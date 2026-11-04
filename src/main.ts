@@ -91,7 +91,7 @@ function createApplication(config: Config) {
                     ),
                 );
             }),
-        ...assetManagementRoutes(config.MODULE_ID),
+        ...assetManagementRoutes(),
     };
     const handler = new OpenAPIHandler(router, {
         customErrorResponseBodyEncoder: (error) =>
@@ -187,9 +187,9 @@ app.all(
 );
 app.listen({
     hostname: config.HOST,
-    port: config.PORT ?? 18645,
+    port: config.PORT,
     reusePort: true,
-    // Bawaan Bun memutus koneksi sesudah 10 detik; PHP, Go, dan Rust tetap menjawab request lambat.
+    // Bawaan Bun memutus koneksi sesudah 10 detik, padahal CoreERP tetap menjawab request yang lebih lambat.
     idleTimeout: 255,
 });
 process.stderr.write(

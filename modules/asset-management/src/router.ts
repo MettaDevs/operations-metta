@@ -9,7 +9,10 @@ import {
 import { Workspace } from '@core/platform/security.ts';
 import { Receipts } from './receipts.ts';
 
-export function assetManagementRoutes(moduleId: string) {
+// Kode app module ini di CoreERP. Route, izin, kebijakan data, dan referensi nomor diturunkan darinya.
+const moduleId = 'management-aset';
+
+export function assetManagementRoutes() {
     async function domain(context: Context, body?: unknown) {
         context.session.csrf(body);
         const workspace = await Workspace.resolve(
