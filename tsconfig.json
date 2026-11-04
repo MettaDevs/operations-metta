@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ES2024",
+        "module": "Preserve",
+        "moduleResolution": "Bundler",
+        "lib": ["ES2024", "DOM", "DOM.Iterable"],
+        "types": ["bun"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noFallthroughCasesInSwitch": true,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "verbatimModuleSyntax": true,
+        "allowImportingTsExtensions": true,
+        "paths": {
+            "@core/*": ["./src/*"]
+        }
+    },
+    "include": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "modules/*/src/**/*.ts",
+        "modules/*/test/**/*.ts",
+        "scripts/**/*.ts"
+    ]
+}
