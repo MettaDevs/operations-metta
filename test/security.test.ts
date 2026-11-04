@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { CookieCipher, randomToken } from '../src/security.ts';
+import { CookieCipher, randomToken } from '../src/platform/security.ts';
 
 test('encrypted cookies validate both the envelope MAC and the cookie-name prefix', () => {
     const cipher = new CookieCipher(Buffer.alloc(32, 19));

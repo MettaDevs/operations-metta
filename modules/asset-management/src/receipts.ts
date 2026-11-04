@@ -1,28 +1,27 @@
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { Currency } from './currency.ts';
-import { Database, jsonObject, sqlErrorCode } from './db.ts';
-import type { Bind } from './db.ts';
-import { abort, coded, validation } from './errors.ts';
+import { Currency } from '@core/foundation/currency.ts';
+import { FinancePostings } from '@core/foundation/finance-posting.ts';
+import { NumberIssuer } from '@core/foundation/number-sequence.ts';
+import { Database, jsonObject, sqlErrorCode } from '@core/platform/db.ts';
+import type { Bind } from '@core/platform/db.ts';
+import { abort, coded, validation } from '@core/platform/errors.ts';
+import { incrementalList } from '@core/platform/listing.ts';
+import { expectedVersion, nowSql } from '@core/platform/model.ts';
+import { Decimal } from '@core/platform/money.ts';
+import type { Workspace } from '@core/platform/security.ts';
 import { Inventory } from './inventory.ts';
-import { incrementalList } from './listing.ts';
-import {
-    detailSchema,
-    expectedVersion,
-    headerSchema,
-    nowSql,
-    parseReceipt,
-} from './model.ts';
+import { detailSchema, headerSchema, parseReceipt } from './model.ts';
 import type { ReceiptDetail, ReceiptHeader, ReceiptInput } from './model.ts';
-import { Decimal } from './money.ts';
-import { NumberIssuer } from './numbering.ts';
+import { assetCodes } from './number-scope.ts';
 import { AcquisitionPosting } from './posting.ts';
-import type { Workspace } from './security.ts';
 
 const headerTable = 'aset_tr_penerimaan_aset';
 const detailTable = 'aset_tr_penerimaan_aset_details';
 const editedMessage =
     'Penerimaan yang sudah selesai tidak dapat diubah; asetnya sudah terdaftar dan bernomor.';
+const postingFailure =
+    'Penerimaan gagal diselesaikan karena kesalahan sistem pada jurnal perolehannya. Tidak ada aset yang terdaftar; tim kami sudah diberi tahu.';
 const requestLineSchema = z.object({
     id: z.string(),
     request_id: z.string(),
@@ -39,6 +38,7 @@ const requestHeaderSchema = z.object({
 export class Receipts {
     readonly inventory: Inventory;
     private readonly currency: Currency;
+    private readonly finance: FinancePostings;
     private readonly posting: AcquisitionPosting;
     private readonly numbers: NumberIssuer;
 
@@ -48,11 +48,18 @@ export class Receipts {
     ) {
         this.inventory = new Inventory(db, workspace);
         this.currency = new Currency(db, workspace.tenantId);
+        this.finance = new FinancePostings(
+            db,
+            workspace.tenantId,
+            this.currency,
+            postingFailure,
+        );
         this.posting = new AcquisitionPosting(
             db,
             workspace,
             this.currency,
             this.inventory,
+            this.finance,
         );
         this.numbers = new NumberIssuer(db, workspace);
     }
@@ -132,9 +139,9 @@ export class Receipts {
         const vendor =
             receipt.vendor_id === null
                 ? null
-                : await this.posting.vendor(receipt.vendor_id);
+                : await this.finance.vendor(receipt.vendor_id);
         const posting = ['selesai', 'cancelled'].includes(receipt.status)
-            ? await this.posting.status(
+            ? await this.finance.status(
                   (receipt.cara_perolehan === 'saldo_awal'
                       ? 'AST-OPB-'
                       : 'AST-ACQ-') + receipt.id,
@@ -155,7 +162,7 @@ export class Receipts {
         if (cancellation) {
             const statuses = [];
             for (const postingId of cancellation.posting_ids ?? []) {
-                const status = await this.posting.status(postingId);
+                const status = await this.finance.status(postingId);
                 if (status) statuses.push(status);
             }
             const { posting_ids, ...summary } = cancellation;
@@ -410,7 +417,7 @@ export class Receipts {
             }
         }
         if (data.vendor_id) {
-            const vendor = await this.posting.vendor(data.vendor_id);
+            const vendor = await this.finance.vendor(data.vendor_id);
             if (!vendor || vendor.legal_entity_id !== data.legal_entity_id)
                 validation({
                     vendor_id:
@@ -840,7 +847,10 @@ export class Receipts {
                 [nowSql(), this.workspace.tenantId, id],
             );
             if (!updated) abort(422, 'Penerimaan ini sudah diselesaikan.');
-            const codes = await this.numbers.assets(
+            const codes = await assetCodes(
+                this.db,
+                this.numbers,
+                this.workspace,
                 units.map((unit) => ({
                     key: 'aset:' + unit.key,
                     groupId: unit.line.group_aset_id,

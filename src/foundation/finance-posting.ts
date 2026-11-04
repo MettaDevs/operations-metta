@@ -1,27 +1,14 @@
 import { createHash } from 'node:crypto';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { Currency } from './currency.ts';
-import { Database, jsonObject, sqlErrorCode } from './db.ts';
-import type { Bind } from './db.ts';
-import { coded } from './errors.ts';
-import { Inventory } from './inventory.ts';
-import { nowIso, nowSql } from './model.ts';
-import type { ReceiptDetail, ReceiptHeader } from './model.ts';
-import { Decimal } from './money.ts';
-import type { Workspace } from './security.ts';
+import { Database, jsonObject, sqlErrorCode } from '../platform/db.ts';
+import type { Bind, JsonObject } from '../platform/db.ts';
+import { coded } from '../platform/errors.ts';
+import { nowIso, nowSql } from '../platform/model.ts';
+import { Decimal } from '../platform/money.ts';
+import type { Currency } from './currency.ts';
 
-const postingFailure =
-    'Penerimaan gagal diselesaikan karena kesalahan sistem pada jurnal perolehannya. Tidak ada aset yang terdaftar; tim kami sudah diberi tahu.';
-const accountLabels = {
-    acquisition_account_id: 'harga perolehan',
-    payable_account_id: 'lawan hutang',
-    clearing_account_id: 'perantara',
-    grant_offset_account_id: 'lawan hibah',
-    input_vat_account_id: 'PPN Masukan',
-};
-type AccountColumn = keyof typeof accountLabels;
-type JournalLine = {
+export type JournalLine = {
     account_id: string | null;
     debit: string;
     credit: string;
@@ -29,11 +16,29 @@ type JournalLine = {
     org_unit_id: string;
     mapping: { label: string; fix_url: string; reference: string };
 };
-type AssetDetail = {
-    asset_code: string;
-    group_aset_id: string;
-    acquisition_value: string;
-    tax_amount: string;
+export type PostingInput = {
+    tenant_id: string;
+    posting_id: string;
+    posting_type: string;
+    legal_entity_id: string;
+    currency_code: string;
+    posting_date: string;
+    document_date: string;
+    occurred_at: string;
+    settlement_mode: string;
+    requires_vendor: boolean;
+    vendor_id: string | null;
+    vendor_invoice_reference: string | null;
+    source_document: {
+        module: string;
+        type: string;
+        number: string;
+        description: string;
+        id: string;
+        url: string;
+    };
+    lines: JournalLine[];
+    details: JsonObject;
 };
 type Dimension = {
     code: string;
@@ -89,12 +94,12 @@ const existingSchema = z.object({
     hold_reasons: z.array(jsonObject).nullable(),
 });
 
-export class AcquisitionPosting {
+export class FinancePostings {
     constructor(
         private readonly db: Database,
-        private readonly workspace: Workspace,
+        private readonly tenantId: string,
         private readonly currency: Currency,
-        private readonly inventory: Inventory,
+        private readonly failure: string,
     ) {}
 
     async vendor(id: string) {
@@ -107,7 +112,7 @@ export class AcquisitionPosting {
                 status: z.string(),
             }),
             'select id,party_id,legal_entity_id,number,status from vendors where tenant_id=$1 and id=$2 limit 1',
-            [this.workspace.tenantId, id],
+            [this.tenantId, id],
         );
         if (!row) return null;
         const party = await this.db.one(
@@ -124,64 +129,13 @@ export class AcquisitionPosting {
         };
     }
 
-    async mode(receipt: ReceiptHeader): Promise<string> {
+    async mode(legalEntityId: string, date: string): Promise<string> {
         const mode = await this.db.one(
             z.object({ mode: z.string() }),
             'select mode from finance_settlement_modes where tenant_id=$1 and legal_entity_id=$2 and effective_from<=$3 order by effective_from desc limit 1',
-            [
-                this.workspace.tenantId,
-                receipt.legal_entity_id,
-                receipt.tanggal.slice(0, 10),
-            ],
+            [this.tenantId, legalEntityId, date],
         );
         return mode?.mode ?? 'direct_payable';
-    }
-
-    async blockers(receipt: ReceiptHeader, lines: ReceiptDetail[]) {
-        const blockers: Record<string, string> = {};
-        const precision = await this.currency.precision(receipt.currency_code);
-        if (precision.amount_decimals > 2)
-            blockers.currency_code = `Presisi nilai ${receipt.currency_code} (${precision.amount_decimals} desimal) lebih halus dari yang dapat dicatat register aset (2 desimal). Ubah presisinya di Data referensi › Mata uang.`;
-        if (
-            !['pembelian', 'hibah', 'saldo_awal'].includes(
-                receipt.cara_perolehan,
-            )
-        )
-            blockers.cara_perolehan =
-                'Pilih pembelian, hibah, atau saldo awal.';
-        if (
-            receipt.cara_perolehan === 'pembelian' &&
-            receipt.vendor_id === null &&
-            (await this.mode(receipt)) === 'direct_payable'
-        )
-            blockers.vendor_id =
-                'Pilih vendornya. Entitas legal ini mencatat pembelian aset langsung sebagai hutang ke vendor, jadi vendor wajib diisi.';
-        for (const [index, line] of lines.entries()) {
-            if (!(await this.inventory.postedBook(line.group_aset_id))) {
-                const group = await this.inventory.group(line.group_aset_id);
-                blockers[`details.${index}.group_aset_id`] =
-                    `Group ${group.kode} belum punya buku yang di-post ke finance. Tambahkan buku yang lapisan posting-nya bukan "none" di matriks group x buku (Master data › Group aset), lalu selesaikan lagi.`;
-            }
-        }
-        return blockers;
-    }
-
-    async amounts(receipt: ReceiptHeader, line: ReceiptDetail) {
-        const decimals = (await this.currency.precision(receipt.currency_code))
-            .amount_decimals;
-        const value = Decimal.of(line.nilai_per_unit)
-            .times(line.jumlah)
-            .rounded(decimals);
-        const tax = Decimal.of(line.ppn_per_unit)
-            .times(line.jumlah)
-            .rounded(decimals);
-        await this.inventory.postedBook(line.group_aset_id);
-        return {
-            value: value.fixed(decimals),
-            tax: tax.fixed(decimals),
-            unitValues: value.split(line.jumlah, decimals),
-            unitTaxes: tax.split(line.jumlah, decimals),
-        };
     }
 
     private async businessUnits(unitIds: string[], date: string) {
@@ -193,7 +147,7 @@ export class AcquisitionPosting {
         const candidates = await this.db.rows(
             z.object({ id: z.string(), hierarchy_id: z.string() }),
             "select v.id,v.hierarchy_id from organization_hierarchy_versions v join organization_hierarchies h on h.id=v.hierarchy_id join organization_hierarchy_purposes l on l.hierarchy_id=h.id join hierarchy_purposes p on p.id=l.purpose_id where h.tenant_id=$1 and h.status='active' and p.code='management' and v.status='published' and v.effective_from<($2::date+interval '1 day') order by v.effective_from desc,v.version_number desc",
-            [this.workspace.tenantId, date],
+            [this.tenantId, date],
         );
         const versions = new Map<string, string>();
         for (const candidate of candidates)
@@ -204,7 +158,7 @@ export class AcquisitionPosting {
         const rows = await this.db.rows(
             businessUnitSchema,
             `select c.version_id,c.descendant_organization_id,c.ancestor_organization_id,a.name,u.number from organization_hierarchy_closures c join operating_units u on u.organization_id=c.ancestor_organization_id join organizations a on a.id=c.ancestor_organization_id where c.version_id in (${versionIds.map((_, index) => `$${index + 2}`).join(',')}) and c.descendant_organization_id in (${unitIds.map((_, index) => `$${index + versionIds.length + 2}`).join(',')}) and u.type='business_unit' and a.tenant_id=$1 order by c.distance`,
-            [this.workspace.tenantId, ...versionIds, ...unitIds],
+            [this.tenantId, ...versionIds, ...unitIds],
         );
         const nearest = new Map<string, z.infer<typeof businessUnitSchema>>();
         for (const row of rows) {
@@ -229,221 +183,18 @@ export class AcquisitionPosting {
         return result;
     }
 
-    private async input(
-        receipt: ReceiptHeader,
-        lines: ReceiptDetail[],
-        assets: AssetDetail[] | null,
-    ) {
-        const precision = (await this.currency.precision(receipt.currency_code))
-            .amount_decimals;
-        const mode = await this.mode(receipt);
-        const groups = new Map<
-            string,
-            Awaited<ReturnType<Inventory['group']>>
-        >();
-        const partitions = new Map<
-            string,
-            { groupId: string; unitId: string; value: Decimal; tax: Decimal }
-        >();
-        for (const line of lines) {
-            if (!groups.has(line.group_aset_id))
-                groups.set(
-                    line.group_aset_id,
-                    await this.inventory.group(line.group_aset_id),
-                );
-            const unitId = await this.inventory.dimension(
-                line.group_aset_id,
-                receipt.lokasi_aset_id,
-                receipt.responsible_org_unit_id,
-            );
-            const amounts = await this.amounts(receipt, line);
-            const key = line.group_aset_id + '|' + unitId;
-            const partition = partitions.get(key) ?? {
-                groupId: line.group_aset_id,
-                unitId,
-                value: Decimal.of('0'),
-                tax: Decimal.of('0'),
-            };
-            partition.value = partition.value.plus(Decimal.of(amounts.value));
-            partition.tax = partition.tax.plus(Decimal.of(amounts.tax));
-            partitions.set(key, partition);
-        }
-        const vendor =
-            receipt.vendor_id === null
-                ? null
-                : await this.vendor(receipt.vendor_id);
-        const mappingSchema = z.object(
-            Object.fromEntries(
-                Object.keys(accountLabels).map((key) => [
-                    key,
-                    z.string().nullable(),
-                ]),
-            ),
-        );
-        const mappings = new Map<
-            string,
-            z.infer<typeof mappingSchema> | undefined
-        >();
-        const journal: JournalLine[] = [];
-        const append = async (
-            partition: { groupId: string; unitId: string },
-            column: AccountColumn,
-            debit: string,
-            credit: string,
-            description: string,
-        ) => {
-            if (!mappings.has(partition.groupId))
-                mappings.set(
-                    partition.groupId,
-                    await this.db.one(
-                        mappingSchema,
-                        'select acquisition_account_id,payable_account_id,clearing_account_id,grant_offset_account_id,input_vat_account_id from aset_m_posting_group where tenant_id=$1 and group_aset_id=$2 and deleted_at is null and effective_from<=$3 order by effective_from desc limit 1',
-                        [
-                            this.workspace.tenantId,
-                            partition.groupId,
-                            receipt.tanggal.slice(0, 10),
-                        ],
-                    ),
-                );
-            journal.push({
-                account_id: mappings.get(partition.groupId)?.[column] ?? null,
-                debit,
-                credit,
-                description: description.slice(0, 255),
-                org_unit_id: partition.unitId,
-                mapping: {
-                    label: `Group ${groups.get(partition.groupId)?.kode ?? partition.groupId} · ${accountLabels[column]}`,
-                    fix_url: `/${this.workspace.moduleId}/fixed-aset-posting-profiles`,
-                    reference: `posting-group:${partition.groupId}:${column}`,
-                },
-            });
-        };
-        for (const partition of partitions.values())
-            if (partition.value.compare(Decimal.of('0')) !== 0)
-                await append(
-                    partition,
-                    'acquisition_account_id',
-                    partition.value.fixed(precision),
-                    '0',
-                    receipt.kode +
-                        ' · ' +
-                        (groups.get(partition.groupId)?.nama ??
-                            partition.groupId),
-                );
-        for (const partition of partitions.values())
-            if (partition.tax.compare(Decimal.of('0')) !== 0)
-                await append(
-                    partition,
-                    'input_vat_account_id',
-                    partition.tax.fixed(precision),
-                    '0',
-                    'PPN Masukan · ' +
-                        receipt.kode +
-                        ' · ' +
-                        (groups.get(partition.groupId)?.nama ??
-                            partition.groupId),
-                );
-        for (const partition of partitions.values()) {
-            const total = partition.value.plus(partition.tax);
-            if (total.compare(Decimal.of('0')) === 0) continue;
-            const column =
-                receipt.cara_perolehan === 'hibah'
-                    ? 'grant_offset_account_id'
-                    : mode === 'clearing'
-                      ? 'clearing_account_id'
-                      : 'payable_account_id';
-            const description =
-                receipt.cara_perolehan === 'hibah'
-                    ? 'Hibah · ' +
-                      receipt.kode +
-                      ' · ' +
-                      (groups.get(partition.groupId)?.nama ?? partition.groupId)
-                    : vendor
-                      ? vendor.name + ' · ' + receipt.kode
-                      : receipt.kode +
-                        ' · ' +
-                        (groups.get(partition.groupId)?.nama ??
-                            partition.groupId);
-            await append(
-                partition,
-                column,
-                '0',
-                total.fixed(precision),
-                description,
-            );
-        }
-        if (!journal.length) return null;
-        const detailAssets = [];
-        for (const asset of assets ?? [])
-            detailAssets.push({
-                asset_code: asset.asset_code,
-                asset_group: groups.get(asset.group_aset_id)?.kode ?? null,
-                book:
-                    (await this.inventory.postedBook(asset.group_aset_id))
-                        ?.kode ?? null,
-                acquisition_value: asset.acquisition_value,
-                tax_amount: asset.tax_amount,
-            });
-        return {
-            tenant_id: this.workspace.tenantId,
-            posting_id: 'AST-ACQ-' + receipt.id,
-            posting_type: 'asset.acquisition',
-            legal_entity_id: receipt.legal_entity_id,
-            currency_code: receipt.currency_code,
-            posting_date: receipt.tanggal.slice(0, 10),
-            document_date: (
-                receipt.vendor_invoice_date ?? receipt.tanggal
-            ).slice(0, 10),
-            occurred_at: nowIso(),
-            settlement_mode: mode,
-            requires_vendor:
-                receipt.cara_perolehan === 'pembelian' &&
-                mode === 'direct_payable',
-            vendor_id: receipt.vendor_id,
-            vendor_invoice_reference: receipt.vendor_invoice_reference,
-            source_document: {
-                module: this.workspace.moduleId,
-                type: 'penerimaan-aset',
-                number: receipt.kode,
-                description: (
-                    receipt.keterangan?.trim() ||
-                    'Penerimaan aset ' + receipt.kode
-                ).slice(0, 255),
-                id: receipt.id,
-                url: `/${this.workspace.moduleId}/inventarisasi-aset/penerimaan/${receipt.id}`,
-            },
-            lines: journal,
-            details: {
-                receipt: {
-                    id: receipt.id,
-                    number: receipt.kode,
-                    purchase_order_reference: receipt.purchase_order_reference,
-                    attachment_record_type: 'aset_tr_penerimaan_aset',
-                },
-                assets: detailAssets,
-            },
-        };
-    }
-
-    async evaluate(
-        receipt: ReceiptHeader,
-        lines: ReceiptDetail[],
-        assets: AssetDetail[] | null = null,
-        ignoreMissingVendor = false,
-    ) {
-        const input = await this.input(receipt, lines, assets);
-        if (!input) return null;
+    async evaluate(input: PostingInput, ignoreMissingVendor: boolean) {
         const existing = await this.db.one(
             existingSchema,
             'select id,input_hash,currency_decimals,status,payload,hold_reasons from finance_postings where tenant_id=$1 and posting_id=$2 limit 1',
-            [this.workspace.tenantId, input.posting_id],
+            [this.tenantId, input.posting_id],
         );
         const organization = await this.db.one(
             z.object({ id: z.string() }),
             "select id from organizations where tenant_id=$1 and classification='legal_entity' and id=$2 limit 1",
-            [this.workspace.tenantId, input.legal_entity_id],
+            [this.tenantId, input.legal_entity_id],
         );
-        if (!organization) coded(500, 'posting_failed', postingFailure);
+        if (!organization) coded(500, 'posting_failed', this.failure);
         const company = await this.db.one(
             z.object({ company_code: z.string() }),
             'select company_code from legal_entities where organization_id=$1 limit 1',
@@ -463,9 +214,9 @@ export class AcquisitionPosting {
                     vendor.legal_entity_id !== input.legal_entity_id)) ||
             (input.requires_vendor && !vendor && !ignoreMissingVendor)
         )
-            coded(500, 'posting_failed', postingFailure);
+            coded(500, 'posting_failed', this.failure);
         if (input.lines.length < 2 || input.lines.length > 5000)
-            coded(500, 'posting_failed', postingFailure);
+            coded(500, 'posting_failed', this.failure);
         const normalized = input.lines.map((line, index) => {
             const debit = Decimal.of(line.debit);
             const credit = Decimal.of(line.credit);
@@ -477,7 +228,7 @@ export class AcquisitionPosting {
                 debit.scale > decimals ||
                 credit.scale > decimals
             )
-                coded(500, 'posting_failed', postingFailure);
+                coded(500, 'posting_failed', this.failure);
             return {
                 ...line,
                 line_no: index + 1,
@@ -494,7 +245,7 @@ export class AcquisitionPosting {
             Decimal.of('0'),
         );
         if (debit.compare(credit) !== 0)
-            coded(500, 'posting_failed', postingFailure);
+            coded(500, 'posting_failed', this.failure);
         const hash = createHash('sha256')
             .update(
                 JSON.stringify([
@@ -518,7 +269,7 @@ export class AcquisitionPosting {
             .digest('hex');
         if (existing) {
             if (existing.input_hash !== hash)
-                coded(500, 'posting_failed', postingFailure);
+                coded(500, 'posting_failed', this.failure);
             return {
                 input,
                 hash,
@@ -544,7 +295,7 @@ export class AcquisitionPosting {
             ? await this.db.rows(
                   accountSchema,
                   `select id,legal_entity_id,external_id,code,name,type,active from finance_reference_accounts where tenant_id=$1 and id in (${accountIds.map((_, index) => `$${index + 2}`).join(',')})`,
-                  [this.workspace.tenantId, ...accountIds],
+                  [this.tenantId, ...accountIds],
               )
             : [];
         const unitIds = [
@@ -553,7 +304,7 @@ export class AcquisitionPosting {
         const units = await this.db.rows(
             unitSchema,
             `select o.id,o.name,o.classification,u.type,u.number from organizations o left join operating_units u on u.organization_id=o.id where o.tenant_id=$1 and o.id in (${unitIds.map((_, index) => `$${index + 2}`).join(',')})`,
-            [this.workspace.tenantId, ...unitIds],
+            [this.tenantId, ...unitIds],
         );
         const businessUnits = await this.businessUnits(
             unitIds,
@@ -788,7 +539,7 @@ export class AcquisitionPosting {
                 cutover_date: z.string().nullable(),
             }),
             'select enabled,cutover_date from finance_posting_settings where tenant_id=$1 and legal_entity_id=$2 limit 1',
-            [this.workspace.tenantId, input.legal_entity_id],
+            [this.tenantId, input.legal_entity_id],
         );
         const manualReason = !settings?.enabled
             ? 'feed_disabled'
@@ -816,22 +567,16 @@ export class AcquisitionPosting {
         };
     }
 
-    async publish(
-        receipt: ReceiptHeader,
-        lines: ReceiptDetail[],
-        assets: AssetDetail[],
-    ): Promise<void> {
-        if (!this.db.inTransaction)
-            throw new Error('Posting requires the receipt transaction.');
-        const value = await this.evaluate(receipt, lines, assets);
-        if (!value || value.existing) return;
+    async publish(input: PostingInput): Promise<void> {
+        const value = await this.evaluate(input, false);
+        if (value.existing) return;
         try {
             await this.db.transaction(async () => {
                 const id = ulid().toLowerCase();
                 const stamp = nowSql();
                 await this.db.insert('finance_postings', {
                     id,
-                    tenant_id: this.workspace.tenantId,
+                    tenant_id: this.tenantId,
                     legal_entity_id: value.input.legal_entity_id,
                     posting_id: value.input.posting_id,
                     posting_type: value.input.posting_type,
@@ -868,14 +613,14 @@ export class AcquisitionPosting {
                     await this.db.insert('finance_posting_lines', {
                         ...line,
                         id: ulid().toLowerCase(),
-                        tenant_id: this.workspace.tenantId,
+                        tenant_id: this.tenantId,
                         finance_posting_id: id,
                         created_at: stamp,
                         updated_at: stamp,
                     });
                 await this.db.insert('finance_posting_events', {
                     id: ulid().toLowerCase(),
-                    tenant_id: this.workspace.tenantId,
+                    tenant_id: this.tenantId,
                     finance_posting_id: id,
                     event: 'published',
                     from_status: null,
@@ -891,10 +636,10 @@ export class AcquisitionPosting {
             const existing = await this.db.one(
                 existingSchema,
                 'select id,input_hash,currency_decimals,status,payload,hold_reasons from finance_postings where tenant_id=$1 and posting_id=$2 limit 1',
-                [this.workspace.tenantId, value.input.posting_id],
+                [this.tenantId, value.input.posting_id],
             );
             if (!existing || existing.input_hash !== value.hash)
-                coded(500, 'posting_failed', postingFailure);
+                coded(500, 'posting_failed', this.failure);
         }
     }
 
@@ -913,7 +658,7 @@ export class AcquisitionPosting {
                 hold_reasons: z.array(jsonObject).nullable(),
             }),
             'select posting_id,status,settlement_mode,posting_date,manual_reason,external_reference,reason_code,reason,acknowledged_at,hold_reasons from finance_postings where tenant_id=$1 and posting_id=$2 limit 1',
-            [this.workspace.tenantId, postingId],
+            [this.tenantId, postingId],
         );
         if (!row) return null;
         const { hold_reasons, ...posting } = row;

@@ -657,6 +657,7 @@ export class Workspace {
         db: Database,
         session: Session,
         moduleId: string,
+        policyCode: string,
     ): Promise<Workspace> {
         const user = session.requireUser();
         const memberships = await this.memberships(db, session);
@@ -701,7 +702,7 @@ export class Workspace {
             company?.id ?? null,
             unit?.id ?? null,
             permissions,
-            policies.get(moduleId + '.asset-responsibility') ?? {
+            policies.get(policyCode) ?? {
                 kind: 'grants',
                 grants: [],
             },

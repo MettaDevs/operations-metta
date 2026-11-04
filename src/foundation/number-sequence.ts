@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { Database, sqlErrorCode } from './db.ts';
-import { coded } from './errors.ts';
-import { nowSql } from './model.ts';
-import type { Workspace } from './security.ts';
+import { Database, sqlErrorCode } from '../platform/db.ts';
+import { coded } from '../platform/errors.ts';
+import { nowSql } from '../platform/model.ts';
+import type { Workspace } from '../platform/security.ts';
 
 const segmentSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('constant'), value: z.string() }),
@@ -53,7 +53,7 @@ const allocationSchema = counterSchema.extend({
     last_number: z.coerce.bigint(),
 });
 
-function fail(message: string): never {
+export function failSequence(message: string): never {
     return coded(422, 'number_sequence_failed', message);
 }
 
@@ -85,7 +85,9 @@ export class NumberIssuer {
                   : null;
         if (sequence.scope_type !== 'tenant') {
             if (!organizationId)
-                fail('Context organisasi untuk sequence ini belum tersedia.');
+                failSequence(
+                    'Context organisasi untuk sequence ini belum tersedia.',
+                );
             const organization = await this.db.one(
                 z.object({
                     id: z.string(),
@@ -96,7 +98,9 @@ export class NumberIssuer {
                 [organizationId, this.scope.tenantId, sequence.scope_type],
             );
             if (!organization)
-                fail('Context organisasi tidak sah untuk sequence ini.');
+                failSequence(
+                    'Context organisasi tidak sah untuk sequence ini.',
+                );
             code =
                 sequence.scope_type === 'legal_entity'
                     ? organization.company_code
@@ -112,7 +116,7 @@ export class NumberIssuer {
                 !/^[A-Za-z0-9_-]+$/.test(value) ||
                 value.length > segment.length
             )
-                fail(
+                failSequence(
                     'Lengkapi kode untuk ' +
                         (segment.name ?? segment.value) +
                         ' sebelum menerbitkan nomor.',
@@ -145,7 +149,9 @@ export class NumberIssuer {
                 [this.scope.legalEntityId, this.scope.tenantId],
             );
             if (!fiscal)
-                fail('Kalender fiskal belum tersedia untuk tanggal ini.');
+                failSequence(
+                    'Kalender fiskal belum tersedia untuk tanggal ini.',
+                );
             fiscalYear = fiscal.year_name;
             fiscalPeriod = fiscal.period_ordinal;
             period =
@@ -171,7 +177,7 @@ export class NumberIssuer {
             sequence.maximum_number !== null &&
             numeric > sequence.maximum_number
         )
-            fail('Nomor sequence sudah mencapai batas maksimum.');
+            failSequence('Nomor sequence sudah mencapai batas maksimum.');
         return numeric;
     }
 
@@ -281,7 +287,7 @@ export class NumberIssuer {
                     case 'context':
                         return (
                             scope.values[segment.value] ??
-                            fail('Kode context belum tersedia.')
+                            failSequence('Kode context belum tersedia.')
                         );
                     case 'year':
                         return scope.year;
@@ -297,7 +303,7 @@ export class NumberIssuer {
                     case 'number': {
                         const text = String(number);
                         if (text.length > segment.length)
-                            fail(
+                            failSequence(
                                 'Nomor sudah melampaui panjang segmen yang dikonfigurasi.',
                             );
                         return text.padStart(segment.length, '0');
@@ -343,12 +349,12 @@ export class NumberIssuer {
                 return await this.db.transaction(async () => {
                     const sequence = await this.sequence(reference);
                     if (!sequence)
-                        fail(
+                        failSequence(
                             'Sequence aktif tidak ditemukan untuk aplikasi dan tenant ini.',
                         );
                     const scope = await this.context(sequence, values);
                     if (sequence.is_continuous)
-                        fail(
+                        failSequence(
                             'Sequence berkelanjutan harus memakai reserve lalu confirm.',
                         );
                     const replay = await this.db.one(
@@ -358,7 +364,7 @@ export class NumberIssuer {
                     );
                     if (replay) return replay.formatted_value;
                     if (!sequence.allow_automatic)
-                        fail(
+                        failSequence(
                             'Isi kode secara manual. Pembuatan nomor otomatis tidak diizinkan.',
                         );
                     let number: bigint;
@@ -418,106 +424,14 @@ export class NumberIssuer {
         throw new Error('Number issuance exhausted retries.');
     }
 
-    async assets(
-        requests: {
-            key: string;
-            groupId: string;
-            locationId: string | null;
-            acquiredOn: string;
-        }[],
-    ): Promise<Map<string, string>> {
-        return this.db.transaction(async () => {
-            const reference = this.scope.moduleId + '.asset-code';
-            const sequence = await this.sequence(reference);
-            if (!sequence)
-                fail(
-                    'Sequence aktif tidak ditemukan untuk aplikasi dan tenant ini.',
-                );
-            const fields = sequence.segments.flatMap((segment) =>
-                segment.type === 'context' ? [segment.value] : [],
+    async contextFields(reference: string): Promise<string[]> {
+        const sequence = await this.sequence(reference);
+        if (!sequence)
+            failSequence(
+                'Sequence aktif tidak ditemukan untuk aplikasi dan tenant ini.',
             );
-            const contexts = new Map<string, Record<string, string>>();
-            const prepared: {
-                key: string;
-                values: Record<string, string>;
-                rank: string;
-                position: number;
-            }[] = [];
-            for (const [position, request] of requests.entries()) {
-                const contextKey = JSON.stringify([
-                    request.groupId,
-                    request.locationId,
-                    request.acquiredOn,
-                ]);
-                let values = contexts.get(contextKey);
-                if (!values) {
-                    values = {};
-                    if (fields.length) {
-                        const group = await this.db.one(
-                            z.object({
-                                kode: z.string(),
-                                kelompok_harta_fiskal_id: z.string().nullable(),
-                                lokasi_aset_id: z.string().nullable(),
-                            }),
-                            'select kode,kelompok_harta_fiskal_id,lokasi_aset_id from aset_m_group_aset where tenant_id=$1 and id=$2 and deleted_at is null limit 1 for share',
-                            [this.scope.tenantId, request.groupId],
-                        );
-                        if (!group) fail('Group aset tidak ditemukan.');
-                        const classification = await this.db.one(
-                            z.object({ kode: z.string() }),
-                            'select kode from aset_m_kelompok_harta_fiskal where tenant_id=$1 and id=$2 and deleted_at is null limit 1 for share',
-                            [
-                                this.scope.tenantId,
-                                group.kelompok_harta_fiskal_id,
-                            ],
-                        );
-                        const location = await this.db.one(
-                            z.object({ kode: z.string() }),
-                            'select kode from aset_m_lokasi_aset where tenant_id=$1 and id=$2 and deleted_at is null limit 1 for share',
-                            [
-                                this.scope.tenantId,
-                                request.locationId ?? group.lokasi_aset_id,
-                            ],
-                        );
-                        const available: Record<string, string> = {
-                            asset_classification: classification?.kode ?? '',
-                            asset_group: group.kode,
-                            asset_location: location?.kode ?? '',
-                            acquisition_year: request.acquiredOn.slice(0, 4),
-                        };
-                        const selectedValues: Record<string, string> = {};
-                        for (const field of [...fields].sort())
-                            selectedValues[field] = available[field] ?? '';
-                        values = selectedValues;
-                    }
-                    contexts.set(contextKey, values);
-                }
-                prepared.push({
-                    key: request.key,
-                    values,
-                    rank: JSON.stringify(values),
-                    position,
-                });
-            }
-            prepared.sort(
-                (first, second) =>
-                    first.rank.localeCompare(second.rank) ||
-                    first.position - second.position,
-            );
-            const codes = new Map<string, string>();
-            for (const request of prepared) {
-                const code = await this.issue(
-                    reference,
-                    request.key,
-                    request.values,
-                );
-                if (code.length > 50)
-                    fail(
-                        'Format kode aset melebihi 50 karakter. Pendekkan bagian kode pada pengaturan nomor.',
-                    );
-                codes.set(request.key, code);
-            }
-            return codes;
-        });
+        return sequence.segments.flatMap((segment) =>
+            segment.type === 'context' ? [segment.value] : [],
+        );
     }
 }

@@ -11,7 +11,16 @@
         "noEmit": true,
         "skipLibCheck": true,
         "verbatimModuleSyntax": true,
-        "allowImportingTsExtensions": true
+        "allowImportingTsExtensions": true,
+        "paths": {
+            "@core/*": ["./src/*"]
+        }
     },
-    "include": ["src/**/*.ts", "test/**/*.ts"]
+    "include": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "modules/*/src/**/*.ts",
+        "modules/*/test/**/*.ts",
+        "scripts/**/*.ts"
+    ]
 }

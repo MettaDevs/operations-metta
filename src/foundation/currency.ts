@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Database } from './db.ts';
-import { validation } from './errors.ts';
+import { Database } from '../platform/db.ts';
+import { validation } from '../platform/errors.ts';
 
 const precisionSchema = z.object({
     amount_decimals: z.number(),
