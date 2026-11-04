@@ -6,13 +6,13 @@
         "modules/*"
     ],
     "scripts": {
-        "start": "bun src/main.ts",
-        "build": "bun build src/main.ts --target=bun --outdir dist --minify",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
-        "check:boundaries": "bun scripts/check-boundaries.ts",
-        "format": "prettier --write src test modules scripts package.json tsconfig.json",
-        "format:check": "prettier --check src test modules scripts package.json tsconfig.json"
+        "build": "bun build src/main.ts --target=bun --outdir dist --minify",
+        "start": "bun src/main.ts",
+        "format": "prettier --write src test modules scripts .github package.json tsconfig.json",
+        "format:check": "prettier --check src test modules scripts .github package.json tsconfig.json",
+        "check:boundaries": "bun scripts/check-boundaries.ts"
     },
     "dependencies": {
         "@orpc/openapi": "1.16.1",
