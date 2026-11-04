@@ -1,0 +1,95 @@
+# operations-metta
+
+- Repo ini runtime ERP yang dijalankan untuk klinik, di SaaS maupun on-prem, dan ditulis dengan Bun + Elysia. Praktik Dokter direncanakan berjalan di runtime yang sama. Kode Praktik Dokter belum ada di repo ini.
+- Onboarding, trial gratis Praktik Dokter, pengelolaan tenant dan lingkungan, rilis, dan agen server milik repo [control-plane-metta](https://github.com/MettaDevs/control-plane-metta). Pengelolaan pengguna dan role di dalam tenant tetap milik repo ini.
+- **CoreERP tetap acuan perilaku sampai setiap alur selesai dipindah.** Kodenya ada di [repo CoreERP](https://github.com/MettaDevs/coreERP). Keputusan pindah ke Bun + Elysia beserta hasil pengukurannya ada di [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md). Alur layar, permintaan, dan data CoreERP tanpa ikatan framework ada di [`docs/design-system/`](https://github.com/MettaDevs/coreERP/tree/main/docs/design-system). Folder itu potret kode CoreERP pada satu commit. Bila isinya berbeda dengan kode CoreERP, yang benar adalah kodenya.
+- Jaga perubahan dan dependency tetap minimal. Jangan membuat abstraksi atau compatibility layer spekulatif. Kalau ada yang membingungkan, tanyakan langsung ke pemilik produk dan berhenti dulu sampai konteksnya jelas.
+- SaaS dikelola lewat control plane. On-prem perpetual berdiri sendiri, memakai update bertanda tangan, dan tidak mewajibkan telemetry.
+
+## Susunan repo
+
+- `src/` adalah Core.
+  - `src/platform/` berisi bagian yang dipakai setiap request: identitas, sesi, akses, tenant, pool database, dan actor audit.
+  - `src/foundation/` berisi layanan bisnis bersama: number sequence, mata uang, dan posting finance.
+- `modules/<nama>/` berisi satu package Bun workspace per module. Module pertama adalah `modules/asset-management/`.
+- `src/main.ts` adalah satu-satunya berkas Core yang merangkai module ke dalam runtime. Di luar berkas itu, Core tidak pernah meng-import module. `bun run check:boundaries` menolak pelanggarannya.
+
+## Aturan module
+
+Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/coreERP/blob/main/AGENTS.md#satu-bentuk-module) di CoreERP dan tidak boleh dilonggarkan dengan alasan apa pun.
+
+- Sebuah module tidak boleh membaca atau menulis tabel milik module lain. PostgreSQL tidak menolak `JOIN` lintas module, jadi jangan mengandalkan database untuk menjaga batas ini.
+- Setiap module memakai awalan nama tabelnya sendiri, sama dengan di CoreERP. `asset-management` memakai `aset_`.
+- Setiap tabel module membawa `tenant_id`, dan setiap query menyaringnya. Tenant diambil dari konteks tepercaya di `src/platform/`, bukan dari nilai kiriman klien yang belum diperiksa.
+- Nama event `module.aggregate.action.vN`, envelope, dan aturan versinya tidak berubah. Event yang sudah terbit tidak diubah di tempat. Menambah atau menghapus field wajib berarti `vN+1`. Bentuk envelope ada di [Kontrak wajib](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/04-api-and-integration.md#kontrak-wajib).
+- Core boleh membaca tabel module secara langsung, misalnya untuk laporan dan analitik. Ini keputusan pemilik produk pada 3 Oktober 2026. Bacaan itu wajib memenuhi syarat dari [Ownership dan data](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#ownership-dan-data):
+  - Nama tabel dan kolom datang dari yang didaftarkan module, tidak ditulis mati di kode Core.
+  - Tenant disaring, dan kebijakan data yang dinyatakan module diterapkan.
+  - Bacaan yang menggabungkan beberapa module hanya ditawarkan bila semuanya terpasang untuk tenant itu.
+  - Core hanya membaca. Menulis tetap lewat module pemiliknya.
+- Katalog, entitlement, dan pemasangan module tidak sama. Katalog berarti produk dikenal, entitlement berarti tenant berhak memakai, dan `installed` hanya sah setelah migration module berhasil dan tercatat di `core_module_installations`. Layar berlabel "terpasang" membaca catatan pemasangan itu, tidak menyimpulkannya dari entitlement.
+
+## Database
+
+- Nama tabel, kolom, index, constraint, dan trigger sama persis dengan CoreERP.
+- Selama transisi, CoreERP pemilik skema dan migration. Repo ini tidak menulis migration sampai satu area selesai pindah seluruhnya.
+- Konfigurasi runtime dan aturan database ditetapkan skill `coreerp-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.
+- Tidak ada baris yang dihapus fisik. Menghapus berarti mengisi `deleted_at`. Indeks unik pada kode bisnis wajib parsial (`WHERE deleted_at IS NULL`), supaya kode yang sudah dihapus bisa dipakai lagi. Rinciannya di [Penghapusan lunak](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#penghapusan-lunak).
+
+## Kapan sebuah alur dianggap pindah
+
+- Sebuah alur dianggap pindah hanya setelah harness kesetaraan melaporkannya identik dengan CoreERP untuk input yang sama. Harness itu terdiri dari:
+  - Golden run, yang membandingkan respons HTTP dan jejak SQL.
+  - Conformance, yang antara lain menguji pencabutan akses, rollback, dan throttle.
+  - Oracle SQL, yang memeriksa isi database langsung tanpa memakai kode aplikasi.
+- Harness itu sekarang ada di [`experiments/stack-comparison/scripts`](https://github.com/MettaDevs/coreERP/tree/codex/native-stack-comparison/experiments/stack-comparison/scripts) pada branch `codex/native-stack-comparison` di CoreERP.
+- Sebuah module boleh disebut sudah pindah setelah [pemeriksaan kesetiaan](https://github.com/MettaDevs/coreERP/blob/main/docs/design-system/04-pemeriksaan-kesetiaan.md) terpenuhi seluruhnya, termasuk syarat beban dan kebenarannya.
+- Test yang lulus di repo ini belum berarti sebuah alur sudah pindah.
+
+## Kontrak
+
+- Repo ini pemilik endpoint `internal/v1` yang dipanggil control plane. Setiap endpoint, event, dan webhook yang dipakai dari luar runtime wajib punya kontrak.
+- Kontrak ditulis tangan, tidak pernah di-generate dari kode.
+- REST untuk perintah dan permintaan data. Event untuk fakta yang sudah terjadi. Jangan mengontrakkan panggilan REST sebagai event, atau sebaliknya.
+- Kontrak menggambarkan keadaan sebenarnya. Kalau kode belum memenuhi aturan, tulis gap-nya di `info.description`, bukan bentuk ideal yang belum dikirim kode.
+- Mengubah kontrak berarti mengubah repo penerbit dan repo pemanggil dalam pekerjaan yang sama.
+- Test sisi pemanggil memvalidasi permintaannya terhadap berkas kontrak, bukan terhadap fake berjawaban tetap. Di CoreERP, Core memeriksa `Authorization: Bearer`, konsol mengirim header lain, dan kedua suite tetap hijau.
+
+## Bahasa
+
+- **Nama di dalam kode ditulis bahasa Inggris, tanpa kecuali.** Ini berlaku untuk berkas, folder, fungsi, class, type, variabel, properti, nama route, kunci config, variabel env, nama perintah CLI, dan komponen UI. Contohnya, `siapkanLingkungan` menjadi `provisionEnvironment`.
+- Yang tetap bahasa Indonesia, dan ini disengaja: nama tabel, kolom, index, dan constraint database, teks yang dibaca pengguna di layar, alamat URL layar yang diketik operator, komentar, docs, dan pesan commit.
+- Kalau sebuah istilah tidak punya padanan Inggris yang jelas, pakai istilah Dynamics 365 untuk hal yang sama. Jangan mengarang terjemahan harfiah.
+- Istilah teknis yang sudah baku ditulis apa adanya, misalnya push, pull, scope, token, signing secret, webhook, endpoint, GET, POST, dan PUT. Ini berlaku di layar, pesan, kontrak, dan docs. Tulis "scope `vendors.read`", bukan "cakupan `vendors.read`". Batasnya ada di skill `coreerp-docs` CoreERP, bagian [Where the loanword boundary sits](https://github.com/MettaDevs/coreERP/blob/main/.agents/skills/coreerp-docs/SKILL.md#where-the-loanword-boundary-sits).
+- Teks layar untuk pengguna bisnis memakai bahasa sehari-hari yang menjelaskan tindakan atau dampaknya. Istilah internal seperti `tenant_id`, entitlement, atau nama class tidak tampil di layar itu. Pengecualiannya hanya layar yang memang untuk developer atau operator teknis.
+
+## Nama datang dari database
+
+- Jangan menulis mati nama perusahaan, nama orang, atau nama module besar seperti Praktik Dokter di kode. Nama itu datang dari konfigurasi di database. Kalau belum jelas sebuah nama termasuk atau tidak, tanyakan ke pemilik produk.
+
+## Repo ini publik
+
+Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena riwayat git menyimpannya.
+
+- Tidak ada secret di repo. Secret hanya disimpan di GitHub Actions secrets.
+- Tidak ada data pasien. Fixture dan data uji dibuat sintetis.
+- Alamat server, IP, user SSH, dan nama service di server ditulis sebagai contoh, misalnya `server.example.com` dan `203.0.113.10`, bukan nilai sebenarnya.
+- Tidak ada self-hosted runner. Pull request dari fork dapat menjalankan kode apa pun di runner semacam itu.
+- Workflow deploy hanya berjalan di `main` atau tag, tidak pernah pada event `pull_request`.
+
+## Skill
+
+- Setiap skill ada di `.agents/skills/` dan `.claude/skills/` dengan isi yang sama persis, karena kedua folder dibaca alat yang berbeda. Ubah keduanya dalam commit yang sama.
+- `coreerp-bun-elysia` disalin apa adanya dari CoreERP. Path `docs/...` di dalamnya menunjuk ke repo CoreERP. Kalimat di skill itu yang menyebut nama dan pembagian repo baru belum diputuskan ditulis sebelum repo ini dibuat. Pembagiannya sekarang tertulis di bagian atas berkas ini.
+
+## Sebelum menyatakan hijau
+
+Jalankan dari akar repo. Semuanya harus lulus.
+
+```bash
+bun run typecheck
+bun test
+bun run format:check
+bun run check:boundaries
+bun run build
+```
