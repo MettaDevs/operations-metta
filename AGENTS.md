@@ -36,6 +36,17 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
 - Konfigurasi runtime dan aturan database ditetapkan skill `coreerp-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.
 - Tidak ada baris yang dihapus fisik. Menghapus berarti mengisi `deleted_at`. Indeks unik pada kode bisnis wajib parsial (`WHERE deleted_at IS NULL`), supaya kode yang sudah dihapus bisa dipakai lagi. Rinciannya di [Penghapusan lunak](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#penghapusan-lunak).
 
+## Kode dan nomor dokumen
+
+Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diberi kode otomatis. Mulai sekarang kode hanya ada bila memang dipakai orang.
+
+- Mesin number sequence di `src/foundation/number-sequence.ts` tetap seperti di CoreERP: scope, reset fiskal, mode continuous dan non-continuous, dan preallocation.
+- Nomor otomatis hanya untuk dua hal: dokumen transaksi (penerimaan, mutasi, penjualan, pemusnahan, work order, dan sejenisnya) dan master utama yang dicari orang lewat kodenya, misalnya aset.
+- Master setup kecil, misalnya kondisi aset, tipe lokasi, dan sebab kerusakan, tidak memakai number sequence. Bila orang memang mengetik atau menyaring dengan kode, kodenya pendek dan diketik pengguna, seperti field `Code` di Business Central. Bila tidak, cukup nama dan ID internal.
+- Baris dokumen dan entri ledger tidak punya kode bisnis.
+- Master memakai mode non-continuous, jadi nomornya boleh bolong. Mode continuous hanya untuk dokumen yang memang diaudit.
+- Diputuskan per master saat master itu dipindah. Kolom kode yang tidak lagi diisi otomatis dibuat opsional lewat migration di CoreERP, bersama pencabutan referensi nomornya di manifest, karena skema masih milik CoreERP.
+
 ## Kapan sebuah alur dianggap pindah
 
 - Sebuah alur dianggap pindah hanya setelah harness kesetaraan melaporkannya identik dengan CoreERP untuk input yang sama. Harness itu terdiri dari:
