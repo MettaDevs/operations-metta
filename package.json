@@ -10,8 +10,9 @@
         "build": "bun build src/main.ts --target=bun --outdir dist --minify",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
-        "format": "prettier --write src test modules package.json tsconfig.json",
-        "format:check": "prettier --check src test modules package.json tsconfig.json"
+        "check:boundaries": "bun scripts/check-boundaries.ts",
+        "format": "prettier --write src test modules scripts package.json tsconfig.json",
+        "format:check": "prettier --check src test modules scripts package.json tsconfig.json"
     },
     "dependencies": {
         "@orpc/openapi": "1.16.1",
