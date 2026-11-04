@@ -4,11 +4,10 @@ import { ORPCError, os } from '@orpc/server';
 import { RedisClient } from 'bun';
 import { z } from 'zod';
 import type { Config } from './config.ts';
-import { ContextCache } from './context-cache.ts';
 import { createPool, Database, sqlErrorCode } from './db.ts';
 import { HttpFailure } from './errors.ts';
 import { Receipts } from './receipts.ts';
-import { Session, Workspace, type SessionStores } from './security.ts';
+import { Session, Workspace } from './security.ts';
 import { ValkeySessions } from './valkey.ts';
 
 type Context = {
@@ -22,14 +21,7 @@ const recordInput = z.object({ params: z.object({ id: z.string() }) });
 const mutationInput = recordInput.extend({ body: z.unknown() });
 const ok = (body: object) => ({ status: 200, headers: {}, body });
 
-// Satu klien Valkey dan satu cache konteks per proses Bun; keduanya tidak menyimpan apa pun milik request.
-function sessionStores(config: Config): SessionStores {
-    return {
-        valkey: valkeySessions(config),
-        contextCache: contextCache(config),
-    };
-}
-
+// Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {
     switch (config.SESSION_BACKEND) {
         case 'database':
@@ -49,22 +41,9 @@ function valkeySessions(config: Config): ValkeySessions | null {
     }
 }
 
-function contextCache(config: Config): ContextCache | null {
-    switch (config.CONTEXT_CACHE) {
-        case 'off':
-            return null;
-        case 'on':
-            return new ContextCache(config.CONTEXT_CACHE_TTL_SECONDS);
-        default: {
-            const unknown: never = config.CONTEXT_CACHE;
-            throw new Error(`CONTEXT_CACHE tidak dikenal: ${unknown}`);
-        }
-    }
-}
-
 export function createApplication(config: Config) {
     const pool = createPool(config);
-    const stores = sessionStores(config);
+    const valkey = valkeySessions(config);
     const base = os.$context<Context>().use(async ({ context, next }) => {
         try {
             return await next();
@@ -312,7 +291,7 @@ export function createApplication(config: Config) {
                     config,
                     request,
                     clientAddress,
-                    stores,
+                    valkey,
                 );
                 const context: Context = {
                     db,
@@ -366,7 +345,7 @@ export function createApplication(config: Config) {
             return response;
         },
         close: async () => {
-            stores.valkey?.close();
+            valkey?.close();
             await pool.end();
         },
     };

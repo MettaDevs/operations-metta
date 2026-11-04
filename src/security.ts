@@ -9,11 +9,6 @@ import {
 } from 'node:crypto';
 import { z } from 'zod';
 import type { Config } from './config.ts';
-import {
-    utcInstant,
-    type ContextCache,
-    type ContextCacheView,
-} from './context-cache.ts';
 import { Database } from './db.ts';
 import { abort, HttpFailure, validation } from './errors.ts';
 import { RateLimiter } from './limiter.ts';
@@ -70,11 +65,6 @@ type Membership = z.infer<typeof membershipSchema>;
 type Organization = z.infer<typeof organizationSchema>;
 type Grant = { legalEntityId: string | null; operatingUnitIds: string[] };
 export type Policy = { kind: 'all' } | { kind: 'grants'; grants: Grant[] };
-// Penyimpanan versi teroptimasi (optimized.md); null berarti perilaku pembanding dasar.
-export type SessionStores = {
-    valkey: ValkeySessions | null;
-    contextCache: ContextCache | null;
-};
 
 export function randomToken(): string {
     return randomBytes(48)
@@ -153,8 +143,6 @@ export class Session {
         private readonly clientAddress: string,
         private readonly cipher: CookieCipher,
         private readonly valkey: ValkeySessions | null,
-        // Terisi hanya bila query versi sudah berjalan pada request ini (CONTEXT_CACHE=on dan sesi membawa user).
-        readonly context: ContextCacheView | null,
         public id: string,
         public data: z.infer<typeof sessionSchema>,
         public user: z.infer<typeof userSchema> | null,
@@ -165,7 +153,7 @@ export class Session {
         config: Config,
         request: Request,
         clientAddress: string,
-        stores: SessionStores,
+        valkey: ValkeySessions | null,
     ) {
         const cipher = new CookieCipher(config.key);
         const cookies = new Map(
@@ -190,12 +178,7 @@ export class Session {
         }
         let data: z.infer<typeof sessionSchema> = { _token: randomToken() };
         if (sessionId && /^[A-Za-z0-9]{40}$/.test(sessionId)) {
-            const payload = await this.payload(
-                db,
-                config,
-                stores.valkey,
-                sessionId,
-            );
+            const payload = await this.payload(db, config, valkey, sessionId);
             if (payload !== null) {
                 try {
                     const parsed = sessionSchema.safeParse(
@@ -211,19 +194,12 @@ export class Session {
         } else sessionId = null;
         const principal = data[guardKey];
         let user: z.infer<typeof userSchema> | undefined;
-        let context: ContextCacheView | null = null;
-        if (typeof principal === 'number' || typeof principal === 'string') {
-            const find = () =>
-                db.one(
-                    userSchema,
-                    "select * from users where id=$1 and account_type='person' limit 1",
-                    [principal],
-                );
-            if (stores.contextCache) {
-                context = await stores.contextCache.open(db);
-                user = await context.remember(`user:${principal}`, find);
-            } else user = await find();
-        }
+        if (typeof principal === 'number' || typeof principal === 'string')
+            user = await db.one(
+                userSchema,
+                "select * from users where id=$1 and account_type='person' limit 1",
+                [principal],
+            );
         if (user) await db.actor(user.id);
         return new Session(
             db,
@@ -231,8 +207,7 @@ export class Session {
             request,
             clientAddress,
             cipher,
-            stores.valkey,
-            context,
+            valkey,
             sessionId ?? randomToken(),
             data,
             user ?? null,
@@ -466,70 +441,30 @@ export class Workspace {
         readonly moduleId: string,
     ) {}
 
-    // Tanpa cache konteks, query yang sama persis dengan pembanding dasar langsung berjalan.
-    private static cached<T>(
-        session: Session,
-        key: string,
-        load: () => Promise<T>,
-        boundary?: () => Promise<number | null>,
-    ): Promise<T> {
-        return session.context
-            ? session.context.remember(key, load, boundary)
-            : load();
-    }
-
     private static async memberships(
         db: Database,
         session: Session,
     ): Promise<Membership[]> {
         const user = session.requireUser();
-        return this.cached(session, `memberships:${user.id}`, async () => {
-            const memberships = await db.rows(
-                membershipSchema,
-                "select m.id,m.tenant_id from tenant_memberships m where m.user_id=$1 and m.status='active' order by m.created_at",
-                [user.id],
+        const memberships = await db.rows(
+            membershipSchema,
+            "select m.id,m.tenant_id from tenant_memberships m where m.user_id=$1 and m.status='active' order by m.created_at",
+            [user.id],
+        );
+        if (memberships.length) {
+            const tenantIds = memberships.map(
+                (membership) => membership.tenant_id,
             );
-            if (memberships.length) {
-                const tenantIds = memberships.map(
-                    (membership) => membership.tenant_id,
-                );
-                await db.rows(
-                    z.object({ id: z.string() }),
-                    `select id from tenants where id in (${tenantIds.map((_, index) => `$${index + 1}`).join(',')})`,
-                    tenantIds,
-                );
-            }
-            return memberships;
-        });
+            await db.rows(
+                z.object({ id: z.string() }),
+                `select id from tenants where id in (${tenantIds.map((_, index) => `$${index + 1}`).join(',')})`,
+                tenantIds,
+            );
+        }
+        return memberships;
     }
 
-    // Batas validitas berikutnya penugasan dan scope keanggotaan ini (optimized.md, bagian 2), dalam milidetik.
-    private static async boundary(
-        db: Database,
-        membership: Membership,
-    ): Promise<number | null> {
-        const row = await db.one(
-            z.object({ min: z.string().nullable() }),
-            "select min(t) from ( select a.valid_until as t from role_assignments a where a.membership_id = $1 and a.status = 'active' and a.valid_until > now() union all select a.valid_from from role_assignments a where a.membership_id = $1 and a.status = 'active' and a.valid_from > now() union all select s.valid_until from role_assignment_data_policy_scopes s join role_assignments a on a.id = s.role_assignment_id where a.membership_id = $1 and s.tenant_id = $2 and s.valid_until > now() union all select s.valid_from from role_assignment_data_policy_scopes s join role_assignments a on a.id = s.role_assignment_id where a.membership_id = $1 and s.tenant_id = $2 and s.valid_from > now() ) boundaries",
-            [membership.id, membership.tenant_id],
-        );
-        return row?.min ? utcInstant(row.min) : null;
-    }
-
-    private static policies(
-        db: Database,
-        session: Session,
-        membership: Membership,
-    ): Promise<Map<string, Policy>> {
-        return this.cached(
-            session,
-            `policies:${membership.id}:${membership.tenant_id}`,
-            () => this.readPolicies(db, membership),
-            () => this.boundary(db, membership),
-        );
-    }
-
-    private static async readPolicies(
+    private static async policies(
         db: Database,
         membership: Membership,
     ): Promise<Map<string, Policy>> {
@@ -593,7 +528,6 @@ export class Workspace {
 
     private static async organizations(
         db: Database,
-        session: Session,
         membership: Membership,
         policies: Map<string, Policy>,
     ): Promise<Organization[]> {
@@ -615,39 +549,15 @@ export class Workspace {
             ),
         ];
         if (!all && !ids.length) return [];
-        const read = (scoped: string[] | null) =>
-            db.rows(
-                organizationSchema,
-                `select id,tenant_id,name,classification from organizations where tenant_id=$1 and status='active' ${scoped ? `and id in (${scoped.map((_, index) => `$${index + 2}`).join(',')})` : ''} order by name`,
-                [membership.tenant_id, ...(scoped ?? [])],
-            );
-        if (!session.context) return read(all ? null : ids);
-        // Entri organisasi dikunci tenant saja, jadi yang disimpan seluruh organisasi aktif tenant; saringan scope
-        // keanggotaan dihitung per request dan urutan nama tetap.
-        const active = await session.context.remember(
-            `organizations:${membership.tenant_id}`,
-            () => read(null),
-        );
-        if (all) return active;
-        const allowed = new Set(ids);
-        return active.filter((item) => allowed.has(item.id));
-    }
-
-    private static permissions(
-        db: Database,
-        session: Session,
-        membership: Membership,
-        moduleId: string,
-    ): Promise<Set<string>> {
-        return this.cached(
-            session,
-            `permissions:${membership.id}:${membership.tenant_id}:${moduleId}`,
-            () => this.readPermissions(db, membership, moduleId),
-            () => this.boundary(db, membership),
+        const scoped = all ? null : ids;
+        return db.rows(
+            organizationSchema,
+            `select id,tenant_id,name,classification from organizations where tenant_id=$1 and status='active' ${scoped ? `and id in (${scoped.map((_, index) => `$${index + 2}`).join(',')})` : ''} order by name`,
+            [membership.tenant_id, ...(scoped ?? [])],
         );
     }
 
-    private static async readPermissions(
+    private static async permissions(
         db: Database,
         membership: Membership,
         moduleId: string,
@@ -694,10 +604,9 @@ export class Workspace {
             validation({
                 membership_id: 'Tenant tidak tersedia untuk identity ini.',
             });
-        const policies = await this.policies(db, session, membership);
+        const policies = await this.policies(db, membership);
         const organizations = await this.organizations(
             db,
-            session,
             membership,
             policies,
         );
@@ -759,17 +668,11 @@ export class Workspace {
             delete session.data.workspace;
             abort(403, 'Tidak ada tenant aktif untuk permintaan ini.');
         }
-        const permissions = await this.permissions(
-            db,
-            session,
-            membership,
-            moduleId,
-        );
+        const permissions = await this.permissions(db, membership, moduleId);
         if (!permissions.size) abort(403, 'Tidak ada izin untuk module ini.');
-        const policies = await this.policies(db, session, membership);
+        const policies = await this.policies(db, membership);
         const organizations = await this.organizations(
             db,
-            session,
             membership,
             policies,
         );

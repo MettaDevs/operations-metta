@@ -109,7 +109,7 @@ async function harness() {
                 headers: { 'sec-fetch-site': 'same-origin' },
             }),
             ip,
-            { valkey: null, contextCache: null },
+            null,
         );
         log = [];
         let status = 200;

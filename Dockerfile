@@ -11,4 +11,4 @@ COPY --from=build /app/dist ./dist
 USER bun
 ENV HOST=0.0.0.0 PORT=8000
 EXPOSE 8000
-CMD ["bun", "dist/hono.js"]
+CMD ["bun", "dist/elysia.js"]

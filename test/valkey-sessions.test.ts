@@ -82,11 +82,7 @@ function harness(failing = false) {
             cookie: `laravel-session=${encodeURIComponent(new CookieCipher(config.key).encrypt('laravel-session', id))}`,
         },
     });
-    const open = () =>
-        Session.open(db, config, request, '10.0.0.7', {
-            valkey,
-            contextCache: null,
-        });
+    const open = () => Session.open(db, config, request, '10.0.0.7', valkey);
     return { id, store, commands, statements, open };
 }
 
