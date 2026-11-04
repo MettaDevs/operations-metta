@@ -1,0 +1,69 @@
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
+
+const environmentSchema = z.object({
+    DB_HOST: z.string().default('127.0.0.1'),
+    DB_PORT: z.coerce.number().int().positive().default(18640),
+    DB_DATABASE: z
+        .string()
+        .regex(
+            /^(?:erp_compare_ts(?:_[a-z0-9]+)?|erp_compare_final_(?:hono|elysia))$/,
+        ),
+    DB_USERNAME: z.string().default('compare_admin'),
+    DB_PASSWORD: z.string().min(1),
+    APP_KEY: z.string().min(1),
+    APP_PREVIOUS_KEYS: z.literal('').default(''),
+    SESSION_DRIVER: z.literal('database').default('database'),
+    SESSION_ENCRYPT: z.literal('false').default('false'),
+    CACHE_STORE: z.literal('database').default('database'),
+    CACHE_PREFIX: z.string().default('laravel-cache-'),
+    COREERP_LICENSE_REQUIRED: z.literal('false').default('false'),
+    COREERP_BASE_DOMAIN: z.literal('').default(''),
+    HOST: z.string().default('127.0.0.1'),
+    PORT: z.coerce.number().int().positive().optional(),
+    MODULE_ID: z.string().default('management-aset'),
+    SESSION_COOKIE: z.string().default('laravel-session'),
+    SESSION_LIFETIME: z.coerce.number().int().positive().default(120),
+    SESSION_SECURE_COOKIE: z.enum(['true', 'false']).default('false'),
+    SESSION_LOTTERY_HITS: z.coerce.number().int().min(0).default(2),
+    SESSION_LOTTERY_OUT_OF: z.coerce.number().int().positive().default(100),
+    DB_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+    TRACE_FILE: z.string().optional(),
+    // Saklar versi teroptimasi (optimized.md); bawaannya perilaku pembanding dasar.
+    SESSION_BACKEND: z.enum(['database', 'valkey']).default('database'),
+    VALKEY_HOST: z.string().min(1).default('valkey'),
+    VALKEY_PORT: z.coerce.number().int().positive().default(6379),
+    SESSION_KEY_PREFIX: z.string().default('coreerp-session:'),
+    CONTEXT_CACHE: z.enum(['off', 'on']).default('off'),
+    CONTEXT_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+});
+
+export function loadConfig() {
+    const privateValues: Record<string, string> = {};
+    if (process.env.COMPARE_ENV) {
+        for (const line of readFileSync(process.env.COMPARE_ENV, 'utf8').split(
+            /\r?\n/,
+        )) {
+            const position = line.indexOf('=');
+            if (position > 0 && !line.startsWith('#')) {
+                privateValues[line.slice(0, position)] = line.slice(
+                    position + 1,
+                );
+            }
+        }
+    }
+    const values = environmentSchema.parse({
+        ...privateValues,
+        ...process.env,
+        DB_DATABASE: process.env.DB_DATABASE ?? 'erp_compare_ts',
+    });
+    const key = values.APP_KEY.startsWith('base64:')
+        ? Buffer.from(values.APP_KEY.slice(7), 'base64')
+        : Buffer.from(values.APP_KEY);
+    if (key.length !== 32) {
+        throw new Error('APP_KEY must contain a 32-byte AES-256 key.');
+    }
+    return { ...values, key };
+}
+
+export type Config = ReturnType<typeof loadConfig>;
