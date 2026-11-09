@@ -8,11 +8,19 @@
 
 ## Susunan repo
 
-- `src/` adalah Core.
-  - `src/platform/` berisi bagian yang dipakai setiap request: identitas, sesi, akses, tenant, pool database, dan actor audit.
-  - `src/foundation/` berisi layanan bisnis bersama: number sequence, mata uang, dan posting finance.
+Keputusan pemilik produk, 9 November 2026: susunan folder mengikuti Business Central. Folder disusun per area bisnis lalu per fitur, bukan per jenis teknis, dan semua berkas satu fitur ada di satu folder. Sumbernya bisa dibaca di BCApps, misalnya `src/Layers/W1/BaseApp/FixedAssets/` dan `src/System Application/App/Email/`.
+
+- `src/` adalah Core, setara System Application dan Business Foundation di BC.
+  - `src/platform/<kemampuan>/` berisi bagian yang dipakai setiap request: `config`, `database`, `http`, `identity`, `access`, dan `money`.
+  - `src/foundation/<layanan>/` berisi layanan bisnis bersama: `currency`, `number-sequence`, dan `finance-posting`.
+  - Setiap folder kemampuan atau layanan punya `index.ts` sebagai satu-satunya pintu publik, setara pasangan `Email` dan `Email Impl` di BC. Kode di luar folder itu hanya meng-import `index.ts`-nya. Berkas di dalam satu folder boleh saling meng-import langsung.
 - `modules/<nama>/` berisi satu package Bun workspace per module. Module pertama adalah `modules/asset-management/`.
-- `src/main.ts` adalah satu-satunya berkas Core yang merangkai module ke dalam runtime. Di luar berkas itu, Core tidak pernah meng-import module. `bun run check:boundaries` menolak pelanggarannya.
+  - `src/index.ts` adalah pintu publik module. `src/module.ts` memegang kode module dan konteks kerjanya.
+  - Di bawah `src/` folder disusun per area lalu per fitur, misalnya `fixed-asset/asset-receipt/` dan `depreciation/`. Nama area dan fitur mengikuti nama di manifest CoreERP.
+  - Berkas satu fitur memakai akhiran peran: `.schema.ts` (bentuk baris dan input), `.service.ts` (aturan bisnis), `.routes.ts` (endpoint), `.posting.ts` atau peran lain bila memang perlu, dan `.test.ts` di sampingnya. Layar fitur nanti ditaruh di folder yang sama.
+- Test diletakkan di samping berkas yang diujinya. Tidak ada folder `test/` terpisah.
+- `src/main.ts` adalah satu-satunya berkas Core yang merangkai module ke dalam runtime. Di luar berkas itu, Core tidak pernah meng-import module.
+- `bun run check:boundaries` menolak impor dari Core ke module, impor yang melewati `index.ts` sebuah kemampuan, module yang meng-import Core tanpa `@core/`, dan nama tabel module di `src/`.
 
 ## Aturan module
 
@@ -49,7 +57,7 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
 
 Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diberi kode otomatis. Mulai sekarang kode hanya ada bila memang dipakai orang.
 
-- Mesin number sequence di `src/foundation/number-sequence.ts` tetap seperti di CoreERP: scope, reset fiskal, mode continuous dan non-continuous, dan preallocation.
+- Mesin number sequence di `src/foundation/number-sequence/` tetap seperti di CoreERP: scope, reset fiskal, mode continuous dan non-continuous, dan preallocation.
 - Nomor otomatis hanya untuk dua hal: dokumen transaksi (penerimaan, mutasi, penjualan, pemusnahan, work order, dan sejenisnya) dan master utama yang dicari orang lewat kodenya, misalnya aset.
 - Master setup kecil, misalnya kondisi aset, tipe lokasi, dan sebab kerusakan, tidak memakai number sequence. Bila orang memang mengetik atau menyaring dengan kode, kodenya pendek dan diketik pengguna, seperti field `Code` di Business Central. Bila tidak, cukup nama dan ID internal.
 - Baris dokumen dan entri ledger tidak punya kode bisnis.
