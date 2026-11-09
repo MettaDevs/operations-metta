@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
-import { assetManagementRoutes } from '../modules/asset-management/src/router.ts';
+import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
 import { Workspace } from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {

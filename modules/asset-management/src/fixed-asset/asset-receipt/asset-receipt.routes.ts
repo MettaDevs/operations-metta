@@ -1,4 +1,3 @@
-import { Workspace } from '@core/platform/access/index.ts';
 import {
     base,
     bodyInput,
@@ -7,24 +6,14 @@ import {
     recordInput,
     type Context,
 } from '@core/platform/http/index.ts';
-import { Receipts } from './receipts.ts';
+import { moduleId, moduleWorkspace } from '../../module.ts';
+import { Receipts } from './asset-receipt.service.ts';
 
-// Kode app module ini di CoreERP. Route, izin, kebijakan data, dan referensi nomor diturunkan darinya.
-const moduleId = 'management-aset';
-
-export function assetManagementRoutes() {
+export function assetReceiptRoutes() {
     async function domain(context: Context, body?: unknown) {
-        context.session.csrf(body);
-        const workspace = await Workspace.resolve(
-            context.db,
-            context.session,
-            moduleId,
-            moduleId + '.asset-responsibility',
-        );
-        return new Receipts(context.db, workspace);
+        return new Receipts(context.db, await moduleWorkspace(context, body));
     }
     const receiptPath: `/${string}` = `/api/modules/${moduleId}/v1/penerimaan-aset`;
-    const assetPath: `/${string}` = `/api/modules/${moduleId}/v1/aset`;
     return {
         receiptList: base
             .route({
@@ -115,30 +104,6 @@ export function assetManagementRoutes() {
             .input(recordInput)
             .handler(async ({ context, input }) =>
                 ok(await (await domain(context)).assets(input.params.id)),
-            ),
-        assetList: base
-            .route({
-                method: 'GET',
-                path: assetPath,
-                outputStructure: 'detailed',
-            })
-            .handler(async ({ context }) =>
-                ok(
-                    await (
-                        await domain(context)
-                    ).inventory.list(new URL(context.request.url).searchParams),
-                ),
-            ),
-        assetShow: base
-            .route({
-                method: 'GET',
-                path: `${assetPath}/{id}`,
-                inputStructure: 'detailed',
-                outputStructure: 'detailed',
-            })
-            .input(recordInput)
-            .handler(async ({ context, input }) =>
-                (await domain(context)).inventory.show(input.params.id),
             ),
     };
 }

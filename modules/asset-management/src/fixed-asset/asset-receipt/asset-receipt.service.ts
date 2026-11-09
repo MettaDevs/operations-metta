@@ -19,11 +19,19 @@ import {
     validation,
 } from '@core/platform/http/index.ts';
 import { Decimal } from '@core/platform/money/index.ts';
-import { Inventory } from './inventory.ts';
-import { detailSchema, headerSchema, parseReceipt } from './model.ts';
-import type { ReceiptDetail, ReceiptHeader, ReceiptInput } from './model.ts';
-import { assetCodes } from './number-scope.ts';
-import { AcquisitionPosting } from './posting.ts';
+import { assetCodes } from '../asset/asset.code.ts';
+import { Inventory } from '../asset/asset.service.ts';
+import { AcquisitionPosting } from './asset-receipt.posting.ts';
+import {
+    detailSchema,
+    headerSchema,
+    parseReceipt,
+} from './asset-receipt.schema.ts';
+import type {
+    ReceiptDetail,
+    ReceiptHeader,
+    ReceiptInput,
+} from './asset-receipt.schema.ts';
 
 const headerTable = 'aset_tr_penerimaan_aset';
 const detailTable = 'aset_tr_penerimaan_aset_details';

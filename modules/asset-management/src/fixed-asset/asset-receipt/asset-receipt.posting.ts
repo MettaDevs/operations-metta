@@ -9,8 +9,8 @@ import type { Workspace } from '@core/platform/access/index.ts';
 import type { Database } from '@core/platform/database/index.ts';
 import { nowIso } from '@core/platform/database/index.ts';
 import { Decimal } from '@core/platform/money/index.ts';
-import type { Inventory } from './inventory.ts';
-import type { ReceiptDetail, ReceiptHeader } from './model.ts';
+import type { Inventory } from '../asset/asset.service.ts';
+import type { ReceiptDetail, ReceiptHeader } from './asset-receipt.schema.ts';
 
 const accountLabels = {
     acquisition_account_id: 'harga perolehan',
