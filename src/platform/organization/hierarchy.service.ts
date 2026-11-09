@@ -13,6 +13,7 @@ import {
     createHierarchySchema,
     draftSchema,
     graphHierarchySchema,
+    hierarchyListRowSchema,
     graphNodeSchema,
     graphVersionSchema,
     nodeSchema,
@@ -117,8 +118,8 @@ export class OrganizationHierarchies {
         };
     }
 
-    batch(parameters: URLSearchParams) {
-        return incrementalList(this.db, {
+    async batch(parameters: URLSearchParams) {
+        const batch = await incrementalList(this.db, {
             query: 'select id, name, status, version from organization_hierarchies where tenant_id = $1',
             bindings: [this.workspace.tenantId],
             parameters,
@@ -128,6 +129,11 @@ export class OrganizationHierarchies {
             defaultSort: 'name',
             defaultDirection: 'asc',
         });
+        // Baris yang sama dengan kolom query di atas, dibaca lewat schema supaya tipenya sampai ke layar.
+        return {
+            data: z.array(hierarchyListRowSchema).parse(batch.data),
+            next_cursor: batch.next_cursor,
+        };
     }
 
     // Versi milik tenant, untuk menyaring organisasi yang sudah ditempatkan.

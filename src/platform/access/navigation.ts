@@ -21,6 +21,30 @@ export const coreNavigation: NavigationGroupEntry[] = [
         label: 'Dashboard',
         items: [{ id: 'dashboard', label: 'Ringkasan', href: '/dashboard' }],
     },
+    {
+        id: 'organization',
+        label: 'Organisasi',
+        items: [
+            {
+                id: 'legal-entities',
+                label: 'Perusahaan',
+                href: '/settings/legal-entities',
+                permission: 'core.organization.read',
+            },
+            {
+                id: 'operating-units',
+                label: 'Operating unit',
+                href: '/settings/operating-units',
+                permission: 'core.organization.read',
+            },
+            {
+                id: 'organization-hierarchies',
+                label: 'Hierarki organisasi',
+                href: '/settings/organization-hierarchies',
+                permission: 'core.organization.read',
+            },
+        ],
+    },
 ];
 
 export type NavigationItem = { id: string; label: string; href: string };

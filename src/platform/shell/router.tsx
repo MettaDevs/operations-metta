@@ -1,10 +1,12 @@
 import { Button } from '@operations-metta/ui/button';
 import { Toaster } from '@operations-metta/ui/sonner';
+import { Spinner } from '@operations-metta/ui/spinner';
 import { TooltipProvider } from '@operations-metta/ui/tooltip';
 import {
     QueryCache,
     QueryClient,
     QueryClientProvider,
+    useQueryErrorResetBoundary,
 } from '@tanstack/react-query';
 import {
     createRootRouteWithContext,
@@ -147,9 +149,44 @@ export const indexRoute = createRoute({
     },
 });
 
+// Data halaman gagal dimuat: pesannya tetap terlihat di tempat halaman, dengan jalan untuk mencoba lagi. Bingkai Shell
+// tetap ada, jadi pengguna masih bisa berpindah ke halaman lain.
+function PageError({ error, reset }: ErrorComponentProps): ReactNode {
+    const router = useRouter();
+    const queries = useQueryErrorResetBoundary();
+    return (
+        <div className="flex flex-col items-start gap-3 p-6">
+            <p role="alert" className="text-sm">
+                {errorText(error, 'Halaman ini belum dapat dimuat.')}
+            </p>
+            <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                    queries.reset();
+                    reset();
+                    void router.invalidate();
+                }}
+            >
+                Coba lagi
+            </Button>
+        </div>
+    );
+}
+
+function PagePending(): ReactNode {
+    return (
+        <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Spinner /> Memuat…
+        </div>
+    );
+}
+
 export const routerOptions = {
     context: { queryClient } satisfies RouterContext,
     defaultPreload: 'intent' as const,
+    defaultErrorComponent: PageError,
+    defaultPendingComponent: PagePending,
 };
 
 export function startClient(router: AnyRouter): void {

@@ -322,6 +322,7 @@ export class Organizations {
             throw error;
         }
         const [saved] = await this.rows([found.id]);
+        if (!saved) throw new Error('Updated organization is missing.');
         return { status: 200, headers: {}, body: { data: saved } };
     }
 

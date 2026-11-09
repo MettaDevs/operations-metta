@@ -188,3 +188,11 @@ export const graphHierarchySchema = z.object({
     version: z.number(),
 });
 export { graphNodeSchema, purposeSchema };
+
+// Satu baris daftar hierarchy di layar.
+export const hierarchyListRowSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    status: z.string(),
+    version: z.number(),
+});

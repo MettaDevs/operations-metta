@@ -53,6 +53,7 @@
             "route": {
                 "method": "GET",
                 "path": "/api/v1/settings/legal-entities",
+                "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }
         }
@@ -64,6 +65,7 @@
             "route": {
                 "method": "GET",
                 "path": "/api/v1/settings/operating-units",
+                "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }
         }
@@ -75,6 +77,7 @@
             "route": {
                 "method": "GET",
                 "path": "/api/v1/settings/organization-hierarchies",
+                "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }
         }

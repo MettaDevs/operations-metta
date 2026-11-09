@@ -37,6 +37,16 @@ const cursorSchema = z
     })
     .catchall(z.union([z.string(), z.number(), z.boolean()]));
 
+// Search params daftar bertahap. Layar mengirimnya sebagai query string, jadi semua nilainya teks.
+export const listParametersSchema = z.object({
+    q: z.string().max(200).optional(),
+    sort: z.string().optional(),
+    direction: z.enum(['asc', 'desc']).optional(),
+    cursor: z.string().max(2000).optional(),
+    per_page: z.coerce.number().int().min(1).max(100).optional(),
+    record_id: z.string().max(100).optional(),
+});
+
 export async function incrementalList(
     db: Database,
     options: {
@@ -51,16 +61,7 @@ export async function incrementalList(
     },
 ): Promise<{ data: JsonObject[]; next_cursor: string | null }> {
     const input = Object.fromEntries(options.parameters);
-    const parsed = z
-        .object({
-            q: z.string().max(200).optional(),
-            sort: z.string().optional(),
-            direction: z.enum(['asc', 'desc']).optional(),
-            cursor: z.string().max(2000).optional(),
-            per_page: z.coerce.number().int().min(1).max(100).optional(),
-            record_id: z.string().max(100).optional(),
-        })
-        .safeParse(input);
+    const parsed = listParametersSchema.safeParse(input);
     if (!parsed.success)
         validation(
             Object.fromEntries(
