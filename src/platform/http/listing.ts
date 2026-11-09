@@ -24,18 +24,24 @@ export function searchTerms(
 const searchableText = (column: string) =>
     `to_tsvector('simple'::regconfig, regexp_replace(normalize(coalesce(cast(${column} as text), ''), NFC), '[^[:alnum:]]+', ' ', 'g'))`;
 
-const cursorSchema = z
-    .object({
-        list_sort_null: z.union([z.literal(0), z.literal(1)]),
-        list_sort_value: z.union([z.string(), z.number(), z.boolean()]),
-        id: idSchema.optional(),
-        _pointsToNextItems: z
-            .union([z.boolean(), z.string(), z.number()])
-            .transform((value) =>
-                value === '0' || value === '' ? false : Boolean(value),
-            ),
-    })
-    .catchall(z.union([z.string(), z.number(), z.boolean()]));
+// Kunci baris daftar: uuid, atau teks untuk tabel berkunci kode seperti country_regions. Teks yang bukan uuid tidak
+// pernah sampai ke kolom uuid, karena PostgreSQL menolaknya.
+type IdType = 'uuid' | 'text';
+const textId = z.string().min(1).max(100);
+
+const cursorSchema = (idType: IdType) =>
+    z
+        .object({
+            list_sort_null: z.union([z.literal(0), z.literal(1)]),
+            list_sort_value: z.union([z.string(), z.number(), z.boolean()]),
+            id: (idType === 'uuid' ? idSchema : textId).optional(),
+            _pointsToNextItems: z
+                .union([z.boolean(), z.string(), z.number()])
+                .transform((value) =>
+                    value === '0' || value === '' ? false : Boolean(value),
+                ),
+        })
+        .catchall(z.union([z.string(), z.number(), z.boolean()]));
 
 // Search params daftar bertahap. Layar mengirimnya sebagai query string, jadi semua nilainya teks.
 export const listParametersSchema = z.object({
@@ -58,6 +64,7 @@ export async function incrementalList(
         numericColumns: string[];
         defaultSort: string;
         defaultDirection: 'asc' | 'desc';
+        idType?: IdType;
     },
 ): Promise<{ data: JsonObject[]; next_cursor: string | null }> {
     const input = Object.fromEntries(options.parameters);
@@ -72,6 +79,8 @@ export async function incrementalList(
             ),
         );
     const value = parsed.data;
+    const idType = options.idType ?? 'uuid';
+    const recordKey = (id: string) => (idType === 'uuid' ? lookupId(id) : id);
     const sort = options.columns[value.sort ?? options.defaultSort];
     if (!sort) validation({ sort: 'The selected sort is invalid.' });
     const direction =
@@ -83,7 +92,7 @@ export async function incrementalList(
         return '$' + bindings.length;
     };
     const filters: string[] = [];
-    if (value.record_id) filters.push('id=' + bind(lookupId(value.record_id)));
+    if (value.record_id) filters.push('id=' + bind(recordKey(value.record_id)));
     const ids = options.parameters.getAll('record_ids[]');
     if (ids.length > 100 || ids.some((id) => id.length > 100 || id.length < 1))
         validation({
@@ -93,7 +102,7 @@ export async function incrementalList(
     if (options.parameters.has('record_ids[]'))
         filters.push(
             ids.length
-                ? `id in (${ids.map((id) => bind(lookupId(id))).join(',')})`
+                ? `id in (${ids.map((id) => bind(recordKey(id))).join(',')})`
                 : 'false',
         );
     const keyword = (value.q ?? '').trim();
@@ -114,10 +123,10 @@ export async function incrementalList(
             filters.push(`(${matches.join(' or ')})`);
         }
     }
-    let cursor: z.infer<typeof cursorSchema> | null = null;
+    let cursor: z.infer<ReturnType<typeof cursorSchema>> | null = null;
     if (value.cursor) {
         try {
-            const candidate = cursorSchema.safeParse(
+            const candidate = cursorSchema(idType).safeParse(
                 JSON.parse(
                     Buffer.from(value.cursor, 'base64url').toString('utf8'),
                 ),
