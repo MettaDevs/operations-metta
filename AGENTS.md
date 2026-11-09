@@ -100,12 +100,13 @@ Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena 
 
 ## Sebelum menyatakan hijau
 
-Jalankan dari akar repo. Semuanya harus lulus.
+Jalankan dari akar repo. Keempat pemeriksaan ini wajib lulus untuk setiap perubahan:
 
 ```bash
 bun run typecheck
 bun test
 bun run format:check
 bun run check:boundaries
-bun run build ## BUILD HANYA JIKA PERLU tidak harus semua kadang kan  ##
 ```
+
+`bun run build` hanya perlu dijalankan bila perubahan menyentuh hasil build: `package.json`, `bun.lock`, `tsconfig.json`, `Dockerfile`, atau `src/main.ts`. Untuk perubahan lain, lewati saja, karena build memakan waktu dan CI tetap menjalankannya di setiap PR.
