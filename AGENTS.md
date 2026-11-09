@@ -100,11 +100,12 @@ Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena 
 
 ## Alur kerja
 
-Keputusan pemilik produk, 9 November 2026: tidak ada pull request. Perubahan langsung masuk `main` karena lebih cepat. PR hanya dibuat bila pemilik memintanya.
+Keputusan pemilik produk, 9 November 2026: setiap perubahan masuk `main` lewat pull request, supaya CI selalu lulus sebelum perubahan sampai di `main`. PR tidak dibuat sebagai draft dan tidak menunggu review.
 
 - Kerjakan di worktree sendiri, lalu jalankan pemeriksaan di bagian [Sebelum menyatakan hijau](#sebelum-menyatakan-hijau).
-- Ambil `main` terbaru dan push langsung: `git pull --rebase origin main`, lalu `git push origin HEAD:main`. Push yang ditolak karena `main` sudah bergerak diulang dengan rebase, tidak pernah dengan `--force`.
-- CI berjalan di setiap push ke `main`. Bila merah, perbaikannya juga langsung masuk `main`, sebelum pekerjaan lain dilanjutkan.
+- Push branch-nya dan langsung buka PR biasa: `gh pr create --base main`. Jangan `--draft`.
+- Merge dengan squash begitu CI PR itu hijau. CI yang merah diperbaiki di branch yang sama, tidak pernah di-merge dalam keadaan merah.
+- Tidak ada push langsung ke `main`.
 - Sebelum menyentuh folder yang mungkin sedang dikerjakan sesi lain, periksa `git worktree list` dan kabari sesi itu lebih dulu.
 
 ## Worktree
@@ -112,10 +113,10 @@ Keputusan pemilik produk, 9 November 2026: tidak ada pull request. Perubahan lan
 Keputusan pemilik produk, 9 November 2026: worktree tidak dibuat di folder kerja di luar repo, supaya folder kerja tidak dipenuhi salinan repo yang lupa dihapus.
 
 - Worktree hanya dibuat di `.worktrees/<nama>` di dalam clone ini: `git worktree add .worktrees/<nama> -b <branch> origin/main`. Folder `.worktrees/` sudah di-ignore git.
-- Hapus begitu pekerjaannya masuk `main`: `git worktree remove .worktrees/<nama>`, lalu `git branch -D <branch>`. Jangan menghapus foldernya dengan `rm -rf`.
+- Hapus begitu PR-nya di-merge: `git worktree remove .worktrees/<nama>`, lalu `git branch -D <branch>`. Jangan menghapus foldernya dengan `rm -rf`.
 - `git worktree list` menampilkan semua worktree yang masih ada. Periksa sebelum memulai pekerjaan baru.
 - `bun scripts/prune-worktrees.ts`, dijalankan dari clone utama, menghapus worktree di `.worktrees/` yang commit-nya sudah ada di `main` dan HEAD-nya tidak bergerak 24 jam, atau yang PR-nya sudah di-merge atau ditutup, beserta branch lokalnya. Batas 24 jam melindungi worktree yang baru dibuat dari `main` dan belum diisi. Worktree yang masih punya perubahan belum di-commit atau commit yang belum masuk `main` tidak disentuh. Tambahkan `--dry-run` untuk melihat hasilnya tanpa menghapus apa pun.
-- Setiap worktree yang dibiarkan dilaporkan tertinggal berapa commit dari `main` dan sudah berapa hari tidak disentuh, dengan tanda `LAMA` sesudah tujuh hari. Jalankan perintah itu di awal setiap sesi. Worktree `LAMA` diputuskan saat itu juga: selesaikan dan push ke `main`, atau gabungkan `main` terbaru ke branch-nya sebelum dilanjutkan.
+- Setiap worktree yang dibiarkan dilaporkan tertinggal berapa commit dari `main` dan sudah berapa hari tidak disentuh, dengan tanda `LAMA` sesudah tujuh hari. Jalankan perintah itu di awal setiap sesi. Worktree `LAMA` diputuskan saat itu juga: selesaikan dan merge PR-nya, gabungkan `main` terbaru ke branch-nya sebelum dilanjutkan, atau tutup PR-nya supaya terhapus pada putaran berikutnya.
 - Nama foldernya harus tetap berawalan titik. Prettier mengabaikannya karena tercantum di `.gitignore`, `bun test` tidak masuk ke folder berawalan titik, dan `tsconfig.json` hanya membaca folder yang disebut. Folder tanpa titik akan ikut dijalankan `bun test`.
 
 ## Sebelum menyatakan hijau
