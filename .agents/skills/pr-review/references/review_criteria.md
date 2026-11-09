@@ -1,7 +1,8 @@
 # Kriteria review operations-metta
 
 Baca aturan pada branch/revisi yang sedang dinilai dan aturan terbaru di `AGENTS.md`. Untuk alur yang
-dipindah dari CoreERP, perilaku CoreERP adalah acuan dan harness kesetaraan di `parity/` buktinya.
+dipindah dari CoreERP, perilaku CoreERP adalah acuan. Untuk alur yang menghitung atau mencatat uang atau nomor,
+harness kesetaraan di `parity/` buktinya; alur lain dibuktikan test berbasis database.
 Jelaskan perbedaannya jika contoh lama belum mengikuti aturan terbaru. Jangan menjadikan legacy
 sebagai pengecualian untuk source baru.
 

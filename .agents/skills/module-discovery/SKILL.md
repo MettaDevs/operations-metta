@@ -48,7 +48,7 @@ Run these skills in order; do not duplicate their detailed rules here:
 2. Use `number-sequence-design` only when the approved proposal marks a number reference `required`.
 3. Use `operations-metta-page-standard` and `operations-metta-ui` only when the approved change creates or changes a business screen.
 4. Use `api-design`, `security-review`, and the contract decision gate only when the approved change exposes an API, internal command, webhook, or cross-runtime event.
-5. Use the load and correctness gate in `operations-metta-architecture`, and for a ported flow the parity harness in `parity/`, before declaring an implemented module complete.
+5. Use the load and correctness gate in `operations-metta-architecture`, and for a ported flow that computes or records money or numbers the parity harness in `parity/` (`AGENTS.md`, Kapan sebuah alur dianggap pindah), before declaring an implemented module complete.
 
 ## Number reference decision
 

@@ -33,7 +33,7 @@ In CoreERP, phase 1 shipped the dataset contract, registry, and validator; the q
 - The engine has no business vocabulary, so it is a Core capability under `src/platform/<capability>/` with one `index.ts` (table Susunan repo in `AGENTS.md`).
 - Each module's datasets live inside that module, next to the area and feature they describe.
 - How a module registers its datasets with Core is not decided. CoreERP used a singleton registry filled from each module's service provider; this repository has no provider mechanism. Ask the product owner before inventing one, and keep the rule below that Core never hard-codes a module table or column name.
-- A ported query is finished only when the parity harness shows the same rows and SQL obligations as CoreERP for the same input (`AGENTS.md`, Kapan sebuah alur dianggap pindah).
+- A ported query is finished when it meets the rule in `AGENTS.md` (Kapan sebuah alur dianggap pindah): a query that computes money amounts or numbers needs the parity harness to show the same rows and SQL obligations as CoreERP for the same input; other queries need database-backed tests that prove CoreERP's behaviour.
 
 ## Boundaries that never bend
 

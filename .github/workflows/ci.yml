@@ -60,6 +60,10 @@ jobs:
       - name: Check boundaries
         run: bun run check:boundaries
 
+      # Golden run dan conformance hanya bisa berjalan di lab; di sini cukup test pembanding dan pemetaan id harness.
+      - name: Test the parity harness
+        run: python3 -B -m unittest discover -s parity
+
       - name: Migrate the test database
         run: bun run migrate
 

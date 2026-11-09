@@ -147,13 +147,16 @@ Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diber
 
 ## Kapan sebuah alur dianggap pindah
 
-- Sebuah alur dianggap pindah hanya setelah harness kesetaraan melaporkannya identik dengan CoreERP untuk input yang sama. Harness itu terdiri dari:
+Keputusan pemilik produk, 9 November 2026: harness kesetaraan hanya wajib untuk alur yang menyentuh uang dan nomor. Kesalahan kecil di alur itu langsung menjadi angka keuangan yang salah, sedangkan alur lain cukup dibuktikan test.
+
+- **Alur yang dipindah dari CoreERP dan menghitung atau mencatat uang atau nomor** dianggap pindah hanya setelah harness kesetaraan melaporkannya identik dengan CoreERP untuk input yang sama. Termasuk di sini posting ke finance, penyusutan, penomoran dokumen, dan nilai uang lain yang disimpan. Harness itu terdiri dari:
   - Golden run, yang membandingkan respons HTTP dan jejak SQL.
   - Conformance, yang antara lain menguji pencabutan akses, rollback, dan throttle.
   - Oracle SQL, yang memeriksa isi database langsung tanpa memakai kode aplikasi.
-- Harness itu ada di `parity/` repo ini, dipindah dari eksperimen CoreERP. Hasil CoreERP yang tersimpan memakai ULID dan dipetakan ke uuid saat dibaca. Cara menjalankannya dan daftar waiver-nya ada di `parity/README.md`. Data acuan dan secret fixture tetap di server lab, tidak pernah masuk repo.
+- **Alur lain yang dipindah dari CoreERP**, misalnya master seperti Organization dan buku alamat, dianggap pindah setelah test berbasis database di repo ini membuktikan perilaku CoreERP yang dipindah: validasi, kasus tolak, efek ke database, dan izin. Acuannya tetap kode dan test CoreERP.
+- **Alur baru yang tidak ada di CoreERP**, misalnya alur layanan kesehatan, tidak punya acuan kesetaraan. Buktinya test berbasis database ditambah syarat beban dan kebenaran.
+- Harness itu ada di `parity/` repo ini, dipindah dari eksperimen CoreERP. Hasil CoreERP yang tersimpan memakai ULID dan dipetakan ke uuid saat dibaca. Cara menjalankannya dan daftar waiver-nya ada di `parity/README.md`. Data acuan dan secret fixture tetap di server lab, tidak pernah masuk repo. Golden run dan conformance hanya bisa dijalankan di lab; test untuk harness itu sendiri berjalan di CI.
 - Sebuah module boleh disebut sudah pindah setelah [pemeriksaan kesetiaan](docs/design-system/04-pemeriksaan-kesetiaan.md) terpenuhi seluruhnya, termasuk syarat beban dan kebenarannya.
-- Test yang lulus di repo ini belum berarti sebuah alur sudah pindah.
 
 ## Kontrak
 
