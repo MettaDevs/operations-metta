@@ -16,11 +16,5 @@
             "@core/*": ["./src/*"]
         }
     },
-    "include": [
-        "src/**/*.ts",
-        "test/**/*.ts",
-        "modules/*/src/**/*.ts",
-        "modules/*/test/**/*.ts",
-        "scripts/**/*.ts"
-    ]
+    "include": ["src/**/*.ts", "modules/*/src/**/*.ts", "scripts/**/*.ts"]
 }
