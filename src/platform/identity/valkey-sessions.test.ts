@@ -19,7 +19,7 @@ const config = {
     SESSION_SECURE_COOKIE: 'false',
 } as unknown as Config;
 const user = {
-    id: 3,
+    id: '019a6b3c-1d2e-7f40-8a5b-6c7d8e9f0a1b',
     name: 'User',
     email: 'user@example.test',
     password: 'hash',
@@ -29,7 +29,7 @@ const user = {
     two_factor_confirmed_at: null,
 };
 
-function harness(failing = false) {
+function harness(failing = false, principal: string | number = user.id) {
     const store = new Map<string, string>();
     const commands: (string | number)[][] = [];
     const fail = () => Promise.reject(new Error('Connection closed'));
@@ -72,7 +72,7 @@ function harness(failing = false) {
     store.set(
         prefix + id,
         Buffer.from(
-            JSON.stringify({ _token: 'token', [guardKey]: user.id }),
+            JSON.stringify({ _token: 'token', [guardKey]: principal }),
         ).toString('base64'),
     );
     const request = new Request('http://localhost/logout', {
@@ -103,6 +103,13 @@ test('logout deletes the old key and saves the new session with the lifetime TTL
     );
     expect(saved).toEqual({ _token: session.data._token });
     expect(statements.some((query) => query.includes('sessions'))).toBe(false);
+});
+
+test('a session saved before user ids became uuid opens logged out without querying users', async () => {
+    const { statements, open } = harness(false, 3);
+    const session = await open();
+    expect(session.user).toBeNull();
+    expect(statements).toEqual([]);
 });
 
 test('a Valkey failure becomes a 503 instead of falling back to the database', async () => {

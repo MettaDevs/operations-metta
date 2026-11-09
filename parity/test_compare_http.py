@@ -25,6 +25,7 @@ def generated(number: int, coreerp: bool) -> str:
 def flow(offset: int = 0, coreerp: bool = False) -> dict:
     """CoreERP menyimpan ULID; kandidat membaca seed uuid dan membangkitkan id baru sendiri."""
     seed = (lambda value: value) if coreerp else ids.ulid_to_uuid
+    actor = 1 if coreerp else ids.user_id_to_uuid(1)
     record_id = generated(100 + offset, coreerp)
     details = [{"id": generated(200 + offset, coreerp), "penerimaan_aset_id": record_id}]
     assets = [{"id": generated(300 + offset + i, coreerp), "kode": f"A{i}", "lokasi_aset_id": seed(LOCATION)} for i in range(3)]
@@ -47,10 +48,11 @@ def flow(offset: int = 0, coreerp: bool = False) -> dict:
             body = {"data": {"id": record_id, "tenant_id": seed(TENANT), "lokasi_aset_id": seed(LOCATION), "creation_key": "compare-unit",
                              "lokasi_aset_nama": "Location simulasi 01m6g2rvpjw0ads6d17dqew6qw-0001", "details": copy.deepcopy(details),
                              "posting": {"posting_id": "AST-ACQ-" + record_id, "status": "pending"},
-                             "created_at": "2026-11-03 00:00:00", "updated_at": "2026-11-03 00:00:00", "amount": "1000000.00"}}
+                             "created_at": "2026-11-03 00:00:00", "updated_at": "2026-11-03 00:00:00", "amount": "1000000.00",
+                             "created_by_user_id": actor, "updated_by_user_id": actor, "diterima_oleh_user_id": None}}
         events.append({"operation": operation, "status": 201 if operation == "receipt-create" else 200, "headers": headers, "body": body,
                        "started_at": "2026-11-03T00:00:00+00:00", "finished_at": "2026-11-03T00:00:20+00:00"})
-    account = {"index": 0, "user_id": 1, "tenant_id": seed(TENANT), "legal_entity_id": seed(LEGAL_ENTITY), "membership_id": seed(MEMBERSHIP)}
+    account = {"index": 0, "user_id": actor, "tenant_id": seed(TENANT), "legal_entity_id": seed(LEGAL_ENTITY), "membership_id": seed(MEMBERSHIP)}
     return {"source_sha": PROFILE["source_sha"], "profile_id": PROFILE["id"], "fixture_id": "01m6g2rvpjw0ads6d17dqew6qw",
             "fixture_hash": "unit-fixture-hash", "run_id": "unit", "account": account, "authentication": [{"status": 200}] * 3, "events": events}
 
@@ -67,7 +69,8 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual("NOT VERIFIED", compare_runs(flow(coreerp=True), flow(10))["verdict"])
 
     def test_seed_id_or_name_mismatch_fails(self):
-        for key, value in [("lokasi_aset_id", ids.ulid_to_uuid("01M6G2RVPJW0ADS6D17DQEW6R1")), ("lokasi_aset_nama", "Location simulasi lain")]:
+        for key, value in [("lokasi_aset_id", ids.ulid_to_uuid("01M6G2RVPJW0ADS6D17DQEW6R1")), ("lokasi_aset_nama", "Location simulasi lain"),
+                           ("created_by_user_id", ids.user_id_to_uuid(2)), ("created_by_user_id", 1)]:
             other = flow(10)
             other["events"][1]["body"]["data"][key] = value
             result = compare_runs(expected(), other)
@@ -96,7 +99,7 @@ class HarnessTests(unittest.TestCase):
         other = flow(10)
         other["authentication"][0] = {"status": 401}
         self.assertEqual(compare_runs(expected(), other)["verdict"], "NOT VERIFIED")
-        for account in [None, {**flow()["account"], "index": 1, "user_id": 2}]:
+        for account in [None, {**flow()["account"], "index": 1}, {**flow()["account"], "user_id": ids.user_id_to_uuid(2)}]:
             other = flow(10)
             other["account"] = account
             self.assertEqual(compare_runs(expected(), other)["verdict"], "NOT VERIFIED", account)

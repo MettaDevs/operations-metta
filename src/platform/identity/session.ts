@@ -10,7 +10,7 @@ import {
 import { z } from 'zod';
 import type { Config } from '../config/index.ts';
 import { Database } from '../database/index.ts';
-import { abort, HttpFailure, validation } from '../http/index.ts';
+import { abort, HttpFailure, idSchema, validation } from '../http/index.ts';
 import { RateLimiter } from './login-limiter.ts';
 import type { ValkeySessions } from './valkey-sessions.ts';
 
@@ -38,7 +38,7 @@ const sessionSchema = z
     })
     .catchall(z.json());
 const userSchema = z.object({
-    id: z.coerce.number().int().positive(),
+    id: idSchema,
     name: z.string(),
     email: z.string(),
     password: z.string(),
@@ -174,13 +174,14 @@ export class Session {
                 }
             }
         } else sessionId = null;
-        const principal = data[guardKey];
+        // Sesi dari sebelum id pengguna menjadi uuid memegang id angka, dan dibaca sebagai belum login.
+        const principal = idSchema.safeParse(data[guardKey]);
         let user: z.infer<typeof userSchema> | undefined;
-        if (typeof principal === 'number' || typeof principal === 'string')
+        if (principal.success)
             user = await db.one(
                 userSchema,
                 "select * from users where id=$1 and account_type='person' limit 1",
-                [principal],
+                [principal.data],
             );
         if (user) await db.actor(user.id);
         return new Session(

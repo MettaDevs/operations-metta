@@ -152,7 +152,7 @@ WITH input AS (
  )
 ), ack AS (
  SELECT item.* FROM input, jsonb_to_recordset(data->'acknowledgements') AS item(
-   user_id bigint, tenant_id uuid, legal_entity_id uuid, receipt_id uuid, creation_key text, receipt_code text,
+   user_id uuid, tenant_id uuid, legal_entity_id uuid, receipt_id uuid, creation_key text, receipt_code text,
    outcome text, version integer, asset_ids jsonb, asset_codes jsonb, posting_id text, body jsonb
  )
 ), ack_asset AS (
@@ -328,7 +328,7 @@ def probes(acknowledgements: list[dict], baseline: dict) -> list[tuple[str, str,
         ("soft_deleted_receipt", f"UPDATE aset_tr_penerimaan_aset SET deleted_at=now() WHERE id='{receipt}'", acknowledgements, {"ack_receipt_stored"}),
         ("header_input", f"UPDATE aset_tr_penerimaan_aset SET tanggal_siap_pakai=tanggal_siap_pakai+1 WHERE id='{receipt}'", acknowledgements, {"ack_header_input"}),
         ("detail_input", f"UPDATE aset_tr_penerimaan_aset_details SET nama=nama||' diubah' WHERE penerimaan_aset_id='{receipt}'", acknowledgements, {"ack_detail_input"}),
-        ("asset_actor", f"UPDATE aset_tr_aset SET created_by_user_id=created_by_user_id+1 WHERE penerimaan_aset_id='{receipt}'", acknowledgements, {"ack_actor"}),
+        ("asset_actor", f"UPDATE aset_tr_aset SET created_by_user_id=gen_random_uuid() WHERE penerimaan_aset_id='{receipt}'", acknowledgements, {"ack_actor"}),
         ("seed_row_changed", f"UPDATE aset_tr_penerimaan_aset SET keterangan='diubah' WHERE id='{seed}'", acknowledgements, {"baseline_rows_changed"}),
         ("missing_acknowledgement", "", acknowledgements[1:], {"unacknowledged_aset_tr_penerimaan_aset", "unacknowledged_aset_tr_aset", "unacknowledged_finance_postings", "unacknowledged_number_sequence_issues"}),
         ("phantom_acknowledgement", "", acknowledgements + [phantom], {"ack_receipt_stored"}),

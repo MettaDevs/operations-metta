@@ -31,7 +31,8 @@ def flow() -> dict:
 class LedgerTests(unittest.TestCase):
     def test_flow_binds_fixture_input_not_generator_payload(self):
         entry = bind([flow_acknowledgement(flow())], FIXTURE)[0]
-        self.assertEqual((7, ids.ulid_to_uuid(TENANT), RECEIPT, 5, ASSETS), (entry["user_id"], entry["tenant_id"], entry["receipt_id"], entry["version"], entry["asset_ids"]))
+        self.assertEqual((ids.user_id_to_uuid(7), ids.ulid_to_uuid(TENANT), RECEIPT, 5, ASSETS),
+                         (entry["user_id"], entry["tenant_id"], entry["receipt_id"], entry["version"], entry["asset_ids"]))
         self.assertIs(entry["body"], FIXTURE["tenants"][0]["receipt_body"])
 
     def test_missing_or_repeated_acknowledgement_fails(self):
@@ -44,7 +45,7 @@ class LedgerTests(unittest.TestCase):
                     flow_acknowledgement(run)
 
     def test_account_must_match_the_normalized_fixture(self):
-        for key, value in [("user_id", 8), ("tenant_id", TENANT), ("membership_id", str(uuid.UUID(int=1)))]:
+        for key, value in [("user_id", ids.user_id_to_uuid(8)), ("user_id", 7), ("tenant_id", TENANT), ("membership_id", str(uuid.UUID(int=1)))]:
             entry = flow_acknowledgement(flow())
             entry["account"][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):

@@ -26,7 +26,7 @@ export class Workspace {
     private constructor(
         readonly tenantId: string,
         readonly membershipId: string,
-        readonly userId: number,
+        readonly userId: string,
         readonly legalEntityId: string | null,
         readonly orgUnitId: string | null,
         readonly permissions: Set<string>,

@@ -155,8 +155,8 @@ export const headerSchema = z
         vendor_id: nullableText,
         vendor_invoice_reference: nullableText,
         vendor_invoice_date: nullableText,
-        created_by_user_id: z.coerce.number().nullable(),
-        updated_by_user_id: z.coerce.number().nullable(),
+        created_by_user_id: idSchema.nullable(),
+        updated_by_user_id: idSchema.nullable(),
         purchase_order_reference: nullableText,
     })
     .catchall(z.json());
@@ -189,8 +189,8 @@ export const detailSchema = z
         akumulasi_per_unit: z.string(),
         periode_berjalan: z.number(),
         saldo_awal_buku: z.json(),
-        created_by_user_id: z.coerce.number().nullable(),
-        updated_by_user_id: z.coerce.number().nullable(),
+        created_by_user_id: idSchema.nullable(),
+        updated_by_user_id: idSchema.nullable(),
         version: z.number(),
     })
     .catchall(z.json());
