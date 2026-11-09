@@ -66,7 +66,7 @@
                 ]
             },
             "reason": "Migration 0002 (id ULID menjadi uuid) menulis ulang trigger aset_capture_book_ledger: source_id tetap varchar sedangkan NEW.id kini uuid, jadi NEW.id menjadi NEW.id::text dan baris komentar 0002 ikut masuk teks statement. Statement lain, jumlah panggilan (3), dan tabel yang ditulis sama. Bila teks trigger berubah lagi, entri ini berhenti cocok dan gate kembali merah.",
-            "evidence": "Golden 9 November 2026 di lab (seed erp_compare_uuid_seed, image dari branch code/uuid): oracle SQL 44 pemeriksaan bersih termasuk ledger_matches_asset (tepat satu baris ledger acquisition per aset, source_id = id receipt, acquisition_delta = nilai aset); total panggilan nested 196 = 196."
+            "evidence": "Golden 9 November 2026 di lab (seed uuid hasil migration 0002, image dari branch code/uuid): oracle SQL 44 pemeriksaan bersih termasuk ledger_matches_asset (tepat satu baris ledger acquisition per aset, source_id = id receipt, acquisition_delta = nilai aset); total panggilan nested 196 = 196."
         }
     ]
 }
