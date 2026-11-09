@@ -45,6 +45,28 @@
             "match": "pg_type",
             "reason": "Bun berjalan dua proses reusePort; proses yang membuka koneksi pertamanya membaca katalog pg_type untuk pemetaan tipe postgres.js, di aksi mana pun koneksi itu pertama dipakai. Metadata driver, bukan kerja bisnis.",
             "evidence": "Lab eksperimen: d3-hono-queries.json (login-page) dan d5-elysia-queries.json (login)"
+        },
+        {
+            "operations": [
+                "receipt-complete"
+            ],
+            "kind": "nested-work",
+            "match": {
+                "statements": [
+                    {
+                        "query": "INSERT INTO aset_tr_ledger_aset(id, tenant_id, aset_id, buku_aset_id, buku_id, legal_entity_id, responsible_org_unit_id, group_aset_id, asset_code, asset_name, book_code, currency_code, posting_date, posting_type, source_type, source_id, document_number, description, acquisition_delta, accumulated_delta, write_down_delta, appreciation_delta, amount, created_at, updated_at) VALUES (gen_random_uuid(), NEW.tenant_id, NEW.aset_id, NEW.id, NEW.buku_id, asset_row.legal_entity_id, asset_row.responsible_org_unit_id, asset_row.group_aset_id, asset_row.kode, asset_row.nama, NEW.book_code, asset_row.currency_code, entry_date, entry_type, coalesce(context->>$45, $46), -- 0002: NEW.id kini uuid, sedangkan source_id tetap teks. coalesce(context->>$47, NEW.id::text), coalesce(context->>$48, asset_row.kode), context->>$49, acq, acc, wd, ap, acq - acc - wd + ap, now(), now())",
+                        "expected": 0,
+                        "actual": 3
+                    },
+                    {
+                        "query": "INSERT INTO aset_tr_ledger_aset(id, tenant_id, aset_id, buku_aset_id, buku_id, legal_entity_id, responsible_org_unit_id, group_aset_id, asset_code, asset_name, book_code, currency_code, posting_date, posting_type, source_type, source_id, document_number, description, acquisition_delta, accumulated_delta, write_down_delta, appreciation_delta, amount, created_at, updated_at) VALUES (gen_random_uuid(), NEW.tenant_id, NEW.aset_id, NEW.id, NEW.buku_id, asset_row.legal_entity_id, asset_row.responsible_org_unit_id, asset_row.group_aset_id, asset_row.kode, asset_row.nama, NEW.book_code, asset_row.currency_code, entry_date, entry_type, coalesce(context->>$45, $46), coalesce(context->>$47, NEW.id), coalesce(context->>$48, asset_row.kode), context->>$49, acq, acc, wd, ap, acq - acc - wd + ap, now(), now())",
+                        "expected": 3,
+                        "actual": 0
+                    }
+                ]
+            },
+            "reason": "Migration 0002 (id ULID menjadi uuid) menulis ulang trigger aset_capture_book_ledger: source_id tetap varchar sedangkan NEW.id kini uuid, jadi NEW.id menjadi NEW.id::text dan baris komentar 0002 ikut masuk teks statement. Statement lain, jumlah panggilan (3), dan tabel yang ditulis sama. Bila teks trigger berubah lagi, entri ini berhenti cocok dan gate kembali merah.",
+            "evidence": "Golden 9 November 2026 di lab (seed erp_compare_uuid_seed, image dari branch code/uuid): oracle SQL 44 pemeriksaan bersih termasuk ledger_matches_asset (tepat satu baris ledger acquisition per aset, source_id = id receipt, acquisition_delta = nilai aset); total panggilan nested 196 = 196."
         }
     ]
 }
