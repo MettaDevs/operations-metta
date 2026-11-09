@@ -29,6 +29,7 @@ import {
     typedBody,
     type Context,
 } from './platform/http/index.ts';
+import { geographyRoutes } from './platform/geography/index.ts';
 import {
     loginInputSchema,
     Session,
@@ -98,6 +99,7 @@ export const router = {
         }),
     ...shellRoutes(),
     ...organizationRoutes(),
+    ...geographyRoutes(),
     ...assetManagementRoutes(),
 };
 export type Router = typeof router;

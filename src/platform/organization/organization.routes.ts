@@ -3,6 +3,7 @@ import { Workspace } from '../access/index.ts';
 import {
     base,
     bodyInput,
+    failOn,
     lookupId,
     mutationInput,
     ok,
@@ -11,7 +12,6 @@ import {
 } from '../http/index.ts';
 import { OrganizationHierarchies } from './hierarchy.service.ts';
 import {
-    failOn,
     operatingUnitTypes,
     organizationPageQuerySchema,
 } from './organization.schema.ts';

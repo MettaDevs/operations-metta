@@ -29,6 +29,9 @@ export function validation(errors: Record<string, string | string[]>): never {
     throw new HttpFailure(422, { message, errors: normalized });
 }
 
+export const staleMessage =
+    'Perubahanmu belum disimpan karena data ini sudah diubah sejak kamu membukanya. Muat ulang untuk melihat data terbaru, lalu ulangi perubahanmu.';
+
 export function coded(status: number, code: string, message: string): never {
     throw new HttpFailure(status, { error: { code, message } });
 }
