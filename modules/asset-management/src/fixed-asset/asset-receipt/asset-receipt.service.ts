@@ -14,6 +14,7 @@ import {
     abort,
     coded,
     expectedVersion,
+    idSchema,
     incrementalList,
     lookupId,
     validation,
@@ -120,7 +121,7 @@ export class Receipts {
             row.penanggung_jawab_user_id !== null
                 ? await this.db.rows(
                       z.object({
-                          user_id: z.coerce.string(),
+                          user_id: idSchema,
                           name: z.string(),
                       }),
                       "select m.id,m.user_id,u.name,u.email from tenant_memberships m join users u on u.id=m.user_id where m.tenant_id=$1 and m.status='active' order by u.name",
@@ -762,7 +763,7 @@ export class Receipts {
                     storage_path: z.string(),
                     content_hash: z.string(),
                     data_class: z.string(),
-                    created_by_user_id: z.coerce.number().nullable(),
+                    created_by_user_id: idSchema.nullable(),
                 }),
                 "select * from document_attachments where tenant_id=$1 and record_type='aset_tr_penerimaan_aset' and record_id=$2 and kind='document' and deleted_at is null order by id for update",
                 [this.workspace.tenantId, id],

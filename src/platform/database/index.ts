@@ -143,9 +143,9 @@ export class Database {
         return this.depth > 0;
     }
 
-    async actor(userId: number | null): Promise<void> {
+    async actor(userId: string | null): Promise<void> {
         await this.execute("select set_config('coreerp.user_id', $1, false)", [
-            userId === null ? '' : String(userId),
+            userId ?? '',
         ]);
     }
 }

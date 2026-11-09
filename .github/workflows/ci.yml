@@ -84,7 +84,7 @@ jobs:
       - name: Migrate an empty database
         run: bun scripts/migrate.ts
 
-      - name: Check ids are uuid and the ULID mapping is exact
+      - name: Check ids and user ids are uuid and both mappings are exact
         run: psql -X -v ON_ERROR_STOP=1 -f database/check-ids.sql
 
       - name: Migrate again without changes
