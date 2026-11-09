@@ -27,6 +27,10 @@ const environmentSchema = z.object({
     VALKEY_HOST: z.string().min(1).default('valkey'),
     VALKEY_PORT: z.coerce.number().int().positive().default(6379),
     SESSION_KEY_PREFIX: z.string().default('coreerp-session:'),
+    // Pelaporan kesalahan ke Sentry. Kosong berarti mati, dan itu bawaannya.
+    SENTRY_DSN: z.url().optional(),
+    SENTRY_ENVIRONMENT: z.string().min(1).optional(),
+    SENTRY_RELEASE: z.string().min(1).optional(),
 });
 
 export function loadConfig() {
