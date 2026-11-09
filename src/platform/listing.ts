@@ -20,6 +20,9 @@ export function searchTerms(
     );
 }
 
+const searchableText = (column: string) =>
+    `to_tsvector('simple'::regconfig, regexp_replace(normalize(coalesce(cast(${column} as text), ''), NFC), '[^[:alnum:]]+', ' ', 'g'))`;
+
 const cursorSchema = z
     .object({
         list_sort_null: z.union([z.literal(0), z.literal(1)]),
@@ -99,19 +102,14 @@ export async function incrementalList(
                 ? words.join(' ')
                 : words.map((word) => `'${word}':*`).join(' & ');
             const position = bind(expression);
-            filters.push(
-                '(' +
-                    options.searchColumns
-                        .map(
-                            (column) =>
-                                `to_tsvector('simple'::regconfig,regexp_replace(normalize(coalesce(cast(${column} as text),''),NFC),'[^[:alnum:]]+',' ','g')) @@ ${term.phrase ? 'phraseto_tsquery' : 'to_tsquery'}('simple'::regconfig,${position})`,
-                        )
-                        .join(' or ') +
-                    ')',
+            const tsquery = term.phrase ? 'phraseto_tsquery' : 'to_tsquery';
+            const matches = options.searchColumns.map(
+                (column) =>
+                    `${searchableText(column)} @@ ${tsquery}('simple'::regconfig, ${position})`,
             );
+            filters.push(`(${matches.join(' or ')})`);
         }
     }
-    let query = `select list_records.*,case when ${sort} is null then 1 else 0 end as list_sort_null,${numeric ? `coalesce(${sort},0)` : `coalesce(cast(${sort} as text),'')`} as list_sort_value from (${options.query}) list_records${filters.length ? ' where ' + filters.join(' and ') : ''}`;
     let cursor: z.infer<typeof cursorSchema> | null = null;
     if (value.cursor) {
         try {
@@ -136,19 +134,38 @@ export async function incrementalList(
     const forward = cursor?._pointsToNextItems ?? true;
     const nullDirection = forward ? 'asc' : 'desc';
     const order = forward ? direction : direction === 'asc' ? 'desc' : 'asc';
+    const sortNull = `case when ${sort} is null then 1 else 0 end`;
+    const sortValue = numeric
+        ? `coalesce(${sort}, 0)`
+        : `coalesce(cast(${sort} as text), '')`;
+    const where = filters.length ? `where ${filters.join(' and ')}` : '';
+    let keyset = '';
     if (cursor) {
-        const nullPosition = bind(cursor.list_sort_null);
-        const valuePosition = bind(cursor.list_sort_value);
+        const nullAt = bind(cursor.list_sort_null);
+        const valueAt = bind(cursor.list_sort_value);
         const comparison = order === 'asc' ? '>' : '<';
-        let condition = `list_sort_null${forward ? '>' : '<'}${nullPosition} or (list_sort_null=${nullPosition} and (`;
-        condition += `list_sort_value${comparison}${valuePosition}`;
-        if (sort !== 'id')
-            condition += ` or (list_sort_value=${valuePosition} and id${comparison}${bind(cursor.id ?? '')})`;
-        condition += '))';
-        query = `select * from (${query}) sorted_records where ${condition}`;
-    } else query = `select * from (${query}) sorted_records`;
+        const tie =
+            sort === 'id'
+                ? ''
+                : `or (list_sort_value = ${valueAt} and id ${comparison} ${bind(cursor.id ?? '')})`;
+        keyset = `
+            where list_sort_null ${forward ? '>' : '<'} ${nullAt}
+               or (list_sort_null = ${nullAt} and (list_sort_value ${comparison} ${valueAt} ${tie}))`;
+    }
     const size = value.per_page ?? 40;
-    query += ` order by list_sort_null ${nullDirection},list_sort_value ${order}${sort === 'id' ? '' : ',id ' + order} limit ${size + 1}`;
+    const query = `
+        select *
+        from (
+            select list_records.*,
+                   ${sortNull} as list_sort_null,
+                   ${sortValue} as list_sort_value
+            from (${options.query}) list_records
+            ${where}
+        ) sorted_records
+        ${keyset}
+        order by list_sort_null ${nullDirection},
+                 list_sort_value ${order}${sort === 'id' ? '' : `, id ${order}`}
+        limit ${size + 1}`;
     const rows = await db.rows(jsonObject, query, bindings);
     const more = rows.length > size;
     const items = rows.slice(0, size);

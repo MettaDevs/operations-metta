@@ -724,7 +724,19 @@ export class Inventory {
             }
         }
         const result = await incrementalList(this.db, {
-            query: `select a.*,g.nama as group_nama,t.nama as type_nama,l.nama as location_nama,(select name from organizations o where o.tenant_id=a.tenant_id and o.id=a.legal_entity_id limit 1) as legal_entity_nama from aset_tr_aset a left join aset_m_group_aset g on g.id=a.group_aset_id and g.tenant_id=a.tenant_id left join aset_m_jenis_aset t on t.id=a.jenis_aset_id and t.tenant_id=a.tenant_id left join aset_m_lokasi_aset l on l.id=a.lokasi_aset_id and l.tenant_id=a.tenant_id where ${where}`,
+            query: `
+                select a.*,
+                       g.nama as group_nama,
+                       t.nama as type_nama,
+                       l.nama as location_nama,
+                       (select name from organizations o
+                         where o.tenant_id = a.tenant_id and o.id = a.legal_entity_id
+                         limit 1) as legal_entity_nama
+                from aset_tr_aset a
+                left join aset_m_group_aset g on g.id = a.group_aset_id and g.tenant_id = a.tenant_id
+                left join aset_m_jenis_aset t on t.id = a.jenis_aset_id and t.tenant_id = a.tenant_id
+                left join aset_m_lokasi_aset l on l.id = a.lokasi_aset_id and l.tenant_id = a.tenant_id
+                where ${where}`,
             bindings,
             parameters,
             columns: {
