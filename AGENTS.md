@@ -95,11 +95,13 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
 Server butuh database yang sudah dimigrasi dan `APP_KEY` (32 byte, `base64:...`), sama dengan test. Isi `DB_*` dan `APP_KEY` di `.env` atau env shell, lalu:
 
 ```bash
-bun run migrate
+bun run dev:setup  # migration, lalu tenant contoh dari dev/tenants.json
 bun run dev        # http://127.0.0.1:8000
 ```
 
-`bun run dev` menjalankan server dengan `bun --watch`, dan server dinyalakan ulang bila kode server berubah. Build peramban diulang setiap kali berkas di `src/`, `modules/`, atau `packages/ui/src/` berubah. Muat ulang halaman untuk melihat hasilnya. Untuk menjalankan hasil build seperti di image: `bun run build`, lalu `bun dist/main.js`. Pengguna untuk login dibuat lewat `test/support/tenant-fixtures.ts` (`createTenant`, `createMember`, `grantAllOrganizations`); kata sandinya `testPassword` di berkas itu.
+`bun run dev:setup` memigrasi database dev lalu membuat setiap tenant di `dev/tenants.json` beserta admin pertamanya, lewat `provisionEnvironment` yang juga dipakai penyiapan di server. Login dengan email dan kata sandi admin di berkas itu. Perintah ini aman diulang: tenant yang slug-nya sudah ada dilewati. Tambah tenant contoh dengan menambah entri di berkas itu; isinya data sintetis, dan kata sandinya hanya untuk laptop. Di server, tenant hanya lahir dari admin.erp, dan perintah ini tidak ikut ke image.
+
+`bun run dev` menjalankan server dengan `bun --watch`, dan server dinyalakan ulang bila kode server berubah. Build peramban diulang setiap kali berkas di `src/`, `modules/`, atau `packages/ui/src/` berubah. Muat ulang halaman untuk melihat hasilnya. Untuk menjalankan hasil build seperti di image: `bun run build`, lalu `bun dist/main.js`.
 
 ## Aturan module
 
@@ -129,7 +131,8 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
   - Database hasil restore dump CoreERP memakai `bun run migrate --adopt-coreerp`: `0001` setiap pemilik dicatat tanpa dijalankan setelah tabelnya terbukti ada, lalu sisanya diterapkan. Jalur ini dipakai alat uji kesetaraan untuk mengonversi seed CoreERP.
   - Tidak ada pemindahan data pelanggan dari CoreERP atau sistem lama. Pelanggan lama tetap di aplikasi lama sampai batas waktu yang ditentukan, dan repo ini mulai dari database kosong (keputusan pemilik produk, 9 November 2026).
   - Perubahan skema CoreERP sesudah `6b3cf584` tidak ikut otomatis. Bila dibutuhkan, tulis sebagai migration baru di sini. `database/find-ulid-text.sql` menemukan id ULID di kolom teks dan JSON pada dump yang lebih baru.
-- Migration tinggal bersama pemiliknya, karena module dibeli dan dipasang per lingkungan. Foldernya ada di tabel [Susunan repo](#susunan-repo), dan `scripts/migrate.ts` mencatat migration per pemilik di `schema_migrations`. Core berjalan lebih dulu, lalu module. Migration Core tidak membuat atau merujuk tabel module.
+- Migration tinggal bersama pemiliknya, karena module dibeli dan dipasang per lingkungan. Foldernya ada di tabel [Susunan repo](#susunan-repo), dan `migrate` di `src/platform/migration/` mencatat migration per pemilik di `schema_migrations`. `scripts/migrate.ts` hanya pembungkusnya. Core berjalan lebih dulu, lalu module. Migration Core tidak membuat atau merujuk tabel module.
+- Lingkungan disiapkan oleh `provisionEnvironment` di `src/platform/environment/`: database lingkungan dibuat dan hanya Core yang dimigrasi di dalamnya, lalu customer, tenant, admin pertama, dan role pemilik dengan semua duty Core ditulis dalam satu transaksi. Id datang dari control plane, jadi penyiapan yang diulang menemukan tenant yang sama dan tidak menulis apa pun. Admin pertama dibuat di database lingkungan sampai identitas pusat ada (keputusan pemilik produk, 9 November 2026). Module belum ikut; module dipasang dari entitlement.
   - `bun run migrate` memigrasi Core dan semua module. `bun run migrate --modules a,b` memigrasi Core ditambah module yang disebut saja, dan `--modules ''` hanya Core.
 - Id baru dibuat dengan `Bun.randomUUIDv7()`, termasuk id pengguna. API dan URL memakai teks UUID huruf kecil.
 - Konfigurasi runtime dan aturan database ditetapkan skill `operations-metta-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.

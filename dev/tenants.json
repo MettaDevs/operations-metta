@@ -1,0 +1,12 @@
+[
+    {
+        "legal_name": "PT Klinik Contoh Sehat",
+        "name": "Klinik Contoh Sehat",
+        "slug": "klinik-contoh",
+        "admin": {
+            "name": "Admin Klinik Contoh",
+            "email": "admin@klinik-contoh.test",
+            "password": "dev-klinik-contoh-saja"
+        }
+    }
+]

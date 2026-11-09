@@ -35,6 +35,16 @@ const environmentSchema = z.object({
     SENTRY_RELEASE: z.string().min(1).optional(),
 });
 
+// Cukup untuk membuka koneksi database, tanpa APP_KEY dan setelan server: dipakai migrate dan dev:setup.
+export const databaseSettingsSchema = environmentSchema.pick({
+    DB_HOST: true,
+    DB_PORT: true,
+    DB_DATABASE: true,
+    DB_USERNAME: true,
+    DB_PASSWORD: true,
+});
+export type DatabaseSettings = z.infer<typeof databaseSettingsSchema>;
+
 export function loadConfig(
     environment: Record<string, string | undefined> = process.env,
 ) {
