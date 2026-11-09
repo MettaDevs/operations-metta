@@ -1,8 +1,9 @@
 """Bukti bahwa normalisasi harness sama dengan konversi skema yang dipakai kandidat.
 
-Dua pemeriksaan: ulid_to_uuid/uuid_to_ulid Python sama bit demi bit dengan fungsi SQL di database uuid, dan
-setiap baris seed CoreERP yang dinormalisasi sama persis dengan barisnya di seed uuid. Jalankan ulang setiap
-kali skema berubah; baris yang berbeda berarti aturan kunci di ids.py atau konversi skemanya perlu ditinjau.
+Dua pemeriksaan: ulid_to_uuid/uuid_to_ulid dan user_id_to_uuid/uuid_to_user_id Python sama bit demi bit dengan
+fungsi SQL di database uuid, dan setiap baris seed CoreERP yang dinormalisasi sama persis dengan barisnya di seed
+uuid. Jalankan ulang setiap kali skema berubah; baris yang berbeda berarti aturan kunci di ids.py atau konversi
+skemanya perlu ditinjau.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def dump(lab: Lab, database: str, names: list[str]) -> dict[str, list[dict]]:
 
 
 def normalize_row(table: str, row: dict) -> dict:
-    normalized = ids.normalize(row)
+    normalized = ids.normalize_row(table, row)
     # Konversi skema menghitung ulang input_hash dengan id uuid hanya bila resepnya cocok dengan hash tersimpan.
     if table == "finance_postings" and isinstance(row.get("input"), dict):
         try:
@@ -68,10 +69,17 @@ def function_agreement(lab: Lab, database: str, count: int) -> dict:
     values += ["00000000000000000000000000", "7ZZZZZZZZZZZZZZZZZZZZZZZZZ", "01JC9X0V2B3C4D5E6F7G8H9JKM"]
     values += [value.lower() for value in values[:100]]
     literal = json.dumps(values).replace("'", "''")
-    rows = json.loads(lab.sql("SELECT json_agg(json_build_array(v, public.ulid_to_uuid(v)::text, public.uuid_to_ulid(public.ulid_to_uuid(v)))) "
-                              f"FROM json_array_elements_text('{literal}') v;", database))
-    mismatched = [row for row in rows if row[1] != ids.ulid_to_uuid(row[0]) or row[2] != ids.uuid_to_ulid(row[1])]
-    return {"values": len(rows), "mismatched": mismatched[:5], "mismatch_count": len(mismatched)}
+    ulid_rows = json.loads(lab.sql("SELECT json_agg(json_build_array(v, public.ulid_to_uuid(v)::text, public.uuid_to_ulid(public.ulid_to_uuid(v)))) "
+                                   f"FROM json_array_elements_text('{literal}') v;", database))
+    mismatched = [row for row in ulid_rows if row[1] != ids.ulid_to_uuid(row[0]) or row[2] != ids.uuid_to_ulid(row[1])]
+    users = [generator.randrange(ids.BIGINT_LIMIT) for _ in range(count)] + [generator.randrange(1 << 20) for _ in range(100)]
+    users += [0, 1, 12, ids.BIGINT_LIMIT - 1]
+    user_rows = json.loads(lab.sql("SELECT json_agg(json_build_array(v::text, public.user_id_to_uuid(v)::text, "
+                                   "public.uuid_to_user_id(public.user_id_to_uuid(v))::text)) "
+                                   f"FROM unnest('{{{','.join(map(str, users))}}}'::bigint[]) v;", database))
+    mismatched += [row for row in user_rows
+                   if row[1] != ids.user_id_to_uuid(int(row[0])) or int(row[2]) != ids.uuid_to_user_id(row[1])]
+    return {"values": len(ulid_rows) + len(user_rows), "mismatched": mismatched[:5], "mismatch_count": len(mismatched)}
 
 
 if __name__ == "__main__":

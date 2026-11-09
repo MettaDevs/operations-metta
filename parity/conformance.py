@@ -149,9 +149,9 @@ def http_probes(base: str, fixture: dict, password: str) -> dict:
 def revocation(base: str, fixture: dict, password: str, lab: Lab, database: str) -> list[dict]:
     """Izin dibaca ulang tiap request: mutasi akses pada sesi yang masih hidup harus langsung berlaku."""
     account = fixture["accounts"][3]
-    membership, user_id = account["membership_id"], int(account["user_id"])
-    if not ids.UUID.fullmatch(membership):
-        raise ValueError("Fixture membership ID is not a canonical UUID.")
+    membership, user_id = account["membership_id"], account["user_id"]
+    if not all(isinstance(value, str) and ids.UUID.fullmatch(value) for value in [membership, user_id]):
+        raise ValueError("Fixture membership or user ID is not a canonical UUID.")
     client = Client(base)
     client.login(account, password)
     path = "/api/modules/" + fixture["module_id"] + "/v1/penerimaan-aset"
@@ -198,12 +198,12 @@ def revocation(base: str, fixture: dict, password: str, lab: Lab, database: str)
             lambda row: f"UPDATE tenant_memberships SET status={literal(row['status'])} WHERE id={literal(row['id'])};")
     observe("membership-restored")
     # Margin 60 detik di kedua sisi lifetime 120 menit; ::integer membulatkan, jadi -7201 jatuh tepat di batas detik.
-    run(f"UPDATE sessions SET last_activity=floor(extract(epoch FROM now()))::integer-7140 WHERE user_id={user_id};")
+    run(f"UPDATE sessions SET last_activity=floor(extract(epoch FROM now()))::integer-7140 WHERE user_id='{user_id}';")
     observe("database-session-near-lifetime")
-    run(f"UPDATE sessions SET last_activity=floor(extract(epoch FROM now()))::integer-7260 WHERE user_id={user_id};")
+    run(f"UPDATE sessions SET last_activity=floor(extract(epoch FROM now()))::integer-7260 WHERE user_id='{user_id}';")
     observe("database-session-expired")
     client.login(account, password)
-    run(f"DELETE FROM sessions WHERE user_id={user_id};")
+    run(f"DELETE FROM sessions WHERE user_id='{user_id}';")
     observe("database-session-deleted")
     client.login(account, password)
     observe("new-session-after-revocation")

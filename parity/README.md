@@ -4,7 +4,7 @@ Harness ini membuktikan operations-metta berperilaku sama dengan CoreERP untuk i
 
 - `golden.py` menjalankan satu golden run. Ia meng-clone seed uuid, merekam baseline oracle, menjalankan alur HTTP bertrace, lalu empat gate: `compare_http.py`, `sql_oracle.py check`, `compare_posting.py`, dan `compare_queries.py`.
 - `conformance.py` menjalankan probe negatif, race, pencabutan akses, rollback, dan throttle pada clone baru, lalu membandingkannya dengan hasil CoreERP.
-- `ids.py` memetakan ULID ke uuid dan menerjemahkan bukti CoreERP.
+- `ids.py` memetakan ULID dan id pengguna ke uuid dan menerjemahkan bukti CoreERP.
 - `check_seed.py` membuktikan terjemahan itu sama dengan konversi skema pada seluruh seed.
 - `candidate.py` menjalankan image di jaringan lab. `lab.py` mengakses PostgreSQL lab.
 
@@ -18,6 +18,14 @@ Pemilik produk memutuskan pada 9 November 2026 bahwa setiap id ULID menjadi `uui
 - `input_hash` posting adalah hash atas id. Resepnya lebih dulu dicocokkan dengan hash tersimpan CoreERP, lalu hash diturunkan ulang dari input yang sudah diterjemahkan.
 - Baseline oracle berisi hash isi baris, jadi tidak bisa diterjemahkan. Baseline direkam ulang dari clone seed uuid sebelum kandidat berjalan, dan himpunan id-nya wajib sama dengan baseline CoreERP lewat `ulid_to_uuid`.
 - Id yang dibangkitkan selama alur dipetakan bijektif ke placeholder seperti `$receipt`, `$asset-<kode>`, dan `$posting`, sama dengan di eksperimen.
+
+## Id pengguna
+
+Pemilik produk memutuskan pada 9 November 2026 bahwa id pengguna menjadi `uuid`, karena identitas pengguna pindah ke control-plane-metta. Bukti CoreERP tetap memakai id `bigint`, sedangkan kandidat membaca seed yang dikonversi migration 0003.
+
+- `ids.user_id_to_uuid` dan `ids.uuid_to_user_id` sama dengan fungsi SQL di migration 0003: id `n` menjadi uuid bernilai `n`, dengan 64 bit atas nol.
+- Nilai di bawah kunci `user_id`, `*_user_id`, `created_by`, `updated_by`, `requested_by`, `sso_redeemed_by`, dan `principal_id` diganti bila berupa bilangan bulat atau teks angka desimal di rentang `bigint` yang tidak negatif. `actor_scope` berpemisah `:`. `users.id` hanya diganti lewat `ids.normalize_row`, karena kuncinya hanya `id`.
+- `user_index`, `users_per_tenant`, dan teks bebas di bawah kunci id pengguna tidak disentuh.
 
 ## Waiver
 
