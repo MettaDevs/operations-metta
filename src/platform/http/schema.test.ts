@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { idSchema, lookupId } from '../src/platform/model.ts';
+import { idSchema, lookupId } from './schema.ts';
 
 // ULID 01JC9X0V2B3C4D5E6F7G8H9JKM dengan 128 bit yang sama: bit versi dan varian RFC 9562 tidak terisi.
 const convertedUlid = '019313d0-6c4b-1b08-d2b8-cf3c1114ca74';

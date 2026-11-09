@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import type { Currency } from '@core/foundation/currency.ts';
+import type { Currency } from '@core/foundation/currency/index.ts';
 import type {
     FinancePostings,
     JournalLine,
     PostingInput,
-} from '@core/foundation/finance-posting.ts';
-import type { Database } from '@core/platform/db.ts';
-import { nowIso } from '@core/platform/model.ts';
-import { Decimal } from '@core/platform/money.ts';
-import type { Workspace } from '@core/platform/security.ts';
+} from '@core/foundation/finance-posting/index.ts';
+import type { Workspace } from '@core/platform/access/index.ts';
+import type { Database } from '@core/platform/database/index.ts';
+import { nowIso } from '@core/platform/database/index.ts';
+import { Decimal } from '@core/platform/money/index.ts';
 import type { Inventory } from './inventory.ts';
 import type { ReceiptDetail, ReceiptHeader } from './model.ts';
 

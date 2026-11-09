@@ -1,11 +1,15 @@
 import { z } from 'zod';
-import { Database } from '@core/platform/db.ts';
-import type { Bind } from '@core/platform/db.ts';
-import { abort, validation } from '@core/platform/errors.ts';
-import { incrementalList } from '@core/platform/listing.ts';
-import { dateSchema, lookupId, nowSql } from '@core/platform/model.ts';
-import { Decimal } from '@core/platform/money.ts';
-import type { Workspace } from '@core/platform/security.ts';
+import type { Workspace } from '@core/platform/access/index.ts';
+import { Database, nowSql } from '@core/platform/database/index.ts';
+import type { Bind } from '@core/platform/database/index.ts';
+import {
+    abort,
+    dateSchema,
+    incrementalList,
+    lookupId,
+    validation,
+} from '@core/platform/http/index.ts';
+import { Decimal } from '@core/platform/money/index.ts';
 import { assetSchema } from './model.ts';
 import type { DetailInput, ReceiptDetail, ReceiptHeader } from './model.ts';
 

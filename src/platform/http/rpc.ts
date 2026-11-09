@@ -1,8 +1,8 @@
 import { ORPCError, os } from '@orpc/server';
 import { z } from 'zod';
-import { type Database, sqlErrorCode } from './db.ts';
+import { type Database, sqlErrorCode } from '../database/index.ts';
 import { HttpFailure } from './errors.ts';
-import type { Session } from './security.ts';
+import type { Session } from '../identity/index.ts';
 
 export type Context = {
     db: Database;

@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { Database, sqlErrorCode } from '../platform/db.ts';
-import { coded } from '../platform/errors.ts';
-import { nowSql } from '../platform/model.ts';
-import type { Workspace } from '../platform/security.ts';
+import type { Workspace } from '../../platform/access/index.ts';
+import {
+    Database,
+    nowSql,
+    sqlErrorCode,
+} from '../../platform/database/index.ts';
+import { coded } from '../../platform/http/index.ts';
 
 const segmentSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('constant'), value: z.string() }),

@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import type postgres from 'postgres';
-import type { Config } from '../src/platform/config.ts';
-import { Database, type Bind } from '../src/platform/db.ts';
-import { HttpFailure } from '../src/platform/errors.ts';
-import { Session } from '../src/platform/security.ts';
+import type { Config } from '../config/index.ts';
+import { Database, type Bind } from '../database/index.ts';
+import { HttpFailure } from '../http/index.ts';
+import { Session } from './session.ts';
 
 const prefix = 'laravel-cache-';
 const ip = '10.0.0.7';

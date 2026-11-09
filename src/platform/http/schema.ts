@@ -42,11 +42,3 @@ export function expectedVersion(request: Request, body: unknown): number {
         'Versi data yang sedang diubah wajib dikirim: header If-Match berisi ETag, atau field version.',
     );
 }
-
-export function nowSql(): string {
-    return new Date().toISOString().slice(0, 19).replace('T', ' ');
-}
-
-export function nowIso(): string {
-    return new Date().toISOString().slice(0, 19) + '+00:00';
-}

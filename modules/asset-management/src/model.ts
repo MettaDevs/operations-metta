@@ -1,7 +1,11 @@
 import { z } from 'zod';
-import { validation } from '@core/platform/errors.ts';
-import { dateSchema, idSchema, nullableText } from '@core/platform/model.ts';
-import { Decimal } from '@core/platform/money.ts';
+import {
+    dateSchema,
+    idSchema,
+    nullableText,
+    validation,
+} from '@core/platform/http/index.ts';
+import { Decimal } from '@core/platform/money/index.ts';
 
 const amountInput = z
     .union([z.string(), z.number()])

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { Database, jsonObject } from './db.ts';
-import type { Bind, JsonObject } from './db.ts';
+import { Database, jsonObject } from '../database/index.ts';
+import type { Bind, JsonObject } from '../database/index.ts';
 import { validation } from './errors.ts';
-import { idSchema, lookupId } from './model.ts';
+import { idSchema, lookupId } from './schema.ts';
 
 export function searchTerms(
     keyword: string,

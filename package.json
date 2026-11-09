@@ -10,8 +10,8 @@
         "test": "bun test",
         "build": "bun build src/main.ts --target=bun --outdir dist --minify",
         "start": "bun src/main.ts",
-        "format": "prettier --write src test modules scripts .github package.json tsconfig.json",
-        "format:check": "prettier --check src test modules scripts .github package.json tsconfig.json",
+        "format": "prettier --write src modules scripts .github package.json tsconfig.json",
+        "format:check": "prettier --check src modules scripts .github package.json tsconfig.json",
         "check:boundaries": "bun scripts/check-boundaries.ts",
         "migrate": "bun scripts/migrate.ts"
     },

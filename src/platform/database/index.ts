@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { z } from 'zod';
-import type { Config } from './config.ts';
+import type { Config } from '../config/index.ts';
 
 export type Bind = string | number | boolean | null;
 export const jsonObject = z.record(z.string(), z.json());
@@ -152,4 +152,12 @@ export class Database {
 
 export function sqlErrorCode(error: unknown): string | undefined {
     return error instanceof postgres.PostgresError ? error.code : undefined;
+}
+
+export function nowSql(): string {
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+export function nowIso(): string {
+    return new Date().toISOString().slice(0, 19) + '+00:00';
 }

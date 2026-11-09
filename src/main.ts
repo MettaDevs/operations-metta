@@ -3,12 +3,21 @@ import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
 import { assetManagementRoutes } from '../modules/asset-management/src/router.ts';
-import { loadConfig, type Config } from './platform/config.ts';
-import { createPool, Database, sqlErrorCode } from './platform/db.ts';
-import { HttpFailure } from './platform/errors.ts';
-import { base, bodyInput, ok, type Context } from './platform/rpc.ts';
-import { Session, Workspace } from './platform/security.ts';
-import { ValkeySessions } from './platform/valkey.ts';
+import { Workspace } from './platform/access/index.ts';
+import { loadConfig, type Config } from './platform/config/index.ts';
+import {
+    createPool,
+    Database,
+    sqlErrorCode,
+} from './platform/database/index.ts';
+import {
+    base,
+    bodyInput,
+    HttpFailure,
+    ok,
+    type Context,
+} from './platform/http/index.ts';
+import { Session, ValkeySessions } from './platform/identity/index.ts';
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {

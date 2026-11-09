@@ -1,3 +1,4 @@
+import { Workspace } from '@core/platform/access/index.ts';
 import {
     base,
     bodyInput,
@@ -5,8 +6,7 @@ import {
     ok,
     recordInput,
     type Context,
-} from '@core/platform/rpc.ts';
-import { Workspace } from '@core/platform/security.ts';
+} from '@core/platform/http/index.ts';
 import { Receipts } from './receipts.ts';
 
 // Kode app module ini di CoreERP. Route, izin, kebijakan data, dan referensi nomor diturunkan darinya.

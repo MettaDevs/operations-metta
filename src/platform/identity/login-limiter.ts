@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Database } from './db.ts';
+import type { Database } from '../database/index.ts';
 
 const maxAttempts = 5;
 const decaySeconds = 60;

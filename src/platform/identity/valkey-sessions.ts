@@ -1,5 +1,5 @@
 import { RedisClient } from 'bun';
-import { HttpFailure } from './errors.ts';
+import { HttpFailure } from '../http/index.ts';
 
 // Sesi di Valkey (SESSION_BACKEND=valkey): nilainya string payload yang sama dengan kolom sessions.payload.
 // TTL kunci menggantikan pemeriksaan last_activity dan GC tabel sessions.

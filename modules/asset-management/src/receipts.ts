@@ -1,14 +1,24 @@
 import { z } from 'zod';
-import { Currency } from '@core/foundation/currency.ts';
-import { FinancePostings } from '@core/foundation/finance-posting.ts';
-import { NumberIssuer } from '@core/foundation/number-sequence.ts';
-import { Database, jsonObject, sqlErrorCode } from '@core/platform/db.ts';
-import type { Bind } from '@core/platform/db.ts';
-import { abort, coded, validation } from '@core/platform/errors.ts';
-import { incrementalList } from '@core/platform/listing.ts';
-import { expectedVersion, lookupId, nowSql } from '@core/platform/model.ts';
-import { Decimal } from '@core/platform/money.ts';
-import type { Workspace } from '@core/platform/security.ts';
+import { Currency } from '@core/foundation/currency/index.ts';
+import { FinancePostings } from '@core/foundation/finance-posting/index.ts';
+import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
+import type { Workspace } from '@core/platform/access/index.ts';
+import {
+    Database,
+    jsonObject,
+    nowSql,
+    sqlErrorCode,
+} from '@core/platform/database/index.ts';
+import type { Bind } from '@core/platform/database/index.ts';
+import {
+    abort,
+    coded,
+    expectedVersion,
+    incrementalList,
+    lookupId,
+    validation,
+} from '@core/platform/http/index.ts';
+import { Decimal } from '@core/platform/money/index.ts';
 import { Inventory } from './inventory.ts';
 import { detailSchema, headerSchema, parseReceipt } from './model.ts';
 import type { ReceiptDetail, ReceiptHeader, ReceiptInput } from './model.ts';

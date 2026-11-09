@@ -2,9 +2,9 @@ import { z } from 'zod';
 import {
     failSequence,
     type NumberIssuer,
-} from '@core/foundation/number-sequence.ts';
-import type { Database } from '@core/platform/db.ts';
-import type { Workspace } from '@core/platform/security.ts';
+} from '@core/foundation/number-sequence/index.ts';
+import type { Workspace } from '@core/platform/access/index.ts';
+import type { Database } from '@core/platform/database/index.ts';
 
 type AssetCodeRequest = {
     key: string;
