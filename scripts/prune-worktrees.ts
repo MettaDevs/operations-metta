@@ -1,4 +1,5 @@
 import { $ } from 'bun';
+import { statSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 
 type Worktree = { path: string; branch: string | null };
@@ -43,11 +44,32 @@ async function verdict(worktree: Worktree): Promise<Verdict> {
             reason: 'masih ada perubahan yang belum di-commit',
         };
     }
+    const inMain =
+        await $`git -C ${worktree.path} merge-base --is-ancestor HEAD origin/main`
+            .nothrow()
+            .quiet();
+    if (inMain.exitCode === 0) {
+        // Worktree yang baru dibuat dari main juga lolos pemeriksaan ini, jadi ia dihapus hanya sesudah
+        // HEAD-nya tidak bergerak sehari penuh. Sesi yang selesai menghapus worktree-nya sendiri.
+        const head = (
+            await $`git -C ${worktree.path} rev-parse --git-path HEAD`.text()
+        ).trim();
+        const idleHours =
+            (Date.now() - statSync(resolve(worktree.path, head)).mtimeMs) /
+            3_600_000;
+        if (idleHours < 24) {
+            return {
+                kind: 'keep',
+                reason: 'sudah masuk main; dihapus otomatis sesudah 24 jam tanpa perubahan',
+            };
+        }
+        return { kind: 'remove', branch: worktree.branch };
+    }
     const pulls: PullRequest[] =
         await $`gh pr list --head ${worktree.branch} --state all --json number,state,headRefOid --limit 1`.json();
     const pull = pulls[0];
     if (pull === undefined) {
-        return { kind: 'keep', reason: 'belum ada PR' };
+        return { kind: 'keep', reason: 'belum masuk main' };
     }
     switch (pull.state) {
         case 'OPEN':
