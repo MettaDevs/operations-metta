@@ -1,7 +1,8 @@
 -- Mencari ULID yang tertanam di kolom teks dan JSON pada schema public.
 -- Jalankan dengan psql atas dump CoreERP yang sudah dipulihkan, sebelum dan sesudah migration:
 --   psql -X -v ON_ERROR_STOP=1 -f database/find-ulid-text.sql
--- Sebelum migration, daftarnya menjadi bahan keputusan kolom mana yang ditulis ulang 0002.
+-- Sebelum migration, daftarnya menjadi bahan keputusan kolom mana yang ditulis ulang 0002 Core atau 0002 module
+-- pemiliknya.
 -- Sesudah migration, yang masih muncul hanya boleh kolom yang sengaja dibiarkan.
 -- Token dihitung hanya bila tidak diapit huruf atau angka lain, supaya potongan hash tidak ikut terbaca.
 -- Kolom known menghitung token yang memang id di database ini, sebagai pembeda dari kebetulan.

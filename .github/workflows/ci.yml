@@ -92,3 +92,20 @@ jobs:
           output=$(bun scripts/migrate.ts)
           echo "$output"
           grep -qx 'database is up to date' <<< "$output"
+
+      - name: Install Core alone, then the modules, and compare schemas
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -o pipefail
+          psql -X -v ON_ERROR_STOP=1 -c 'create database operations_ci_core_first'
+          DB_DATABASE=operations_ci_core_first bun scripts/migrate.ts --modules ''
+          DB_DATABASE=operations_ci_core_first bun scripts/migrate.ts
+          dump() {
+            docker exec "$POSTGRES_CONTAINER" pg_dump -U ci --schema-only \
+              --exclude-table=public.schema_migrations -d "$1" |
+              grep -Ev '^\\(un)?restrict '
+          }
+          dump operations_ci > all-at-once.sql
+          dump operations_ci_core_first > core-first.sql
+          diff all-at-once.sql core-first.sql

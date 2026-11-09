@@ -1,11 +1,12 @@
 -- Sidik jari isi setiap tabel di schema public: jumlah baris dan md5 seluruh baris, dengan setiap id ditulis sebagai
--- ULID huruf besar. Jalankan sebelum dan sesudah 0002 pada database yang sama, lalu bandingkan:
+-- ULID huruf besar. Jalankan sebelum dan sesudah bun run migrate --adopt-coreerp pada database yang sama, lalu
+-- bandingkan:
 --   psql -X -v ON_ERROR_STOP=1 -f database/fingerprint.sql > sebelum.txt
 --   psql -X -v ON_ERROR_STOP=1 -f database/fingerprint.sql > sesudah.txt
 --   diff sebelum.txt sesudah.txt
 -- Kedua hasil harus sama persis. Uuid diterjemahkan balik dengan aritmetika numeric milik berkas ini sendiri, bukan
 -- dengan fungsi dari migration, jadi pemetaan yang salah tetap ketahuan walaupun ia konsisten dengan kebalikannya.
--- finance_postings.input_hash tidak ikut dihitung karena 0002 sengaja menghitungnya ulang atas id uuid.
+-- finance_postings.input_hash tidak ikut dihitung karena 0002 Core sengaja menghitungnya ulang atas id uuid.
 
 \pset footer off
 \pset format unaligned
