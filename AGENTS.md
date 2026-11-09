@@ -98,6 +98,17 @@ Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena 
 - Setiap skill ada di `.agents/skills/` dan `.claude/skills/` dengan isi yang sama persis, karena kedua folder dibaca alat yang berbeda. Ubah keduanya dalam commit yang sama.
 - `coreerp-bun-elysia` disalin apa adanya dari CoreERP. Path `docs/...` di dalamnya menunjuk ke repo CoreERP. Bila skill itu berubah di CoreERP, salin ulang ke kedua folder di sini.
 
+## Worktree
+
+Keputusan pemilik produk, 9 November 2026: worktree tidak dibuat di folder kerja di luar repo, supaya folder kerja tidak dipenuhi salinan repo yang lupa dihapus.
+
+- Worktree hanya dibuat di `.worktrees/<nama>` di dalam clone ini: `git worktree add .worktrees/<nama> -b <branch> origin/main`. Folder `.worktrees/` sudah di-ignore git.
+- Hapus begitu branch-nya selesai di-merge: `git worktree remove .worktrees/<nama>`, lalu `git branch -D <branch>`. Jangan menghapus foldernya dengan `rm -rf`.
+- `git worktree list` menampilkan semua worktree yang masih ada. Periksa sebelum memulai pekerjaan baru.
+- `bun scripts/prune-worktrees.ts`, dijalankan dari clone utama, menghapus worktree di `.worktrees/` yang PR-nya sudah di-merge atau ditutup, beserta branch lokalnya. Worktree yang masih punya perubahan belum di-commit, commit sesudah commit terakhir PR-nya, belum punya PR, atau PR-nya masih terbuka tidak disentuh. Tambahkan `--dry-run` untuk melihat hasilnya tanpa menghapus apa pun.
+- Setiap worktree yang dibiarkan dilaporkan tertinggal berapa commit dari `main` dan sudah berapa hari tidak disentuh, dengan tanda `LAMA` sesudah tujuh hari. Jalankan perintah itu di awal setiap sesi. Worktree `LAMA` diputuskan saat itu juga: selesaikan dan merge, gabungkan `main` terbaru ke branch-nya sebelum dilanjutkan, atau tutup PR-nya supaya terhapus pada putaran berikutnya.
+- Nama foldernya harus tetap berawalan titik. Prettier mengabaikannya karena tercantum di `.gitignore`, `bun test` tidak masuk ke folder berawalan titik, dan `tsconfig.json` hanya membaca folder yang disebut. Folder tanpa titik akan ikut dijalankan `bun test`.
+
 ## Sebelum menyatakan hijau
 
 Jalankan dari akar repo. Keempat pemeriksaan ini wajib lulus untuk setiap perubahan:
