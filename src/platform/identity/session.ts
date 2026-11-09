@@ -129,6 +129,8 @@ export class Session {
         private readonly clientAddress: string,
         private readonly cipher: CookieCipher,
         private readonly valkey: ValkeySessions | null,
+        // Id yang sesinya dimuat dari penyimpanan di request ini, atau null bila sesinya lahir di request ini.
+        private readonly storedId: string | null,
         public id: string,
         public data: z.infer<typeof sessionSchema>,
         public user: z.infer<typeof userSchema> | null,
@@ -162,7 +164,10 @@ export class Session {
         } catch {
             sessionId = null;
         }
+        // Id dari cookie dipakai lagi hanya bila sesinya terbaca. Selain itu sesi baru lahir dengan id baru, supaya
+        // id yang sudah dihapus logout tidak pernah dibuat ulang oleh request lain yang masih membawa cookie lamanya.
         let data: z.infer<typeof sessionSchema> = { _token: randomToken() };
+        let storedId: string | null = null;
         if (sessionId && /^[A-Za-z0-9]{40}$/.test(sessionId)) {
             const payload = await this.payload(db, config, valkey, sessionId);
             if (payload !== null) {
@@ -172,12 +177,15 @@ export class Session {
                             Buffer.from(payload, 'base64').toString('utf8'),
                         ),
                     );
-                    if (parsed.success) data = parsed.data;
+                    if (parsed.success) {
+                        data = parsed.data;
+                        storedId = sessionId;
+                    }
                 } catch {
-                    sessionId = null;
+                    // Payload yang rusak dibaca sebagai sesi baru.
                 }
             }
-        } else sessionId = null;
+        }
         // Sesi dari sebelum id pengguna menjadi uuid memegang id angka, dan dibaca sebagai belum login.
         const principal = idSchema.safeParse(data[guardKey]);
         let user: z.infer<typeof userSchema> | undefined;
@@ -195,7 +203,8 @@ export class Session {
             clientAddress,
             cipher,
             valkey,
-            sessionId ?? randomToken(),
+            storedId,
+            storedId ?? randomToken(),
             data,
             user ?? null,
         );
@@ -378,8 +387,14 @@ export class Session {
         const payload = Buffer.from(JSON.stringify(this.data)).toString(
             'base64',
         );
-        if (this.valkey) await this.valkey.write(this.id, payload);
-        else await this.persist(payload);
+        // Sesi yang dimuat dari penyimpanan hanya diperbarui selama masih ada; hanya sesi yang lahir di request ini yang
+        // dibuat. Logout atau login di request lain yang menghapusnya lebih dulu menang, dan cookie sesi yang sudah
+        // dihapus tidak dikirim ulang, supaya cookie dari logout itu tetap dipegang peramban.
+        const existing = this.id === this.storedId;
+        const saved = this.valkey
+            ? await this.valkey.write(this.id, payload, existing)
+            : await this.persist(payload, existing);
+        if (!saved) return [];
         const suffix = `; Path=/; Max-Age=${this.config.SESSION_LIFETIME * 60}; SameSite=Lax${this.config.SESSION_SECURE_COOKIE === 'true' ? '; Secure' : ''}`;
         return [
             `XSRF-TOKEN=${encodeURIComponent(this.cipher.encrypt('XSRF-TOKEN', this.data._token))}${suffix}`,
@@ -387,9 +402,15 @@ export class Session {
         ];
     }
 
-    private async persist(payload: string): Promise<void> {
-        await this.db.execute(
-            'insert into sessions(id,user_id,ip_address,user_agent,payload,last_activity) values($1,$2,$3,$4,$5,$6) on conflict(id) do update set user_id=excluded.user_id,ip_address=excluded.ip_address,user_agent=excluded.user_agent,payload=excluded.payload,last_activity=excluded.last_activity',
+    // false bila sesi yang dimuat sudah tidak ada di tabel sessions.
+    private async persist(
+        payload: string,
+        existing: boolean,
+    ): Promise<boolean> {
+        const written = await this.db.execute(
+            existing
+                ? 'update sessions set user_id=$2,ip_address=$3,user_agent=$4,payload=$5,last_activity=$6 where id=$1'
+                : 'insert into sessions(id,user_id,ip_address,user_agent,payload,last_activity) values($1,$2,$3,$4,$5,$6)',
             [
                 this.id,
                 this.user?.id ?? null,
@@ -411,5 +432,6 @@ export class Session {
                 ],
             );
         }
+        return written > 0;
     }
 }

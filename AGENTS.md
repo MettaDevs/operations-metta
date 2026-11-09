@@ -231,14 +231,16 @@ bun run format:check
 bun run check:boundaries
 ```
 
-Test yang memanggil route lewat database (`test/support/operations-app.ts`) hanya berjalan bila `DB_HOST` diisi, dan dilewati bila kosong. CI selalu mengisinya. Di laptop, pakai satu PostgreSQL sekali pakai, lalu hapus containernya:
+Test yang memanggil route lewat database (`test/support/operations-app.ts`) hanya berjalan bila `DB_HOST` diisi, dan dilewati bila kosong. Test sesi di Valkey juga butuh `VALKEY_HOST`. CI selalu mengisi keduanya. Di laptop, pakai PostgreSQL dan Valkey sekali pakai, lalu hapus containernya:
 
 ```bash
 docker run -d --name ops-test-db -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci-only-not-a-secret \
     -e POSTGRES_DB=operations_test -p 127.0.0.1:55432:5432 postgres:17
+docker run -d --name ops-test-valkey -p 127.0.0.1:56379:6379 valkey/valkey:9.1.2-alpine
 export DB_HOST=127.0.0.1 DB_PORT=55432 DB_DATABASE=operations_test DB_USERNAME=ci DB_PASSWORD=ci-only-not-a-secret
+export VALKEY_HOST=127.0.0.1 VALKEY_PORT=56379
 bun run migrate && bun test
-docker rm -f ops-test-db
+docker rm -f ops-test-db ops-test-valkey
 ```
 
 `bun run build` hanya perlu dijalankan bila perubahan menyentuh hasil build: `package.json`, `bun.lock`, `tsconfig.json`, `Dockerfile`, `src/main.ts`, `scripts/build.ts`, atau kode peramban (`.tsx`, `src/platform/shell/`, `packages/ui/`). Untuk perubahan lain, lewati saja, karena build memakan waktu dan CI tetap menjalankannya di setiap PR. Bila `check:generated` gagal, jalankan `bun scripts/generate-client.ts` lalu commit hasilnya.

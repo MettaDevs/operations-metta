@@ -4,13 +4,14 @@ import { createPool } from '../../src/platform/database/index.ts';
 
 // Aplikasi lengkap dari src/main.ts di atas database test yang namanya diambil dari env DB_*, dipanggil seperti
 // browser memanggilnya: lewat Request sungguhan, dengan cookie, token XSRF, dan alamat IP. Setiap pemanggilan
-// memakai alamat IP sendiri, supaya pembatas percobaan login tidak terbawa antar-berkas test.
+// memakai alamat IP sendiri, supaya pembatas percobaan login tidak terbawa antar-berkas test. Sesi di tabel
+// sessions, kecuali pemanggil meminta SESSION_BACKEND lain.
 export function operationsTestApp(environment: Record<string, string> = {}) {
     const config = loadConfig({
         ...process.env,
+        SESSION_BACKEND: 'database',
         ...environment,
         APP_KEY: 'base64:' + Buffer.alloc(32, 7).toString('base64'),
-        SESSION_BACKEND: 'database',
         SESSION_LOTTERY_HITS: '0',
     });
     const application = createApplication(config);
