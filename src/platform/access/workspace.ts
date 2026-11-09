@@ -90,7 +90,7 @@ export class Workspace {
                         ...(
                             await db.rows(
                                 z.object({ id: z.string() }),
-                                'select descendant_organization_id as id from organization_hierarchy_closures where version_id=$1 and ancestor_organization_id=$2',
+                                'select descendant_organization_id as id from organization_hierarchy_closures where version_id=$1 and ancestor_organization_id=$2 and deleted_at is null',
                                 [
                                     scope.hierarchy_version_id,
                                     scope.organization_id,
@@ -246,11 +246,27 @@ export class Workspace {
         };
     }
 
-    static async resolve(
+    static resolve(
         db: Database,
         session: Session,
         moduleId: string,
         policyCode: string,
+    ): Promise<Workspace> {
+        return this.open(db, session, moduleId, policyCode, true);
+    }
+
+    // Fitur Core tidak dijaga satu izin untuk seluruh app seperti module. Setiap route memeriksa izinnya sendiri
+    // lewat guard(), sama dengan gate `core` di CoreERP, jadi anggota tanpa izin Core tetap punya tenant aktif.
+    static core(db: Database, session: Session): Promise<Workspace> {
+        return this.open(db, session, 'core', 'core', false);
+    }
+
+    private static async open(
+        db: Database,
+        session: Session,
+        moduleId: string,
+        policyCode: string,
+        requirePermission: boolean,
     ): Promise<Workspace> {
         const user = session.requireUser();
         const memberships = await this.memberships(db, session);
@@ -263,7 +279,8 @@ export class Workspace {
             abort(403, 'Tidak ada tenant aktif untuk permintaan ini.');
         }
         const permissions = await this.permissions(db, membership, moduleId);
-        if (!permissions.size) abort(403, 'Tidak ada izin untuk module ini.');
+        if (requirePermission && !permissions.size)
+            abort(403, 'Tidak ada izin untuk module ini.');
         const policies = await this.policies(db, membership);
         const organizations = await this.organizations(
             db,

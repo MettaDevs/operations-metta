@@ -169,4 +169,14 @@ bun run format:check
 bun run check:boundaries
 ```
 
+Test yang memanggil route lewat database (`test/support/operations-app.ts`) hanya berjalan bila `DB_HOST` diisi, dan dilewati bila kosong. CI selalu mengisinya. Di laptop, pakai satu PostgreSQL sekali pakai, lalu hapus containernya:
+
+```bash
+docker run -d --name ops-test-db -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci-only-not-a-secret \
+    -e POSTGRES_DB=operations_test -p 127.0.0.1:55432:5432 postgres:17
+export DB_HOST=127.0.0.1 DB_PORT=55432 DB_DATABASE=operations_test DB_USERNAME=ci DB_PASSWORD=ci-only-not-a-secret
+bun run migrate && bun test
+docker rm -f ops-test-db
+```
+
 `bun run build` hanya perlu dijalankan bila perubahan menyentuh hasil build: `package.json`, `bun.lock`, `tsconfig.json`, `Dockerfile`, atau `src/main.ts`. Untuk perubahan lain, lewati saja, karena build memakan waktu dan CI tetap menjalankannya di setiap PR.

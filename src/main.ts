@@ -23,6 +23,7 @@ import {
     type Context,
 } from './platform/http/index.ts';
 import { Session, ValkeySessions } from './platform/identity/index.ts';
+import { organizationRoutes } from './platform/organization/index.ts';
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {
@@ -44,7 +45,7 @@ function valkeySessions(config: Config): ValkeySessions | null {
     }
 }
 
-function createApplication(config: Config) {
+export function createApplication(config: Config) {
     const pool = createPool(config);
     const valkey = valkeySessions(config);
     const router = {
@@ -105,6 +106,7 @@ function createApplication(config: Config) {
                     ),
                 );
             }),
+        ...organizationRoutes(),
         ...assetManagementRoutes(),
     };
     const handler = new OpenAPIHandler(router, {
@@ -194,38 +196,43 @@ function createApplication(config: Config) {
     };
 }
 
-const config = loadConfig();
-startErrorReporting(config, 'http');
-const application = createApplication(config);
-const app = new Elysia({ aot: true, precompile: true });
-app.all(
-    '*',
-    ({ request, server }) =>
-        application.handle(request, server?.requestIP(request)?.address ?? ''),
-    { parse: 'none' },
-);
-app.listen({
-    hostname: config.HOST,
-    port: config.PORT,
-    reusePort: true,
-    // Bawaan Bun memutus koneksi sesudah 10 detik, padahal CoreERP tetap menjawab request yang lebih lambat.
-    idleTimeout: 255,
-});
-process.stderr.write(
-    JSON.stringify({
-        event: 'listening',
-        adapter: 'elysia-orpc',
-        host: config.HOST,
-        port: app.server?.port,
-    }) + '\n',
-);
-process.on('SIGTERM', async () => {
-    await app.stop();
-    await application.close();
-    await flushErrorReporting();
-});
-process.on('SIGINT', async () => {
-    await app.stop();
-    await application.close();
-    await flushErrorReporting();
-});
+if (import.meta.main) {
+    const config = loadConfig();
+    startErrorReporting(config, 'http');
+    const application = createApplication(config);
+    const app = new Elysia({ aot: true, precompile: true });
+    app.all(
+        '*',
+        ({ request, server }) =>
+            application.handle(
+                request,
+                server?.requestIP(request)?.address ?? '',
+            ),
+        { parse: 'none' },
+    );
+    app.listen({
+        hostname: config.HOST,
+        port: config.PORT,
+        reusePort: true,
+        // Bawaan Bun memutus koneksi sesudah 10 detik, padahal CoreERP tetap menjawab request yang lebih lambat.
+        idleTimeout: 255,
+    });
+    process.stderr.write(
+        JSON.stringify({
+            event: 'listening',
+            adapter: 'elysia-orpc',
+            host: config.HOST,
+            port: app.server?.port,
+        }) + '\n',
+    );
+    process.on('SIGTERM', async () => {
+        await app.stop();
+        await application.close();
+        await flushErrorReporting();
+    });
+    process.on('SIGINT', async () => {
+        await app.stop();
+        await application.close();
+        await flushErrorReporting();
+    });
+}
