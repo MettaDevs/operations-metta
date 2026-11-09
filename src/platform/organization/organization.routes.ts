@@ -101,41 +101,16 @@ export function organizationRoutes() {
             .route({ method: 'GET', path, outputStructure: 'detailed' })
             .handler(({ context }) => page(context, section));
     return {
-        organizationDirectory: base
-            .route({
-                method: 'GET',
-                path: '/settings/organization',
-                outputStructure: 'detailed',
-            })
-            .handler(async ({ context }) => {
-                (await coreWorkspace(context)).guard('organization', 'read');
-                const section = new URL(context.request.url).searchParams.get(
-                    'section',
-                );
-                const path =
-                    section === 'operating-units'
-                        ? '/settings/operating-units'
-                        : section === 'hierarchies'
-                          ? '/settings/organization-hierarchies'
-                          : '/settings/legal-entities';
-                return {
-                    status: 302,
-                    headers: {
-                        Location: new URL(path, context.request.url).href,
-                    },
-                    body: undefined,
-                };
-            }),
         legalEntityPage: sectionPage(
-            '/settings/legal-entities',
+            '/api/v1/settings/legal-entities',
             'legal-entities',
         ),
         operatingUnitPage: sectionPage(
-            '/settings/operating-units',
+            '/api/v1/settings/operating-units',
             'operating-units',
         ),
         hierarchyPage: sectionPage(
-            '/settings/organization-hierarchies',
+            '/api/v1/settings/organization-hierarchies',
             'hierarchies',
         ),
         // Daftar API CoreERP tidak dijaga izin layar; cukup anggota aktif tenant.

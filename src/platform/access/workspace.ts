@@ -17,6 +17,11 @@ const scopeSchema = z.object({
     hierarchy_version_id: z.string().nullable(),
     include_descendants: z.boolean(),
 });
+export const workspaceSelectionSchema = z.object({
+    membership_id: z.string(),
+    legal_entity_id: z.string().nullable().optional(),
+    org_unit_id: z.string().nullable().optional(),
+});
 type Membership = z.infer<typeof membershipSchema>;
 type Organization = z.infer<typeof organizationSchema>;
 type Grant = { legalEntityId: string | null; operatingUnitIds: string[] };
@@ -178,13 +183,7 @@ export class Workspace {
     }
 
     static async select(db: Database, session: Session, input: unknown) {
-        const parsed = z
-            .object({
-                membership_id: z.string(),
-                legal_entity_id: z.string().nullable().optional(),
-                org_unit_id: z.string().nullable().optional(),
-            })
-            .safeParse(input);
+        const parsed = workspaceSelectionSchema.safeParse(input);
         if (!parsed.success)
             validation({
                 membership_id: 'The membership id field is required.',
@@ -287,6 +286,33 @@ export class Workspace {
             membership,
             policies,
         );
+        const { company, unit } = this.activate(
+            session,
+            membership,
+            organizations,
+        );
+        return new Workspace(
+            membership.tenant_id,
+            membership.id,
+            user.id,
+            company?.id ?? null,
+            unit?.id ?? null,
+            permissions,
+            policies.get(policyCode) ?? {
+                kind: 'grants',
+                grants: [],
+            },
+            moduleId,
+        );
+    }
+
+    // Perusahaan dan unit aktif: pilihan di sesi bila masih terjangkau, selain itu yang pertama. Hasilnya ditulis
+    // balik ke sesi.
+    private static activate(
+        session: Session,
+        membership: Membership,
+        organizations: Organization[],
+    ) {
         const selected = session.data.workspace;
         const companies = organizations.filter(
             (item) => item.classification === 'legal_entity',
@@ -305,19 +331,74 @@ export class Workspace {
             ...(company ? { legal_entity_id: company.id } : {}),
             ...(unit ? { org_unit_id: unit.id } : {}),
         };
-        return new Workspace(
-            membership.tenant_id,
-            membership.id,
-            user.id,
-            company?.id ?? null,
-            unit?.id ?? null,
-            permissions,
-            policies.get(policyCode) ?? {
-                kind: 'grants',
-                grants: [],
-            },
-            moduleId,
+        return { companies, units, company, unit };
+    }
+
+    // Data Shell: keanggotaan aktif beserta pilihannya, organisasi yang terjangkau, dan izin Core untuk menyaring
+    // menu. Seperti HandleInertiaRequests CoreERP, pengguna tanpa keanggotaan tetap dijawab, dengan membership null.
+    static async shell(db: Database, session: Session) {
+        const user = session.requireUser();
+        const memberships = await this.memberships(db, session);
+        const membership =
+            memberships.find(
+                (item) => item.id === session.data.workspace?.membership_id,
+            ) ?? memberships[0];
+        if (!membership) {
+            delete session.data.workspace;
+            return {
+                user,
+                membership: null,
+                memberships: [],
+                permissions: new Set<string>(),
+                legalEntities: [],
+                orgUnits: [],
+                legalEntity: null,
+                orgUnit: null,
+            };
+        }
+        const permissions = await this.permissions(db, membership, 'core');
+        const policies = await this.policies(db, membership);
+        const organizations = await this.organizations(
+            db,
+            membership,
+            policies,
         );
+        const { companies, units, company, unit } = this.activate(
+            session,
+            membership,
+            organizations,
+        );
+        const tenantIds = [
+            ...new Set(memberships.map((item) => item.tenant_id)),
+        ];
+        const tenantNames = new Map(
+            (
+                await db.rows(
+                    z.object({ id: z.string(), name: z.string() }),
+                    `select id,name from tenants where id in (${tenantIds.map((_, index) => `$${index + 1}`).join(',')})`,
+                    tenantIds,
+                )
+            ).map((tenant) => [tenant.id, tenant.name]),
+        );
+        const named = memberships.map((item) => ({
+            id: item.id,
+            tenant_id: item.tenant_id,
+            tenant_name: tenantNames.get(item.tenant_id) ?? '',
+        }));
+        return {
+            user,
+            membership: {
+                id: membership.id,
+                tenant_id: membership.tenant_id,
+                tenant_name: tenantNames.get(membership.tenant_id) ?? '',
+            },
+            memberships: named,
+            permissions,
+            legalEntities: companies,
+            orgUnits: units,
+            legalEntity: company ?? null,
+            orgUnit: unit ?? null,
+        };
     }
 
     guard(resource: string, action: string): void {

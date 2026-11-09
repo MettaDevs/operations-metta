@@ -14,7 +14,7 @@ Repo ini tumbuh dengan menambah folder dan berkas di tempat yang sudah ditetapka
 
 | Yang bertambah | Tempatnya | Contoh |
 | --- | --- | --- |
-| Proses yang di-deploy | Satu berkas di akar `src/` | `src/main.ts` untuk HTTP. Nanti `src/worker.ts` dan `src/cli.ts` |
+| Proses yang di-deploy | Satu berkas di akar `src/` | `src/main.ts` untuk HTTP, `src/client.tsx` untuk peramban (dibuat `scripts/generate-client.ts`). Nanti `src/worker.ts` dan `src/cli.ts` |
 | Kemampuan Core | `src/platform/<kemampuan>/` atau `src/foundation/<layanan>/`, masing-masing dengan `index.ts` | `src/platform/identity/`, `src/foundation/number-sequence/` |
 | Unit yang bisa dibeli atau dipasang tersendiri oleh pelanggan, baik ERP maupun layanan kesehatan | `modules/<module>/` | `modules/asset-management/` |
 | Pustaka yang dipakai Core dan module | `packages/<package>/`, bernama `@operations-metta/<package>` | `packages/ui/` = `@operations-metta/ui` |
@@ -25,7 +25,7 @@ Repo ini tumbuh dengan menambah folder dan berkas di tempat yang sudah ditetapka
 | Pemanggil route | `.routes.ts` untuk pengguna klinik, `.internal.routes.ts` untuk panggilan dari control plane, `.integration.routes.ts` untuk sistem luar | `asset.internal.routes.ts` |
 | Migration | Milik Core di `database/migrations/`. Milik module di `modules/<module>/database/migrations/` | `modules/asset-management/database/migrations/` |
 | Kontrak | `contracts/internal/` untuk endpoint yang dipanggil control plane, `contracts/integration/<domain>/` untuk sistem luar, `contracts/events/` untuk event | `contracts/integration/finance/` |
-| Layar | `.page.tsx` di folder fitur. Bingkai layar (layout, menu, login) dan stylesheet aplikasi di `src/platform/shell/` | `asset-receipt.page.tsx`, `src/platform/shell/app.css` |
+| Layar | `.page.tsx` di folder fitur, aturannya di [Layar](#layar). Bingkai layar (layout, menu, login) dan stylesheet aplikasi di `src/platform/shell/`, yang hanya berisi kode peramban | `asset-receipt.page.tsx`, `src/platform/shell/app.css` |
 | Docs module | `modules/<module>/README.md` | `modules/asset-management/README.md` |
 
 - `src/` adalah Core, setara System Application dan Business Foundation di BC. `src/platform/` berisi bagian yang dipakai setiap request. `src/foundation/` berisi layanan bisnis bersama.
@@ -37,11 +37,68 @@ Repo ini tumbuh dengan menambah folder dan berkas di tempat yang sudah ditetapka
 - Test ada di folder test, tidak di `src/`, mengikuti contoh di dokumentasi Elysia ([Unit Test](https://elysiajs.com/patterns/unit-test.html)) dan contoh project references TypeScript. `src/` hanya berisi kode yang di-deploy, dan folder fitur tidak tercampur test. Keputusan pemilik produk, 9 November 2026, menggantikan aturan lama yang menaruh test di samping berkasnya.
 - Folder test mengikuti folder kode yang diujinya, jadi test sebuah berkas dicari di path yang sama di bawah folder test. Test module ada di module itu sendiri, supaya module tetap bisa dipindah atau dipasang sebagai satu package.
 - Route ditulis sebagai procedure oRPC, bukan controller Elysia. Elysia hanya server HTTP: satu route `app.all('*')` yang meneruskan request ke handler OpenAPI oRPC, karena hanya bentuk itu yang diukur di [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md). Ini sengaja menyimpang dari [best practice Elysia](https://elysiajs.com/essential/best-practice.html) yang menjadikan satu instance Elysia sebagai satu controller. Yang tetap diikuti dari halaman itu: satu folder per fitur, schema sebagai satu-satunya sumber tipe dan validasi (`z.infer`, tanpa `interface` kembaran), dan service yang menerima nilai yang ia butuhkan (misalnya `db` dan `workspace`), bukan seluruh context request.
-- Layar ditulis dengan React dan komponen `@operations-metta/ui`. Keputusan pemilik produk, 9 November 2026: style, font, dan panduan UI CoreERP dipakai di repo ini, dan rinciannya ada di `docs/design-system/`. Rupa dan perilaku milik komponen; halaman memegang data, izin, dan aksi bisnis. Shell dan build frontend belum ada di repo ini, jadi belum ada layar yang memakai package itu.
+- Layar ditulis dengan React dan komponen `@operations-metta/ui`. Keputusan pemilik produk, 9 November 2026: style, font, dan panduan UI CoreERP dipakai di repo ini, dan rinciannya ada di `docs/design-system/`. Rupa dan perilaku milik komponen; halaman memegang data, izin, dan aksi bisnis. Cara layar disajikan, dirakit, dan mengambil data ada di bagian [Layar](#layar).
 - Core meng-import module hanya dari berkas proses di akar `src/`. Module tidak pernah meng-import module lain, baik lewat path relatif maupun lewat `@operations-metta/<module>`.
 - Berkas milik satu pemanggil tidak meng-import berkas milik pemanggil lain. Aturan bisnis yang dipakai beberapa pemanggil ada di `.service.ts`, yang namanya tidak membawa pemanggil.
 - `bun run new-feature <module>/<area>/<fitur>` membuat `.schema.ts`, `.service.ts`, dan `.routes.ts` di folder fitur, `.test.ts` di folder yang sama di bawah `test/` module, lalu mendaftarkan route-nya di `src/index.ts` module. Tambahkan `--audience internal` atau `--audience integration` untuk route control plane atau sistem luar. Route untuk kedua pemanggil itu dibuat kosong sampai Core punya autentikasinya. Perintah ini menolak menimpa berkas yang sudah ada.
-- `bun run check:boundaries` menolak impor dari Core ke module di luar berkas proses, impor yang melewati `index.ts` sebuah kemampuan, module yang meng-import Core tanpa `@core/`, module yang meng-import module lain, berkas satu pemanggil yang meng-import berkas pemanggil lain, nama tabel module di `src/`, test di luar folder test, folder test yang tidak punya pasangan di kode yang diujinya, kode yang meng-import folder test, dan package yang meng-import Core atau module. `@operations-metta/<nama>` dihitung module hanya bila folder `modules/<nama>` ada, jadi impor `@operations-metta/ui` dari module tidak ditolak.
+- `bun run check:boundaries` menolak impor dari Core ke module di luar berkas proses, impor yang melewati `index.ts` sebuah kemampuan, module yang meng-import Core tanpa `@core/`, module yang meng-import module lain, berkas satu pemanggil yang meng-import berkas pemanggil lain, nama tabel module di `src/`, test di luar folder test, folder test yang tidak punya pasangan di kode yang diujinya, kode yang meng-import folder test, dan package yang meng-import Core atau module. Pengecualiannya satu: `src/client.tsx` meng-import `.page.tsx` langsung, karena ia merakit route tree. `@operations-metta/<nama>` dihitung module hanya bila folder `modules/<nama>` ada, jadi impor `@operations-metta/ui` dari module tidak ditolak.
+
+## Layar
+
+Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Router dan TanStack Query di atas API oRPC, bukan Inertia. Server tidak merender halaman dan tidak mengirim props halaman. Ia menyajikan satu dokumen yang sama untuk setiap URL layar, dan layar mengambil datanya sendiri dari `/api/`.
+
+- **URL layar dan URL data terpisah.** Data hanya di bawah `/api/`. URL lain milik layar, misalnya `/dashboard` dan `/settings/legal-entities`. Pengecualiannya `POST /login` dan `POST /logout`, yang tetap di tempatnya.
+  - Route Elysia yang satu-satunya itu lebih dulu memeriksa dua hal, tanpa membuka sesi atau database (`src/platform/http/spa.ts`). `GET /build/<berkas>` mendapat berkas build ber-hash yang tercatat di manifest. GET lain di luar `/api/` mendapat dokumen layar.
+  - Selain dua hal itu, semuanya diteruskan ke oRPC. Permintaan `/api/...` tidak pernah mendapat dokumen layar, dan 404-nya tetap JSON.
+  - Procedure baru yang dibaca layar ditulis di bawah `/api/v1/...`. Jangan menulis GET oRPC di luar `/api/`, karena dokumen layar akan menutupinya.
+- **Halaman** adalah berkas `<fitur>.page.tsx` di folder fiturnya, yang meng-export `page`:
+
+  ```tsx
+  export const page = definePage({
+      path: '/settings/legal-entities',
+      layout: 'app',
+      title: 'Perusahaan',
+      validateSearch: z.object({ q: z.string().optional() }),
+      component: LegalEntitiesPage,
+  });
+  ```
+
+  - `path` adalah URL layar dan ditulis sebagai teks literal. Nama dan folder berkas tidak menentukan URL.
+  - `layout: 'app'` memasang halaman di dalam Shell dan mewajibkan login. `'auth'` dipakai untuk halaman sebelum login.
+  - Search params divalidasi schema zod di `validateSearch`.
+  - Id route adalah id layout ditambah path, sama dengan layout tanpa path di TanStack Router: `/_app/settings/legal-entities` atau `/_auth/login`. Di dalam komponen, `getRouteApi('<id>').useSearch()` memberi search params dengan tipe dari schema. `Link`, `navigate`, dan `redirect` memakai path. TypeScript menolak id, path, dan search param yang tidak ada.
+  - Komponen halaman dan layout menulis tipe kembaliannya (`(): ReactNode`). Tanpa itu, TypeScript dapat kehilangan tipe route tree tanpa pesan apa pun, karena tipe komponen dan route tree saling bergantung.
+- **Route tree dirakit otomatis.** `scripts/generate-client.ts` membaca setiap `.page.tsx` di `src/` dan `modules/*/src/`, lalu menulis dua berkas:
+  - `src/client.tsx`, entry peramban beserta route tree-nya;
+  - `src/platform/shell/api-contract.generated.json`, bentuk route oRPC yang dibutuhkan klien di peramban.
+
+  Keduanya di-commit supaya TypeScript mengenalnya, dan tidak pernah disunting tangan. `bun run build` dan `bun run dev` menulisnya ulang. `bun run check:generated` menolak berkas yang tertinggal, dan CI menjalankannya. `src/client.tsx` satu-satunya berkas yang meng-import `.page.tsx` langsung, dan `check:boundaries` mengizinkan itu.
+- **Data.** Halaman memanggil API lewat `api` (klien oRPC) dan `orpc` (TanStack Query) dari `src/platform/shell/index.ts`.
+  - Tipe input dan output datang dari router di `src/main.ts`, jadi tidak ditulis ulang di layar.
+  - Body yang divalidasi service, bukan oRPC, diberi tipe lewat `typedBody<z.input<typeof schema>>()`. Dengan begitu pesan 422-nya tetap milik service.
+  - Kegagalan API menjadi `ApiError`, berisi status, pesan, error per field, dan kodenya.
+- **Data bersama Shell** datang dari `GET /api/v1/shell` di `src/platform/access/`, berisi pengguna, workspace aktif beserta pilihannya, menu, dan lingkungan. Endpoint ini pengganti shared props CoreERP.
+  - Menu Core ditulis di `src/platform/access/navigation.ts` beserta permission tiap entri, dan disaring di server.
+  - Hanya halaman yang sudah ada yang masuk menu, dan test memeriksanya.
+  - Pesan berhasil tampil sebagai toast di layar.
+- **Sesi dan CSRF** memakai mekanisme `src/platform/identity/`: cookie sesi, header `X-XSRF-TOKEN` dari cookie `XSRF-TOKEN`, dan `Sec-Fetch-Site`.
+  - Data halaman yang dijawab 401 membawa pengguna ke `/login?redirect=<asal>`.
+  - Simpan yang gagal karena sesi habis (401 atau 419) menampilkan pesan, dan isian form tetap ada.
+- **Kode peramban dan kode server tidak bercampur.** `src/platform/shell/` hanya berisi kode peramban, dan server tidak meng-import-nya. Halaman tidak meng-import berkas server di folder fiturnya sendiri, misalnya `.service.ts` atau `.schema.ts` yang menarik database. Yang dibutuhkan layar datang dari API.
+- **Build.** `Bun.build` membundel `src/client.tsx` dan `src/platform/shell/app.css` ke `dist/client/` dengan nama `<nama>-<hash>.<ext>`, dan menulis `dist/client/manifest.json`. Server dibundel ke `dist/main.js`.
+  - Tailwind v4 dijalankan lewat `@tailwindcss/node` dan `@tailwindcss/oxide`, versi yang sama dengan `tailwindcss`. Plugin Tailwind kecil di `scripts/build.ts` yang menjalankannya.
+  - Font `@fontsource` ditulis sebagai berkas sendiri, bukan disisipkan ke CSS.
+
+### Menjalankan layar di laptop
+
+Server butuh database yang sudah dimigrasi dan `APP_KEY` (32 byte, `base64:...`), sama dengan test. Isi `DB_*` dan `APP_KEY` di `.env` atau env shell, lalu:
+
+```bash
+bun run migrate
+bun run dev        # http://127.0.0.1:8000
+```
+
+`bun run dev` menjalankan server dengan `bun --watch`, dan server dinyalakan ulang bila kode server berubah. Build peramban diulang setiap kali berkas di `src/`, `modules/`, atau `packages/ui/src/` berubah. Muat ulang halaman untuk melihat hasilnya. Untuk menjalankan hasil build seperti di image: `bun run build`, lalu `bun dist/main.js`. Pengguna untuk login dibuat lewat `test/support/tenant-fixtures.ts` (`createTenant`, `createMember`, `grantAllOrganizations`); kata sandinya `testPassword` di berkas itu.
 
 ## Aturan module
 
@@ -160,9 +217,10 @@ Keputusan pemilik produk, 9 November 2026: worktree tidak dibuat di folder kerja
 
 ## Sebelum menyatakan hijau
 
-Jalankan dari akar repo. Keempat pemeriksaan ini wajib lulus untuk setiap perubahan:
+Jalankan dari akar repo. Kelima pemeriksaan ini wajib lulus untuk setiap perubahan:
 
 ```bash
+bun run check:generated
 bun run typecheck
 bun test
 bun run format:check
@@ -179,4 +237,4 @@ bun run migrate && bun test
 docker rm -f ops-test-db
 ```
 
-`bun run build` hanya perlu dijalankan bila perubahan menyentuh hasil build: `package.json`, `bun.lock`, `tsconfig.json`, `Dockerfile`, atau `src/main.ts`. Untuk perubahan lain, lewati saja, karena build memakan waktu dan CI tetap menjalankannya di setiap PR.
+`bun run build` hanya perlu dijalankan bila perubahan menyentuh hasil build: `package.json`, `bun.lock`, `tsconfig.json`, `Dockerfile`, `src/main.ts`, `scripts/build.ts`, atau kode peramban (`.tsx`, `src/platform/shell/`, `packages/ui/`). Untuk perubahan lain, lewati saja, karena build memakan waktu dan CI tetap menjalankannya di setiap PR. Bila `check:generated` gagal, jalankan `bun scripts/generate-client.ts` lalu commit hasilnya.

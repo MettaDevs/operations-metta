@@ -37,6 +37,10 @@ const sessionSchema = z
             .optional(),
     })
     .catchall(z.json());
+export const loginInputSchema = z.object({
+    email: z.string().min(1),
+    password: z.string().min(1),
+});
 const userSchema = z.object({
     id: idSchema,
     name: z.string(),
@@ -245,11 +249,9 @@ export class Session {
         }
     }
 
-    async login(input: unknown): Promise<object> {
+    async login(input: unknown): Promise<{ two_factor: boolean }> {
         this.csrf(input);
-        const result = z
-            .object({ email: z.string().min(1), password: z.string().min(1) })
-            .safeParse(input);
+        const result = loginInputSchema.safeParse(input);
         if (!result.success) {
             validation(
                 Object.fromEntries(
@@ -304,7 +306,7 @@ export class Session {
         password: string,
         limiter: RateLimiter,
         throttleKey: string,
-    ): Promise<object> {
+    ): Promise<{ two_factor: boolean }> {
         const find = () =>
             this.db.one(
                 userSchema,

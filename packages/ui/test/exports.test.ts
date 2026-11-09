@@ -19,7 +19,8 @@ test('every component file is importable as @operations-metta/ui/<component>', (
         );
 });
 
-test('the theme and the stylesheet keep their own entry points', () => {
+test('the theme, the class helper, and the stylesheet keep their own entry points', () => {
     expect(resolve('theme')).toBe(join(source, 'theme.ts'));
+    expect(resolve('utils')).toBe(join(source, 'utils.ts'));
     expect(resolve('styles.css')).toBe(join(source, 'styles.css'));
 });

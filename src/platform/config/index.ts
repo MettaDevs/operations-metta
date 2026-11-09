@@ -16,6 +16,8 @@ const environmentSchema = z.object({
     COREERP_BASE_DOMAIN: z.literal('').default(''),
     HOST: z.string().default('127.0.0.1'),
     PORT: z.coerce.number().int().positive().default(8000),
+    // Folder hasil build peramban (manifest.json dan berkas ber-hash), relatif ke folder kerja proses.
+    CLIENT_DIR: z.string().min(1).default('dist/client'),
     SESSION_COOKIE: z.string().default('laravel-session'),
     SESSION_LIFETIME: z.coerce.number().int().positive().default(120),
     SESSION_SECURE_COOKIE: z.enum(['true', 'false']).default('false'),

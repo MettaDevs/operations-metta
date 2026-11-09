@@ -157,10 +157,14 @@ for (const file of checked) {
         const path = target(file, specifier);
         if (path === null) continue;
         const capability = capabilityOf(path);
+        // Entry peramban di akar src/ merakit route tree dari setiap halaman, jadi ia meng-import `.page.tsx`
+        // langsung. Itu satu-satunya jalan masuk ke sebuah folder kemampuan selain index.ts.
+        const routedPage = isProcess && path.endsWith('.page.tsx');
         if (
             capability &&
             !file.startsWith(capability) &&
-            path !== join(capability, 'index.ts')
+            path !== join(capability, 'index.ts') &&
+            !routedPage
         )
             violations.push(
                 `${found}; outside ${shown(capability)}/ import only ${shown(capability)}/index.ts.`,

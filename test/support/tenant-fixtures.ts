@@ -27,18 +27,24 @@ export async function createTenant(sql: postgres.Sql, name = 'Tenant uji') {
 
 // Anggota aktif tenant dengan satu role yang memegang duty yang disebut, misalnya `core.organization.manage`.
 // Tanpa duty, anggota itu tidak punya role sama sekali.
+// Pengguna yang bisa login, belum menjadi anggota tenant mana pun.
+export async function createUser(sql: postgres.Sql, name = 'Anggota uji') {
+    const userId = Bun.randomUUIDv7();
+    const email = `anggota-${userId}@example.com`;
+    await sql.unsafe(
+        "insert into users (id, name, email, password, account_type, created_at, updated_at) values ($1, $2, $3, $4, 'person', now(), now())",
+        [userId, name, email, await passwordHash],
+    );
+    return { userId, email, password: testPassword };
+}
+
 export async function createMember(
     sql: postgres.Sql,
     tenantId: string,
     duties: string[] = [],
 ) {
-    const userId = Bun.randomUUIDv7();
+    const { userId, email } = await createUser(sql);
     const membershipId = Bun.randomUUIDv7();
-    const email = `anggota-${userId}@example.com`;
-    await sql.unsafe(
-        "insert into users (id, name, email, password, account_type, created_at, updated_at) values ($1, 'Anggota uji', $2, $3, 'person', now(), now())",
-        [userId, email, await passwordHash],
-    );
     await sql.unsafe(
         "insert into tenant_memberships (id, tenant_id, user_id, status, created_at, updated_at) values ($1, $2, $3, 'active', now(), now())",
         [membershipId, tenantId, userId],
@@ -61,4 +67,25 @@ export async function createMember(
         );
     }
     return { userId, membershipId, roleId, email, password: testPassword };
+}
+
+// Kebijakan data tanpa batas organisasi untuk role anggota itu, sehingga setiap legal entity dan operating unit aktif
+// tenant terjangkau olehnya, termasuk di pemilih tempat kerja.
+export async function grantAllOrganizations(
+    sql: postgres.Sql,
+    tenantId: string,
+    membershipId: string,
+) {
+    await sql.unsafe(
+        `insert into app_data_policies (code, app_id, name, protected_permissions, allows_descendants, created_at, updated_at)
+         values ('uji.semua-organisasi', 'core', 'Semua organisasi (uji)', '[]', false, now(), now())
+         on conflict (code) do nothing`,
+    );
+    await sql.unsafe(
+        `insert into role_assignment_data_policy_scopes
+             (id, tenant_id, role_assignment_id, policy_code, include_descendants, valid_from, created_at, updated_at)
+         select $1, $2, id, 'uji.semua-organisasi', false, now() - interval '1 day', now(), now()
+         from role_assignments where membership_id = $3`,
+        [Bun.randomUUIDv7(), tenantId, membershipId],
+    );
 }

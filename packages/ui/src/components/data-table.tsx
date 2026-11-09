@@ -1031,12 +1031,14 @@ function DataTable<T>({
                                                             column.id,
                                                         startX: event.clientX,
                                                         startWidth:
-                                                            measured[column.id],
+                                                            measured[
+                                                                column.id
+                                                            ]!,
                                                         nextStartWidth:
                                                             measured[
                                                                 nextColumn?.id ??
                                                                     column.id
-                                                            ],
+                                                            ]!,
                                                         minWidth:
                                                             column.minWidth ??
                                                             80,
@@ -1072,7 +1074,7 @@ function DataTable<T>({
                                                         current.guideLeft +
                                                             nextWidths[
                                                                 current.columnId
-                                                            ] -
+                                                            ]! -
                                                             current.startWidth,
                                                     );
                                                 }}
@@ -1138,12 +1140,12 @@ function DataTable<T>({
                                                                     measured[
                                                                         column
                                                                             .id
-                                                                    ],
+                                                                    ]!,
                                                                 nextStartWidth:
                                                                     measured[
                                                                         nextColumn?.id ??
                                                                             column.id
-                                                                    ],
+                                                                    ]!,
                                                                 minWidth:
                                                                     column.minWidth ??
                                                                     80,

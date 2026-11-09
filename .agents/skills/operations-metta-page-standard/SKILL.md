@@ -5,7 +5,7 @@ description: Build or review operations-metta screens with consistent typography
 
 # operations-metta page standard
 
-Apply `operations-metta-ui` first. Belum ada layar di repo ini; sampai sebuah layar dipindah, layar CoreERP dengan pekerjaan yang sama adalah kontrak visualnya, dan alurnya tanpa ikatan framework ada di `docs/design-system/`. Setelah layar pertama dipindah, layar repo ini dengan pekerjaan yang sama menjadi acuan.
+Apply `operations-metta-ui` first. Layar yang sudah dipindah ke repo ini menjadi acuan untuk layar dengan pekerjaan yang sama. Untuk pekerjaan yang belum punya layar di sini, layar CoreERP adalah kontrak visualnya, dan alurnya tanpa ikatan framework ada di `docs/design-system/`. Cara menulis halaman (`definePage`, route, search params, data) ada di bagian [Layar](../../../AGENTS.md#layar) `AGENTS.md`.
 
 ## Workflow
 
@@ -31,7 +31,7 @@ Entitas kompleks, misalnya aset dengan banyak field dan relasi, memakai DataTabl
 ## State the page does not own
 
 - **A value owned by the URL is derived on every render, never copied into `useState`.** Shell navigation moves between sections by changing the query string (`?section=members` → `?section=invitations`). Visiting the same page component does not remount it, so a `useState` initialiser reads the URL once and then freezes; the address bar changes and the screen does not. The symptom looks like a broken menu, and the cause is three lines away in a file nobody suspects.
-- Props and responses are what the server actually sends. Do not add optional fields to a props or response type speculatively — a reader takes `avatar_url?: string | null` as evidence the backend provides it. Either send it from the procedure in the same change, or leave it out. In this repository the response shape is the zod schema in the feature's `.schema.ts`; derive the screen's type from it instead of writing a twin `interface`.
+- Props and responses are what the server actually sends. Do not add optional fields to a props or response type speculatively — a reader takes `avatar_url?: string | null` as evidence the backend provides it. Either send it from the procedure in the same change, or leave it out. In this repository the screen reads its data through the oRPC client (`api` and `orpc` from `src/platform/shell/index.ts`), whose input and output types come from the router in `src/main.ts`; use those types instead of writing a twin `interface`.
 - Read the procedure (`.routes.ts`) and its service before trusting a field. If it is absent there, the fallback you wrote is the only branch that will ever run.
 
 ## Draft dan bagian kosong
@@ -93,7 +93,7 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 
 ## Navigation
 
-- Navigation labels and the permissions that guard them are declared per module; the Shell renders navigation. In CoreERP they came from the module manifest (`app.yaml` and `manifest/`); this repository has no manifest yet, so the Shell's source of navigation is decided when the Shell is built.
+- Navigation labels and the permissions that guard them are declared per module; the Shell renders navigation. In CoreERP they came from the module manifest (`app.yaml` and `manifest/`); this repository has no manifest yet, so Core entries are declared with their permission in `src/platform/access/navigation.ts` and served, already filtered, by `GET /api/v1/shell`. Only screens that exist are listed.
 - Do not invent placeholder dots or circles for items without meaningful icons. Text-only child navigation is valid.
 - Use a real icon only when it consistently communicates the destination.
 - Label menu sidebar tampil penuh tanpa titik-titik atau line clamp. Label panjang membungkus dan tinggi item mengikuti isinya. Menu aktif tidak mengubah ukuran maupun ketebalan huruf; gunakan warna, latar, atau indikator untuk menandainya.

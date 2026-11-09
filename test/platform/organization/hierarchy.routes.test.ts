@@ -80,7 +80,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         purposes = ['management'],
     ) {
         const result = await saved(
-            await owner.post('/settings/organization/hierarchies', {
+            await owner.post('/api/v1/settings/organization/hierarchies', {
                 name,
                 purpose_codes: purposes,
                 root_organization_id: root,
@@ -101,7 +101,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
     }
 
     const versionPath = (id: string) =>
-        `/settings/organization/hierarchy-versions/${id}`;
+        `/api/v1/settings/organization/hierarchy-versions/${id}`;
 
     async function place(versionId: string, child: string, parent: string) {
         return owner.post(`${versionPath(versionId)}/placements`, {
@@ -385,7 +385,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         const company = await organization('legal_entity', 'PT Nama');
         await hierarchy('Business policy', company, ['policy']);
         const duplicate = await owner.post(
-            '/settings/organization/hierarchies',
+            '/api/v1/settings/organization/hierarchies',
             {
                 name: ' Business policy ',
                 purpose_codes: ['policy'],
@@ -401,11 +401,14 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
             name: ['Nama susunan organisasi sudah dipakai. Pilih nama lain.'],
         });
 
-        const invalid = await owner.post('/settings/organization/hierarchies', {
-            name: '',
-            purpose_codes: ['policy', 'tidak-ada'],
-            effective_from: '2026-02-30',
-        });
+        const invalid = await owner.post(
+            '/api/v1/settings/organization/hierarchies',
+            {
+                name: '',
+                purpose_codes: ['policy', 'tidak-ada'],
+                effective_from: '2026-02-30',
+            },
+        );
         expect(invalid.status).toBe(422);
         expect(
             ((await invalid.json()) as { errors: Record<string, string[]> })
@@ -420,7 +423,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         });
 
         const foreignRoot = await owner.post(
-            '/settings/organization/hierarchies',
+            '/api/v1/settings/organization/hierarchies',
             {
                 name: 'Akar asing',
                 purpose_codes: ['policy'],
@@ -470,7 +473,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
             operating_unit_type: 'cost_center',
         });
         const created = (await (
-            await looker.post('/settings/organization/hierarchies', {
+            await looker.post('/api/v1/settings/organization/hierarchies', {
                 name: 'Struktur',
                 purpose_codes: ['management'],
                 root_organization_id: company,
@@ -480,14 +483,14 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         const versionId = created.savedHierarchy.versions[0]?.id ?? '';
         const lookup = (await (
             await looker.get(
-                `/settings/organization-hierarchies?incremental=1&resource=organizations&exclude_version_id=${versionId}`,
+                `/api/v1/settings/organization-hierarchies?incremental=1&resource=organizations&exclude_version_id=${versionId}`,
             )
         ).json()) as { data: { id: string }[] };
         expect(lookup.data.map((row) => row.id)).toEqual([unit]);
 
         const record = (await (
             await looker.get(
-                `/settings/organization-hierarchies?incremental=1&record_id=${created.savedHierarchy.id}`,
+                `/api/v1/settings/organization-hierarchies?incremental=1&record_id=${created.savedHierarchy.id}`,
             )
         ).json()) as { data: Graph[]; next_cursor: null };
         expect(record.next_cursor).toBeNull();
@@ -495,7 +498,9 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         expect(record.data[0]?.versions[0]?.nodes).toHaveLength(1);
 
         const list = (await (
-            await looker.get('/settings/organization-hierarchies?incremental=1')
+            await looker.get(
+                '/api/v1/settings/organization-hierarchies?incremental=1',
+            )
         ).json()) as { data: unknown[] };
         expect(list.data).toEqual([
             {
@@ -508,21 +513,21 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         expect(
             (
                 await looker.get(
-                    `/settings/organization-hierarchies?incremental=1&record_id=${Bun.randomUUIDv7()}`,
+                    `/api/v1/settings/organization-hierarchies?incremental=1&record_id=${Bun.randomUUIDv7()}`,
                 )
             ).status,
         ).toBe(404);
         expect(
             (
                 await owner.get(
-                    `/settings/organization-hierarchies?incremental=1&record_id=${created.savedHierarchy.id}`,
+                    `/api/v1/settings/organization-hierarchies?incremental=1&record_id=${created.savedHierarchy.id}`,
                 )
             ).status,
         ).toBe(404);
         expect(
             (
                 await looker.get(
-                    '/settings/organization-hierarchies?incremental=1&resource=orang',
+                    '/api/v1/settings/organization-hierarchies?incremental=1&resource=orang',
                 )
             ).status,
         ).toBe(422);
@@ -584,7 +589,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         ).toBe(403);
         expect(
             (
-                await viewer.post('/settings/organization/hierarchies', {
+                await viewer.post('/api/v1/settings/organization/hierarchies', {
                     name: 'Struktur pembaca',
                     purpose_codes: ['management'],
                     root_organization_id: company,

@@ -14,7 +14,14 @@ export type Context = {
 export const bodyInput = z.object({ body: z.unknown() });
 export const recordInput = z.object({ params: z.object({ id: z.string() }) });
 export const mutationInput = recordInput.extend({ body: z.unknown() });
-export const ok = (body: object) => ({ status: 200, headers: {}, body });
+// Body yang diperiksa service, bukan oRPC: pesan 422-nya tetap milik service, dan tipenya sampai ke layar lewat
+// klien oRPC.
+export const typedBody = <T>() => z.object({ body: z.custom<T>() });
+export const ok = <T extends object>(body: T) => ({
+    status: 200 as const,
+    headers: {},
+    body,
+});
 
 export const base = os.$context<Context>().use(async ({ context, next }) => {
     try {
