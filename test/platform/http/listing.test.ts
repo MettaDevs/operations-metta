@@ -1,8 +1,11 @@
 import { expect, test } from 'bun:test';
 import type postgres from 'postgres';
-import { Database, type Bind } from '../database/index.ts';
-import { HttpFailure } from './errors.ts';
-import { incrementalList, searchTerms } from './listing.ts';
+import { Database, type Bind } from '../../../src/platform/database/index.ts';
+import { HttpFailure } from '../../../src/platform/http/errors.ts';
+import {
+    incrementalList,
+    searchTerms,
+} from '../../../src/platform/http/listing.ts';
 
 const id = '019313d0-6c4b-1b08-d2b8-cf3c1114ca74';
 

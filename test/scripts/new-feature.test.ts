@@ -13,19 +13,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
 
-const script = join(import.meta.dir, 'new-feature.ts');
+const repository = join(import.meta.dir, '..', '..');
+const script = join(repository, 'scripts', 'new-feature.ts');
 const moduleIndex = 'modules/asset-management/src/index.ts';
 const featureDirectory =
     'modules/asset-management/src/fixed-asset/asset-disposal';
+const testDirectory =
+    'modules/asset-management/test/fixed-asset/asset-disposal';
 let root: string;
 
 beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'new-feature-'));
     mkdirSync(join(root, 'modules/asset-management/src'), { recursive: true });
-    copyFileSync(
-        join(import.meta.dir, '..', moduleIndex),
-        join(root, moduleIndex),
-    );
+    copyFileSync(join(repository, moduleIndex), join(root, moduleIndex));
 });
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -50,7 +50,7 @@ function registrations() {
     };
 }
 
-test('creates the feature files in one folder and registers its routes in the module', () => {
+test('creates the feature files in one folder, its test in the mirrored test folder, and registers its routes', () => {
     const before = registrations();
     const result = newFeature('asset-management/fixed-asset/asset-disposal');
 
@@ -59,6 +59,8 @@ test('creates the feature files in one folder and registers its routes in the mo
         'asset-disposal.routes.ts',
         'asset-disposal.schema.ts',
         'asset-disposal.service.ts',
+    ]);
+    expect(readdirSync(join(root, testDirectory))).toEqual([
         'asset-disposal.test.ts',
     ]);
     expect(
@@ -95,7 +97,6 @@ test.each([
             routesFile,
             'asset-disposal.schema.ts',
             'asset-disposal.service.ts',
-            'asset-disposal.test.ts',
         ]);
         expect(registrations()).toEqual({
             imports: [
