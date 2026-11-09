@@ -10,17 +10,32 @@
 
 Keputusan pemilik produk, 9 November 2026: susunan folder mengikuti Business Central. Folder disusun per area bisnis lalu per fitur, bukan per jenis teknis, dan semua berkas satu fitur ada di satu folder. Sumbernya bisa dibaca di BCApps, misalnya `src/Layers/W1/BaseApp/FixedAssets/` dan `src/System Application/App/Email/`.
 
-- `src/` adalah Core, setara System Application dan Business Foundation di BC.
-  - `src/platform/<kemampuan>/` berisi bagian yang dipakai setiap request: `config`, `database`, `http`, `identity`, `access`, dan `money`.
-  - `src/foundation/<layanan>/` berisi layanan bisnis bersama: `currency`, `number-sequence`, dan `finance-posting`.
-  - Setiap folder kemampuan atau layanan punya `index.ts` sebagai satu-satunya pintu publik, setara pasangan `Email` dan `Email Impl` di BC. Kode di luar folder itu hanya meng-import `index.ts`-nya. Berkas di dalam satu folder boleh saling meng-import langsung.
-- `modules/<nama>/` berisi satu package Bun workspace per module. Module pertama adalah `modules/asset-management/`.
-  - `src/index.ts` adalah pintu publik module. `src/module.ts` memegang kode module dan konteks kerjanya.
-  - Di bawah `src/` folder disusun per area lalu per fitur, misalnya `fixed-asset/asset-receipt/` dan `depreciation/`. Nama area dan fitur mengikuti nama di manifest CoreERP.
-  - Berkas satu fitur memakai akhiran peran: `.schema.ts` (bentuk baris dan input), `.service.ts` (aturan bisnis), `.routes.ts` (endpoint), `.posting.ts` atau peran lain bila memang perlu, dan `.test.ts` di sampingnya. Layar fitur nanti ditaruh di folder yang sama.
+Repo ini tumbuh dengan menambah folder dan berkas di tempat yang sudah ditetapkan tabel berikut, tanpa menyusun ulang yang sudah ada. Kalau sesuatu yang baru tidak punya tempat di tabel, tanyakan ke pemilik produk sebelum membuat tempat baru.
+
+| Yang bertambah | Tempatnya | Contoh |
+| --- | --- | --- |
+| Proses yang di-deploy | Satu berkas di akar `src/` | `src/main.ts` untuk HTTP. Nanti `src/worker.ts` dan `src/cli.ts` |
+| Kemampuan Core | `src/platform/<kemampuan>/` atau `src/foundation/<layanan>/`, masing-masing dengan `index.ts` | `src/platform/identity/`, `src/foundation/number-sequence/` |
+| Unit yang bisa dibeli atau dipasang tersendiri oleh pelanggan, baik ERP maupun layanan kesehatan | `modules/<module>/` | `modules/asset-management/` |
+| Area bisnis, lalu fitur | `modules/<module>/src/<area>/<fitur>/` | `modules/asset-management/src/fixed-asset/asset-receipt/` |
+| Peran berkas | Akhiran `.schema.ts`, `.service.ts`, `.routes.ts`, `.posting.ts`, `.test.ts`, dan nanti `.page.tsx` | `asset-receipt.posting.ts` |
+| Pemanggil route | `.routes.ts` untuk pengguna klinik, `.internal.routes.ts` untuk panggilan dari control plane, `.integration.routes.ts` untuk sistem luar | `asset.internal.routes.ts` |
+| Migration | Milik Core di `database/migrations/`. Milik module di `modules/<module>/database/migrations/` | `modules/asset-management/database/migrations/` |
+| Kontrak | `contracts/internal/` untuk endpoint yang dipanggil control plane, `contracts/integration/<domain>/` untuk sistem luar, `contracts/events/` untuk event | `contracts/integration/finance/` |
+| Layar | `.page.tsx` di folder fitur. Bingkai layar (layout, menu, login) di `src/platform/shell/` | `asset-receipt.page.tsx` |
+| Docs module | `modules/<module>/README.md` | `modules/asset-management/README.md` |
+
+- `src/` adalah Core, setara System Application dan Business Foundation di BC. `src/platform/` berisi bagian yang dipakai setiap request. `src/foundation/` berisi layanan bisnis bersama.
+- `index.ts` adalah satu-satunya pintu publik sebuah folder kemampuan atau layanan, setara pasangan `Email` dan `Email Impl` di BC. Kode di luar folder itu hanya meng-import `index.ts`-nya. Berkas di dalam satu folder boleh saling meng-import langsung.
+- Setiap module adalah satu package Bun workspace. `src/index.ts` adalah pintu publik module dan tempat route semua fiturnya didaftarkan. `src/module.ts` memegang kode module dan konteks kerjanya.
+- Nama area dan fitur mengikuti nama di manifest CoreERP.
+- `.schema.ts` memegang bentuk baris dan input, `.service.ts` memegang aturan bisnis, dan `.routes.ts` memegang endpoint. Peran berkas di luar tabel boleh ditambahkan bila memang perlu, misalnya `asset.code.ts`.
 - Test diletakkan di samping berkas yang diujinya. Tidak ada folder `test/` terpisah.
-- `src/main.ts` adalah satu-satunya berkas Core yang merangkai module ke dalam runtime. Di luar berkas itu, Core tidak pernah meng-import module.
-- `bun run check:boundaries` menolak impor dari Core ke module, impor yang melewati `index.ts` sebuah kemampuan, module yang meng-import Core tanpa `@core/`, dan nama tabel module di `src/`.
+- Framework UI boleh dipilih belakangan. Tempat layar tidak berubah karena pilihan itu.
+- Core meng-import module hanya dari berkas proses di akar `src/`. Module tidak pernah meng-import module lain, baik lewat path relatif maupun lewat `@operations-metta/<module>`.
+- Berkas milik satu pemanggil tidak meng-import berkas milik pemanggil lain. Aturan bisnis yang dipakai beberapa pemanggil ada di `.service.ts`, yang namanya tidak membawa pemanggil.
+- `bun run new-feature <module>/<area>/<fitur>` membuat `.schema.ts`, `.service.ts`, `.routes.ts`, dan `.test.ts` di folder fitur, lalu mendaftarkan route-nya di `src/index.ts` module. Tambahkan `--audience internal` atau `--audience integration` untuk route control plane atau sistem luar. Route untuk kedua pemanggil itu dibuat kosong sampai Core punya autentikasinya. Perintah ini menolak menimpa berkas yang sudah ada.
+- `bun run check:boundaries` menolak impor dari Core ke module di luar berkas proses, impor yang melewati `index.ts` sebuah kemampuan, module yang meng-import Core tanpa `@core/`, module yang meng-import module lain, berkas satu pemanggil yang meng-import berkas pemanggil lain, dan nama tabel module di `src/`.
 
 ## Aturan module
 
