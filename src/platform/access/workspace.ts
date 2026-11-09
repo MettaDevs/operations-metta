@@ -160,6 +160,17 @@ export class Workspace {
         membership: Membership,
         moduleId: string,
     ): Promise<Set<string>> {
+        return this.permissionsWhere(db, membership, 'p.app_id=$1', [moduleId]);
+    }
+
+    // Kode permission yang dipegang keanggotaan lewat role aktifnya beserta role anaknya, disaring kondisi atas tabel
+    // permissions `p` yang parameternya mulai dari $1.
+    private static async permissionsWhere(
+        db: Database,
+        membership: Membership,
+        condition: string,
+        values: string[],
+    ): Promise<Set<string>> {
         const assigned = await db.rows(
             z.object({ role_id: z.string() }),
             "select a.role_id from role_assignments a join roles r on r.id=a.role_id where a.membership_id=$1 and a.status='active' and r.is_active=true and a.valid_from<=current_timestamp and (a.valid_until is null or a.valid_until>current_timestamp)",
@@ -175,11 +186,24 @@ export class Workspace {
         const permissionRows = effective.length
             ? await db.rows(
                   z.object({ code: z.string() }),
-                  `select distinct p.code from security_role_duties rd join security_duty_privileges dp on dp.duty_code=rd.duty_code join security_privilege_permissions pp on pp.privilege_code=dp.privilege_code join permissions p on p.code=pp.permission_code where p.app_id=$1 and rd.role_id in (${effective.map((_, index) => `$${index + 2}`).join(',')}) order by p.code`,
-                  [moduleId, ...effective.map((row) => row.role_id)],
+                  `select distinct p.code from security_role_duties rd join security_duty_privileges dp on dp.duty_code=rd.duty_code join security_privilege_permissions pp on pp.privilege_code=dp.privilege_code join permissions p on p.code=pp.permission_code where ${condition} and rd.role_id in (${effective.map((_, index) => `$${index + values.length + 1}`).join(',')}) order by p.code`,
+                  [...values, ...effective.map((row) => row.role_id)],
               )
             : [];
         return new Set(permissionRows.map((row) => row.code));
+    }
+
+    // Permission yang dipegang anggota ini di antara kode yang disebut, dari app mana pun. Fitur Core yang dijaga
+    // izin milik module, misalnya party berperan pasien, memakainya.
+    async holds(db: Database, codes: string[]): Promise<Set<string>> {
+        const unique = [...new Set(codes)];
+        if (!unique.length) return new Set();
+        return Workspace.permissionsWhere(
+            db,
+            { id: this.membershipId, tenant_id: this.tenantId },
+            `p.code in (${unique.map((_, index) => `$${index + 1}`).join(',')})`,
+            unique,
+        );
     }
 
     static async select(db: Database, session: Session, input: unknown) {
