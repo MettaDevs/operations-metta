@@ -64,8 +64,19 @@ export class Receipts {
         this.numbers = new NumberIssuer(db, workspace);
     }
 
-    private lookupQuery(where: string) {
-        return `select (select count(*)::int from ${detailTable} d where d.tenant_id=h.tenant_id and d.penerimaan_aset_id=h.id) as jumlah_baris,(select coalesce(sum(jumlah),0)::int from ${detailTable} d where d.tenant_id=h.tenant_id and d.penerimaan_aset_id=h.id) as jumlah_aset,h.*,l.kode as lokasi_aset_kode,l.nama as lokasi_aset_nama from ${headerTable} h left join aset_m_lokasi_aset l on l.id=h.lokasi_aset_id and l.tenant_id=h.tenant_id where ${where}`;
+    private lookupQuery(where: string, extraColumns: string[] = []) {
+        return `
+            select (select count(*)::int from ${detailTable} d
+                     where d.tenant_id = h.tenant_id and d.penerimaan_aset_id = h.id) as jumlah_baris,
+                   (select coalesce(sum(jumlah), 0)::int from ${detailTable} d
+                     where d.tenant_id = h.tenant_id and d.penerimaan_aset_id = h.id) as jumlah_aset,
+                   h.*,
+                   ${extraColumns.map((column) => `${column},`).join('\n')}
+                   l.kode as lokasi_aset_kode,
+                   l.nama as lokasi_aset_nama
+            from ${headerTable} h
+            left join aset_m_lokasi_aset l on l.id = h.lokasi_aset_id and l.tenant_id = h.tenant_id
+            where ${where}`;
     }
 
     async document(id: string): Promise<ReceiptHeader> {
@@ -217,10 +228,17 @@ export class Receipts {
                     sampai: 'The sampai field must be a date after or equal to dari.',
                 });
         }
-        const query = this.lookupQuery(where).replace(
-            'h.*,',
-            `h.*,(select name from organizations o where o.tenant_id=h.tenant_id and o.id=h.legal_entity_id limit 1) as legal_entity_nama,(select name from organizations o where o.tenant_id=h.tenant_id and o.id=h.responsible_org_unit_id limit 1) as responsible_org_unit_nama,(select name from organizations o where o.tenant_id=h.tenant_id and o.id=h.receiving_org_unit_id limit 1) as receiving_org_unit_nama,(select u.name from tenant_memberships m join users u on u.id=m.user_id where m.tenant_id=h.tenant_id and cast(m.user_id as text)=h.diterima_oleh_user_id limit 1) as diterima_oleh_nama,(select u.name from tenant_memberships m join users u on u.id=m.user_id where m.tenant_id=h.tenant_id and cast(m.user_id as text)=h.penanggung_jawab_user_id limit 1) as penanggung_jawab_nama,`,
-        );
+        const organizationName = (column: string) =>
+            `(select name from organizations o where o.tenant_id = h.tenant_id and o.id = h.${column} limit 1)`;
+        const userName = (column: string) =>
+            `(select u.name from tenant_memberships m join users u on u.id = m.user_id where m.tenant_id = h.tenant_id and cast(m.user_id as text) = h.${column} limit 1)`;
+        const query = this.lookupQuery(where, [
+            `${organizationName('legal_entity_id')} as legal_entity_nama`,
+            `${organizationName('responsible_org_unit_id')} as responsible_org_unit_nama`,
+            `${organizationName('receiving_org_unit_id')} as receiving_org_unit_nama`,
+            `${userName('diterima_oleh_user_id')} as diterima_oleh_nama`,
+            `${userName('penanggung_jawab_user_id')} as penanggung_jawab_nama`,
+        ]);
         const batch = await incrementalList(this.db, {
             query,
             bindings,
