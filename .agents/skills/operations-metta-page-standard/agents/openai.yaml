@@ -1,0 +1,4 @@
+interface:
+  display_name: "operations-metta Page Standard"
+  short_description: "Standar layar operations-metta yang konsisten"
+  default_prompt: "Use $operations-metta-page-standard to build an operations-metta screen that matches the Shell layout and UI conventions."

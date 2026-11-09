@@ -1,0 +1,4 @@
+interface:
+  display_name: "operations-metta runtime operations"
+  short_description: "Tuning, load test, dan profiling runtime operations-metta"
+  default_prompt: "Gunakan $operations-metta-runtime-operations untuk mengubah atau mengukur runtime operations-metta dengan konfigurasi yang dapat diverifikasi dan dikembalikan."

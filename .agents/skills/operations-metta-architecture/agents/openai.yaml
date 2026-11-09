@@ -1,0 +1,4 @@
+interface:
+  display_name: "operations-metta Architecture"
+  short_description: "Guardrails for organization, access, contracts, and module lifecycle"
+  default_prompt: "Use $operations-metta-architecture to verify tenant, organization, authorization, contract, and module lifecycle boundaries before implementation."

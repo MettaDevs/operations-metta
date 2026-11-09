@@ -1,0 +1,4 @@
+interface:
+  display_name: "operations-metta UI"
+  short_description: "Build consistent operations-metta screens with @operations-metta/ui"
+  default_prompt: "Use $operations-metta-ui and @operations-metta/ui from packages/ui for this UI change."
