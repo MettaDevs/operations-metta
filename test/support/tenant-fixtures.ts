@@ -1,8 +1,8 @@
 import type postgres from 'postgres';
 
-// Data awal tenant untuk test yang memakai database, ditulis lewat SQL langsung: control plane yang kelak membuat
-// tenant dan pemiliknya, dan repo ini belum punya alurnya. Semua nama dan email sintetis dan unik per pemanggilan,
-// jadi test boleh berjalan berulang di database yang sama.
+// Data awal tenant untuk test yang memakai database, ditulis lewat SQL langsung supaya setiap test memegang duty yang
+// ia butuhkan saja. Tenant sungguhan disiapkan provisionEnvironment. Semua nama dan email sintetis dan unik per
+// pemanggilan, jadi test boleh berjalan berulang di database yang sama.
 
 export const testPassword = 'kata-sandi-uji-yang-panjang';
 const passwordHash = Bun.password.hash(testPassword, {
