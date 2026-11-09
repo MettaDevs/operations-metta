@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import * as prettier from 'prettier';
 import ts from 'typescript';
@@ -193,18 +193,26 @@ const route = routeFiles[request.audience];
 const exportName = name.camel + route.exportSuffix;
 const directory = join(moduleDirectory, 'src', request.area, request.feature);
 const routesFile = `${name.kebab}.${route.suffix}.ts`;
-const created = {
-    [`${name.kebab}.schema.ts`]: schema(name),
-    [`${name.kebab}.service.ts`]: service(name),
-    [routesFile]: routes(request.audience, name, exportName),
-    [`${name.kebab}.test.ts`]: test(name),
-};
-const existing = Object.keys(created).filter((file) =>
-    existsSync(join(directory, file)),
+// Test fitur ada di test/ module, di folder yang sama dengan folder fiturnya di src/.
+const testDirectory = join(
+    moduleDirectory,
+    'test',
+    request.area,
+    request.feature,
 );
+const created = [
+    { path: join(directory, `${name.kebab}.schema.ts`), text: schema(name) },
+    { path: join(directory, `${name.kebab}.service.ts`), text: service(name) },
+    {
+        path: join(directory, routesFile),
+        text: routes(request.audience, name, exportName),
+    },
+    { path: join(testDirectory, `${name.kebab}.test.ts`), text: test(name) },
+];
+const existing = created.filter(({ path }) => existsSync(path));
 if (existing.length)
     fail(
-        `Berkas sudah ada, tidak ada yang ditulis:\n${existing.map((file) => `  ${shown(join(directory, file))}`).join('\n')}`,
+        `Berkas sudah ada, tidak ada yang ditulis:\n${existing.map(({ path }) => `  ${shown(path)}`).join('\n')}`,
     );
 const registered = register(
     readFileSync(index, 'utf8'),
@@ -212,21 +220,17 @@ const registered = register(
     `./${request.area}/${request.feature}/${routesFile}`,
 );
 
-const outputs = [
-    ...Object.entries(created).map(([file, text]) => ({
-        path: join(directory, file),
-        text,
-    })),
-    { path: index, text: registered },
-];
+const outputs = [...created, { path: index, text: registered }];
 const written = await Promise.all(
     outputs.map(async ({ path, text }) => ({
         path,
         text: await formatted(path, text),
     })),
 );
-mkdirSync(directory, { recursive: true });
-for (const { path, text } of written) writeFileSync(path, text);
+for (const { path, text } of written) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+}
 console.log(
     `Fitur ${request.module}/${request.area}/${request.feature} dibuat:\n${written.map(({ path }) => `  ${shown(path)}`).join('\n')}`,
 );

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
@@ -57,8 +57,55 @@ function capabilityOf(path: string): string | null {
 
 const shown = (path: string) => relative(root, path).replaceAll(sep, '/');
 
+// Test hanya ada di test/ (untuk src/ dan scripts/) atau di test/ module (untuk src/ module), di folder yang sama dengan
+// folder kode yang diujinya. Bantuan test ada di support/ folder test itu. Kode tidak meng-import folder test.
+const scripts = join(root, 'scripts');
+const coreTests = join(root, 'test');
+const isTest = (path: string) => /\.test\.(ts|tsx)$/.test(path);
+function testRootOf(path: string): string | null {
+    if (path.startsWith(coreTests + sep)) return coreTests;
+    const module = moduleOf(path);
+    if (module === null) return null;
+    const tests = join(modules, module, 'test');
+    return path.startsWith(tests + sep) ? tests : null;
+}
+function mirroredFolder(file: string, tests: string): string | null {
+    const folder = relative(tests, dirname(file));
+    const [first, ...rest] = folder.split(sep);
+    if (first === 'support') return null;
+    if (tests !== coreTests) return join(dirname(tests), 'src', folder);
+    return first === 'scripts' ? join(scripts, ...rest) : join(core, folder);
+}
+
 const violations: string[] = [];
-const checked = [...files(core), ...files(modules)];
+const testFiles = [...files(coreTests), ...files(modules)].filter(
+    (file) => testRootOf(file) !== null,
+);
+for (const file of testFiles) {
+    const tests = testRootOf(file)!;
+    const mirrored = isTest(file) ? mirroredFolder(file, tests) : null;
+    if (mirrored !== null && !existsSync(mirrored))
+        violations.push(
+            `${shown(file)}; ${shown(dirname(file))} mirrors no folder of the code it tests. Move the test next to the mirror of that code.`,
+        );
+}
+const checked = [...files(core), ...files(modules)].filter(
+    (file) => testRootOf(file) === null,
+);
+for (const file of [...checked, ...files(scripts)]) {
+    if (isTest(file))
+        violations.push(
+            `${shown(file)}; tests live under test/ or the module's test/, in the folder that mirrors the code they test.`,
+        );
+    const text = readFileSync(file, 'utf8');
+    for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
+        const path = target(file, imported.fileName);
+        if (path !== null && testRootOf(path) !== null)
+            violations.push(
+                `${shown(file)} imports ${shown(path)}; code must not import a test folder.`,
+            );
+    }
+}
 for (const file of checked) {
     const text = readFileSync(file, 'utf8');
     const name = shown(file);
@@ -126,5 +173,5 @@ if (violations.length) {
     process.exit(1);
 }
 console.log(
-    `Boundaries hold across ${checked.length} files under src/ and modules/.`,
+    `Boundaries hold across ${checked.length} files under src/ and modules/, and ${testFiles.length} test files.`,
 );

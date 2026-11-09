@@ -2,11 +2,15 @@ import { expect, spyOn, test } from 'bun:test';
 import type { RedisClient } from 'bun';
 import { createHash } from 'node:crypto';
 import type postgres from 'postgres';
-import type { Config } from '../config/index.ts';
-import { Database, type Bind } from '../database/index.ts';
-import { HttpFailure } from '../http/index.ts';
-import { CookieCipher, randomToken, Session } from './session.ts';
-import { ValkeySessions } from './valkey-sessions.ts';
+import type { Config } from '../../../src/platform/config/index.ts';
+import { Database, type Bind } from '../../../src/platform/database/index.ts';
+import { HttpFailure } from '../../../src/platform/http/index.ts';
+import {
+    CookieCipher,
+    randomToken,
+    Session,
+} from '../../../src/platform/identity/session.ts';
+import { ValkeySessions } from '../../../src/platform/identity/valkey-sessions.ts';
 
 const prefix = 'coreerp-session:';
 const guardKey =

@@ -11,8 +11,8 @@
         "new-feature": "bun scripts/new-feature.ts",
         "build": "bun build src/main.ts --target=bun --outdir dist --minify",
         "start": "bun src/main.ts",
-        "format": "prettier --write src modules scripts .github package.json tsconfig.json",
-        "format:check": "prettier --check src modules scripts .github package.json tsconfig.json",
+        "format": "prettier --write src modules scripts test .github package.json tsconfig.json",
+        "format:check": "prettier --check src modules scripts test .github package.json tsconfig.json",
         "check:boundaries": "bun scripts/check-boundaries.ts",
         "migrate": "bun scripts/migrate.ts"
     },

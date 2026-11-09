@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Decimal } from './index.ts';
+import { Decimal } from '../../../src/platform/money/index.ts';
 
 describe('currency amounts', () => {
     test('rounds the extended line once and allocates the first-unit remainder', () => {
