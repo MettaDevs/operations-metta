@@ -1,0 +1,4 @@
+interface:
+  display_name: "operations-metta Analytics"
+  short_description: "Port and change datasets, the query compiler, and dashboards"
+  default_prompt: "Use $operations-metta-analytics to port or change the analytics engine without breaking tenant, data policy, or personal data boundaries."

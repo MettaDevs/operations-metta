@@ -1,0 +1,4 @@
+interface:
+  display_name: "Desain Nomor Otomatis"
+  short_description: "Audit referensi dan default nomor operations-metta"
+  default_prompt: "Use $number-sequence-design to audit a new or ported operations-metta module, decide which masters and transaction documents get a number, align automatic generation with Dynamics 365, and ask before guessing unresolved policies."
