@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import { coded } from './errors.ts';
 
-export const idSchema = z.string().regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i);
+// Bentuk yang dicetak PostgreSQL untuk kolom uuid. Bit versi tidak diperiksa karena ULID hasil konversi tidak
+// membawanya. Huruf besar ditolak supaya id dari klien sama persis dengan teks yang tersimpan, seperti pada char(26).
+export const idSchema = z.guid({ abort: true }).lowercase();
+
+// PostgreSQL menolak teks yang bukan uuid untuk kolom uuid; null membuat pencarian tetap berjalan tanpa menemukan
+// baris, sama seperti teks sembarang terhadap char(26).
+export function lookupId(value: string): string | null {
+    return idSchema.safeParse(value).success ? value : null;
+}
+
 export const nullableText = z.string().nullable();
 export const dateSchema = z
     .string()

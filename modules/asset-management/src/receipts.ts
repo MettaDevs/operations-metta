@@ -1,4 +1,3 @@
-import { ulid } from 'ulid';
 import { z } from 'zod';
 import { Currency } from '@core/foundation/currency.ts';
 import { FinancePostings } from '@core/foundation/finance-posting.ts';
@@ -7,7 +6,7 @@ import { Database, jsonObject, sqlErrorCode } from '@core/platform/db.ts';
 import type { Bind } from '@core/platform/db.ts';
 import { abort, coded, validation } from '@core/platform/errors.ts';
 import { incrementalList } from '@core/platform/listing.ts';
-import { expectedVersion, nowSql } from '@core/platform/model.ts';
+import { expectedVersion, lookupId, nowSql } from '@core/platform/model.ts';
 import { Decimal } from '@core/platform/money.ts';
 import type { Workspace } from '@core/platform/security.ts';
 import { Inventory } from './inventory.ts';
@@ -86,7 +85,7 @@ export class Receipts {
             this.lookupQuery(
                 `h.id=$1 and h.deleted_at is null and ${filter.clause}`,
             ) + ' limit 1',
-            [id, ...filter.bindings],
+            [lookupId(id), ...filter.bindings],
         );
         if (!row)
             abort(
@@ -471,7 +470,7 @@ export class Receipts {
         for (const [index, detail] of data.details.entries()) {
             const stamp = nowSql();
             await this.db.insert(detailTable, {
-                id: ulid().toLowerCase(),
+                id: Bun.randomUUIDv7(),
                 tenant_id: this.workspace.tenantId,
                 penerimaan_aset_id: id,
                 line_number: index + 1,
@@ -615,7 +614,7 @@ export class Receipts {
             this.workspace.moduleId + '.penerimaan-aset',
             'penerimaan-aset:' + key,
         );
-        const id = ulid();
+        const id = Bun.randomUUIDv7();
         try {
             await this.db.transaction(async () => {
                 await this.requestLinks(
@@ -784,7 +783,7 @@ export class Receipts {
                     known.add(key);
                     const stamp = nowSql();
                     await this.db.insert('document_attachments', {
-                        id: ulid(),
+                        id: Bun.randomUUIDv7(),
                         tenant_id: this.workspace.tenantId,
                         record_type: 'aset_tr_aset',
                         record_id: record.record_id,

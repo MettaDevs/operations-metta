@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Database, jsonObject } from './db.ts';
 import type { Bind, JsonObject } from './db.ts';
 import { validation } from './errors.ts';
+import { idSchema, lookupId } from './model.ts';
 
 export function searchTerms(
     keyword: string,
@@ -27,7 +28,7 @@ const cursorSchema = z
     .object({
         list_sort_null: z.union([z.literal(0), z.literal(1)]),
         list_sort_value: z.union([z.string(), z.number(), z.boolean()]),
-        id: z.union([z.string(), z.number()]).optional(),
+        id: idSchema.optional(),
         _pointsToNextItems: z
             .union([z.boolean(), z.string(), z.number()])
             .transform((value) =>
@@ -81,7 +82,7 @@ export async function incrementalList(
         return '$' + bindings.length;
     };
     const filters: string[] = [];
-    if (value.record_id) filters.push('id=' + bind(value.record_id));
+    if (value.record_id) filters.push('id=' + bind(lookupId(value.record_id)));
     const ids = options.parameters.getAll('record_ids[]');
     if (ids.length > 100 || ids.some((id) => id.length > 100 || id.length < 1))
         validation({
@@ -90,7 +91,9 @@ export async function incrementalList(
         });
     if (options.parameters.has('record_ids[]'))
         filters.push(
-            ids.length ? `id in (${ids.map(bind).join(',')})` : 'false',
+            ids.length
+                ? `id in (${ids.map((id) => bind(lookupId(id))).join(',')})`
+                : 'false',
         );
     const keyword = (value.q ?? '').trim();
     if (keyword) {

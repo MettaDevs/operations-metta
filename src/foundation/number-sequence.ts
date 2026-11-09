@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { ulid } from 'ulid';
 import { z } from 'zod';
 import { Database, sqlErrorCode } from '../platform/db.ts';
 import { coded } from '../platform/errors.ts';
@@ -192,7 +191,12 @@ export class NumberIssuer {
             const stamp = nowSql();
             await this.db.execute(
                 'insert into number_sequence_counters(id,sequence_id,scope_key,period_key,next_number,created_at,updated_at) values($1,$2,$3,$4,$5,$6,$6) on conflict do nothing',
-                [ulid(), ...bindings, String(sequence.minimum_number), stamp],
+                [
+                    Bun.randomUUIDv7(),
+                    ...bindings,
+                    String(sequence.minimum_number),
+                    stamp,
+                ],
             );
             counter = await this.db.one(
                 counterSchema,
@@ -246,7 +250,7 @@ export class NumberIssuer {
                 proposed > sequence.maximum_number
                     ? sequence.maximum_number
                     : proposed;
-            const id = ulid().toLowerCase();
+            const id = Bun.randomUUIDv7();
             const stamp = nowSql();
             await this.db.insert('number_sequence_allocations', {
                 id,
@@ -326,7 +330,7 @@ export class NumberIssuer {
     ): Promise<void> {
         const stamp = nowSql();
         return this.db.insert('number_sequence_audit_events', {
-            id: ulid(),
+            id: Bun.randomUUIDv7(),
             sequence_id: sequenceId,
             app_id: appId,
             user_id: null,
@@ -381,7 +385,7 @@ export class NumberIssuer {
                     );
                     const stamp = nowSql();
                     await this.db.insert('number_sequence_issues', {
-                        id: ulid().toLowerCase(),
+                        id: Bun.randomUUIDv7(),
                         sequence_id: sequence.id,
                         app_id: this.scope.moduleId,
                         scope_key: scope.key,
