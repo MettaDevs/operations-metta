@@ -357,21 +357,8 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         expect(purpose?.name).toBe('Enterprise establishment structure');
     });
 
-    test('addresses and print identity are refused until the address book moves', async () => {
-        expect(
-            await errors(
-                await create({
-                    classification: 'operating_unit',
-                    name: 'Unit beralamat',
-                    operating_unit_type: 'cost_center',
-                    party_details: { locations: [], contacts: [] },
-                }),
-            ),
-        ).toEqual({
-            party_details: [
-                'Alamat dan kontak belum dapat disimpan bersama organisasi.',
-            ],
-        });
+    // Alamat dan kontak organisasi baru diuji di test/platform/address-book/party-address.routes.test.ts.
+    test('print identity is refused until it moves', async () => {
         const saved = await unit('Unit cetak', 'department', 'CETAK');
         expect(
             await errors(
