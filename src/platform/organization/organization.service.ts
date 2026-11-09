@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import type { Workspace } from '../access/index.ts';
-import { Database, nowSql } from '../database/index.ts';
+import { Database, isoSql, nowSql } from '../database/index.ts';
 import {
     abort,
     coded,
     expectedVersion,
     incrementalList,
     lookupId,
+    staleMessage,
     validation,
 } from '../http/index.ts';
 import {
@@ -16,13 +17,6 @@ import {
     updateOrganizationSchema,
     type OrganizationRow,
 } from './organization.schema.ts';
-
-// Bentuk tanggal Eloquent saat diubah ke JSON: UTC dengan enam angka mikrodetik.
-export const isoSql = (column: string) =>
-    `to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS".000000Z"')`;
-
-export const staleMessage =
-    'Perubahanmu belum disimpan karena data ini sudah diubah sejak kamu membukanya. Muat ulang untuk melihat data terbaru, lalu ulangi perubahanmu.';
 
 // Organisasi beserta relasi legalEntity dan operatingUnit, dengan kolom dan urutan yang sama dengan Eloquent.
 const organizationSql = `

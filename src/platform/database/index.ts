@@ -154,6 +154,10 @@ export function sqlErrorCode(error: unknown): string | undefined {
     return error instanceof postgres.PostgresError ? error.code : undefined;
 }
 
+// Bentuk tanggal Eloquent saat diubah ke JSON: UTC dengan enam angka mikrodetik.
+export const isoSql = (column: string) =>
+    `to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS".000000Z"')`;
+
 export function nowSql(): string {
     return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
