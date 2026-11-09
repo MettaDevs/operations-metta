@@ -1,10 +1,9 @@
-import { ulid } from 'ulid';
 import { z } from 'zod';
 import { Database } from '@core/platform/db.ts';
 import type { Bind } from '@core/platform/db.ts';
 import { abort, validation } from '@core/platform/errors.ts';
 import { incrementalList } from '@core/platform/listing.ts';
-import { dateSchema, nowSql } from '@core/platform/model.ts';
+import { dateSchema, lookupId, nowSql } from '@core/platform/model.ts';
 import { Decimal } from '@core/platform/money.ts';
 import type { Workspace } from '@core/platform/security.ts';
 import { assetSchema } from './model.ts';
@@ -366,7 +365,7 @@ export class Inventory {
             if (!errors[field]) {
                 const stamp = nowSql();
                 rows.push({
-                    id: ulid(),
+                    id: Bun.randomUUIDv7(),
                     tenant_id: this.workspace.tenantId,
                     tipe_atribut_id: definition.tipe_atribut_id,
                     ...value,
@@ -476,7 +475,7 @@ export class Inventory {
         const dimensionId =
             (await this.inheritedLocation(locationId, 'org_unit_id')) ??
             receipt.responsible_org_unit_id;
-        const id = ulid().toLowerCase();
+        const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         await this.db.insert('aset_tr_aset', {
             id,
@@ -510,7 +509,7 @@ export class Inventory {
             updated_at: stamp,
         });
         await this.db.insert('aset_tr_penempatan_aset', {
-            id: ulid(),
+            id: Bun.randomUUIDv7(),
             tenant_id: this.workspace.tenantId,
             aset_id: id,
             receiving_org_unit_id: receipt.receiving_org_unit_id,
@@ -569,7 +568,7 @@ export class Inventory {
             const convention = matrix.convention ?? profile?.convention ?? null;
             const placed = receipt.tanggal_siap_pakai ?? receipt.tanggal;
             await this.db.insert('aset_tr_buku_aset', {
-                id: ulid().toLowerCase(),
+                id: Bun.randomUUIDv7(),
                 tenant_id: this.workspace.tenantId,
                 aset_id: id,
                 buku_id: matrix.buku_id,
@@ -623,7 +622,7 @@ export class Inventory {
         const asset = await this.db.one(
             assetSchema,
             `select a.* from aset_tr_aset a where a.id=$1 and a.deleted_at is null and ${filter.clause} limit 1`,
-            [id, ...filter.bindings],
+            [lookupId(id), ...filter.bindings],
         );
         if (!asset)
             abort(

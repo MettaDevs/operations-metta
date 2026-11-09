@@ -36,8 +36,12 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
   - dikerjakan lewat migration, tidak pernah diubah tangan di database;
   - ikut memperbarui harness kesetaraan, termasuk pemetaan nama lama ke nama baru, supaya alur yang sudah pindah tetap terbukti setara;
   - tidak mengubah bentuk respons API yang sudah dipakai. Bentuk baru dirilis sebagai versi API baru.
-- Tabel yang ada di CoreERP dan masih dipakai CoreERP: migration-nya ditulis di CoreERP. Setelah areanya selesai pindah, migration-nya pindah ke repo ini.
-- Tabel baru yang tidak ada di CoreERP, misalnya tabel Healthcare, sejak awal milik repo ini beserta migration-nya.
+- Repo ini pemilik skemanya sendiri. Keputusan pemilik produk 9 November 2026: repo CoreERP tidak disentuh lagi, dan setiap perubahan baru hanya ada di sini.
+  - `database/migrations/0001_coreerp_baseline.sql` adalah skema CoreERP pada commit `6b3cf584`, dan `0002_ids_to_uuid.sql` mengubah setiap id ULID `character(26)` menjadi `uuid` dengan nilai 128 bit yang sama, termasuk id yang tertanam di teks dan JSON.
+  - Jalankan dengan `bun run migrate`. Database hasil restore dump CoreERP memakai `bun run migrate --adopt-coreerp`: `0001` dicatat tanpa dijalankan, lalu sisanya diterapkan. Jalur ini dipakai alat uji kesetaraan untuk mengonversi seed CoreERP.
+  - Tidak ada pemindahan data pelanggan dari CoreERP atau sistem lama. Pelanggan lama tetap di aplikasi lama sampai batas waktu yang ditentukan, dan repo ini mulai dari database kosong (keputusan pemilik produk, 9 November 2026).
+  - Perubahan skema CoreERP sesudah `6b3cf584` tidak ikut otomatis. Bila dibutuhkan, tulis sebagai migration baru di sini. `database/find-ulid-text.sql` menemukan id ULID di kolom teks dan JSON pada dump yang lebih baru.
+- Id baru dibuat dengan `Bun.randomUUIDv7()`. API dan URL memakai teks UUID huruf kecil.
 - Konfigurasi runtime dan aturan database ditetapkan skill `coreerp-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.
 - Tidak ada baris yang dihapus fisik. Menghapus berarti mengisi `deleted_at`. Indeks unik pada kode bisnis wajib parsial (`WHERE deleted_at IS NULL`), supaya kode yang sudah dihapus bisa dipakai lagi. Rinciannya di [Penghapusan lunak](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#penghapusan-lunak).
 
@@ -96,7 +100,7 @@ Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena 
 ## Skill
 
 - Setiap skill ada di `.agents/skills/` dan `.claude/skills/` dengan isi yang sama persis, karena kedua folder dibaca alat yang berbeda. Ubah keduanya dalam commit yang sama.
-- `coreerp-bun-elysia` disalin apa adanya dari CoreERP. Path `docs/...` di dalamnya menunjuk ke repo CoreERP. Bila skill itu berubah di CoreERP, salin ulang ke kedua folder di sini.
+- `coreerp-bun-elysia` berasal dari CoreERP, tapi sejak 9 November 2026 versi yang berlaku ada di sini, karena repo CoreERP tidak disentuh lagi. Path `docs/...` di dalamnya menunjuk ke repo CoreERP sebagai bacaan.
 
 ## Alur kerja
 
