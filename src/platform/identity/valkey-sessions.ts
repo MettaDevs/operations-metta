@@ -14,15 +14,21 @@ export class ValkeySessions {
         return this.guard(() => this.client.get(this.prefix + id));
     }
 
-    async write(id: string, payload: string): Promise<void> {
-        await this.guard(() =>
-            this.client.set(
-                this.prefix + id,
-                payload,
-                'EX',
-                this.lifetimeSeconds,
-            ),
+    // Sesi yang sudah ada ditulis dengan XX: kunci yang dihapus logout di request lain tidak dibuat ulang, dan
+    // hasilnya false. Masa berlakunya sama dengan sesi baru.
+    async write(
+        id: string,
+        payload: string,
+        existing: boolean,
+    ): Promise<boolean> {
+        const key = this.prefix + id;
+        const ttl = this.lifetimeSeconds;
+        const reply = await this.guard(() =>
+            existing
+                ? this.client.set(key, payload, 'EX', String(ttl), 'XX')
+                : this.client.set(key, payload, 'EX', ttl),
         );
+        return reply !== null;
     }
 
     async forget(id: string): Promise<void> {

@@ -9,7 +9,7 @@
             "match": {
                 "table": "sessions"
             },
-            "reason": "Kedua sisi menulis tepat satu baris sesi per request. Kandidat memakai INSERT ... ON CONFLICT DO UPDATE; PHP membaca baris lalu UPDATE atau INSERT.",
+            "reason": "Kedua sisi menulis tepat satu baris sesi per request: UPDATE untuk sesi yang terbaca, INSERT untuk sesi baru. Bedanya pada cookie yang sesinya sudah kedaluwarsa: PHP memakai lagi id dari cookie dan meng-UPDATE baris itu, sedangkan kandidat membuat sesi dengan id baru lewat INSERT, supaya id sesi yang sudah dihapus logout tidak pernah dibuat ulang.",
             "evidence": ""
         },
         {

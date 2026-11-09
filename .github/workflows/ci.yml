@@ -11,7 +11,8 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # Test route Core memanggil aplikasi di atas database yang sudah dimigrasi.
+    # Test route Core memanggil aplikasi di atas database yang sudah dimigrasi. Test sesi berjalan di PostgreSQL dan
+    # di Valkey sungguhan, karena tiruan yang menjawab tetap menyembunyikan penulisan yang membuat ulang sesi.
     services:
       postgres:
         image: postgres:17
@@ -26,12 +27,23 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      valkey:
+        image: valkey/valkey:9.1.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_DATABASE: operations_test
       DB_USERNAME: ci
       DB_PASSWORD: ci-only-not-a-secret
+      VALKEY_HOST: 127.0.0.1
+      VALKEY_PORT: 6379
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
