@@ -104,8 +104,8 @@ Keputusan pemilik produk, 9 November 2026: setiap perubahan masuk `main` lewat p
 
 - Kerjakan di worktree sendiri, lalu jalankan pemeriksaan di bagian [Sebelum menyatakan hijau](#sebelum-menyatakan-hijau).
 - Push branch-nya dan langsung buka PR biasa: `gh pr create --base main`. Jangan `--draft`.
-- Merge dengan squash begitu CI PR itu hijau. CI yang merah diperbaiki di branch yang sama, tidak pernah di-merge dalam keadaan merah.
-- Tidak ada push langsung ke `main`.
+- Langsung pasang auto-merge: `gh pr merge --auto --squash`. GitHub me-merge PR itu sendiri begitu check `check` hijau, jadi tidak ada yang perlu menunggu. CI yang merah diperbaiki di branch yang sama.
+- Branch `main` diproteksi: merge dan push yang belum lolos check `check` ditolak GitHub, termasuk dari admin. Jangan mematikan proteksi untuk meloloskan perubahan.
 - Sebelum menyentuh folder yang mungkin sedang dikerjakan sesi lain, periksa `git worktree list` dan kabari sesi itu lebih dulu.
 
 ## Worktree
