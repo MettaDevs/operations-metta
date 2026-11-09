@@ -9,8 +9,8 @@
 ## Susunan repo
 
 - `src/` adalah Core.
-    - `src/platform/` berisi bagian yang dipakai setiap request: identitas, sesi, akses, tenant, pool database, dan actor audit.
-    - `src/foundation/` berisi layanan bisnis bersama: number sequence, mata uang, dan posting finance.
+  - `src/platform/` berisi bagian yang dipakai setiap request: identitas, sesi, akses, tenant, pool database, dan actor audit.
+  - `src/foundation/` berisi layanan bisnis bersama: number sequence, mata uang, dan posting finance.
 - `modules/<nama>/` berisi satu package Bun workspace per module. Module pertama adalah `modules/asset-management/`.
 - `src/main.ts` adalah satu-satunya berkas Core yang merangkai module ke dalam runtime. Di luar berkas itu, Core tidak pernah meng-import module. `bun run check:boundaries` menolak pelanggarannya.
 
@@ -23,19 +23,19 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
 - Setiap tabel module membawa `tenant_id`, dan setiap query menyaringnya. Tenant diambil dari konteks tepercaya di `src/platform/`, bukan dari nilai kiriman klien yang belum diperiksa.
 - Nama event `module.aggregate.action.vN`, envelope, dan aturan versinya tidak berubah. Event yang sudah terbit tidak diubah di tempat. Menambah atau menghapus field wajib berarti `vN+1`. Bentuk envelope ada di [Kontrak wajib](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/04-api-and-integration.md#kontrak-wajib).
 - Core boleh membaca tabel module secara langsung, misalnya untuk laporan dan analitik. Ini keputusan pemilik produk pada 3 Oktober 2026. Bacaan itu wajib memenuhi syarat dari [Ownership dan data](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#ownership-dan-data):
-    - Nama tabel dan kolom datang dari yang didaftarkan module, tidak ditulis mati di kode Core.
-    - Tenant disaring, dan kebijakan data yang dinyatakan module diterapkan.
-    - Bacaan yang menggabungkan beberapa module hanya ditawarkan bila semuanya terpasang untuk tenant itu.
-    - Core hanya membaca. Menulis tetap lewat module pemiliknya.
+  - Nama tabel dan kolom datang dari yang didaftarkan module, tidak ditulis mati di kode Core.
+  - Tenant disaring, dan kebijakan data yang dinyatakan module diterapkan.
+  - Bacaan yang menggabungkan beberapa module hanya ditawarkan bila semuanya terpasang untuk tenant itu.
+  - Core hanya membaca. Menulis tetap lewat module pemiliknya.
 - Katalog, entitlement, dan pemasangan module tidak sama. Katalog berarti produk dikenal, entitlement berarti tenant berhak memakai, dan `installed` hanya sah setelah migration module berhasil dan tercatat di `core_module_installations`. Layar berlabel "terpasang" membaca catatan pemasangan itu, tidak menyimpulkannya dari entitlement.
 
 ## Database
 
 - Skema CoreERP adalah titik awal, bukan batas. Keputusan pemilik produk 9 November 2026: perubahan yang membuat skema lebih baik boleh dilakukan, misalnya nama yang lebih jelas, tipe kolom yang lebih tepat, atau index yang lebih berguna. Setiap perubahan:
-    - alasannya ditulis di PR-nya;
-    - dikerjakan lewat migration, tidak pernah diubah tangan di database;
-    - ikut memperbarui harness kesetaraan, termasuk pemetaan nama lama ke nama baru, supaya alur yang sudah pindah tetap terbukti setara;
-    - tidak mengubah bentuk respons API yang sudah dipakai. Bentuk baru dirilis sebagai versi API baru.
+  - alasannya ditulis di PR-nya;
+  - dikerjakan lewat migration, tidak pernah diubah tangan di database;
+  - ikut memperbarui harness kesetaraan, termasuk pemetaan nama lama ke nama baru, supaya alur yang sudah pindah tetap terbukti setara;
+  - tidak mengubah bentuk respons API yang sudah dipakai. Bentuk baru dirilis sebagai versi API baru.
 - Tabel yang ada di CoreERP dan masih dipakai CoreERP: migration-nya ditulis di CoreERP. Setelah areanya selesai pindah, migration-nya pindah ke repo ini.
 - Tabel baru yang tidak ada di CoreERP, misalnya tabel Healthcare, sejak awal milik repo ini beserta migration-nya.
 - Konfigurasi runtime dan aturan database ditetapkan skill `coreerp-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.
@@ -55,9 +55,9 @@ Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diber
 ## Kapan sebuah alur dianggap pindah
 
 - Sebuah alur dianggap pindah hanya setelah harness kesetaraan melaporkannya identik dengan CoreERP untuk input yang sama. Harness itu terdiri dari:
-    - Golden run, yang membandingkan respons HTTP dan jejak SQL.
-    - Conformance, yang antara lain menguji pencabutan akses, rollback, dan throttle.
-    - Oracle SQL, yang memeriksa isi database langsung tanpa memakai kode aplikasi.
+  - Golden run, yang membandingkan respons HTTP dan jejak SQL.
+  - Conformance, yang antara lain menguji pencabutan akses, rollback, dan throttle.
+  - Oracle SQL, yang memeriksa isi database langsung tanpa memakai kode aplikasi.
 - Harness itu sekarang ada di [`experiments/stack-comparison/scripts`](https://github.com/MettaDevs/coreERP/tree/codex/native-stack-comparison/experiments/stack-comparison/scripts) pada branch `codex/native-stack-comparison` di CoreERP.
 - Sebuah module boleh disebut sudah pindah setelah [pemeriksaan kesetiaan](https://github.com/MettaDevs/coreERP/blob/main/docs/design-system/04-pemeriksaan-kesetiaan.md) terpenuhi seluruhnya, termasuk syarat beban dan kebenarannya.
 - Test yang lulus di repo ini belum berarti sebuah alur sudah pindah.
@@ -106,6 +106,7 @@ Keputusan pemilik produk, 9 November 2026: worktree tidak dibuat di folder kerja
 - Hapus begitu branch-nya selesai di-merge: `git worktree remove .worktrees/<nama>`, lalu `git branch -D <branch>`. Jangan menghapus foldernya dengan `rm -rf`.
 - `git worktree list` menampilkan semua worktree yang masih ada. Periksa sebelum memulai pekerjaan baru.
 - `bun scripts/prune-worktrees.ts`, dijalankan dari clone utama, menghapus worktree di `.worktrees/` yang PR-nya sudah di-merge atau ditutup, beserta branch lokalnya. Worktree yang masih punya perubahan belum di-commit, commit sesudah commit terakhir PR-nya, belum punya PR, atau PR-nya masih terbuka tidak disentuh. Tambahkan `--dry-run` untuk melihat hasilnya tanpa menghapus apa pun.
+- Setiap worktree yang dibiarkan dilaporkan tertinggal berapa commit dari `main` dan sudah berapa hari tidak disentuh, dengan tanda `LAMA` sesudah tujuh hari. Jalankan perintah itu di awal setiap sesi. Worktree `LAMA` diputuskan saat itu juga: selesaikan dan merge, gabungkan `main` terbaru ke branch-nya sebelum dilanjutkan, atau tutup PR-nya supaya terhapus pada putaran berikutnya.
 - Nama foldernya harus tetap berawalan titik. Prettier mengabaikannya karena tercantum di `.gitignore`, `bun test` tidak masuk ke folder berawalan titik, dan `tsconfig.json` hanya membaca folder yang disebut. Folder tanpa titik akan ikut dijalankan `bun test`.
 
 ## Sebelum menyatakan hijau

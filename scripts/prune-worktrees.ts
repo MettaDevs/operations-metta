@@ -78,7 +78,23 @@ if (main === undefined) {
     throw new Error('git worktree list tidak memulangkan apa pun.');
 }
 const root = resolve(main.path, '.worktrees') + sep;
+const staleDays = 7;
 
+// Worktree yang dibiarkan ikut dilaporkan jaraknya dari main, supaya pekerjaan yang lupa di-merge terlihat
+// sebelum konfliknya menumpuk.
+async function drift(worktree: Worktree): Promise<string> {
+    const behind = (
+        await $`git -C ${worktree.path} rev-list --count HEAD..origin/main`.text()
+    ).trim();
+    const committed = Number(
+        (await $`git -C ${worktree.path} log -1 --format=%ct`.text()).trim(),
+    );
+    const days = Math.floor((Date.now() / 1000 - committed) / 86400);
+    const stale = days >= staleDays ? ' LAMA' : '';
+    return `tertinggal ${behind} commit dari main, commit terakhir ${days} hari lalu${stale}`;
+}
+
+await $`git fetch --quiet --prune origin`;
 for (const worktree of others) {
     if (!resolve(worktree.path).startsWith(root)) {
         continue;
@@ -87,7 +103,9 @@ for (const worktree of others) {
     const result = await verdict(worktree);
     switch (result.kind) {
         case 'keep':
-            console.log(`tetap    ${name}: ${result.reason}`);
+            console.log(
+                `tetap    ${name}: ${result.reason} (${await drift(worktree)})`,
+            );
             break;
         case 'remove':
             if (dryRun) {
