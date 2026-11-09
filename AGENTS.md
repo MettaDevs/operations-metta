@@ -62,7 +62,7 @@ Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diber
   - Golden run, yang membandingkan respons HTTP dan jejak SQL.
   - Conformance, yang antara lain menguji pencabutan akses, rollback, dan throttle.
   - Oracle SQL, yang memeriksa isi database langsung tanpa memakai kode aplikasi.
-- Harness itu sekarang ada di [`experiments/stack-comparison/scripts`](https://github.com/MettaDevs/coreERP/tree/codex/native-stack-comparison/experiments/stack-comparison/scripts) pada branch `codex/native-stack-comparison` di CoreERP.
+- Harness itu ada di `parity/` repo ini, dipindah dari eksperimen CoreERP. Hasil CoreERP yang tersimpan memakai ULID dan dipetakan ke uuid saat dibaca. Cara menjalankannya dan daftar waiver-nya ada di `parity/README.md`. Data acuan dan secret fixture tetap di server lab, tidak pernah masuk repo.
 - Sebuah module boleh disebut sudah pindah setelah [pemeriksaan kesetiaan](https://github.com/MettaDevs/coreERP/blob/main/docs/design-system/04-pemeriksaan-kesetiaan.md) terpenuhi seluruhnya, termasuk syarat beban dan kebenarannya.
 - Test yang lulus di repo ini belum berarti sebuah alur sudah pindah.
 
