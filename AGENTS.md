@@ -31,8 +31,13 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
 
 ## Database
 
-- Nama tabel, kolom, index, constraint, dan trigger sama persis dengan CoreERP.
-- Selama transisi, CoreERP pemilik skema dan migration. Repo ini tidak menulis migration sampai satu area selesai pindah seluruhnya.
+- Skema CoreERP adalah titik awal, bukan batas. Keputusan pemilik produk 9 November 2026: perubahan yang membuat skema lebih baik boleh dilakukan, misalnya nama yang lebih jelas, tipe kolom yang lebih tepat, atau index yang lebih berguna. Setiap perubahan:
+  - alasannya ditulis di PR-nya;
+  - dikerjakan lewat migration, tidak pernah diubah tangan di database;
+  - ikut memperbarui harness kesetaraan, termasuk pemetaan nama lama ke nama baru, supaya alur yang sudah pindah tetap terbukti setara;
+  - tidak mengubah bentuk respons API yang sudah dipakai. Bentuk baru dirilis sebagai versi API baru.
+- Tabel yang ada di CoreERP dan masih dipakai CoreERP: migration-nya ditulis di CoreERP. Setelah areanya selesai pindah, migration-nya pindah ke repo ini.
+- Tabel baru yang tidak ada di CoreERP, misalnya tabel Healthcare, sejak awal milik repo ini beserta migration-nya.
 - Konfigurasi runtime dan aturan database ditetapkan skill `coreerp-bun-elysia` dan [`docs/dev/39-pindah-ke-bun-elysia.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), antara lain jumlah proses Bun, pool koneksi, `idleTimeout`, prepared statement, tipe parameter, tempat sesi, actor audit, dan setelan PostgreSQL yang dilarang. Berkas ini sengaja tidak menyalin angkanya. Baca dari sumbernya.
 - Tidak ada baris yang dihapus fisik. Menghapus berarti mengisi `deleted_at`. Indeks unik pada kode bisnis wajib parsial (`WHERE deleted_at IS NULL`), supaya kode yang sudah dihapus bisa dipakai lagi. Rinciannya di [Penghapusan lunak](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md#penghapusan-lunak).
 
@@ -102,5 +107,5 @@ bun run typecheck
 bun test
 bun run format:check
 bun run check:boundaries
-bun run build
+bun run build ## BUILD HANYA JIKA PERLU tidak harus semua kadang kan  ##
 ```
