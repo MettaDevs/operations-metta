@@ -41,7 +41,7 @@ Use `@operations-metta/ui` as the single source for generic UI. Inspect its comp
 - Aksi pemilih banyak barang hanya muncul bila ada lebih dari satu rincian yang masih dapat ditambahkan. Jangan menampilkan teks/tombol nonaktif tanpa tindakan yang berguna; pilihan tunggal tetap lewat lookup utama.
 - Lampiran induk baru dipilih sebagai draft: pilihan berkas tetap lokal dan ikut Simpan utama secara atomik. Baca batas per berkas, jumlah, dan ukuran gabungan dari server; jangan memakai induk sementara atau memaksa Simpan dulu. Pertahankan pilihan ketika gagal. Penerusan ke record hasil mengikuti pola aliran dokumen pada [standar module CoreERP](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/02-module-standard.md), tanpa menggandakan isi berkas.
 - Tanggal dan waktu lokal memakai `DateTimePicker` SDK; tanggal kalender memakai `DatePicker` SDK: placeholder `dd/mm/yyyy` muncul ketika field kosong difokuskan, ketikan delapan digit diformat otomatis, dan tanggal sah diteruskan dalam ISO. Jangan memakai kalender native browser atau formatter tanggal per halaman.
-- Setelah menambah komponen SDK, build paket sebelum mengganti import pemakai, lalu periksa bahwa server development yang aktif memang mengenali ekspor baru; keberhasilan build terpisah tidak membuktikannya.
+- `packages/ui` tidak punya langkah build: exports-nya menunjuk langsung ke `src/`. Komponen `.tsx` baru ikut pola `./*`; komponen `.ts` butuh baris exports sendiri di `packages/ui/package.json`. `packages/ui/test/exports.test.ts` gagal bila sebuah komponen tidak bisa di-import sebagai `@operations-metta/ui/<nama>`.
 
 ## Boundaries
 
@@ -176,11 +176,11 @@ The Shell in `src/platform/shell/` is not built yet. Two mistakes in CoreERP shi
 - **Every new screen needs an entry in the Shell's main navigation**, under the group it belongs to, guarded by the same permission that guards its route; the menu hides it from members who lack it, while the route enforces it. A link placed only in a sub-navigation is unreachable from the rail.
 - **Verify by walking the rail**, not by opening the URL directly: open the Shell, click through the rail to the new screen, and confirm one header and one sidebar. A screen reached by typing its URL proves nothing about either rule.
 
-## Theme and workspace build
+## Theme and workspace package
 
 Modules share the Shell's React tree, theme, and fonts; they do not create an iframe, a second React root, or a ready/context handshake with the Shell. Import public `@operations-metta/ui` subpaths and inherit the Shell stylesheet. Theme values come from `@operations-metta/ui/theme` and the tokens in `styles.css`; the token list is also in `docs/design-system/`.
 
-`packages/ui` is a workspace package in this repository. Do not introduce a vendored tarball or import package source from another repository. Build or type-check the package only when its source, dependencies, or build configuration changed.
+`packages/ui` is a workspace package in this repository. Do not introduce a vendored tarball or import package source from another repository. The package has no build step; `bun run typecheck` checks it (`tsc --noEmit -p packages/ui`) and `bun test` runs its tests, including the jsdom scenarios. The Shell stylesheet is `src/platform/shell/app.css`; it scans `packages/ui/src` and the screens in `src/` and `modules/*/src/`.
 
 ## Native page and table scrolling
 
@@ -205,4 +205,4 @@ Saat menulis pesan kegagalan, tombol pemulihan, atau ringkasan error form, baca 
 
 For failed saves or processing actions, a 5xx must produce a visible message that remains until corrected or dismissed, using the action's everyday wording. A brief toast or a successfully captured error report alone does not satisfy user feedback. Preserve unsaved inputs and keep technical details in server reports. The behaviour CoreERP follows is in [`docs/dev/28-pelaporan-kesalahan.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/28-pelaporan-kesalahan.md), "Kegagalan yang terlihat oleh pengguna".
 
-Run `bun run typecheck` and `bun run format:check` from the repository root. Build `packages/ui` or the app only when SDK source, dependencies, or build configuration changed. Respect a request for the user to do the visual review. When runtime inspection is needed, verify light/dark appearance, keyboard/focus behavior, and that a changed dialog shows its title and required decision text in the modal itself.
+Run `bun run typecheck`, `bun test`, and `bun run format:check` from the repository root; they cover `packages/ui`. There is no frontend build yet. Respect a request for the user to do the visual review. When runtime inspection is needed, verify light/dark appearance, keyboard/focus behavior, and that a changed dialog shows its title and required decision text in the modal itself.
