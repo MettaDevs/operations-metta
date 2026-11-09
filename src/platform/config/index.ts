@@ -33,8 +33,10 @@ const environmentSchema = z.object({
     SENTRY_RELEASE: z.string().min(1).optional(),
 });
 
-export function loadConfig() {
-    const values = environmentSchema.parse(process.env);
+export function loadConfig(
+    environment: Record<string, string | undefined> = process.env,
+) {
+    const values = environmentSchema.parse(environment);
     const key = values.APP_KEY.startsWith('base64:')
         ? Buffer.from(values.APP_KEY.slice(7), 'base64')
         : Buffer.from(values.APP_KEY);

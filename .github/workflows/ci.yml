@@ -11,6 +11,27 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Test route Core memanggil aplikasi di atas database yang sudah dimigrasi.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: operations_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d operations_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: operations_test
+      DB_USERNAME: ci
+      DB_PASSWORD: ci-only-not-a-secret
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -34,7 +55,10 @@ jobs:
       - name: Check boundaries
         run: bun run check:boundaries
 
-      - name: Test
+      - name: Migrate the test database
+        run: bun run migrate
+
+      - name: Test against the migrated database
         run: bun run test
 
       - name: Build
