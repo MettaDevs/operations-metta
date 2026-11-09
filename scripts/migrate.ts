@@ -69,8 +69,9 @@ async function missingTables(tables: string[]): Promise<string[]> {
 async function migrate(): Promise<void> {
     // Dua proses migrate yang berjalan bersamaan saling menunggu di kunci ini, bukan saling menabrak.
     await sql`select pg_advisory_lock(hashtext('schema_migrations'))`;
+    // Selalu bersama schema-nya, karena berkas migration boleh mengosongkan search_path (0001 melakukannya).
     await sql`
-        create table if not exists schema_migrations (
+        create table if not exists public.schema_migrations (
             name text primary key,
             checksum text not null,
             applied_at timestamptz not null default now()
@@ -79,7 +80,7 @@ async function migrate(): Promise<void> {
         (
             await sql<
                 { name: string; checksum: string }[]
-            >`select name, checksum from schema_migrations`
+            >`select name, checksum from public.schema_migrations`
         ).map((row) => [row.name, row.checksum]),
     );
 
@@ -105,7 +106,7 @@ async function migrate(): Promise<void> {
             throw new Error(
                 `${adoptFlag} needs a database restored from a CoreERP dump, but ${missing.length} of ${tables.length} baseline tables are missing, for example ${missing.slice(0, 5).join(', ')}.`,
             );
-        await sql`insert into schema_migrations (name, checksum) values (${baseline}, ${file.checksum})`;
+        await sql`insert into public.schema_migrations (name, checksum) values (${baseline}, ${file.checksum})`;
         applied.set(baseline, file.checksum);
         console.log(`adopted ${baseline} without running it`);
     }
@@ -119,7 +120,7 @@ async function migrate(): Promise<void> {
             // Setelan sesi dari berkas sebelumnya (misalnya search_path kosong dari pg_dump) tidak boleh terbawa.
             await transaction.unsafe('reset all');
             await transaction.unsafe(migration.sql);
-            await transaction`insert into schema_migrations (name, checksum) values (${migration.name}, ${migration.checksum})`;
+            await transaction`insert into public.schema_migrations (name, checksum) values (${migration.name}, ${migration.checksum})`;
         });
         const seconds = (performance.now() - started) / 1000;
         console.log(`applied ${migration.name} in ${seconds.toFixed(1)} s`);
