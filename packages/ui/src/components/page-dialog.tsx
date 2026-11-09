@@ -424,7 +424,7 @@ function PageDialogHeader({
                 variant="ghost"
                 size="command"
                 aria-current="page"
-                className="text-primary border-primary rounded-none border-b"
+                className="rounded-none border-b border-primary text-primary"
                 onClick={page.focusContent}
             >
                 Beranda
@@ -443,7 +443,7 @@ function PageDialogHeader({
                     <Button
                         type="button"
                         data-page-dialog-back
-                        className="bg-accent/60 text-accent-foreground rounded-full"
+                        className="rounded-full bg-accent/60 text-accent-foreground"
                         size="icon-sm"
                         variant="ghost"
                         aria-label="Kembali ke halaman sebelumnya"
@@ -477,7 +477,7 @@ function PageDialogHeader({
                             aria-pressed={record.editing}
                             className={
                                 record.editing
-                                    ? 'border-primary rounded-full border disabled:opacity-100'
+                                    ? 'rounded-full border border-primary disabled:opacity-100'
                                     : undefined
                             }
                             disabled={
@@ -675,7 +675,7 @@ function PageDialogTitle({
     return (
         <DialogTitle
             className={cn(
-                'text-muted-foreground text-xs font-normal leading-5',
+                'text-xs leading-5 font-normal text-muted-foreground',
                 className,
             )}
             {...props}

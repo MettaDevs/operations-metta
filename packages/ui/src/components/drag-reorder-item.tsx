@@ -1,10 +1,10 @@
-import * as React from "react";
-import { cn } from "../utils";
+import * as React from 'react';
+import { cn } from '../utils';
 
-type DropEdge = "before" | "after";
+type DropEdge = 'before' | 'after';
 type DragReorderItemProps = Omit<
-    React.ComponentProps<"div">,
-    "onDrop" | "onDragStart" | "onDragOver" | "onDragEnd" | "onDragLeave"
+    React.ComponentProps<'div'>,
+    'onDrop' | 'onDragStart' | 'onDragOver' | 'onDragEnd' | 'onDragLeave'
 > & {
     payload: string;
     preview: string;
@@ -28,14 +28,14 @@ function DragReorderItem({
         <div
             {...props}
             draggable
-            className={cn("relative", dragging && "opacity-50", className)}
+            className={cn('relative', dragging && 'opacity-50', className)}
             onDragStart={(event) => {
                 event.dataTransfer.setData(mimeType, payload);
-                event.dataTransfer.effectAllowed = "copyMove";
-                const ghost = document.createElement("div");
+                event.dataTransfer.effectAllowed = 'copyMove';
+                const ghost = document.createElement('div');
                 ghost.textContent = preview;
                 ghost.className =
-                    "fixed -left-[9999px] rounded border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md";
+                    'fixed -left-[9999px] rounded border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md';
                 document.body.appendChild(ghost);
                 event.dataTransfer.setDragImage(ghost, 10, 10);
                 requestAnimationFrame(() => ghost.remove());
@@ -55,8 +55,8 @@ function DragReorderItem({
                 const rect = event.currentTarget.getBoundingClientRect();
                 setEdge(
                     event.clientY < rect.top + rect.height / 2
-                        ? "before"
-                        : "after",
+                        ? 'before'
+                        : 'after',
                 );
             }}
             onDragLeave={(event) => {
@@ -73,8 +73,8 @@ function DragReorderItem({
                 const rect = event.currentTarget.getBoundingClientRect();
                 const position =
                     event.clientY < rect.top + rect.height / 2
-                        ? "before"
-                        : "after";
+                        ? 'before'
+                        : 'after';
                 const data = event.dataTransfer.getData(mimeType);
                 setEdge(null);
 
@@ -87,8 +87,8 @@ function DragReorderItem({
                 <span
                     aria-hidden
                     className={cn(
-                        "pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary",
-                        edge === "before" ? "top-0" : "bottom-0",
+                        'pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary',
+                        edge === 'before' ? 'top-0' : 'bottom-0',
                     )}
                 />
             )}

@@ -132,7 +132,7 @@ function DialogOverlay({
                 // Tanpa `backdrop-filter`. Ia memaksa browser menyalin lalu mengaburkan
                 // seluruh isi di belakang overlay pada setiap frame, dan dialog di sini
                 // seukuran halaman. Peredupan sudah cukup dikerjakan `bg-black/40`.
-                'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/40',
+                'fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
                 className,
             )}
             {...props}
@@ -177,7 +177,7 @@ function DialogSurface({
                 data-slot="dialog-content"
                 data-behind={isBehind ? '' : undefined}
                 className={cn(
-                    'bg-background fixed z-50 flex flex-col overflow-hidden rounded-lg border shadow-2xl outline-none',
+                    'fixed z-50 flex flex-col overflow-hidden rounded-lg border bg-background shadow-2xl outline-none',
                     // Hanya `transform` dan `opacity` yang dianimasikan; keduanya dapat
                     // dikerjakan compositor tanpa raster ulang. `filter` tidak boleh ikut
                     // — lihat catatan pada kelas data-[behind] di bawah.
@@ -207,7 +207,7 @@ function DialogSurface({
                     <DialogPrimitive.Close
                         data-slot="dialog-close"
                         aria-label="Tutup"
-                        className="text-muted-foreground hover:bg-accent focus-visible:ring-ring absolute right-4 top-3.5 rounded-sm p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2"
+                        className="absolute top-3.5 right-4 rounded-sm p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                         <XIcon className="size-4" />
                     </DialogPrimitive.Close>
@@ -237,7 +237,7 @@ function DialogTitle({
     return (
         <DialogPrimitive.Title
             data-slot="dialog-title"
-            className={cn('text-lg font-semibold leading-tight', className)}
+            className={cn('text-lg leading-tight font-semibold', className)}
             {...props}
         />
     );
@@ -251,7 +251,7 @@ function DialogDescription({
     return (
         <DialogPrimitive.Description
             data-slot="dialog-description"
-            className={cn('text-muted-foreground text-sm', className)}
+            className={cn('text-sm text-muted-foreground', className)}
             {...props}
         />
     );
@@ -264,7 +264,7 @@ function DialogToolbar({ className, ...props }: React.ComponentProps<'div'>) {
             data-slot="dialog-toolbar"
             data-command-bar=""
             className={cn(
-                'bg-background sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-1 border-b px-4 py-1',
+                'sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-1 border-b bg-background px-4 py-1',
                 className,
             )}
             {...props}
@@ -295,7 +295,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
         <div
             data-slot="dialog-footer"
             className={cn(
-                'bg-muted/30 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t px-6 py-3',
+                'flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-muted/30 px-6 py-3',
                 className,
             )}
             {...props}

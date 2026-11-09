@@ -575,7 +575,7 @@ export function FormErrorSummary({
                 ref={summaryRef}
                 tabIndex={-1}
                 data-slot="form-error-summary"
-                className="focus-visible:ring-ring flex max-h-[min(16rem,35dvh)] w-full flex-col gap-2 overflow-y-auto rounded-lg outline-none focus-visible:ring-2"
+                className="flex max-h-[min(16rem,35dvh)] w-full flex-col gap-2 overflow-y-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
                 {entries.map((entry) => (
                     <FormErrorNotice
@@ -643,7 +643,7 @@ function FormErrorNotice({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground self-start"
+                className="self-start text-muted-foreground"
                 onClick={() => setDisplay({ feedback, mode: 'expanded' })}
             >
                 Tampilkan pesan: {feedback.title}

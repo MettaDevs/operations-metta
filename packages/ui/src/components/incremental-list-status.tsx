@@ -55,7 +55,7 @@ export function IncrementalListStatus({
             ref={ref}
             role="status"
             aria-live="polite"
-            className="text-muted-foreground p-2 text-center text-sm"
+            className="p-2 text-center text-sm text-muted-foreground"
         >
             {state.loading ? (
                 'Memuat data…'

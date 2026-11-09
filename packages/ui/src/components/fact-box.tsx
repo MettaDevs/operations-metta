@@ -167,7 +167,7 @@ export function FactBox({
                     aria-valuenow={panelWidth}
                     aria-valuetext={`${Math.round(panelWidth)} piksel`}
                     title="Tarik untuk mengubah lebar. Tombol panah kiri/kanan juga bisa digunakan. Klik dua kali untuk mengembalikan lebar."
-                    className="focus-visible:outline-ring relative hidden touch-none select-none self-stretch after:absolute after:-inset-x-1 after:inset-y-0 focus-visible:outline-2 xl:block xl:cursor-col-resize"
+                    className="relative hidden touch-none self-stretch select-none after:absolute after:-inset-x-1 after:inset-y-0 focus-visible:outline-2 focus-visible:outline-ring xl:block xl:cursor-col-resize"
                     onDoubleClick={() => resize(DEFAULT_WIDTH)}
                     onPointerDown={(event) => {
                         if (event.button !== 0) {

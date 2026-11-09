@@ -49,7 +49,7 @@ function TransferListPane({
 }) {
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 {title}
             </p>
             {onSearchChange && (
@@ -83,7 +83,7 @@ function TransferListPane({
                 )}
             >
                 {items.length === 0 ? (
-                    <p className="text-muted-foreground p-3 text-sm">
+                    <p className="p-3 text-sm text-muted-foreground">
                         {emptyLabel}
                     </p>
                 ) : (
@@ -107,7 +107,7 @@ function TransferListPane({
                                         {item.label}
                                     </span>
                                     {item.description && (
-                                        <span className="text-muted-foreground text-xs">
+                                        <span className="text-xs text-muted-foreground">
                                             {item.description}
                                         </span>
                                     )}

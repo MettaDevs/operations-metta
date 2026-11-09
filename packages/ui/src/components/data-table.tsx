@@ -485,9 +485,9 @@ function DataTable<T>({
                 }
             }}
             className={cn(
-                'hover:bg-accent/40 data-active:bg-accent/60 border-0',
+                'border-0 hover:bg-accent/40 data-active:bg-accent/60',
                 onRowClick &&
-                    'focus-visible:ring-ring cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset',
+                    'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
                 selection && selectedKeys.has(getRowKey(row)) && 'bg-accent/40',
             )}
         >
@@ -517,9 +517,9 @@ function DataTable<T>({
                 </TableCell>
             )}
             {showRowNumbers && (
-                <TableCell className="text-muted-foreground h-9 border-b px-2 text-center text-xs tabular-nums">
+                <TableCell className="h-9 border-b px-2 text-center text-xs text-muted-foreground tabular-nums">
                     {activeRowKey === getRowKey(row) ? (
-                        <ArrowRight className="text-primary mx-auto size-3.5" />
+                        <ArrowRight className="mx-auto size-3.5 text-primary" />
                     ) : (
                         index + 1
                     )}
@@ -547,7 +547,7 @@ function DataTable<T>({
                             allowColumnFreeze &&
                                 columnIndex < frozenCount &&
                                 'bg-background',
-                            'h-9 overflow-hidden whitespace-nowrap border-b px-3 py-2',
+                            'h-9 overflow-hidden border-b px-3 py-2 whitespace-nowrap',
                             column.align === 'center' && 'text-center',
                             column.align === 'right' && 'text-right',
                         )}
@@ -557,7 +557,7 @@ function DataTable<T>({
                             className={cn(
                                 'min-w-0',
                                 column.content === 'control'
-                                    ? 'whitespace-normal py-2'
+                                    ? 'py-2 whitespace-normal'
                                     : 'truncate',
                             )}
                         >
@@ -603,7 +603,7 @@ function DataTable<T>({
             data-cell-mode={cellMode}
             data-seamless-header={seamlessHeader ? '' : undefined}
             className={cn(
-                'bg-background relative overflow-hidden rounded-md border',
+                'relative overflow-hidden rounded-md border bg-background',
                 seamlessHeader && 'rounded-none border-0 bg-transparent',
                 scrollMode === 'viewport' &&
                     'flex h-full min-h-0 flex-1 flex-col',
@@ -670,14 +670,14 @@ function DataTable<T>({
                     className={cn(
                         '[&_tr]:border-0',
                         scrollMode === 'viewport' &&
-                            'bg-background sticky top-0 z-10',
+                            'sticky top-0 z-10 bg-background',
                     )}
                 >
                     <TableRow className="border-0 hover:bg-transparent">
                         {selection && (
                             <TableHead
                                 data-column-kind="selection"
-                                className="bg-muted/70 h-9 border-b px-2 text-center"
+                                className="h-9 border-b bg-muted/70 px-2 text-center"
                             >
                                 <Checkbox
                                     checked={
@@ -695,7 +695,7 @@ function DataTable<T>({
                         {showRowNumbers && (
                             <TableHead
                                 data-column-kind="row-numbers"
-                                className="bg-muted/70 text-muted-foreground h-9 border-b px-2 text-center text-xs"
+                                className="h-9 border-b bg-muted/70 px-2 text-center text-xs text-muted-foreground"
                             >
                                 #
                             </TableHead>
@@ -739,7 +739,7 @@ function DataTable<T>({
                                                 : undefined
                                         }
                                         className={cn(
-                                            'bg-muted/70 group relative h-9 select-none overflow-visible whitespace-normal border-b px-3 py-2 align-bottom text-xs font-normal last:border-r-0',
+                                            'group relative h-9 overflow-visible border-b bg-muted/70 px-3 py-2 align-bottom text-xs font-normal whitespace-normal select-none last:border-r-0',
                                             allowColumnFreeze &&
                                                 columns.indexOf(column) <
                                                     frozenCount &&
@@ -758,7 +758,7 @@ function DataTable<T>({
                                             <button
                                                 type="button"
                                                 className={cn(
-                                                    'focus-visible:ring-ring inline-flex w-full min-w-0 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2',
+                                                    'inline-flex w-full min-w-0 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                                     column.align === 'center' &&
                                                         'justify-center text-center',
                                                     column.align === 'right' &&
@@ -796,7 +796,7 @@ function DataTable<T>({
                                                 </span>
                                                 <SortIcon
                                                     className={cn(
-                                                        'text-muted-foreground size-3.5 shrink-0 transition-opacity',
+                                                        'size-3.5 shrink-0 text-muted-foreground transition-opacity',
                                                         !isSorted &&
                                                             'opacity-0 group-focus-within:opacity-60 group-hover:opacity-60',
                                                     )}
@@ -827,7 +827,7 @@ function DataTable<T>({
                                                     <button
                                                         type="button"
                                                         aria-label={`Menu kolom ${column.header}`}
-                                                        className="bg-muted absolute right-7 top-1 z-10 rounded p-1 opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                                                        className="absolute top-1 right-7 z-10 rounded bg-muted p-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
                                                     >
                                                         <Menu className="size-3.5" />
                                                     </button>
@@ -977,7 +977,7 @@ function DataTable<T>({
                                                         type="button"
                                                         aria-label={`Filter kolom ${column.header}`}
                                                         className={cn(
-                                                            'bg-muted absolute right-2 top-1 z-10 rounded p-1 opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100',
+                                                            'absolute top-1 right-2 z-10 rounded bg-muted p-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100',
                                                             column.filterActive &&
                                                                 'text-primary opacity-100',
                                                         )}
@@ -999,12 +999,12 @@ function DataTable<T>({
                                                         : `Resize column ${column.header}`
                                                 }
                                                 className={cn(
-                                                    'after:bg-primary absolute inset-y-0 z-10 w-2 cursor-col-resize touch-none opacity-0 outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 focus-visible:opacity-100 group-hover:opacity-100',
+                                                    'absolute inset-y-0 z-10 w-2 cursor-col-resize touch-none opacity-0 outline-none group-hover:opacity-100 after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:bg-primary focus-visible:opacity-100',
                                                     // Handle ujung tetap di dalam tabel agar tidak menambah scrollWidth.
                                                     nextColumn ||
                                                         hasTrailingActions
                                                         ? '-right-1'
-                                                        : 'right-0 after:left-auto after:right-0',
+                                                        : 'right-0 after:right-0 after:left-auto',
                                                 )}
                                                 onPointerDown={(event) => {
                                                     if (event.button !== 0) {
@@ -1172,7 +1172,7 @@ function DataTable<T>({
                                     {hasInlineActions && columnIndex === 0 && (
                                         <TableHead
                                             data-column-kind="actions"
-                                            className="bg-muted/70 h-9 border-b px-1"
+                                            className="h-9 border-b bg-muted/70 px-1"
                                         >
                                             <span className="sr-only">
                                                 Tindakan
@@ -1185,7 +1185,7 @@ function DataTable<T>({
                         {hasTrailingActions && (
                             <TableHead
                                 data-column-kind="actions"
-                                className="bg-muted/70 h-9 border-b px-2 text-right"
+                                className="h-9 border-b bg-muted/70 px-2 text-right"
                             >
                                 <span className="sr-only">Tindakan</span>
                             </TableHead>
@@ -1201,7 +1201,7 @@ function DataTable<T>({
                         <TableRow>
                             <TableCell
                                 colSpan={totalColumns}
-                                className="text-muted-foreground h-24 text-center"
+                                className="h-24 text-center text-muted-foreground"
                             >
                                 {incremental?.loading
                                     ? 'Memuat data…'
@@ -1213,7 +1213,7 @@ function DataTable<T>({
                         <TableRow>
                             <TableCell
                                 colSpan={totalColumns}
-                                className="text-muted-foreground text-center"
+                                className="text-center text-muted-foreground"
                             >
                                 <IncrementalListStatus
                                     state={incremental}
@@ -1230,7 +1230,7 @@ function DataTable<T>({
                         <TableRow data-add-row className="hover:bg-accent/40">
                             {selection && <TableCell />}
                             {showRowNumbers && (
-                                <TableCell className="text-muted-foreground text-center">
+                                <TableCell className="text-center text-muted-foreground">
                                     +
                                 </TableCell>
                             )}
@@ -1241,7 +1241,7 @@ function DataTable<T>({
                                             type="button"
                                             onClick={() => onAddRow(column.id)}
                                             aria-label={`Tambah baris pada ${column.header}`}
-                                            className="text-muted-foreground focus-visible:ring-ring h-8 w-full px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                                            className="h-8 w-full px-2 text-left text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                         >
                                             {index === 0 ? (
                                                 addRowLabel
@@ -1270,7 +1270,7 @@ function DataTable<T>({
                                 <button
                                     type="button"
                                     onClick={() => onAddRow()}
-                                    className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex h-9 w-full items-center gap-2 px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                                    className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                 >
                                     <Plus className="size-3.5" />
                                     {addRowLabel}
@@ -1282,7 +1282,7 @@ function DataTable<T>({
             </Table>
             {resizeGuide !== null && (
                 <div
-                    className="bg-primary pointer-events-none absolute inset-y-0 z-20 w-px"
+                    className="pointer-events-none absolute inset-y-0 z-20 w-px bg-primary"
                     style={{ left: resizeGuide }}
                 />
             )}

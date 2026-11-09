@@ -106,11 +106,11 @@ function CollapsibleSection({
                 }}
             >
                 <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="min-w-0 max-w-full text-lg font-semibold leading-6 [overflow-wrap:anywhere]">
+                    <span className="max-w-full min-w-0 text-lg leading-6 font-semibold [overflow-wrap:anywhere]">
                         {title}
                     </span>
                     {!isOpen && summary != null && (
-                        <span className="text-muted-foreground min-w-0 flex-1 basis-40 truncate text-sm font-normal">
+                        <span className="min-w-0 flex-1 basis-40 truncate text-sm font-normal text-muted-foreground">
                             {summary}
                         </span>
                     )}
@@ -127,7 +127,7 @@ function CollapsibleSection({
         it room; it is not decorative spacing.
       */}
             <AccordionContent
-                className="min-w-0 px-3 pb-3 pt-3"
+                className="min-w-0 px-3 pt-3 pb-3"
                 forceMount={preserveContent ? true : undefined}
                 hidden={preserveContent && !isOpen ? true : undefined}
             >

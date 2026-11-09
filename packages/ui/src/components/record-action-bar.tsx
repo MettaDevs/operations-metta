@@ -270,7 +270,7 @@ function RecordActionBar({
             data-slot="record-action-bar"
             data-command-bar=""
             className={cn(
-                'bg-background sticky top-0 z-20 flex shrink-0 flex-col border-b px-4 py-1',
+                'sticky top-0 z-20 flex shrink-0 flex-col border-b bg-background px-4 py-1',
                 className,
             )}
             {...props}

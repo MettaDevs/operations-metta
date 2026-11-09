@@ -124,7 +124,7 @@ function RecordEditControl({
                     ref={triggerRef}
                     type="button"
                     aria-label={`Ubah ${label.toLocaleLowerCase()}`}
-                    className="focus-visible:ring-ring/50 absolute inset-0 z-10 cursor-text rounded-md outline-none focus-visible:ring-2"
+                    className="absolute inset-0 z-10 cursor-text rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();

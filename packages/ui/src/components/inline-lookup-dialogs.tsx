@@ -118,7 +118,7 @@ export function InlineLookupListDialog<T>({
                         {loading && (
                             <p
                                 role="status"
-                                className="text-muted-foreground text-sm"
+                                className="text-sm text-muted-foreground"
                             >
                                 Memuat pilihan…
                             </p>
@@ -126,7 +126,7 @@ export function InlineLookupListDialog<T>({
                         {error && (
                             <div
                                 role="alert"
-                                className="text-destructive text-sm"
+                                className="text-sm text-destructive"
                             >
                                 {error}
                                 <Button variant="outline" onClick={onRetry}>
@@ -184,7 +184,7 @@ export function InlineLookupDetailsDialog<T>({
                     <dl className="grid gap-4 sm:grid-cols-2">
                         {columns.map((column) => (
                             <div key={column.id} className="min-w-0 space-y-1">
-                                <dt className="text-muted-foreground text-sm">
+                                <dt className="text-sm text-muted-foreground">
                                     {column.header}
                                 </dt>
                                 <dd>

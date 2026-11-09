@@ -141,7 +141,7 @@ function Select({
                         ariaLabel ?? documentLineLabel(cell, providedLabel)
                     }
                     className={cn(
-                        'dark:border-input dark:bg-input/30 dark:text-foreground flex h-9 w-full items-center justify-between gap-2 rounded-[4px] border border-[#d9dfe7] bg-white px-3 py-1 text-left text-sm text-[#1f2937] shadow-none outline-none transition-colors focus:border-[#0284c7] focus:ring-2 focus:ring-[#0284c7]/15 disabled:cursor-not-allowed disabled:opacity-50 data-[popup-open]:border-[#0284c7] data-[placeholder]:text-[#8a94a6] data-[popup-open]:ring-2 data-[popup-open]:ring-[#0284c7]/15 [&>[data-slot=combobox-trigger-icon]]:ml-auto [&>[data-slot=combobox-trigger-icon]]:shrink-0',
+                        'flex h-9 w-full items-center justify-between gap-2 rounded-[4px] border border-[#d9dfe7] bg-white px-3 py-1 text-left text-sm text-[#1f2937] shadow-none transition-colors outline-none focus:border-[#0284c7] focus:ring-2 focus:ring-[#0284c7]/15 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[#8a94a6] data-[popup-open]:border-[#0284c7] data-[popup-open]:ring-2 data-[popup-open]:ring-[#0284c7]/15 dark:border-input dark:bg-input/30 dark:text-foreground [&>[data-slot=combobox-trigger-icon]]:ml-auto [&>[data-slot=combobox-trigger-icon]]:shrink-0',
                         className,
                     )}
                 >
@@ -161,8 +161,8 @@ function Select({
                         className={cn(
                             'pointer-events-none absolute start-3 z-10 px-1 leading-none transition-all',
                             hasValue
-                                ? 'text-foreground dark:bg-input/30 top-0 -translate-y-1/2 bg-white text-xs group-has-[button[data-popup-open]]/select:text-[#0284c7]'
-                                : 'text-foreground top-1/2 -translate-y-1/2 text-sm',
+                                ? 'top-0 -translate-y-1/2 bg-white text-xs text-foreground group-has-[button[data-popup-open]]/select:text-[#0284c7] dark:bg-input/30'
+                                : 'top-1/2 -translate-y-1/2 text-sm text-foreground',
                         )}
                     >
                         {label}

@@ -24,7 +24,7 @@ export function ContextualTitle({
                     <button
                         type="button"
                         className={cn(
-                            'focus-visible:ring-ring cursor-help text-left text-inherit underline-offset-4 outline-none hover:underline focus-visible:underline focus-visible:ring-2 data-[state=delayed-open]:underline data-[state=instant-open]:underline',
+                            'cursor-help text-left text-inherit underline-offset-4 outline-none hover:underline focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring data-[state=delayed-open]:underline data-[state=instant-open]:underline',
                             className,
                         )}
                     >

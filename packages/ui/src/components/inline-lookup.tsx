@@ -288,7 +288,7 @@ export function InlineLookup<T>({
                                                     key={getItemValue(item)}
                                                     value={item}
                                                     render={<TableRow />}
-                                                    className="data-highlighted:bg-accent data-highlighted:text-accent-foreground data-selected:bg-accent/50 cursor-default outline-none"
+                                                    className="cursor-default outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-selected:bg-accent/50"
                                                 >
                                                     {columns.map((column) => (
                                                         <TableCell
@@ -315,7 +315,7 @@ export function InlineLookup<T>({
                             {data.loading && (
                                 <p
                                     role="status"
-                                    className="text-muted-foreground px-3 py-2 text-sm"
+                                    className="px-3 py-2 text-sm text-muted-foreground"
                                 >
                                     Memuat pilihan…
                                 </p>
@@ -323,7 +323,7 @@ export function InlineLookup<T>({
                             {data.error && (
                                 <div
                                     role="alert"
-                                    className="text-destructive px-3 py-2 text-sm"
+                                    className="px-3 py-2 text-sm text-destructive"
                                 >
                                     {data.error}
                                     <Button

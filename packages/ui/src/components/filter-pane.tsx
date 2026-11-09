@@ -30,7 +30,7 @@ export function FilterPane({
             data-slot="filter-pane"
             aria-labelledby={titleId}
             className={cn(
-                'bg-background flex max-h-72 min-h-0 w-full shrink-0 flex-col border-t lg:max-h-none lg:w-80 lg:border-t-0 xl:w-96',
+                'flex max-h-72 min-h-0 w-full shrink-0 flex-col border-t bg-background lg:max-h-none lg:w-80 lg:border-t-0 xl:w-96',
                 side === 'left' ? 'lg:border-r' : 'lg:border-l',
                 className,
             )}
@@ -44,7 +44,7 @@ export function FilterPane({
                         {title}
                     </h2>
                     {description && (
-                        <div className="text-muted-foreground text-xs">
+                        <div className="text-xs text-muted-foreground">
                             {description}
                         </div>
                     )}
