@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { ulid } from 'ulid';
 import { z } from 'zod';
 import { Database, jsonObject, sqlErrorCode } from '../platform/db.ts';
 import type { Bind, JsonObject } from '../platform/db.ts';
@@ -572,7 +571,7 @@ export class FinancePostings {
         if (value.existing) return;
         try {
             await this.db.transaction(async () => {
-                const id = ulid().toLowerCase();
+                const id = Bun.randomUUIDv7();
                 const stamp = nowSql();
                 await this.db.insert('finance_postings', {
                     id,
@@ -612,14 +611,14 @@ export class FinancePostings {
                 for (const line of value.tableLines)
                     await this.db.insert('finance_posting_lines', {
                         ...line,
-                        id: ulid().toLowerCase(),
+                        id: Bun.randomUUIDv7(),
                         tenant_id: this.tenantId,
                         finance_posting_id: id,
                         created_at: stamp,
                         updated_at: stamp,
                     });
                 await this.db.insert('finance_posting_events', {
-                    id: ulid().toLowerCase(),
+                    id: Bun.randomUUIDv7(),
                     tenant_id: this.tenantId,
                     finance_posting_id: id,
                     event: 'published',
