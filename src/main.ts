@@ -6,6 +6,11 @@ import { assetManagementRoutes } from '../modules/asset-management/src/index.ts'
 import { Workspace } from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {
+    flushErrorReporting,
+    reportError,
+    startErrorReporting,
+} from './platform/error-reporting/index.ts';
+import {
     createPool,
     Database,
     sqlErrorCode,
@@ -166,6 +171,10 @@ function createApplication(config: Config) {
                                     : undefined,
                         }) + '\n',
                     );
+                    reportError(error, {
+                        method: request.method,
+                        path: new URL(request.url).pathname,
+                    });
                     response = Response.json(
                         { message: 'Server Error' },
                         { status: 500 },
@@ -186,6 +195,7 @@ function createApplication(config: Config) {
 }
 
 const config = loadConfig();
+startErrorReporting(config, 'http');
 const application = createApplication(config);
 const app = new Elysia({ aot: true, precompile: true });
 app.all(
@@ -212,8 +222,10 @@ process.stderr.write(
 process.on('SIGTERM', async () => {
     await app.stop();
     await application.close();
+    await flushErrorReporting();
 });
 process.on('SIGINT', async () => {
     await app.stop();
     await application.close();
+    await flushErrorReporting();
 });
