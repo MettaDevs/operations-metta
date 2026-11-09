@@ -6,7 +6,7 @@ import { Database, jsonObject, sqlErrorCode } from '@core/platform/db.ts';
 import type { Bind } from '@core/platform/db.ts';
 import { abort, coded, validation } from '@core/platform/errors.ts';
 import { incrementalList } from '@core/platform/listing.ts';
-import { expectedVersion, nowSql } from '@core/platform/model.ts';
+import { expectedVersion, lookupId, nowSql } from '@core/platform/model.ts';
 import { Decimal } from '@core/platform/money.ts';
 import type { Workspace } from '@core/platform/security.ts';
 import { Inventory } from './inventory.ts';
@@ -74,7 +74,7 @@ export class Receipts {
             this.lookupQuery(
                 `h.id=$1 and h.deleted_at is null and ${filter.clause}`,
             ) + ' limit 1',
-            [id, ...filter.bindings],
+            [lookupId(id), ...filter.bindings],
         );
         if (!row)
             abort(

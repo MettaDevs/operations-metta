@@ -3,7 +3,7 @@ import { Database } from '@core/platform/db.ts';
 import type { Bind } from '@core/platform/db.ts';
 import { abort, validation } from '@core/platform/errors.ts';
 import { incrementalList } from '@core/platform/listing.ts';
-import { dateSchema, nowSql } from '@core/platform/model.ts';
+import { dateSchema, lookupId, nowSql } from '@core/platform/model.ts';
 import { Decimal } from '@core/platform/money.ts';
 import type { Workspace } from '@core/platform/security.ts';
 import { assetSchema } from './model.ts';
@@ -622,7 +622,7 @@ export class Inventory {
         const asset = await this.db.one(
             assetSchema,
             `select a.* from aset_tr_aset a where a.id=$1 and a.deleted_at is null and ${filter.clause} limit 1`,
-            [id, ...filter.bindings],
+            [lookupId(id), ...filter.bindings],
         );
         if (!asset)
             abort(
