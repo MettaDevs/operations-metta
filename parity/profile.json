@@ -1,0 +1,28 @@
+{
+    "id": "pending-purchase-v1",
+    "source_sha": "6b3cf5846fd4442c3e895cacf2ba58275f9dd75e",
+    "main_flow": [
+        "receipt-list",
+        "receipt-create",
+        "receipt-show-draft",
+        "receipt-replace-lines",
+        "receipt-preview",
+        "receipt-complete",
+        "receipt-show-completed",
+        "receipt-assets",
+        "asset-list",
+        "asset-show"
+    ],
+    "fixture": {
+        "units": 3,
+        "unit_price": "333333.333",
+        "unit_tax": "33333.333",
+        "posted_book": true,
+        "depreciation": true,
+        "required_attribute": true,
+        "finance_posting_status": "pending",
+        "attachments": false,
+        "purchase_request_link": false,
+        "disclosure": "Satu profil transaksi lengkap; bukan seluruh cabang ERP."
+    }
+}

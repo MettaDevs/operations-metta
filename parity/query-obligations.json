@@ -1,0 +1,50 @@
+{
+    "purpose": "Pengecualian kewajiban SQL yang sudah ditelaah untuk compare_queries.py. Setiap entri menjelaskan mengapa selisih bukan kewajiban yang hilang. FAIL hanya boleh dikecualikan dengan evidence perilaku. Dibawa dari register eksperimen pembanding stack CoreERP, hanya entri yang berlaku untuk kandidat operations.",
+    "waivers": [
+        {
+            "operations": [
+                "*"
+            ],
+            "kind": "write-verb",
+            "match": {
+                "table": "sessions"
+            },
+            "reason": "Kedua sisi menulis tepat satu baris sesi per request. Kandidat memakai INSERT ... ON CONFLICT DO UPDATE; PHP membaca baris lalu UPDATE atau INSERT.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "receipt-complete"
+            ],
+            "kind": "transaction-savepoint:release",
+            "reason": "Laravel tidak mengirim RELEASE untuk savepoint bersarang. Kandidat mengirimnya, jadi ini kerja tambahan kandidat, bukan kewajiban yang hilang.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "login-page"
+            ],
+            "kind": "read-missing",
+            "match": "sessions",
+            "reason": "Request tanpa cookie sesi. PHP membaca ID acak yang baru dibangkitkan dan baris itu pasti tidak ada; kandidat langsung membuat sesi baru.",
+            "evidence": "Lab eksperimen: l4-*-login-compare.json VERIFIED dengan bacaan sesi tanpa cookie diperlakukan opsional"
+        },
+        {
+            "operations": [
+                "login-page"
+            ],
+            "kind": "transaction-other:set search_path to \"public\"",
+            "reason": "Laravel mengirim SET search_path sekali saat membuka koneksi PDO baru; kandidat memakai search_path bawaan database. Bukan kerja per request.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "*"
+            ],
+            "kind": "read-extra",
+            "match": "pg_type",
+            "reason": "Bun berjalan dua proses reusePort; proses yang membuka koneksi pertamanya membaca katalog pg_type untuk pemetaan tipe postgres.js, di aksi mana pun koneksi itu pertama dipakai. Metadata driver, bukan kerja bisnis.",
+            "evidence": "Lab eksperimen: d3-hono-queries.json (login-page) dan d5-elysia-queries.json (login)"
+        }
+    ]
+}
