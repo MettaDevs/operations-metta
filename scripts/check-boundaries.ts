@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
+
+type Audience = 'user' | 'internal' | 'integration';
 
 const root = resolve(import.meta.dir, '..');
 const core = join(root, 'src');
 const modules = join(root, 'modules') + sep;
-const compositionRoot = join(core, 'main.ts');
 
 function files(directory: string): string[] {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -15,16 +16,34 @@ function files(directory: string): string[] {
     });
 }
 
-function importsModule(file: string, specifier: string): boolean {
-    if (specifier.startsWith('@operations-metta/')) return true;
-    if (!specifier.startsWith('.')) return false;
-    return resolve(dirname(file), specifier).startsWith(modules);
-}
-
 function target(file: string, specifier: string): string | null {
     if (specifier.startsWith('@core/')) return join(core, specifier.slice(6));
     if (specifier.startsWith('.')) return resolve(dirname(file), specifier);
     return null;
+}
+
+function moduleOf(path: string): string | null {
+    return path.startsWith(modules)
+        ? (relative(modules, path).split(sep)[0] ?? null)
+        : null;
+}
+
+function importedModule(file: string, specifier: string): string | null {
+    if (specifier.startsWith('@operations-metta/'))
+        return specifier.split('/')[1] ?? null;
+    const path = target(file, specifier);
+    return path === null ? null : moduleOf(path);
+}
+
+// Nama fitur dibuang lebih dulu, jadi fitur bernama `internal` tetap dibaca dari perannya.
+function audienceOf(path: string): Audience | null {
+    const roles = basename(path)
+        .replace(/\.(ts|tsx|js|mjs|cjs)$/, '')
+        .split('.')
+        .slice(1);
+    if (roles.includes('internal')) return 'internal';
+    if (roles.includes('integration')) return 'integration';
+    return roles.at(-1) === 'routes' ? 'user' : null;
 }
 
 // Impor ke folder kemampuan itu sendiri diselesaikan ke index.ts-nya, jadi hanya path di dalam folder yang dihitung.
@@ -44,18 +63,26 @@ for (const file of checked) {
     const text = readFileSync(file, 'utf8');
     const name = shown(file);
     const inCore = file.startsWith(core + sep);
+    const isProcess = dirname(file) === core;
+    const ownModule = moduleOf(file);
+    const ownAudience = audienceOf(file);
     const lineOf = (position: number) =>
         text.slice(0, position).split('\n').length;
     for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
         const specifier = imported.fileName;
         const found = `${name}:${lineOf(imported.pos)} imports ${specifier}`;
+        const otherModule = importedModule(file, specifier);
+        if (inCore && !isProcess && otherModule !== null)
+            violations.push(
+                `${found}; only process files at the root of src/ may import from modules/.`,
+            );
         if (
-            inCore &&
-            file !== compositionRoot &&
-            importsModule(file, specifier)
+            ownModule !== null &&
+            otherModule !== null &&
+            otherModule !== ownModule
         )
             violations.push(
-                `${found}; only src/main.ts may import from modules/.`,
+                `${found}; modules/${ownModule}/ must not import another module.`,
             );
         const path = target(file, specifier);
         if (path === null) continue;
@@ -75,6 +102,15 @@ for (const file of checked) {
         )
             violations.push(
                 `${found}; modules import Core only through @core/.`,
+            );
+        const targetAudience = audienceOf(path);
+        if (
+            ownAudience !== null &&
+            targetAudience !== null &&
+            targetAudience !== ownAudience
+        )
+            violations.push(
+                `${found}; ${ownAudience} files must not import ${targetAudience} files.`,
             );
     }
     if (inCore)
