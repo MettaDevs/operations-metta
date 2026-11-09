@@ -1,0 +1,17 @@
+<!-- @dsCard group="Form" height=110 subtitle="Ikon, teks, dan tombol di dalam field" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>InputGroup</title>
+<style>
+  .ig { display: flex; align-items: center; width: 100%; height: var(--control-height); border: 1px solid var(--control-border); border-radius: var(--radius-md); background: var(--background); box-shadow: var(--shadow-xs); }
+  .ig-add { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .ig-input { flex: 1; min-width: 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="ce-pad ce-grid" style="max-width:700px">
+  <div class="ig"><span class="ig-add"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="ig-input ce-placeholder">Cari kode atau nama</span></div>
+  <div class="ig"><span class="ig-add">Rp</span><span class="ig-input" style="text-align:right;padding-right:var(--space-3)">18.500.000</span></div>
+</div>
+</body>
+</html>

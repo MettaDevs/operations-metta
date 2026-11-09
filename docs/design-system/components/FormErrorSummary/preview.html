@@ -1,0 +1,33 @@
+<!-- @dsCard group="Umpan balik" height=380 subtitle="Ringkasan menetap di bawah bar form" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>FormErrorSummary</title></head>
+<body>
+<div class="ce-pad ce-col">
+  <div class="ce-bar" style="border:1px solid var(--border)">
+    <div class="ce-bar-row"><button class="ce-cmd" type="submit"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Simpan</button><button class="ce-cmd ce-cmd-cancel" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Batal</button></div>
+    <div style="padding:var(--space-2) 0">
+      <div class="ce-alert" role="alert" tabindex="-1">
+        <svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        <div class="ce-alert-title"><span style="flex:1">Periksa 2 isian yang perlu diperbaiki</span><button class="ce-icon-btn" type="button" aria-label="Sembunyikan pesan" style="width:24px;height:24px;color:var(--muted-foreground)"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="ce-alert-desc">
+          <p style="margin:0 0 var(--space-1)">Periksa isian yang ditandai, lalu ulangi tindakan ini setelah diperbaiki.</p>
+          <ul style="margin:0;padding:0;list-style:none">
+            <li style="padding:var(--space-1) 0"><button class="ce-link" type="button" style="color:inherit">Baris 2: isi jumlah minimal 1.</button></li>
+            <li style="padding:var(--space-1) 0;border-top:1px solid var(--border)"><button class="ce-link" type="button" style="color:inherit">Tanggal siap pakai: isi tanggal yang sah.</button></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ce-alert" role="alert">
+    <svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+    <div class="ce-alert-title">Penerimaan belum dapat disimpan</div>
+    <div class="ce-alert-desc">Terjadi gangguan sistem. Isian masih tersedia di form. Salin detail bantuan untuk pengelola aplikasi agar penyebabnya dapat diperiksa.
+      <div class="ce-row" style="margin-top:var(--space-2)"><button class="ce-btn ce-btn-outline" type="button" style="height:32px;padding:0 var(--space-3)">Salin detail bantuan</button></div>
+      <p role="status" style="margin:var(--space-1) 0 0">Rincian sudah disalin.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

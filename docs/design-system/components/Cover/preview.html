@@ -1,0 +1,58 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>CoreERP</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); overflow: hidden; }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; }
+  .art { position: absolute; top: 0; left: 480px; width: 480px; height: 288px; overflow: hidden; }
+  .art svg { display: block; width: 520px; height: 288px; }
+  .brand { fill: var(--primary); }
+  .ink { fill: var(--foreground); }
+  .tint { fill: var(--accent); }
+  .blk { rx: var(--radius-md); }
+  .tile { rx: var(--radius-command); }
+  .words { position: absolute; left: var(--space-6); bottom: var(--space-6); max-width: 440px; }
+  .name { margin: 0; font-size: 96px; line-height: 0.92; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+  .tag { margin: var(--space-2) 0 0 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 520 288" width="520" height="288">
+<!--
+  blocks      primary 152×248 bled off the top (identitas, terbesar) · foreground 312×232 bled off the right (tinta biru tua logo) · accent hanya sebagai potongan ubin — ≈40% dari 960×288
+  arrangement satu slab primary dengan blok tinta di sampingnya, alas sejajar pada langkah space-6 dari tepi
+  pattern     ubin modular bergaya baris tabel: tinggi command-height (28px) pada jarak table-row-height (36px); "padat seperti aplikasi kerja" memilih ubin, beberapa digabung dua lebar seperti kolom kode dan nama
+  scales      sisi kelipatan space-2; celah space-2 dan space-4; jarak baris table-row-height; sudut radius-md untuk blok, radius-command untuk ubin
+-->
+<rect class="brand blk" x="24" y="-16" width="152" height="248" rx="6"/>
+<rect class="tint tile" x="40" y="188" width="56" height="28" rx="3"/>
+<rect class="tint tile" x="104" y="188" width="56" height="28" rx="3"/>
+<rect class="ink blk" x="192" y="32" width="320" height="232" rx="6"/>
+<rect class="brand tile" x="208" y="48" width="296" height="28" rx="3"/>
+<rect class="tint tile" x="208" y="92" width="24" height="28" rx="3"/>
+<rect class="brand tile" x="240" y="92" width="88" height="28" rx="3"/>
+<rect class="tint tile" x="336" y="92" width="168" height="28" rx="3"/>
+<rect class="tint tile" x="208" y="128" width="24" height="28" rx="3"/>
+<rect class="tint tile" x="240" y="128" width="88" height="28" rx="3"/>
+<rect class="tint tile" x="336" y="128" width="120" height="28" rx="3"/>
+<rect class="tint tile" x="208" y="164" width="24" height="28" rx="3"/>
+<rect class="tint tile" x="240" y="164" width="88" height="28" rx="3"/>
+<rect class="tint tile" x="336" y="164" width="152" height="28" rx="3"/>
+<rect class="tint tile" x="208" y="200" width="24" height="28" rx="3"/>
+<rect class="tint tile" x="240" y="200" width="88" height="28" rx="3"/>
+<rect class="tint tile" x="336" y="200" width="96" height="28" rx="3"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">CoreERP</h1>
+<p class="tag">Nilai, perilaku, dan alur yang sama di stack mana pun.</p>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!-- @dsCard group="Daftar" height=330 subtitle="Bar, panel filter kiri, tabel mengisi sisa" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>ListPage</title>
+<style>
+  .lp { height: 300px; display: flex; flex-direction: column; background: var(--surface-shell); }
+  .lp-body { flex: 1; min-height: 0; display: flex; }
+  .lp-filter { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--background); border-right: 1px solid var(--border); }
+  .lp-filter-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+  .lp-filter-body { padding: var(--space-1) var(--space-3) var(--space-3); }
+  .lp-table { flex: 1; min-width: 0; overflow: hidden; }
+  .lp-table .ce-table th { background: var(--surface-shell); height: 40px; }
+  .lp-table .ce-table td { background: var(--background); }
+</style>
+</head>
+<body>
+<div class="lp">
+  <div class="ce-bar">
+    <div class="ce-bar-row">
+      <span class="ce-bar-title">Inventarisasi aset</span>
+      <span class="ce-sep"></span>
+      <button class="ce-icon-btn" type="button" aria-label="Cari"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
+      <span class="ce-sep"></span>
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button>
+      <span class="ce-sep"></span>
+      <button class="ce-cmd" type="button">Home</button>
+      <span class="ce-end"><span class="ce-sep"></span><button class="ce-icon-btn" type="button" aria-label="Sembunyikan filter" aria-expanded="true" style="color:var(--primary)"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button></span>
+    </div>
+  </div>
+  <div class="lp-body">
+    <aside class="lp-filter" aria-label="Filter">
+      <div class="lp-filter-head">
+        <div><div class="ce-card-title">Filter</div><div class="ce-caption">Saring daftar aset</div></div>
+        <button class="ce-icon-btn" type="button" aria-label="Tutup filter" style="width:24px;height:24px"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="lp-filter-body">
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr)"><div class="ce-field"><div class="ce-input ce-select">Aktif<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div><span class="ce-float">Status</span></div></div>
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr);padding-top:var(--space-4)"><div class="ce-field"><div class="ce-input"><span class="ce-float is-rest">Unit kerja</span></div></div></div>
+      </div>
+    </aside>
+    <div class="lp-table">
+      <table class="ce-table">
+        <thead><tr><th class="ce-num">#</th><th style="width:150px">Kode</th><th class="ce-act"></th><th>Nama</th><th style="width:110px">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="ce-num">1</td><td>AST-2026-0042</td><td class="ce-act"><button class="ce-dots" type="button" aria-label="Tindakan"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></td><td>Laptop kantor lantai 3</td><td><span class="ce-badge ce-badge-default">Aktif</span></td></tr>
+          <tr><td class="ce-num">2</td><td>AST-2026-0043</td><td class="ce-act"><button class="ce-dots" type="button" aria-label="Tindakan"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></td><td>Printer ruang administrasi</td><td><span class="ce-badge ce-badge-default">Aktif</span></td></tr>
+          <tr><td class="ce-num">3</td><td>AST-2026-0044</td><td class="ce-act"><button class="ce-dots" type="button" aria-label="Tindakan"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></td><td>Meja kerja</td><td><span class="ce-badge ce-badge-default">Aktif</span></td></tr>
+          <tr><td colspan="5" class="ce-status" style="height:auto;background:var(--background)">Semua hasil sudah dimuat.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

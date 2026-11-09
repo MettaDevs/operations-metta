@@ -1,0 +1,22 @@
+<!-- @dsCard group="Perintah" height=220 subtitle="Bilah menu dengan satu menu terbuka" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Menubar</title>
+<style>
+  .mb { display: inline-flex; align-items: center; gap: var(--space-1); height: 36px; padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); box-shadow: var(--shadow-xs); }
+  .mb-trigger { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; }
+  .mb-trigger.is-open { background: var(--accent); color: var(--accent-foreground); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="mb" role="menubar"><span class="mb-trigger is-open" role="menuitem" aria-expanded="true">Berkas</span><span class="mb-trigger" role="menuitem">Tampilan</span><span class="mb-trigger" role="menuitem">Bantuan</span></div>
+  <div class="ce-menu" role="menu" style="width:200px;min-width:192px;margin-top:var(--space-1)">
+    <div class="ce-menu-item is-focus" role="menuitem">Ekspor ke Excel</div>
+    <div class="ce-menu-item" role="menuitem">Cetak</div>
+    <div class="ce-menu-sep" role="separator"></div>
+    <div class="ce-menu-item" role="menuitem">Tutup</div>
+  </div>
+</div>
+</body>
+</html>

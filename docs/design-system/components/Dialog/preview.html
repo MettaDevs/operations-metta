@@ -1,0 +1,30 @@
+<!-- @dsCard group="Overlay" height=360 subtitle="Ukuran compact di atas dialog wide yang mundur" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Dialog</title>
+<style>
+  .dl-stage { position: relative; height: 340px; overflow: hidden; background: var(--scrim-modal); }
+  .dl-panel { position: absolute; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background); box-shadow: var(--shadow-2xl); }
+  .dl-behind { top: 16px; bottom: 16px; left: 40px; width: 520px; opacity: 0.6; transform: translateX(-40px) scale(0.97); }
+  .dl-front { top: 50%; left: 50%; width: 420px; transform: translate(-50%, -50%); }
+  .dl-head { position: relative; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 56px var(--space-4) var(--space-6); border-bottom: 1px solid var(--border); }
+  .dl-title { font-size: 18px; font-weight: 600; line-height: 1.25; }
+  .dl-desc { font-size: 14px; color: var(--muted-foreground); }
+  .dl-close { position: absolute; top: 14px; right: 16px; padding: var(--space-1); border-radius: var(--radius-sm); color: var(--muted-foreground); opacity: 0.7; display: flex; }
+  .dl-body { flex: 1; padding: var(--space-4) var(--space-6); }
+  .dl-foot { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-6); border-top: 1px solid var(--border); background: color-mix(in oklab, var(--muted) 30%, transparent); }
+</style>
+</head>
+<body>
+<div class="dl-stage">
+  <div class="dl-panel dl-behind" aria-hidden="true">
+    <div class="dl-head"><span class="dl-title">Proses penyusutan</span><span class="dl-desc">Pilih periode dan buku yang diproses.</span></div>
+  </div>
+  <div class="dl-panel dl-front" role="dialog" aria-labelledby="dlt" aria-describedby="dld">
+    <div class="dl-head"><span class="dl-title" id="dlt">Alasan penolakan</span><span class="dl-desc" id="dld">Alasan ini dikirim ke pengaju dan tersimpan di riwayat dokumen.</span><span class="dl-close"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></div>
+    <div class="dl-body"><div class="ce-fc" style="grid-template-columns:minmax(0,1fr)"><div class="ce-field"><div class="ce-input ce-textarea"><span class="ce-float is-rest" style="top:18px">Alasan <span class="ce-req">*</span></span></div></div></div></div>
+    <div class="dl-foot"><button class="ce-btn ce-btn-default" type="submit">Tolak dokumen</button><button class="ce-btn ce-btn-outline" type="button">Batal</button></div>
+  </div>
+</div>
+</body>
+</html>

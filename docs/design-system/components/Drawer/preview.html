@@ -1,0 +1,22 @@
+<!-- @dsCard group="Overlay" height=280 subtitle="Laci bawah dengan pegangan seret" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Drawer</title>
+<style>
+  .dr-stage { position: relative; height: 260px; overflow: hidden; background: var(--scrim-dialog); }
+  .dr-panel { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--background); }
+  .dr-grip { width: 100px; height: 8px; margin: var(--space-4) auto 0; border-radius: var(--radius-full); background: var(--muted); }
+  .dr-head { display: flex; flex-direction: column; gap: 2px; padding: var(--space-4); text-align: center; }
+  .dr-foot { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); }
+</style>
+</head>
+<body>
+<div class="dr-stage">
+  <div class="dr-panel" role="dialog" aria-labelledby="drt">
+    <div class="dr-grip" aria-hidden="true"></div>
+    <div class="dr-head"><span style="font-weight:600" id="drt">Judul laci</span><span class="ce-muted" style="font-size:14px">Deskripsi singkat isi laci.</span></div>
+    <div class="dr-foot"><button class="ce-btn ce-btn-outline" type="button">Batal</button></div>
+  </div>
+</div>
+</body>
+</html>

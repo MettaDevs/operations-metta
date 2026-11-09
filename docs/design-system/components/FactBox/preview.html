@@ -1,0 +1,42 @@
+<!-- @dsCard group="Kartu" height=280 subtitle="Panel Detail dan Lampiran di kanan form" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>FactBox</title>
+<style>
+  .fb { display: flex; height: 250px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .fb-main { flex: 1; min-width: 0; }
+  .fb-split { width: 9px; position: relative; cursor: col-resize; }
+  .fb-split::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--border); }
+  .fb-panel { width: 288px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--background); }
+  .fb-tabs { display: flex; gap: var(--space-1); padding: var(--space-2) var(--space-3) 0; border-bottom: 1px solid var(--border); }
+  .fb-tab { display: inline-flex; align-items: center; gap: var(--space-1\.5); padding: var(--space-1) var(--space-2); font-size: 14px; color: var(--muted-foreground); border-bottom: 2px solid transparent; }
+  .fb-tab.is-active { color: var(--foreground); border-bottom-color: var(--primary); }
+  .fb-dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-3); font-size: 14px; }
+  .fb-dl dt { color: var(--muted-foreground); }
+  .fb-dl dd { margin: 0; }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="ce-row" style="justify-content:flex-end;margin-bottom:var(--space-1)">
+    <button class="ce-icon-btn" type="button" aria-label="Perbesar panel"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg></button>
+    <button class="ce-icon-btn" type="button" aria-label="Tutup panel detail dan lampiran"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m8 9 3 3-3 3"/></svg></button>
+  </div>
+  <div class="fb">
+    <div class="fb-main ce-pad">
+      <div class="ce-fc" style="grid-template-columns:minmax(0,1fr)"><div class="ce-field"><div class="ce-input">Laptop kantor lantai 3</div><span class="ce-float">Nama</span></div></div>
+      <div class="ce-fc" style="grid-template-columns:minmax(0,1fr);padding-top:var(--space-4)"><div class="ce-field"><div class="ce-input">Gedung utama</div><span class="ce-float">Lokasi</span></div></div>
+    </div>
+    <div class="fb-split" role="separator" aria-label="Ubah lebar panel detail dan lampiran"></div>
+    <aside class="fb-panel" aria-label="Detail dan lampiran">
+      <div class="fb-tabs"><span class="fb-tab is-active"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Detail</span><span class="fb-tab"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.234 20.252 21 12.3"/><path d="m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486"/></svg>Lampiran (2)</span></div>
+      <dl class="fb-dl">
+        <dt>Kode</dt><dd>AST-2026-0042</dd>
+        <dt>Status</dt><dd><span class="ce-badge ce-badge-default">Aktif</span></dd>
+        <dt>Penanggung jawab</dt><dd>Unit umum</dd>
+      </dl>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Tampilan data" height=200 subtitle="Penanda sisip saat menyeret" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>DragReorderItem</title>
+<style>
+  .dr-list { width: 320px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .dr-row { position: relative; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); font-size: 14px; }
+  .dr-row:last-child { border-bottom: 0; }
+  .dr-row .ce-ico { color: var(--muted-foreground); cursor: grab; }
+  .dr-mark { position: absolute; left: 0; right: 0; top: -1px; z-index: 1; height: 2px; background: var(--primary); }
+  .dr-ghost { position: absolute; left: 140px; top: 70px; padding: var(--space-1) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--popover); box-shadow: var(--shadow-md); font-size: 14px; opacity: 0.95; }
+</style>
+</head>
+<body>
+<div class="ce-pad" style="position:relative">
+  <div class="dr-list" role="list">
+    <div class="dr-row" role="listitem"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>1. Pemeriksaan visual</div>
+    <div class="dr-row" role="listitem"><span class="dr-mark" aria-hidden="true"></span><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>2. Uji fungsi</div>
+    <div class="dr-row" role="listitem" style="opacity:0.5"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>3. Kalibrasi</div>
+    <div class="dr-row" role="listitem"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>4. Pembersihan</div>
+  </div>
+  <div class="dr-ghost" aria-hidden="true">Kalibrasi</div>
+</div>
+</body>
+</html>

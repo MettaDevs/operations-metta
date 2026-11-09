@@ -1,0 +1,20 @@
+<!-- @dsCard group="Percakapan" height=200 subtitle="Avatar, kepala, isi, kaki" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Message</title>
+<style>
+  .msg { display: flex; gap: var(--space-2); font-size: 14px; }
+  .msg.is-end { flex-direction: row-reverse; }
+  .msg-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .msg.is-end .msg-body { align-items: flex-end; }
+  .msg-meta { padding: 0 var(--space-3); font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+  .msg .ce-avatar { align-self: flex-end; }
+</style>
+</head>
+<body>
+<div class="ce-pad ce-col" style="max-width:560px">
+  <div class="msg"><span class="ce-avatar is-sm">AS</span><div class="msg-body"><span class="msg-meta">Asisten · 09.14</span><div class="ce-bubble is-muted" style="max-width:100%">Penyusutan Oktober sudah dihitung untuk 3 buku.</div></div></div>
+  <div class="msg is-end"><span class="ce-avatar is-sm">NP</span><div class="msg-body"><span class="msg-meta">09.15</span><div class="ce-bubble is-primary" style="max-width:100%">Kirim ringkasannya ke saya.</div></div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Kartu" height=250 subtitle="Halaman pengaturan: header = bar perintah" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Card</title></head>
+<body>
+<div class="ce-pad" style="background:var(--surface-shell)">
+  <div class="ce-card">
+    <div class="ce-card-header">
+      <span class="ce-card-title">Nomor dokumen</span>
+      <button class="ce-icon-btn" type="button" aria-label="Lihat deskripsi" style="width:24px;height:24px;color:var(--muted-foreground)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg></button>
+      <span class="ce-row"><button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button></span>
+    </div>
+    <div class="ce-card-content">
+      <table class="ce-table" style="border:1px solid var(--border);border-radius:var(--radius-md)">
+        <thead><tr><th style="width:200px">Referensi</th><th>Format</th><th style="width:110px">Status</th></tr></thead>
+        <tbody>
+          <tr><td>Penerimaan aset</td><td>PNRA + 5 digit</td><td><span class="ce-badge ce-badge-default">Aktif</span></td></tr>
+          <tr><td>Kode aset</td><td>klasifikasi.grup.lokasi.tahun.NNNN</td><td><span class="ce-badge ce-badge-default">Aktif</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

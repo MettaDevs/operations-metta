@@ -1,0 +1,25 @@
+<!-- @dsCard group="Overlay" height=300 subtitle="Panel bantu dari kanan" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Sheet</title>
+<style>
+  .sh-stage { position: relative; height: 280px; overflow: hidden; background: var(--scrim-dialog); }
+  .sh-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; display: flex; flex-direction: column; gap: var(--space-4); background: var(--background); box-shadow: var(--shadow-lg); }
+  .sh-head { position: relative; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) var(--space-4); }
+  .sh-title { font-size: 14px; font-weight: 600; }
+  .sh-close { position: absolute; top: 16px; right: 16px; display: flex; border-radius: var(--radius-xs); opacity: 0.7; }
+  .sh-body { padding: 0 var(--space-4); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="sh-stage">
+  <aside class="sh-panel" role="dialog" aria-labelledby="sht">
+    <div class="sh-head"><span class="sh-title" id="sht">Riwayat perubahan</span><span class="ce-muted" style="font-size:14px">Siapa mengubah apa, dan kapan.</span><span class="sh-close"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></div>
+    <div class="sh-body ce-col">
+      <div><div style="font-weight:500">Nama diubah</div><div class="ce-caption">03/11/2026 09.14 · Laptop kantor → Laptop kantor lantai 3</div></div>
+      <div><div style="font-weight:500">Lokasi diubah</div><div class="ce-caption">02/11/2026 16.02 · Gudang barat → Gedung utama</div></div>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

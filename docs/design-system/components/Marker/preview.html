@@ -1,0 +1,17 @@
+<!-- @dsCard group="Tampilan data" height=130 subtitle="Pemisah berlabel dan baris keterangan" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Marker</title>
+<style>
+  .mk { display: flex; align-items: center; gap: var(--space-2); min-height: 16px; font-size: 14px; color: var(--muted-foreground); }
+  .mk.is-sep::before, .mk.is-sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .mk.is-line { padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="ce-pad ce-col" style="max-width:520px">
+  <div class="mk is-sep">Hari ini</div>
+  <div class="mk is-line"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Dokumen ini dibuat dari permintaan pembelian.</div>
+</div>
+</body>
+</html>

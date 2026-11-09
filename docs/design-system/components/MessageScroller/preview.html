@@ -1,0 +1,23 @@
+<!-- @dsCard group="Percakapan" height=240 subtitle="Tombol kembali ke pesan terbaru" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>MessageScroller</title>
+<style>
+  .ms { position: relative; width: 420px; height: 200px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .ms-content { display: flex; flex-direction: column; gap: 32px; padding: var(--space-4); -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent); mask-image: linear-gradient(to bottom, #000 75%, transparent); }
+  .ms-btn { position: absolute; left: 50%; bottom: var(--space-3); transform: translateX(-50%); width: 32px; height: 32px; padding: 0; border-radius: var(--radius-full); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="ms" role="log" aria-label="Percakapan">
+    <div class="ms-content">
+      <div class="ce-bubble is-muted">Pesan lama yang sedang dibaca.</div>
+      <div class="ce-bubble is-primary" style="align-self:flex-end">Balasan sebelumnya.</div>
+      <div class="ce-bubble is-muted">Pesan baru masuk tanpa merebut posisi baca.</div>
+    </div>
+    <button class="ce-btn ce-btn-outline ms-btn" type="button" aria-label="Ke pesan terbaru"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></button>
+  </div>
+</div>
+</body>
+</html>

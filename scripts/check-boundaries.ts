@@ -7,10 +7,12 @@ type Audience = 'user' | 'internal' | 'integration';
 const root = resolve(import.meta.dir, '..');
 const core = join(root, 'src');
 const modules = join(root, 'modules') + sep;
+const packages = join(root, 'packages') + sep;
 
 function files(directory: string): string[] {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         const path = join(directory, entry.name);
+        if (entry.name === 'node_modules') return [];
         if (entry.isDirectory()) return files(path);
         return /\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) ? [path] : [];
     });
@@ -28,9 +30,19 @@ function moduleOf(path: string): string | null {
         : null;
 }
 
+function packageOf(path: string): string | null {
+    return path.startsWith(packages)
+        ? (relative(packages, path).split(sep)[0] ?? null)
+        : null;
+}
+
+// `@operations-metta/<nama>` juga nama package di packages/, jadi hanya nama yang punya folder di modules/
+// yang dihitung module.
 function importedModule(file: string, specifier: string): string | null {
-    if (specifier.startsWith('@operations-metta/'))
-        return specifier.split('/')[1] ?? null;
+    if (specifier.startsWith('@operations-metta/')) {
+        const name = specifier.split('/')[1];
+        return name && existsSync(join(modules, name)) ? name : null;
+    }
     const path = target(file, specifier);
     return path === null ? null : moduleOf(path);
 }
@@ -57,16 +69,24 @@ function capabilityOf(path: string): string | null {
 
 const shown = (path: string) => relative(root, path).replaceAll(sep, '/');
 
-// Test hanya ada di test/ (untuk src/ dan scripts/) atau di test/ module (untuk src/ module), di folder yang sama dengan
-// folder kode yang diujinya. Bantuan test ada di support/ folder test itu. Kode tidak meng-import folder test.
+// Test hanya ada di test/ (untuk src/ dan scripts/), di test/ module (untuk src/ module), atau di test/ package (untuk
+// src/ package), di folder yang sama dengan folder kode yang diujinya. Bantuan test ada di support/ folder test itu.
+// Kode tidak meng-import folder test.
 const scripts = join(root, 'scripts');
 const coreTests = join(root, 'test');
 const isTest = (path: string) => /\.test\.(ts|tsx)$/.test(path);
 function testRootOf(path: string): string | null {
     if (path.startsWith(coreTests + sep)) return coreTests;
     const module = moduleOf(path);
-    if (module === null) return null;
-    const tests = join(modules, module, 'test');
+    const owned = packageOf(path);
+    const owner =
+        module !== null
+            ? join(modules, module)
+            : owned !== null
+              ? join(packages, owned)
+              : null;
+    if (owner === null) return null;
+    const tests = join(owner, 'test');
     return path.startsWith(tests + sep) ? tests : null;
 }
 function mirroredFolder(file: string, tests: string): string | null {
@@ -78,9 +98,11 @@ function mirroredFolder(file: string, tests: string): string | null {
 }
 
 const violations: string[] = [];
-const testFiles = [...files(coreTests), ...files(modules)].filter(
-    (file) => testRootOf(file) !== null,
-);
+const testFiles = [
+    ...files(coreTests),
+    ...files(modules),
+    ...files(packages),
+].filter((file) => testRootOf(file) !== null);
 for (const file of testFiles) {
     const tests = testRootOf(file)!;
     const mirrored = isTest(file) ? mirroredFolder(file, tests) : null;
@@ -92,10 +114,11 @@ for (const file of testFiles) {
 const checked = [...files(core), ...files(modules)].filter(
     (file) => testRootOf(file) === null,
 );
-for (const file of [...checked, ...files(scripts)]) {
+const packageCode = files(packages).filter((file) => testRootOf(file) === null);
+for (const file of [...checked, ...packageCode, ...files(scripts)]) {
     if (isTest(file))
         violations.push(
-            `${shown(file)}; tests live under test/ or the module's test/, in the folder that mirrors the code they test.`,
+            `${shown(file)}; tests live under test/, the module's test/, or the package's test/, in the folder that mirrors the code they test.`,
         );
     const text = readFileSync(file, 'utf8');
     for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
@@ -167,11 +190,29 @@ for (const file of checked) {
             );
 }
 
+// Package adalah pustaka yang dipakai Core dan module, jadi ia tidak bergantung pada keduanya.
+for (const file of files(packages)) {
+    const text = readFileSync(file, 'utf8');
+    const lineOf = (position: number) =>
+        text.slice(0, position).split('\n').length;
+    for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
+        const specifier = imported.fileName;
+        const path = target(file, specifier);
+        if (
+            importedModule(file, specifier) !== null ||
+            (path !== null && path.startsWith(core + sep))
+        )
+            violations.push(
+                `${shown(file)}:${lineOf(imported.pos)} imports ${specifier}; packages/ must not import Core or a module.`,
+            );
+    }
+}
+
 if (violations.length) {
     console.error(violations.join('\n'));
     console.error(`${violations.length} boundary violation(s).`);
     process.exit(1);
 }
 console.log(
-    `Boundaries hold across ${checked.length} files under src/ and modules/, and ${testFiles.length} test files.`,
+    `Boundaries hold across ${checked.length} files under src/ and modules/, ${packageCode.length} under packages/, and ${testFiles.length} test files.`,
 );

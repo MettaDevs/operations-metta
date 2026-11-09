@@ -1,0 +1,34 @@
+<!-- @dsCard group="Tampilan data" height=300 subtitle="Lima warna seri, tooltip, dan legenda" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Chart</title>
+<style>
+  .ch { position: relative; width: 520px; }
+  .ch svg { display: block; width: 520px; height: 220px; }
+  .ch .grid line { stroke: color-mix(in oklab, var(--border) 50%, transparent); }
+  .ch .axis { fill: var(--muted-foreground); font-size: 12px; font-family: var(--font-sans); }
+  .s1 { fill: var(--chart-1); } .s2 { fill: var(--chart-2); } .s3 { fill: var(--chart-3); } .s4 { fill: var(--chart-4); } .s5 { fill: var(--chart-5); }
+  .ch-tip { position: absolute; top: 24px; left: 176px; display: grid; gap: 6px; min-width: 128px; padding: 6px 10px; border: 1px solid color-mix(in oklab, var(--border) 50%, transparent); border-radius: var(--radius-lg); background: var(--background); font-size: 12px; box-shadow: var(--shadow-xl); }
+  .ch-row { display: flex; align-items: center; gap: 6px; }
+  .ch-dot { width: 8px; height: 8px; border-radius: var(--radius-xs); }
+  .ch-val { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .ch-legend { display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-2); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="ch">
+    <svg viewBox="0 0 520 220" aria-label="Nilai perolehan per kuartal">
+      <g class="grid"><line x1="40" x2="510" y1="20" y2="20"/><line x1="40" x2="510" y1="70" y2="70"/><line x1="40" x2="510" y1="120" y2="120"/><line x1="40" x2="510" y1="170" y2="170"/></g>
+      <g><rect class="s1" x="70" y="80" width="18" height="90" rx="2"/><rect class="s2" x="90" y="110" width="18" height="60" rx="2"/><rect class="s3" x="110" y="60" width="18" height="110" rx="2"/>
+      <rect class="s1" x="190" y="50" width="18" height="120" rx="2"/><rect class="s2" x="210" y="95" width="18" height="75" rx="2"/><rect class="s3" x="230" y="70" width="18" height="100" rx="2"/>
+      <rect class="s4" x="310" y="100" width="18" height="70" rx="2"/><rect class="s5" x="330" y="85" width="18" height="85" rx="2"/><rect class="s1" x="350" y="40" width="18" height="130" rx="2"/>
+      <rect class="s4" x="430" y="120" width="18" height="50" rx="2"/><rect class="s5" x="450" y="65" width="18" height="105" rx="2"/><rect class="s2" x="470" y="90" width="18" height="80" rx="2"/></g>
+      <g class="axis"><text x="88" y="190">K1</text><text x="208" y="190">K2</text><text x="328" y="190">K3</text><text x="448" y="190">K4</text></g>
+    </svg>
+    <div class="ch-tip" role="tooltip"><span style="font-weight:500">Kuartal 2</span><span class="ch-row"><span class="ch-dot s1" style="background:var(--chart-1)"></span>Elektronik<span class="ch-val">120 jt</span></span><span class="ch-row"><span class="ch-dot" style="background:var(--chart-2)"></span>Kendaraan<span class="ch-val">75 jt</span></span></div>
+    <div class="ch-legend"><span class="ch-row"><span class="ch-dot" style="background:var(--chart-1)"></span>Elektronik</span><span class="ch-row"><span class="ch-dot" style="background:var(--chart-2)"></span>Kendaraan</span><span class="ch-row"><span class="ch-dot" style="background:var(--chart-3)"></span>Bangunan</span><span class="ch-row"><span class="ch-dot" style="background:var(--chart-4)"></span>Mebel</span><span class="ch-row"><span class="ch-dot" style="background:var(--chart-5)"></span>Medis</span></div>
+  </div>
+</div>
+</body>
+</html>

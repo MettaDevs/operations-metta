@@ -1,0 +1,28 @@
+<!-- @dsCard group="Perintah" height=190 subtitle="Bar lengket dengan ribbon tersemat" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>RecordActionBar</title></head>
+<body>
+<div class="ce-pad">
+  <div class="ce-bar" style="border:1px solid var(--border)">
+    <div class="ce-bar-row">
+      <span class="ce-bar-title">Inventarisasi aset</span>
+      <span class="ce-sep"></span>
+      <button class="ce-icon-btn" type="button" aria-label="Cari" aria-expanded="true"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
+      <span class="ce-field ce-search"><span class="ce-input is-focus"><span class="ce-placeholder">Cari...</span></span></span>
+      <span class="ce-sep"></span>
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button>
+      <span class="ce-sep"></span>
+      <button class="ce-cmd ce-group-active" type="button" aria-expanded="true">Home</button>
+      <span class="ce-end"><span class="ce-sep"></span><button class="ce-icon-btn" type="button" aria-label="Sembunyikan filter" aria-expanded="true" style="color:var(--primary)"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button></span>
+    </div>
+    <div class="ce-ribbon" role="group" aria-label="Perintah Home">
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>Ubah</button>
+      <button class="ce-cmd ce-cmd-delete" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>Delete</button>
+      <button class="ce-icon-btn" type="button" style="margin-left:auto" aria-label="Lepas sematan toolbar" title="Lepas sematan toolbar"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89"/><path d="m2 2 20 20"/><path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11"/></svg></button>
+    </div>
+  </div>
+  <p class="ce-note" style="margin-top:var(--space-2)">Grup Home tersemat: stripnya menetap di bawah bar. Tanpa sematan, strip muncul melayang dan tertutup setelah perintah dijalankan.</p>
+</div>
+</body>
+</html>

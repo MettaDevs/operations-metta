@@ -1,0 +1,22 @@
+<!-- @dsCard group="Tampilan data" height=190 subtitle="Tabel kecil non-daftar di Core; dilarang di module" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Table</title>
+<style>
+  .tb { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tb th { height: 32px; padding: 0 var(--space-2); font-size: 12px; font-weight: 400; text-align: left; color: var(--foreground); border-bottom: 1px solid var(--border); }
+  .tb td { padding: var(--space-2); border-bottom: 1px solid var(--border); }
+  .tb tbody tr:hover td { background: color-mix(in oklab, var(--muted) 50%, transparent); }
+  .tb tfoot td { background: color-mix(in oklab, var(--muted) 50%, transparent); font-weight: 500; border-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="ce-pad" style="max-width:560px">
+  <table class="tb">
+    <thead><tr><th>Mata uang</th><th>Kode</th><th style="text-align:right">Kurs</th></tr></thead>
+    <tbody><tr><td>Rupiah</td><td>IDR</td><td style="text-align:right">1</td></tr><tr><td>Dolar Amerika</td><td>USD</td><td style="text-align:right">15.750</td></tr></tbody>
+    <tfoot><tr><td colspan="3">2 mata uang</td></tr></tfoot>
+  </table>
+</div>
+</body>
+</html>

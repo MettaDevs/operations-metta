@@ -1,0 +1,28 @@
+<!-- @dsCard group="Perintah" height=150 subtitle="Baru, Tambah, Ubah, Simpan, Batal, Delete" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>ActionButton</title></head>
+<body>
+<div class="ce-pad ce-col">
+  <div class="ce-bar" style="border:1px solid var(--border)">
+    <div class="ce-bar-row">
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button>
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Tambah</button>
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>Ubah</button>
+      <button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Simpan</button>
+      <button class="ce-cmd ce-cmd-cancel" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Batal</button>
+      <button class="ce-cmd ce-cmd-delete" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>Delete</button>
+    </div>
+  </div>
+  <div class="ce-bar" style="border:1px solid var(--border)">
+    <div class="ce-bar-row">
+      <button class="ce-cmd" type="button" disabled aria-busy="true"><svg class="ce-ico ce-spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Menyimpan…</button>
+      <button class="ce-cmd ce-cmd-cancel" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Batal</button>
+      <span class="ce-sep"></span>
+      <button class="ce-cmd ce-cmd-delete" type="button" disabled><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>Delete</button>
+      <span class="ce-caption" style="margin-left:var(--space-2)">Delete nonaktif sampai ada baris dipilih</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
