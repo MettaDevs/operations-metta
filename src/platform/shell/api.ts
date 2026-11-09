@@ -80,7 +80,12 @@ export const api: JsonifiedClient<RouterClient<Router>> =
     createORPCClient(link);
 export const orpc = createTanstackQueryUtils(api);
 
-export type ShellData = Awaited<ReturnType<typeof api.shell>>['body'];
+// Body jawaban sebuah procedure, untuk tipe data di layar.
+export type ApiBody<K extends keyof typeof api> = Awaited<
+    ReturnType<(typeof api)[K]>
+>['body'];
+
+export type ShellData = ApiBody<'shell'>;
 
 export const shellQuery = orpc.shell.queryOptions({
     select: (response) => response.body,

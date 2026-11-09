@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { nullableText, validation } from '../http/index.ts';
+import {
+    listParametersSchema,
+    nullableText,
+    validation,
+} from '../http/index.ts';
 
 // Tipe operating unit dari config `coreerp.operating_unit_types` CoreERP: kode beserta labelnya di layar.
 export const operatingUnitTypes = {
@@ -374,3 +378,11 @@ export function updateOrganizationSchema(organization: OrganizationRow) {
         };
     });
 }
+
+// Query layar organisasi (`GET /api/v1/settings/...`): tanpa `incremental`, jawabannya props halaman; dengan
+// `incremental=1`, satu batch daftar. Pemeriksaannya di route, dengan pesan Laravel CoreERP.
+export const organizationPageQuerySchema = listParametersSchema.extend({
+    incremental: z.literal('1').optional(),
+    resource: z.enum(['organizations', 'hierarchies']).optional(),
+    exclude_version_id: z.string().optional(),
+});

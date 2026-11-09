@@ -76,6 +76,7 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
 - **Data.** Halaman memanggil API lewat `api` (klien oRPC) dan `orpc` (TanStack Query) dari `src/platform/shell/index.ts`.
   - Tipe input dan output datang dari router di `src/main.ts`, jadi tidak ditulis ulang di layar.
   - Body yang divalidasi service, bukan oRPC, diberi tipe lewat `typedBody<z.input<typeof schema>>()`. Dengan begitu pesan 422-nya tetap milik service.
+  - Query string yang dibaca handler dari URL-nya sendiri diberi tipe lewat `typedQuery<z.input<typeof schema>>()`, misalnya `organizationPageQuerySchema`.
   - Kegagalan API menjadi `ApiError`, berisi status, pesan, error per field, dan kodenya.
 - **Data bersama Shell** datang dari `GET /api/v1/shell` di `src/platform/access/`, berisi pengguna, workspace aktif beserta pilihannya, menu, dan lingkungan. Endpoint ini pengganti shared props CoreERP.
   - Menu Core ditulis di `src/platform/access/navigation.ts` beserta permission tiap entri, dan disaring di server.

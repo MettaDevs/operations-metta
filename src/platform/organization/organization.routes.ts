@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import { Workspace } from '../access/index.ts';
 import {
     base,
@@ -5,13 +6,16 @@ import {
     lookupId,
     mutationInput,
     ok,
+    typedQuery,
     type Context,
 } from '../http/index.ts';
 import { OrganizationHierarchies } from './hierarchy.service.ts';
-import { failOn, operatingUnitTypes } from './organization.schema.ts';
+import {
+    failOn,
+    operatingUnitTypes,
+    organizationPageQuerySchema,
+} from './organization.schema.ts';
 import { Organizations, timezoneOptions } from './organization.service.ts';
-
-type Section = 'legal-entities' | 'operating-units' | 'hierarchies';
 
 // `$request->boolean()` Laravel.
 const truthy = (value: string | null) =>
@@ -24,16 +28,16 @@ export async function coreWorkspace(context: Context, body?: unknown) {
 }
 
 // OrganizationController::index CoreERP untuk tiga layar organisasi. Tanpa `incremental`, jawabannya props
-// halaman; dengan `incremental`, satu batch daftar.
-async function page(context: Context, section: Section) {
+// halaman; dengan `incremental`, satu batch daftar. Layar daftar dan layar hierarchy ditulis sebagai dua fungsi
+// supaya tipe jawaban setiap route sampai ke layar tanpa cabang milik route lain.
+async function pageContext(context: Context) {
     const workspace = await coreWorkspace(context);
     workspace.guard('organization', 'read');
-    const organizations = new Organizations(context.db, workspace);
-    const hierarchies = new OrganizationHierarchies(context.db, workspace);
     const parameters = new URL(context.request.url).searchParams;
-    if (truthy(parameters.get('incremental'))) {
-        const resource = parameters.get('resource') || null;
-        const excluded = parameters.get('exclude_version_id') || null;
+    const incremental = truthy(parameters.get('incremental'));
+    const resource = parameters.get('resource') || null;
+    const excluded = parameters.get('exclude_version_id') || null;
+    if (incremental)
         failOn({
             resource:
                 resource === null ||
@@ -45,74 +49,96 @@ async function page(context: Context, section: Section) {
                     ? []
                     : ['The exclude version id field must be a valid UUID.'],
         });
-        if (section === 'hierarchies' && resource !== 'organizations') {
-            const recordId = parameters.get('record_id') || null;
-            if (recordId === null)
-                return ok(await hierarchies.batch(parameters));
-            failOn({
-                record_id: lookupId(recordId)
-                    ? []
-                    : ['The record id field must be a valid UUID.'],
-            });
-            return ok({
-                data: [await hierarchies.graph(recordId)],
-                next_cursor: null,
-            });
-        }
-        return ok(
-            await organizations.batch(
-                parameters,
-                section === 'hierarchies'
-                    ? {
-                          activeOnly: true,
-                          excludeVersionId: excluded
-                              ? await hierarchies.ownVersion(excluded)
-                              : null,
-                      }
-                    : {
-                          classification:
-                              section === 'legal-entities'
-                                  ? 'legal_entity'
-                                  : 'operating_unit',
-                      },
-            ),
-        );
-    }
-    const props = {
-        scopeKey: workspace.tenantId,
-        canManage: organizations.canManage,
-        operatingUnitTypes,
-        organizations: [],
+    return {
+        workspace,
+        parameters,
+        incremental,
+        resource,
+        excluded,
+        organizations: new Organizations(context.db, workspace),
+        hierarchies: new OrganizationHierarchies(context.db, workspace),
     };
-    return ok(
-        section === 'hierarchies'
-            ? {
-                  ...props,
-                  hierarchies: [],
-                  purposes: await hierarchies.purposes(),
-              }
-            : { ...props, timezones: timezoneOptions() },
-    );
+}
+
+const pageProps = (workspace: Workspace, organizations: Organizations) => ({
+    scopeKey: workspace.tenantId,
+    canManage: organizations.canManage,
+    operatingUnitTypes,
+    organizations: [],
+});
+
+async function directoryPage(
+    context: Context,
+    classification: 'legal_entity' | 'operating_unit',
+) {
+    const { workspace, parameters, incremental, organizations } =
+        await pageContext(context);
+    if (incremental)
+        return ok(await organizations.batch(parameters, { classification }));
+    return ok({
+        ...pageProps(workspace, organizations),
+        timezones: timezoneOptions(),
+    });
+}
+
+async function hierarchyPage(context: Context) {
+    const {
+        workspace,
+        parameters,
+        incremental,
+        resource,
+        excluded,
+        organizations,
+        hierarchies,
+    } = await pageContext(context);
+    if (!incremental)
+        return ok({
+            ...pageProps(workspace, organizations),
+            hierarchies: [],
+            purposes: await hierarchies.purposes(),
+        });
+    if (resource === 'organizations')
+        return ok(
+            await organizations.batch(parameters, {
+                activeOnly: true,
+                excludeVersionId: excluded
+                    ? await hierarchies.ownVersion(excluded)
+                    : null,
+            }),
+        );
+    const recordId = parameters.get('record_id') || null;
+    if (recordId === null) return ok(await hierarchies.batch(parameters));
+    failOn({
+        record_id: lookupId(recordId)
+            ? []
+            : ['The record id field must be a valid UUID.'],
+    });
+    return ok({
+        data: [await hierarchies.graph(recordId)],
+        next_cursor: null,
+    });
 }
 
 export function organizationRoutes() {
-    const sectionPage = (path: `/${string}`, section: Section) =>
+    const pageRoute = (path: `/${string}`) =>
         base
-            .route({ method: 'GET', path, outputStructure: 'detailed' })
-            .handler(({ context }) => page(context, section));
+            .route({
+                method: 'GET',
+                path,
+                inputStructure: 'detailed',
+                outputStructure: 'detailed',
+            })
+            .input(typedQuery<z.input<typeof organizationPageQuerySchema>>());
     return {
-        legalEntityPage: sectionPage(
-            '/api/v1/settings/legal-entities',
-            'legal-entities',
+        legalEntityPage: pageRoute('/api/v1/settings/legal-entities').handler(
+            ({ context }) => directoryPage(context, 'legal_entity'),
         ),
-        operatingUnitPage: sectionPage(
+        operatingUnitPage: pageRoute(
             '/api/v1/settings/operating-units',
-            'operating-units',
-        ),
-        hierarchyPage: sectionPage(
+        ).handler(({ context }) => directoryPage(context, 'operating_unit')),
+        hierarchyPage: pageRoute(
             '/api/v1/settings/organization-hierarchies',
-            'hierarchies',
-        ),
+        ).handler(({ context }) => hierarchyPage(context)),
         // Daftar API CoreERP tidak dijaga izin layar; cukup anggota aktif tenant.
         organizationList: base
             .route({

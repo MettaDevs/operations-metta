@@ -4,12 +4,13 @@ export {
     api,
     ApiError,
     errorText,
-    isSessionExpired,
     orpc,
+    type ApiBody,
     type ShellData,
 } from './api.ts';
 export { FormErrorHeader } from './form-error-header.tsx';
 export { definePage } from './page.ts';
+export { useAppearance } from './use-appearance.ts';
 export {
     appLayoutRoute,
     authLayoutRoute,

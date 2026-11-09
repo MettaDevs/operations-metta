@@ -602,6 +602,38 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         ).toBe(404);
     });
 
+    test('the screen reads the full record it just created through the directory batch', async () => {
+        const created = await create({
+            classification: 'legal_entity',
+            name: 'PT Layar',
+            company_code: 'LAYAR',
+            country_code: 'ID',
+        });
+        const { data } = (await created.json()) as {
+            data: Record<string, unknown> & { id: string };
+        };
+        // Jawaban pembuatan tidak membawa versi, padahal layar butuh versi untuk mengubahnya.
+        expect(data).not.toHaveProperty('version');
+        const batch = (await (
+            await owner.get(
+                `/api/v1/settings/legal-entities?incremental=1&record_id=${data.id}`,
+            )
+        ).json()) as { data: Record<string, unknown>[]; next_cursor: null };
+        expect(batch.data).toHaveLength(1);
+        expect(batch.data[0]).toMatchObject({
+            id: data.id,
+            name: 'PT Layar',
+            version: await versionOf(data.id),
+            legal_entity: { company_code: 'LAYAR' },
+        });
+        const elsewhere = (await (
+            await owner.get(
+                `/api/v1/settings/operating-units?incremental=1&record_id=${data.id}`,
+            )
+        ).json()) as { data: unknown[] };
+        expect(elsewhere.data).toEqual([]);
+    });
+
     test('directory batches search every record and keep the classification scope', async () => {
         const batchTenant = await createTenant(pool, 'PT Daftar');
         const member = await createMember(pool, batchTenant, [

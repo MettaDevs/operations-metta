@@ -161,6 +161,28 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                     { id: 'dashboard', label: 'Ringkasan', href: '/dashboard' },
                 ],
             },
+            {
+                id: 'organization',
+                label: 'Organisasi',
+                href: '/settings/legal-entities',
+                items: [
+                    {
+                        id: 'legal-entities',
+                        label: 'Perusahaan',
+                        href: '/settings/legal-entities',
+                    },
+                    {
+                        id: 'operating-units',
+                        label: 'Operating unit',
+                        href: '/settings/operating-units',
+                    },
+                    {
+                        id: 'organization-hierarchies',
+                        label: 'Hierarki organisasi',
+                        href: '/settings/organization-hierarchies',
+                    },
+                ],
+            },
         ]);
         expect(data.environment).toBeNull();
 
@@ -173,6 +195,22 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
         expect((await shell(owner)).workspace.active_legal_entity?.id).toBe(
             first,
         );
+    });
+
+    test('the menu shows organization screens only to members who may read them', async () => {
+        const viewers = [
+            [['core.organization.inquire'], ['dashboard', 'organization']],
+            [['core.organization.manage'], ['dashboard', 'organization']],
+            [[], ['dashboard']],
+        ] as const;
+        for (const [duties, groups] of viewers) {
+            const member = await createMember(pool, tenantId, [...duties]);
+            const viewer = browser();
+            await viewer.login(member.email, member.password);
+            expect(
+                (await shell(viewer)).navigation.map((group) => group.id),
+            ).toEqual([...groups]);
+        }
     });
 
     test('organizations outside the data policy are not offered', async () => {
