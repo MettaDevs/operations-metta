@@ -2,6 +2,8 @@
 
 Harness ini membuktikan operations-metta berperilaku sama dengan CoreERP untuk input yang sama. Ia dipindah dari `experiments/stack-comparison/scripts` di branch `codex/native-stack-comparison` CoreERP. CoreERP tidak disentuh lagi, jadi bukti CoreERP yang sudah terekam menjadi acuan tetap.
 
+Harness ini wajib hanya untuk alur yang dipindah dari CoreERP dan menghitung atau mencatat uang atau nomor: posting ke finance, penyusutan, penomoran dokumen, dan nilai uang lain yang disimpan (keputusan pemilik produk, 9 November 2026). Alur lain dibuktikan test berbasis database. Aturannya ada di bagian "Kapan sebuah alur dianggap pindah" di `AGENTS.md`.
+
 - `golden.py` menjalankan satu golden run. Ia meng-clone seed uuid, merekam baseline oracle, menjalankan alur HTTP bertrace, lalu empat gate: `compare_http.py`, `sql_oracle.py check`, `compare_posting.py`, dan `compare_queries.py`.
 - `conformance.py` menjalankan probe negatif, race, pencabutan akses, rollback, dan throttle pada clone baru, lalu membandingkannya dengan hasil CoreERP.
 - `ids.py` memetakan ULID dan id pengguna ke uuid dan menerjemahkan bukti CoreERP.

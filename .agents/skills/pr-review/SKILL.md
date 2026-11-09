@@ -27,8 +27,9 @@ plans into work assigned to a PR author.
 2. Read [review criteria](references/review_criteria.md). Read only the relevant
    architecture/UI/React/TypeScript skills and canonical source. Existing
    asset-management code is an example, not permission to violate a newer rule.
-   For a ported flow, CoreERP's behaviour and the parity harness (`parity/`) are
-   the reference; a green test suite is not proof the flow is ported.
+   For a ported flow, CoreERP's behaviour is the reference. A flow that computes
+   or records money or numbers needs the parity harness (`parity/`); a green
+   test suite is not proof that such a flow is ported.
 3. Trace the changed behavior through its real callers and boundaries. Check
    negative, empty, stale, retry and partial-input cases as applicable. Reproduce
    cheap concrete failures with actual code; distinguish measured, source-only,

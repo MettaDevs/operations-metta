@@ -262,7 +262,7 @@ If a requested change cannot be made N-1 compatible in one release, stop and pro
 
 ## Module completion gate: concurrency and load
 
-A module is **not finished when its tests pass**, and a flow is not ported until the parity harness reports it identical to CoreERP (`AGENTS.md`, Kapan sebuah alur dianggap pindah). Tests run one request at a time in one process. They structurally cannot observe connection exhaustion, lost updates, duplicate issued numbers, a tenant boundary that only leaks under interleaving, or an idempotency key that races itself.
+A module is **not finished when its tests pass**, and a flow is not ported until it meets `AGENTS.md` (Kapan sebuah alur dianggap pindah): the parity harness reports it identical to CoreERP when it computes or records money or numbers, and database-backed tests prove CoreERP's behaviour otherwise. Tests run one request at a time in one process. They structurally cannot observe connection exhaustion, lost updates, duplicate issued numbers, a tenant boundary that only leaks under interleaving, or an idempotency key that races itself.
 
 Before reporting any new module complete, run a load test that satisfies **all** of:
 

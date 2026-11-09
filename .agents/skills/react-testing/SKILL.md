@@ -12,7 +12,7 @@ Comprehensive React testing patterns for behavior-focused component tests, custo
 
 - The test runner is `bun test`, whose API is Jest-compatible. Tests live under `test/` (Core) or `modules/<module>/test/` (modules), in the folder that mirrors the code they test; `bun run check:boundaries` rejects a test anywhere else.
 - No React test library is installed yet. Adding React Testing Library, a DOM implementation, MSW, Vitest, or Jest is a dependency decision: ask the product owner before adding one (`AGENTS.md`: keep dependencies minimal). The Vitest and Jest commands below do not apply here.
-- A test that fakes the server proves the screen, not the endpoint. Endpoint behaviour is proven against real PostgreSQL and, for ported flows, by the parity harness.
+- A test that fakes the server proves the screen, not the endpoint. Endpoint behaviour is proven against real PostgreSQL and, for ported flows that compute or record money or numbers, by the parity harness.
 
 ## When to Activate
 
