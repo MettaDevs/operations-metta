@@ -625,12 +625,12 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             );
         }
         const first = (await (
-            await lister.get('/settings/operating-units?incremental=1')
+            await lister.get('/api/v1/settings/operating-units?incremental=1')
         ).json()) as { data: { id: string }[]; next_cursor: string };
         expect(first.data).toHaveLength(40);
         const second = (await (
             await lister.get(
-                `/settings/operating-units?incremental=1&cursor=${first.next_cursor}`,
+                `/api/v1/settings/operating-units?incremental=1&cursor=${first.next_cursor}`,
             )
         ).json()) as { data: { id: string }[]; next_cursor: null };
         expect(second.data).toHaveLength(5);
@@ -641,7 +641,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
 
         const searched = (await (
             await lister.get(
-                '/settings/operating-units?incremental=1&q=UNIT-045',
+                '/api/v1/settings/operating-units?incremental=1&q=UNIT-045',
             )
         ).json()) as { data: Record<string, unknown>[] };
         expect(searched.data).toHaveLength(1);
@@ -669,13 +669,13 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         expect(searched.data[0]?.created_by_user_id).toBe(member.userId);
 
         const companies = (await (
-            await lister.get('/settings/legal-entities?incremental=1')
+            await lister.get('/api/v1/settings/legal-entities?incremental=1')
         ).json()) as { data: unknown[] };
         expect(companies.data).toHaveLength(0);
         expect(
             (
                 await lister.get(
-                    '/settings/operating-units?incremental=1&sort=tenant_id',
+                    '/api/v1/settings/operating-units?incremental=1&sort=tenant_id',
                 )
             ).status,
         ).toBe(422);
@@ -692,8 +692,8 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         );
     });
 
-    test('pages answer with their props and the directory redirects by section', async () => {
-        const page = await owner.get('/settings/operating-units');
+    test('page data answers under /api/v1 with the props CoreERP gave its pages', async () => {
+        const page = await owner.get('/api/v1/settings/operating-units');
         expect(page.status).toBe(200);
         const props = (await page.json()) as Record<string, unknown> & {
             timezones: { value: string; label: string }[];
@@ -717,7 +717,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         expect(props).not.toHaveProperty('hierarchies');
 
         const hierarchies = (await (
-            await owner.get('/settings/organization-hierarchies')
+            await owner.get('/api/v1/settings/organization-hierarchies')
         ).json()) as Record<string, unknown>;
         expect(hierarchies).toMatchObject({ hierarchies: [] });
         expect(hierarchies).not.toHaveProperty('timezones');
@@ -727,28 +727,15 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             description:
                 'Struktur operating unit yang berperan sebagai establishment di bawah legal entity.',
         });
-
-        for (const [section, path] of [
-            ['operating-units', '/settings/operating-units'],
-            ['hierarchies', '/settings/organization-hierarchies'],
-            ['', '/settings/legal-entities'],
-        ]) {
-            const response = await owner.get(
-                `/settings/organization?section=${section}`,
-            );
-            expect(response.status).toBe(302);
-            expect(response.headers.get('location')).toBe(
-                `http://localhost${path}`,
-            );
-        }
     });
 
     test('screen permissions follow the core organization duties', async () => {
         const outsider = await createMember(pool, tenantId);
         const plain = browser();
         await plain.login(outsider.email, outsider.password);
-        expect((await plain.get('/settings/organization')).status).toBe(403);
-        expect((await plain.get('/settings/legal-entities')).status).toBe(403);
+        expect(
+            (await plain.get('/api/v1/settings/legal-entities')).status,
+        ).toBe(403);
         expect(
             (
                 await create(
@@ -769,7 +756,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         ]);
         const viewer = browser();
         await viewer.login(reader.email, reader.password);
-        const page = await viewer.get('/settings/legal-entities');
+        const page = await viewer.get('/api/v1/settings/legal-entities');
         expect(page.status).toBe(200);
         expect(((await page.json()) as { canManage: boolean }).canManage).toBe(
             false,

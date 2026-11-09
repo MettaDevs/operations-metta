@@ -411,7 +411,7 @@ export function FormErrorSummary({
         () =>
             entries.length
                 ? {
-                      ...entries[0],
+                      ...entries[0]!,
                       issues: entries.flatMap((entry) => entry.issues ?? []),
                       focusSummary: entries.some(
                           (entry) => entry.focusSummary !== false,

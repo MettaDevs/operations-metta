@@ -7,7 +7,7 @@ description: Standardize operations-metta React screens with `@operations-metta/
 
 ## Keadaan di repo ini
 
-- Belum ada layar (`.page.tsx`) di repo ini. Tempatnya sudah ditetapkan tabel Susunan repo di `AGENTS.md`: `.page.tsx` di folder fitur, bingkai layar (layout, menu, login) di `src/platform/shell/`.
+- Layar adalah SPA TanStack Router + TanStack Query di atas API oRPC (keputusan pemilik produk, 9 November 2026). Halaman adalah `<fitur>.page.tsx` di folder fitur yang meng-export `page = definePage({ ... })`; bingkai layar (layout, menu, login) di `src/platform/shell/`. Konvensi halaman, pemisahan `/api/`, data bersama Shell, dan cara jalan lokal ada di bagian [Layar](../../../AGENTS.md#layar) `AGENTS.md`.
 - `packages/ui` (`@operations-metta/ui`) adalah port `@apperp/ui` dari [`packages/ui` CoreERP](https://github.com/MettaDevs/coreERP/tree/main/packages/ui). Ia meng-export `@operations-metta/ui/<komponen>`, `@operations-metta/ui/styles.css`, dan `@operations-metta/ui/theme`. Nama komponen di skill ini adalah nama di [`packages/ui` CoreERP](https://github.com/MettaDevs/coreERP/tree/main/packages/ui/src/components). Periksa bahwa komponennya memang ada di `packages/ui` sebelum memakainya. Bila belum ada, pindahkan dari CoreERP ke `packages/ui`; jangan menulis versi lokal di halaman.
 - Spesifikasi netral-stack untuk token tampilan, kontrak perilaku komponen, dan alur layar ada di `docs/design-system/`. Perilaku layar CoreERP tetap acuan sampai layar itu selesai dipindah.
 
@@ -170,10 +170,10 @@ Saat menambah atau mengubah lookup, putuskan bentuk field dan kemampuan tiap aks
 
 ## New screens inside the Shell
 
-The Shell in `src/platform/shell/` is not built yet. Two mistakes in CoreERP shipped a page with a doubled header and no way to reach it. Both are invisible to type-check, so check them by hand once the Shell exists.
+The Shell in `src/platform/shell/` wraps every page whose `definePage` says `layout: 'app'`. Two mistakes in CoreERP shipped a page with a doubled header and no way to reach it. Both are invisible to type-check, so check them by hand.
 
 - **A screen never wraps itself in the Shell layout.** The Shell renders the header, rail, and sidebar around every page. A page that renders the layout again gets them twice — the screenshot looks like a Shell inside a Shell. Return only the page content.
-- **Every new screen needs an entry in the Shell's main navigation**, under the group it belongs to, guarded by the same permission that guards its route; the menu hides it from members who lack it, while the route enforces it. A link placed only in a sub-navigation is unreachable from the rail.
+- **Every new screen needs an entry in the Shell's main navigation**, under the group it belongs to, guarded by the same permission that guards its route; the menu hides it from members who lack it, while the route enforces it. A link placed only in a sub-navigation is unreachable from the rail. Core entries live in `src/platform/access/navigation.ts` and reach the screen through `GET /api/v1/shell`, already filtered by permission; `test/platform/access/navigation.test.ts` fails when an entry points at a path no page declares.
 - **Verify by walking the rail**, not by opening the URL directly: open the Shell, click through the rail to the new screen, and confirm one header and one sidebar. A screen reached by typing its URL proves nothing about either rule.
 
 ## Theme and workspace package
@@ -205,4 +205,4 @@ Saat menulis pesan kegagalan, tombol pemulihan, atau ringkasan error form, baca 
 
 For failed saves or processing actions, a 5xx must produce a visible message that remains until corrected or dismissed, using the action's everyday wording. A brief toast or a successfully captured error report alone does not satisfy user feedback. Preserve unsaved inputs and keep technical details in server reports. The behaviour CoreERP follows is in [`docs/dev/28-pelaporan-kesalahan.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/28-pelaporan-kesalahan.md), "Kegagalan yang terlihat oleh pengguna".
 
-Run `bun run typecheck`, `bun test`, and `bun run format:check` from the repository root; they cover `packages/ui`. There is no frontend build yet. Respect a request for the user to do the visual review. When runtime inspection is needed, verify light/dark appearance, keyboard/focus behavior, and that a changed dialog shows its title and required decision text in the modal itself.
+Run `bun run typecheck`, `bun test`, and `bun run format:check` from the repository root; they cover `packages/ui`. `bun run build` bundles the screens, and `bun run dev` rebuilds them on every change; a page that does not compile fails the build in CI. Respect a request for the user to do the visual review. When runtime inspection is needed, verify light/dark appearance, keyboard/focus behavior, and that a changed dialog shows its title and required decision text in the modal itself.

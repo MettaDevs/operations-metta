@@ -4,8 +4,10 @@ COPY package.json bun.lock tsconfig.json ./
 COPY modules ./modules
 COPY packages ./packages
 RUN bun install --frozen-lockfile
+COPY scripts ./scripts
 COPY src ./src
-RUN bun run build
+# src/client.tsx dan kontrak API sudah di-commit dan diperiksa CI, jadi di sini hanya build server dan peramban.
+RUN bun scripts/build.ts
 
 FROM oven/bun:1.4.4-slim
 WORKDIR /app

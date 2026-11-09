@@ -5,9 +5,10 @@ import { createPool } from '../../src/platform/database/index.ts';
 // Aplikasi lengkap dari src/main.ts di atas database test yang namanya diambil dari env DB_*, dipanggil seperti
 // browser memanggilnya: lewat Request sungguhan, dengan cookie, token XSRF, dan alamat IP. Setiap pemanggilan
 // memakai alamat IP sendiri, supaya pembatas percobaan login tidak terbawa antar-berkas test.
-export function operationsTestApp() {
+export function operationsTestApp(environment: Record<string, string> = {}) {
     const config = loadConfig({
         ...process.env,
+        ...environment,
         APP_KEY: 'base64:' + Buffer.alloc(32, 7).toString('base64'),
         SESSION_BACKEND: 'database',
         SESSION_LOTTERY_HITS: '0',
@@ -73,10 +74,12 @@ export function operationsTestApp() {
                 request('DELETE', path, { body }),
             put: (path: string, body: unknown) =>
                 request('PUT', path, { body }),
+            // Layar login tidak memuat data apa pun sebelum POST /login, jadi belum ada cookie XSRF-TOKEN. Peramban
+            // mengirim Sec-Fetch-Site same-origin, dan pemeriksaan CSRF di identity menerimanya.
             async login(email: string, password: string) {
-                await request('GET', '/login');
                 const response = await request('POST', '/login', {
                     body: { email, password },
+                    headers: { 'sec-fetch-site': 'same-origin' },
                 });
                 if (response.status !== 200)
                     throw new Error(

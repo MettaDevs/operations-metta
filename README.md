@@ -12,6 +12,7 @@ Dari akar repo:
 
 ```bash
 bun install
+bun run check:generated
 bun run typecheck
 bun test
 bun run format:check
@@ -19,5 +20,7 @@ bun run check:boundaries
 ```
 
 `bun run build` hanya bila perubahan menyentuh hasil build; rinciannya di [AGENTS.md](AGENTS.md).
+
+Layar dijalankan di laptop dengan `bun run dev`, di atas database yang sudah dimigrasi. Caranya ada di bagian [Layar](AGENTS.md#layar) AGENTS.md.
 
 Aturan kerja di repo ini ada di [AGENTS.md](AGENTS.md).

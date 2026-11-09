@@ -2,8 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
+import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
-import { Workspace } from './platform/access/index.ts';
+import {
+    shellRoutes,
+    Workspace,
+    workspaceSelectionSchema,
+} from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {
     flushErrorReporting,
@@ -18,11 +23,17 @@ import {
 import {
     base,
     bodyInput,
+    clientBuild,
     HttpFailure,
     ok,
+    typedBody,
     type Context,
 } from './platform/http/index.ts';
-import { Session, ValkeySessions } from './platform/identity/index.ts';
+import {
+    loginInputSchema,
+    Session,
+    ValkeySessions,
+} from './platform/identity/index.ts';
 import { organizationRoutes } from './platform/organization/index.ts';
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
@@ -45,70 +56,56 @@ function valkeySessions(config: Config): ValkeySessions | null {
     }
 }
 
+// Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
+// ditulis scripts/generate-client.ts ke kontrak yang dibaca klien itu.
+export const router = {
+    login: base
+        .route({
+            method: 'POST',
+            path: '/login',
+            inputStructure: 'detailed',
+            outputStructure: 'detailed',
+        })
+        .input(typedBody<z.input<typeof loginInputSchema>>())
+        .handler(async ({ context, input }) =>
+            ok(await context.session.login(input.body)),
+        ),
+    logout: base
+        .route({
+            method: 'POST',
+            path: '/logout',
+            inputStructure: 'detailed',
+            outputStructure: 'detailed',
+        })
+        .input(bodyInput)
+        .handler(async ({ context, input }) => {
+            await context.session.logout(input.body);
+            return { status: 204, headers: {}, body: undefined };
+        }),
+    workspace: base
+        .route({
+            method: 'PUT',
+            path: '/api/v1/workspace-context',
+            inputStructure: 'detailed',
+            outputStructure: 'detailed',
+        })
+        .input(typedBody<z.input<typeof workspaceSelectionSchema>>())
+        .handler(async ({ context, input }) => {
+            context.session.csrf(input.body);
+            return ok(
+                await Workspace.select(context.db, context.session, input.body),
+            );
+        }),
+    ...shellRoutes(),
+    ...organizationRoutes(),
+    ...assetManagementRoutes(),
+};
+export type Router = typeof router;
+
 export function createApplication(config: Config) {
     const pool = createPool(config);
     const valkey = valkeySessions(config);
-    const router = {
-        loginPage: base
-            .route({
-                method: 'GET',
-                path: '/login',
-                outputStructure: 'detailed',
-            })
-            .handler(() => ({
-                status: 200,
-                headers: { 'Content-Type': 'text/html; charset=UTF-8' },
-                body: new Blob(
-                    [
-                        '<!doctype html><html lang="id"><head><title>Masuk</title></head><body></body></html>',
-                    ],
-                    { type: 'text/html; charset=UTF-8' },
-                ),
-            })),
-        login: base
-            .route({
-                method: 'POST',
-                path: '/login',
-                inputStructure: 'detailed',
-                outputStructure: 'detailed',
-            })
-            .input(bodyInput)
-            .handler(async ({ context, input }) =>
-                ok(await context.session.login(input.body)),
-            ),
-        logout: base
-            .route({
-                method: 'POST',
-                path: '/logout',
-                inputStructure: 'detailed',
-                outputStructure: 'detailed',
-            })
-            .input(bodyInput)
-            .handler(async ({ context, input }) => {
-                await context.session.logout(input.body);
-                return { status: 204, headers: {}, body: undefined };
-            }),
-        workspace: base
-            .route({
-                method: 'PUT',
-                path: '/api/v1/workspace-context',
-                inputStructure: 'detailed',
-                outputStructure: 'detailed',
-            })
-            .input(bodyInput)
-            .handler(async ({ context, input }) => {
-                context.session.csrf(input.body);
-                return ok(
-                    await Workspace.select(
-                        context.db,
-                        context.session,
-                        input.body,
-                    ),
-                );
-            }),
-        ...organizationRoutes(),
-        ...assetManagementRoutes(),
-    };
+    const client = clientBuild(config.CLIENT_DIR);
     const handler = new OpenAPIHandler(router, {
         customErrorResponseBodyEncoder: (error) =>
             error.data ?? { message: error.message },
@@ -118,6 +115,9 @@ export function createApplication(config: Config) {
             request: Request,
             clientAddress: string,
         ): Promise<Response> {
+            // Berkas build dan dokumen layar tidak membuka sesi maupun koneksi database.
+            const served = await client.serve(request);
+            if (served) return served;
             const connection = await pool.reserve();
             const db = new Database(
                 connection,

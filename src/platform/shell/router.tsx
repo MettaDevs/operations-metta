@@ -1,0 +1,170 @@
+import { Button } from '@operations-metta/ui/button';
+import { Toaster } from '@operations-metta/ui/sonner';
+import { TooltipProvider } from '@operations-metta/ui/tooltip';
+import {
+    QueryCache,
+    QueryClient,
+    QueryClientProvider,
+} from '@tanstack/react-query';
+import {
+    createRootRouteWithContext,
+    createRoute,
+    Link,
+    Outlet,
+    redirect,
+    RouterProvider,
+    useRouter,
+} from '@tanstack/react-router';
+import type { AnyRouter, ErrorComponentProps } from '@tanstack/react-router';
+import { StrictMode } from 'react';
+import type { ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './app.css';
+import { api, ApiError, errorText, shellQuery } from './api.ts';
+import { AppLayout } from './app-layout.tsx';
+import { AuthLayout } from './auth-layout.tsx';
+import { initializeTheme } from './use-appearance.ts';
+
+let activeRouter: AnyRouter | null = null;
+
+// Sesi yang habis saat sebuah daftar atau halaman memuat data membawa pengguna ke layar login, lalu kembali ke tempat
+// semula setelah masuk. Kegagalan simpan tidak berpindah layar: form menampilkan pesannya dan isiannya tetap.
+const queryClient = new QueryClient({
+    queryCache: new QueryCache({
+        onError: (error) => {
+            const location = activeRouter?.state.location;
+            if (
+                error instanceof ApiError &&
+                error.status === 401 &&
+                location &&
+                location.pathname !== '/login'
+            )
+                void activeRouter?.navigate({
+                    href: `/login?redirect=${encodeURIComponent(location.href)}`,
+                });
+        },
+    }),
+    defaultOptions: {
+        queries: {
+            retry: (failures, error) =>
+                !(error instanceof ApiError && error.status < 500) &&
+                failures < 2,
+        },
+    },
+});
+
+export type RouterContext = { queryClient: QueryClient };
+
+function NotFound(): ReactNode {
+    return (
+        <div className="flex flex-col items-start gap-3 p-6">
+            <h1 className="text-sm font-semibold">Halaman tidak ditemukan</h1>
+            <p className="text-sm text-muted-foreground">
+                Alamat ini tidak menunjuk halaman mana pun.
+            </p>
+            <Button asChild variant="outline" size="sm">
+                <Link to="/dashboard">Ke beranda</Link>
+            </Button>
+        </div>
+    );
+}
+
+// Data Shell gagal dimuat: gangguan server, atau akun yang wajib mengganti kata sandi lebih dulu (layar keamanan
+// CoreERP belum dipindah). Pesannya tetap terlihat sampai pengguna mencoba lagi atau keluar.
+function ShellError({ error }: ErrorComponentProps): ReactNode {
+    const router = useRouter();
+    return (
+        <main className="flex min-h-svh items-center justify-center bg-background p-6">
+            <div className="flex max-w-md flex-col gap-4 rounded-xl border bg-card p-6">
+                <h1 className="text-sm font-semibold">
+                    Ruang kerja belum dapat dibuka
+                </h1>
+                <p className="text-sm" role="alert">
+                    {errorText(error, 'Ruang kerja belum dapat dimuat.')}
+                </p>
+                <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        onClick={() => {
+                            void queryClient.resetQueries(shellQuery);
+                            void router.invalidate();
+                        }}
+                    >
+                        Coba lagi
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={async () => {
+                            await api.logout({ body: {} }).catch(() => {});
+                            window.location.assign('/login');
+                        }}
+                    >
+                        Keluar
+                    </Button>
+                </div>
+            </div>
+        </main>
+    );
+}
+
+export const rootRoute = createRootRouteWithContext<RouterContext>()({
+    component: Outlet,
+    notFoundComponent: NotFound,
+});
+
+// Halaman di dalam Shell. Data Shell dimuat sebelum halaman mana pun dirender; tanpa sesi, pengguna dibawa ke login.
+export const appLayoutRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    id: '_app',
+    beforeLoad: async ({ context, location }): Promise<void> => {
+        try {
+            await context.queryClient.ensureQueryData(shellQuery);
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 401)
+                throw redirect({
+                    href: `/login?redirect=${encodeURIComponent(location.href)}`,
+                });
+            throw error;
+        }
+    },
+    component: AppLayout,
+    errorComponent: ShellError,
+});
+
+// Halaman sebelum login.
+export const authLayoutRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    id: '_auth',
+    component: AuthLayout,
+});
+
+export const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    beforeLoad: (): never => {
+        throw redirect({ href: '/dashboard' });
+    },
+});
+
+export const routerOptions = {
+    context: { queryClient } satisfies RouterContext,
+    defaultPreload: 'intent' as const,
+};
+
+export function startClient(router: AnyRouter): void {
+    activeRouter = router;
+    initializeTheme();
+    const element = document.getElementById('app');
+    if (!element) throw new Error('Dokumen layar tidak memuat #app.');
+    createRoot(element).render(
+        <StrictMode>
+            <TooltipProvider delayDuration={1000}>
+                <QueryClientProvider client={queryClient}>
+                    <RouterProvider router={router} />
+                </QueryClientProvider>
+                <Toaster />
+            </TooltipProvider>
+        </StrictMode>,
+    );
+}

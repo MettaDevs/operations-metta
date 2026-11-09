@@ -15,12 +15,13 @@ const nodeInput = z.object({
 // Di CoreERP setiap penyimpanan ini kembali ke halaman hierarchy dengan props savedHierarchy dan flash.status.
 // Di sini kedua props itu langsung menjadi jawabannya.
 export function hierarchyRoutes() {
-    const versionPath = '/settings/organization/hierarchy-versions/{version}';
+    const versionPath =
+        '/api/v1/settings/organization/hierarchy-versions/{version}';
     return {
         hierarchyCreate: base
             .route({
                 method: 'POST',
-                path: '/settings/organization/hierarchies',
+                path: '/api/v1/settings/organization/hierarchies',
                 inputStructure: 'detailed',
                 outputStructure: 'detailed',
             })

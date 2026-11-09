@@ -6,6 +6,7 @@ export {
     mutationInput,
     ok,
     recordInput,
+    typedBody,
     type Context,
 } from './rpc.ts';
 export {
@@ -15,3 +16,10 @@ export {
     lookupId,
     nullableText,
 } from './schema.ts';
+export {
+    clientAssetPrefix,
+    clientBuild,
+    clientManifestSchema,
+    isApiPath,
+    type ClientManifest,
+} from './spa.ts';
