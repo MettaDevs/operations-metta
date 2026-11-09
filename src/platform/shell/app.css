@@ -1,0 +1,28 @@
+@import 'tailwindcss' source(none);
+@import 'tw-animate-css';
+@import '@operations-metta/ui/styles.css';
+
+/*
+ * `source(none)` mematikan pemindaian otomatis Tailwind, jadi setiap folder yang memakai kelas Tailwind
+ * disebut di sini. Tanpa baris yang tepat build tetap hijau dan CSS keluarannya kehilangan setiap kelas
+ * yang hanya dipakai folder itu, kegagalan yang baru terlihat sebagai layar yang tata letaknya berantakan.
+ *
+ * Paket UI ditulis langsung ke folder sumbernya, bukan lewat tautan di `node_modules`: satu deklarasi yang
+ * menunjuk berkas sungguhan, dan tidak bergantung pada apakah pemindai Tailwind mau menembus tautan
+ * simbolik. Contoh kelas yang hanya lahir dari sini: `.max-h-\[300px\]` milik `command`.
+ */
+@source '../../../packages/ui/src';
+
+/*
+ * Layar Core: bingkai layar di folder ini dan `.page.tsx` di folder fitur Core.
+ */
+@source '../../**/*.tsx';
+
+/*
+ * Layar module. Ditulis sebagai satu pola untuk semua module, bukan satu baris per module: daftar yang
+ * harus ditambah setiap kali module baru datang adalah daftar yang akan terlupa. Polanya `*.tsx`, bukan
+ * hanya `*.page.tsx`, supaya komponen pendamping sebuah halaman di folder fitur yang sama ikut terpindai.
+ */
+@source '../../../modules/*/src/**/*.tsx';
+
+@custom-variant dark (&:is(.dark *));

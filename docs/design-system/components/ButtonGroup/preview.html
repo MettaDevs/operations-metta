@@ -1,0 +1,20 @@
+<!-- @dsCard group="Perintah" height=110 subtitle="Tombol yang menempel jadi satu" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>ButtonGroup</title>
+<style>
+  .bg { display: inline-flex; }
+  .bg > * { border-radius: 0; }
+  .bg > *:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+  .bg > *:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+  .bg > * + * { border-left-width: 0; }
+  .bg-text { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4); border: 1px solid var(--border); background: var(--muted); font-size: 14px; font-weight: 500; box-shadow: var(--shadow-xs); }
+</style>
+</head>
+<body>
+<div class="ce-pad ce-row" style="gap:var(--space-4)">
+  <span class="bg"><button class="ce-btn ce-btn-outline" type="button">Ekspor</button><button class="ce-btn ce-btn-outline" type="button" aria-label="Pilihan ekspor" style="padding:0 var(--space-2)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span>
+  <span class="bg"><span class="bg-text">Periode</span><button class="ce-btn ce-btn-outline" type="button">2026</button></span>
+</div>
+</body>
+</html>

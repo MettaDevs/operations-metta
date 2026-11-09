@@ -1,0 +1,17 @@
+<!-- @dsCard group="Overlay" height=130 subtitle="Nama tombol ikon saat hover" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Tooltip</title>
+<style>
+  .tt-arrow { position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; margin-left: -5px; border-right: 1px solid var(--tooltip-border); border-bottom: 1px solid var(--tooltip-border); border-radius: 2px; background: var(--tooltip-surface); transform: rotate(45deg); }
+</style>
+</head>
+<body>
+<div class="ce-pad" style="padding-top:56px;padding-left:76px;position:relative">
+  <div class="ce-tip" role="tooltip" style="top:16px;left:35px;text-wrap:balance">Buka di tab baru<span class="tt-arrow"></span></div>
+  <button class="ce-icon-btn" type="button" aria-label="Buka di tab baru" style="background:var(--accent)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+  <button class="ce-icon-btn" type="button" aria-label="Perbesar halaman"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg></button>
+  <button class="ce-icon-btn" type="button" aria-label="Tutup halaman"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+</div>
+</body>
+</html>

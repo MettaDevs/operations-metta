@@ -1,0 +1,34 @@
+<!-- @dsCard group="Kartu" height=250 subtitle="Mode baca → klik nilai → mode Ubah" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>RecordEditBoundary</title>
+<style>
+  .reb { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+  .reb-col { border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .reb-head { padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+  .reb-cursor { cursor: text; }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="reb">
+    <div class="reb-col">
+      <div class="reb-head">Mode baca (field baca saja, bukan nonaktif)</div>
+      <div class="ce-bar" style="border-bottom:1px solid var(--border)"><div class="ce-bar-row"><button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>Ubah</button></div></div>
+      <div style="padding:var(--space-1) var(--space-3) var(--space-3)">
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr)"><div class="ce-field reb-cursor"><div class="ce-input is-readonly">Gedung utama</div><span class="ce-float">Nama</span></div></div>
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr);padding-top:var(--space-4)"><div class="ce-field reb-cursor"><div class="ce-input is-readonly ce-select">Aktif<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div><span class="ce-float">Status</span></div></div>
+      </div>
+    </div>
+    <div class="reb-col">
+      <div class="reb-head">Setelah klik pada Nama: mode Ubah, fokus di Nama</div>
+      <div class="ce-bar" style="border-bottom:1px solid var(--border)"><div class="ce-bar-row"><button class="ce-cmd" type="submit"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Simpan</button><button class="ce-cmd ce-cmd-cancel" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Batal</button></div></div>
+      <div style="padding:var(--space-1) var(--space-3) var(--space-3)">
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr)"><div class="ce-field"><div class="ce-input is-focus">Gedung utama</div><span class="ce-float">Nama <span class="ce-req">*</span></span></div></div>
+        <div class="ce-fc" style="grid-template-columns:minmax(0,1fr);padding-top:var(--space-4)"><div class="ce-field"><div class="ce-input ce-select">Aktif<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div><span class="ce-float">Status</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!-- @dsCard group="Shell" height=380 subtitle="Rail, submenu, area kerja" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Shell</title>
+<style>
+  .sh { height: 360px; }
+  .sh-nav { flex: 1; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) 2px; width: 100%; align-items: center; }
+  .sh-ver { width: 100%; padding: var(--space-2) var(--space-1); border-top: 1px solid var(--sidebar-border); font-size: 10px; line-height: 1.25; text-align: center; color: var(--muted-foreground); }
+  .sh-subnav { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) 0; }
+  .sh-head { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; padding: var(--space-1\.5) var(--space-4); border-bottom: 1px solid var(--border); }
+  .sh-crumb { font-size: 14px; color: var(--muted-foreground); }
+  .sh-crumb b { color: var(--foreground); font-weight: 500; }
+  .sh-search { margin-left: auto; width: 220px; }
+</style>
+</head>
+<body>
+<div class="ce-shell sh">
+  <aside class="ce-rail" aria-label="Rail">
+    <div class="ce-rail-head"><span class="ce-logo"><img src="/_blob/7d50978d246526546d028c7889c651fa" alt="" width="28" height="21"></span></div>
+    <nav class="sh-nav">
+      <a class="ce-rail-item is-active" aria-current="page"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg><span>Management Aset</span></a>
+      <a class="ce-rail-item is-hover"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>Pengadaan</span></a>
+      <a class="ce-rail-item"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Pengaturan</span></a>
+    </nav>
+    <div class="sh-ver"><span style="display:block">Versi</span><span style="display:block;font-weight:500">0.11.1</span></div>
+  </aside>
+  <aside class="ce-sub" aria-label="Submenu">
+    <div class="ce-sub-head">Management Aset</div>
+    <nav class="sh-subnav">
+      <a class="ce-sub-item is-active" aria-current="page">Inventarisasi aset</a>
+      <a class="ce-sub-item">Penerimaan aset</a>
+      <a class="ce-sub-item">Kategori aset dan kelompok penyusutan</a>
+      <a class="ce-sub-item">Lokasi aset</a>
+    </nav>
+  </aside>
+  <section class="ce-work">
+    <header class="sh-head">
+      <span class="sh-crumb">Management Aset / <b>Inventarisasi aset</b></span>
+      <span class="ce-field sh-search"><span class="ce-input"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="ce-placeholder" style="margin-left:var(--space-2)">Cari menu</span></span></span>
+    </header>
+    <div class="ce-work-content">
+      <div class="ce-bar"><div class="ce-bar-row"><span class="ce-bar-title">Inventarisasi aset</span><span class="ce-sep"></span><button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button></div></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!-- @dsCard group="Tampilan data" height=190 subtitle="Scrollbar tipis untuk panel kecil" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>ScrollArea</title>
+<style>
+  .sa { position: relative; width: 240px; height: 150px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .sa-list { padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3); font-size: 14px; }
+  .sa-list div { padding: var(--space-1) 0; border-bottom: 1px solid var(--border); }
+  .sa-bar { position: absolute; top: 0; right: 0; bottom: 0; width: 10px; padding: 1px; }
+  .sa-thumb { height: 40%; margin-top: 10px; border-radius: var(--radius-full); background: var(--border); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="sa" tabindex="0" aria-label="Daftar unit">
+    <div class="sa-list"><div>Unit umum</div><div>Unit keuangan</div><div>Unit farmasi</div><div>Unit laboratorium</div><div>Unit radiologi</div><div>Unit rawat jalan</div></div>
+    <div class="sa-bar" aria-hidden="true"><div class="sa-thumb"></div></div>
+  </div>
+</div>
+</body>
+</html>

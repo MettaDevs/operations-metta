@@ -1,0 +1,36 @@
+<!-- @dsCard group="Daftar" height=270 subtitle="Daftar 25% | detail 75%, divider polos" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>MasterDetailLayout</title>
+<style>
+  .md { display: flex; height: 240px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--background); }
+  .md-list { width: 25%; min-width: 180px; display: flex; flex-direction: column; }
+  .md-item { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+  .md-item.is-active { background: color-mix(in oklab, var(--accent) 60%, transparent); }
+  .md-divider { width: 1px; background: var(--border); cursor: col-resize; }
+  .md-detail { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="md">
+    <div class="md-list">
+      <div class="md-item is-active"><div style="font-weight:500">Gedung utama</div><div class="ce-caption">LOK-001</div></div>
+      <div class="md-item"><div style="font-weight:500">Gudang barat</div><div class="ce-caption">LOK-002</div></div>
+      <div class="md-item"><div style="font-weight:500">Klinik cabang</div><div class="ce-caption">LOK-003</div></div>
+    </div>
+    <div class="md-divider" role="separator" aria-label="Ubah lebar daftar dan detail" title="Geser untuk mengatur lebar panel"></div>
+    <div class="md-detail">
+      <div class="ce-bar"><div class="ce-bar-row"><span class="ce-bar-title">Gedung utama</span><span class="ce-sep"></span><button class="ce-cmd" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>Ubah</button><button class="ce-cmd ce-cmd-delete" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>Delete</button></div></div>
+      <div class="ce-pad">
+        <div class="ce-grid">
+          <div class="ce-fc"><div class="ce-field"><div class="ce-input is-readonly">LOK-001</div><span class="ce-float">Kode</span></div><div class="ce-help"></div></div>
+          <div class="ce-fc"><div class="ce-field"><div class="ce-input is-readonly">Gedung utama</div><span class="ce-float">Nama</span></div><div class="ce-help"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="ce-note" style="margin-top:var(--space-2)">Di bawah 1280px hanya satu panel tampil; tombol "Daftar" kembali ke daftar tanpa membuang draft.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!-- @dsCard group="Perintah" height=270 subtitle="Pencarian menu Shell" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Command</title>
+<style>
+  .cmd { width: 420px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--popover); box-shadow: var(--shadow-lg); }
+  .cmd-input { display: flex; align-items: center; gap: var(--space-2); height: 36px; padding: 0 var(--space-3); border-bottom: 1px solid var(--border); font-size: 14px; }
+  .cmd-input .ce-ico { opacity: 0.5; }
+  .cmd-list { padding: var(--space-1); }
+  .cmd-group { padding: 6px var(--space-2); font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="cmd" role="dialog" aria-label="Cari menu">
+    <div class="cmd-input"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>aset</span></div>
+    <div class="cmd-list" role="listbox">
+      <div class="cmd-group">Management Aset</div>
+      <div class="ce-menu-item is-focus" role="option" aria-selected="true">Inventarisasi aset</div>
+      <div class="ce-menu-item" role="option">Penerimaan aset</div>
+      <div class="ce-menu-item" role="option">Kategori aset dan kelompok penyusutan</div>
+      <div class="ce-menu-sep" role="separator"></div>
+      <div class="cmd-group">Pengaturan</div>
+      <div class="ce-menu-item" role="option">Nomor dokumen</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

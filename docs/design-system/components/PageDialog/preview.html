@@ -1,0 +1,63 @@
+<!-- @dsCard group="Kartu" height=430 subtitle="Kartu bertumpuk di atas daftar yang tetap terpasang" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>PageDialog</title>
+<style>
+  .pd-stage { height: 410px; }
+  .pd-under { left: 16px; right: 96px; }
+  .pd-top { left: 64px; right: 16px; }
+  .pd-under .ce-record-title { opacity: 1; }
+  .pd-body { flex: 1; min-height: 0; overflow: hidden; padding: 0 var(--space-10); }
+  .pd-edge { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--secondary); color: var(--secondary-foreground); display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+<div class="ce-stage pd-stage">
+  <div class="ce-scrim"></div>
+  <div class="ce-page pd-under" aria-hidden="true">
+    <div class="ce-page-header"><span class="ce-icon-btn ce-back"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></span><span class="ce-feature">Penerimaan aset</span><span></span><span></span></div>
+    <h2 class="ce-record-title">PNRA00042 · Pengadaan laptop</h2>
+    <div class="ce-page-dim"></div>
+  </div>
+  <div class="ce-page pd-top" role="dialog" aria-label="Kategori aset">
+    <div class="ce-page-header">
+      <button class="ce-icon-btn ce-back" type="button" aria-label="Kembali ke halaman sebelumnya" title="Kembali (Esc)"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></button>
+      <span class="ce-feature">Kategori aset</span>
+      <span class="ce-record-actions" role="group" aria-label="Aksi record">
+        <button class="ce-icon-btn" type="button" aria-label="Ubah" aria-pressed="true" style="box-shadow:inset 0 0 0 1px var(--primary);border-radius:var(--radius-full)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+        <button class="ce-icon-btn" type="button" aria-label="Bagikan" title="Salin tautan"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg></button>
+        <button class="ce-icon-btn" type="button" aria-label="Baru"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+        <button class="ce-icon-btn" type="button" aria-label="Delete"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+      </span>
+      <span class="ce-window-actions">
+        <span class="ce-count" role="status" aria-label="2 halaman terbuka">2</span>
+        <button class="ce-icon-btn" type="button" aria-label="Buka di tab baru"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+        <button class="ce-icon-btn" type="button" aria-label="Perbesar halaman"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg></button>
+        <button class="ce-icon-btn" type="button" aria-label="Tutup halaman"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </span>
+    </div>
+    <h2 class="ce-record-title">ELK · Elektronik kantor</h2>
+    <nav class="ce-page-nav" aria-label="Navigasi utama kartu">
+      <button class="ce-tab is-active" type="button" aria-current="page">Beranda</button>
+      <span style="margin-left:auto"><button class="ce-icon-btn" type="button" aria-label="Bantuan halaman" style="width:28px;height:28px"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span>
+    </nav>
+    <div class="ce-bar" style="border-bottom:0;padding-inline:var(--space-10)">
+      <div class="ce-bar-row">
+        <button class="ce-cmd" type="submit"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Simpan</button>
+        <button class="ce-cmd ce-cmd-cancel" type="button"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Batal</button>
+      </div>
+    </div>
+    <div class="pd-body">
+      <div class="ce-grid">
+        <div class="ce-fc"><div class="ce-field"><div class="ce-input is-readonly">ELK</div><span class="ce-float">Kode</span></div><div class="ce-help"></div></div>
+        <div class="ce-fc"><div class="ce-field"><div class="ce-input is-focus">Elektronik kantor</div><span class="ce-float">Nama <span class="ce-req">*</span></span></div><div class="ce-help"></div></div>
+        <div class="ce-fc"><div class="ce-field"><div class="ce-input ce-select">Peralatan<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div><span class="ce-float">Kelompok</span></div><div class="ce-help"></div></div>
+        <div class="ce-fc"><div class="ce-field"><div class="ce-input">48</div><span class="ce-float">Masa manfaat (bulan)</span></div><div class="ce-help"><button class="ce-icon-btn" type="button" aria-label="Bantuan field"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></div></div>
+      </div>
+    </div>
+    <span class="pd-edge" style="left:-14px" aria-hidden="true"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></span>
+    <span class="pd-edge" style="right:-14px" aria-hidden="true"><svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!-- @dsCard group="Navigasi" height=210 subtitle="Pemicu dengan panel terbuka" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>NavigationMenu</title>
+<style>
+  .nm { display: flex; gap: var(--space-1); }
+  .nm-trigger { display: inline-flex; align-items: center; gap: var(--space-1); height: 36px; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); background: var(--background); font-size: 14px; font-weight: 500; }
+  .nm-trigger.is-open { background: var(--accent); color: var(--accent-foreground); }
+  .nm-trigger.is-open .ce-ico { transform: rotate(180deg); }
+  .nm-panel { width: 360px; margin-top: 6px; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--popover); box-shadow: var(--shadow-sm); }
+  .nm-link { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2); border-radius: var(--radius-sm); font-size: 14px; }
+  .nm-link.is-active { background: color-mix(in oklab, var(--accent) 50%, transparent); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <nav class="nm"><span class="nm-trigger is-open" aria-expanded="true">Laporan<svg class="ce-ico ce-ico-12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span><span class="nm-trigger">Pengaturan<svg class="ce-ico ce-ico-12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></nav>
+  <div class="nm-panel">
+    <a class="nm-link is-active"><span style="font-weight:500">Daftar aset</span><span class="ce-muted">Semua aset beserta lokasi dan nilainya.</span></a>
+    <a class="nm-link"><span style="font-weight:500">Penyusutan per periode</span><span class="ce-muted">Beban penyusutan per buku dan periode.</span></a>
+  </div>
+</div>
+</body>
+</html>

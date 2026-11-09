@@ -1,0 +1,35 @@
+<!-- @dsCard group="Form" height=330 subtitle="Popup bertabel yang dimuat bertahap" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>InlineLookup</title></head>
+<body>
+<div class="ce-pad" style="max-width:560px">
+  <div class="ce-fc" style="padding-top:var(--space-2)">
+    <div class="ce-field">
+      <div class="ce-input is-focus" role="combobox" aria-expanded="true" style="justify-content:space-between">elek<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div>
+      <span class="ce-float">Kategori aset <span class="ce-req">*</span></span>
+    </div>
+    <div class="ce-help"></div>
+  </div>
+  <div style="margin-top:var(--space-1);border:1px solid var(--border);border-radius:var(--radius-md);background:var(--popover);box-shadow:var(--shadow-lg);overflow:hidden">
+    <table class="ce-table">
+      <thead><tr><th style="width:110px">Kode</th><th>Nama</th><th style="width:120px">Kelompok</th></tr></thead>
+      <tbody>
+        <tr class="is-active"><td>ELK</td><td>Elektronik kantor</td><td>Peralatan</td></tr>
+        <tr><td>ELK-MED</td><td>Elektronik medis</td><td>Peralatan medis</td></tr>
+        <tr><td>ELK-JAR</td><td>Perangkat jaringan</td><td>Peralatan</td></tr>
+      </tbody>
+    </table>
+    <div class="ce-status">Semua hasil sudah dimuat.</div>
+    <div class="ce-row" style="justify-content:space-between;padding:var(--space-2);border-top:1px solid var(--border)">
+      <button class="ce-cmd" type="button" style="border-radius:var(--radius-sm)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Baru</button>
+      <span class="ce-row" style="margin-left:auto">
+        <button class="ce-btn ce-btn-ghost" type="button" style="height:32px;padding:0 var(--space-3)">Detail</button>
+        <button class="ce-btn ce-btn-ghost" type="button" style="height:32px;padding:0 var(--space-3)">Daftar lengkap</button>
+      </span>
+    </div>
+  </div>
+  <p class="ce-note" style="margin-top:var(--space-2)">Query "elek" terpisah dari pilihan tersimpan; menutup popup memulihkan label pilihan sebelumnya.</p>
+</div>
+</body>
+</html>

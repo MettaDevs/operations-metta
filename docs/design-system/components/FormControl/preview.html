@@ -1,0 +1,40 @@
+<!-- @dsCard group="Form" height=330 subtitle="Label di dalam field, slot bantuan tetap, error terlihat" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>FormControl</title></head>
+<body>
+<div class="ce-pad">
+  <div class="ce-grid" style="max-width:680px">
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input is-readonly">PNRA00042</div><span class="ce-float">Kode</span></div>
+      <div class="ce-help"></div>
+    </div>
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input">Laptop kantor lantai 3</div><span class="ce-float">Nama <span class="ce-req">*</span></span></div>
+      <div class="ce-help"></div>
+    </div>
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input is-focus"><span class="ce-placeholder">dd/mm/yyyy</span></div><span class="ce-float">Tanggal siap pakai</span></div>
+      <div class="ce-help"><button class="ce-icon-btn" type="button" aria-label="Bantuan field"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></div>
+    </div>
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input"><span class="ce-float is-rest">Keterangan</span></div></div>
+      <div class="ce-help"></div>
+    </div>
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input is-invalid">0</div><span class="ce-float is-invalid">Jumlah <span class="ce-req">*</span></span></div>
+      <div class="ce-help"></div>
+      <div class="ce-error" role="alert">Isi jumlah minimal 1.</div>
+    </div>
+    <div class="ce-fc">
+      <div class="ce-field"><div class="ce-input ce-select">Pembelian<svg class="ce-ico ce-ico-14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div><span class="ce-float">Cara perolehan <span class="ce-req">*</span></span></div>
+      <div class="ce-help" style="position:relative">
+        <button class="ce-icon-btn" type="button" aria-label="Bantuan field" aria-expanded="true" style="background:var(--accent)"><svg class="ce-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
+        <div class="ce-tip" role="tooltip" style="left:38px;top:-2px;width:230px">Menentukan apakah nilai aset tercatat dari pembelian, hibah, atau saldo awal. Bantuan ini tetap terbuka karena diklik.</div>
+      </div>
+    </div>
+  </div>
+  <p class="ce-note" style="margin-top:var(--space-4)">Kode baca saja · Nama terisi · Tanggal difokuskan dengan petunjuk format · Keterangan kosong (label di tengah) · Jumlah tidak valid · Bantuan yang diklik tetap terbuka, tampil di kanan ikonnya.</p>
+</div>
+</body>
+</html>

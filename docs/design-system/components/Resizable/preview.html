@@ -1,0 +1,21 @@
+<!-- @dsCard group="Tampilan data" height=170 subtitle="Divider polos tanpa pegangan" -->
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Resizable</title>
+<style>
+  .rz { display: flex; height: 130px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .rz-pane { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--muted-foreground); }
+  .rz-handle { position: relative; width: 1px; background: var(--border); cursor: col-resize; }
+  .rz-handle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+<div class="ce-pad">
+  <div class="rz">
+    <div class="rz-pane" style="width:30%">Daftar</div>
+    <div class="rz-handle" role="separator" aria-orientation="vertical" aria-valuenow="30" tabindex="0" aria-label="Ubah lebar daftar dan detail"></div>
+    <div class="rz-pane" style="flex:1">Detail</div>
+  </div>
+</div>
+</body>
+</html>
