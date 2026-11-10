@@ -39,6 +39,13 @@ const environmentSchema = z.object({
     VALKEY_HOST: z.string().min(1).default('valkey'),
     VALKEY_PORT: z.coerce.number().int().positive().default(6379),
     SESSION_KEY_PREFIX: z.string().default('coreerp-session:'),
+    // Worker lingkungan (src/worker.ts): alamat proses agen control plane, id host runtime yang dicetak
+    // `add-runtime-host`, berkas kunci privat RSA (PEM) pasangan kunci publik yang didaftarkan, dan jeda antar-claim
+    // saat antrean kosong. Proses http tidak membacanya.
+    CONTROL_PLANE_URL: z.url().optional(),
+    WORKER_HOST_ID: z.uuid().optional(),
+    WORKER_PRIVATE_KEY_PATH: z.string().min(1).optional(),
+    WORKER_POLL_SECONDS: z.coerce.number().int().min(1).max(3600).default(10),
     // Pelaporan kesalahan ke Sentry. Kosong berarti mati, dan itu bawaannya.
     SENTRY_DSN: z.url().optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),
