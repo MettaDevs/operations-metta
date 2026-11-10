@@ -1,9 +1,20 @@
 import { z } from 'zod';
 import { coreWorkspace } from '../access/index.ts';
-import { base, bodyInput, ok, type Context } from '../http/index.ts';
+import {
+    base,
+    bodyInput,
+    ok,
+    recordInput,
+    typedQuery,
+    type Context,
+} from '../http/index.ts';
 import { PartyDuplicates } from './party-duplicate.service.ts';
 import { PartyIdentifications } from './party-identification.service.ts';
 import { PartyRelationships } from './party-relationship.service.ts';
+import {
+    partyListQuerySchema,
+    partyOptionsQuerySchema,
+} from './party.schema.ts';
 import { Parties } from './party.service.ts';
 
 const path = '/api/v1/parties';
@@ -37,15 +48,19 @@ const route = (
 // (core.organization.read), mengubah butuh core.organization.update, dan party yang tidak terlihat dijawab 404.
 export function partyRoutes() {
     return {
-        partyList: route('GET', '').handler(async ({ context }) =>
-            ok(await (await open(context)).parties.list(query(context))),
-        ),
+        partyList: route('GET', '')
+            .input(typedQuery<z.input<typeof partyListQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(await (await open(context)).parties.list(query(context))),
+            ),
         partyMetadata: route('GET', '/metadata').handler(async ({ context }) =>
             ok(await (await open(context)).parties.metadata()),
         ),
-        partyOptions: route('GET', '/options').handler(async ({ context }) =>
-            ok(await (await open(context)).parties.options(query(context))),
-        ),
+        partyOptions: route('GET', '/options')
+            .input(typedQuery<z.input<typeof partyOptionsQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(await (await open(context)).parties.options(query(context))),
+            ),
         partyCreate: route('POST', '')
             .input(bodyInput)
             .handler(async ({ context, input }) =>
@@ -84,7 +99,7 @@ export function partyRoutes() {
                 );
             }),
         partyShow: route('GET', '/{id}')
-            .input(partyInput)
+            .input(recordInput)
             .handler(async ({ context, input }) =>
                 ok(await (await open(context)).parties.show(input.params.id)),
             ),
@@ -116,7 +131,7 @@ export function partyRoutes() {
                 ),
             ),
         partyDuplicates: route('GET', '/{id}/duplicates')
-            .input(partyInput)
+            .input(recordInput)
             .handler(async ({ context, input }) => {
                 const { workspace, parties } = await open(context);
                 const party = await parties.require(input.params.id);

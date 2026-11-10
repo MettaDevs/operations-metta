@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import type { Workspace } from '../access/index.ts';
-import {
-    isoSql,
-    nowSql,
-    type Bind,
-    type Database,
-    jsonObject,
-} from '../database/index.ts';
+import { isoSql, nowSql, type Bind, type Database } from '../database/index.ts';
 import {
     abort,
     coded,
@@ -34,6 +28,7 @@ import {
 } from './party-duplicate.service.ts';
 import { PartyIdentifications } from './party-identification.service.ts';
 import { PartyRelationships } from './party-relationship.service.ts';
+import { partyRowSchema } from './party.schema.ts';
 import { createParty, searchName } from './party-store.service.ts';
 
 // Isian identitas bersama party (Party::PROFILE_FIELDS CoreERP) beserta isian form pasien legacy yang menjadi milik
@@ -164,11 +159,11 @@ export class Parties {
         return Map.groupBy(rows, (row) => row.party_id);
     }
 
-    private async present(rows: Record<string, unknown>[]) {
-        const roles = await this.roles(rows.map((row) => String(row.id)));
+    private async present(rows: z.infer<typeof partyRowSchema>[]) {
+        const roles = await this.roles(rows.map((row) => row.id));
         return rows.map((row) => ({
             ...row,
-            roles: (roles.get(String(row.id)) ?? []).map(
+            roles: (roles.get(row.id) ?? []).map(
                 ({ party_id: _, ...role }) => role,
             ),
         }));
@@ -176,7 +171,7 @@ export class Parties {
 
     async row(partyId: string, archived = false) {
         const party = await this.db.one(
-            jsonObject,
+            partyRowSchema,
             `${partySql(this.seesPrivate)} where p.tenant_id = $1 and p.id = $2 and p.deleted_at is ${archived ? 'not null' : 'null'}`,
             [this.workspace.tenantId, partyId],
         );
@@ -221,7 +216,9 @@ export class Parties {
             defaultDirection: 'asc',
         });
         return {
-            data: await this.present(batch.data),
+            data: await this.present(
+                batch.data.map((row) => partyRowSchema.parse(row)),
+            ),
             next_cursor: batch.next_cursor,
         };
     }

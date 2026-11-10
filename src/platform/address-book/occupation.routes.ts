@@ -1,9 +1,12 @@
+import type { z } from 'zod';
 import { coreWorkspace } from '../access/index.ts';
 import {
     base,
     bodyInput,
+    listParametersSchema,
     mutationInput,
     ok,
+    typedQuery,
     type Context,
 } from '../http/index.ts';
 import { Occupations } from './occupation.service.ts';
@@ -24,13 +27,15 @@ export function occupationRoutes() {
             outputStructure: 'detailed',
         });
     return {
-        occupationList: route('GET').handler(async ({ context }) =>
-            ok(
-                await (
-                    await occupations(context)
-                ).list(new URL(context.request.url).searchParams),
+        occupationList: route('GET')
+            .input(typedQuery<z.input<typeof listParametersSchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await occupations(context)
+                    ).list(new URL(context.request.url).searchParams),
+                ),
             ),
-        ),
         occupationCreate: route('POST')
             .input(bodyInput)
             .handler(async ({ context, input }) =>

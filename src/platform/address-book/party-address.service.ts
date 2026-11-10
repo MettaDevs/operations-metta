@@ -63,6 +63,29 @@ const locationSchema = z.object({
     postal_code: z.string().nullable(),
     formatted: z.string(),
 });
+const sharableSchema = locationSchema.pick({
+    id: true,
+    name: true,
+    formatted: true,
+    country_region_code: true,
+    province_id: true,
+    regency_id: true,
+    district_id: true,
+    village_id: true,
+    postal_code_id: true,
+    group_of_houses_id: true,
+    province: true,
+    city: true,
+    district: true,
+    village: true,
+    group_of_houses: true,
+    rt: true,
+    rw: true,
+    street: true,
+    building: true,
+    postbox: true,
+    postal_code: true,
+});
 const contactSchema = z.object({
     id: z.string(),
     version: z.number(),
@@ -321,7 +344,7 @@ export class PartyAddresses {
     // Tempat beralamat pos milik tenant yang bisa ditautkan ke party ini. Tempat yang ditandai privat oleh party mana
     // pun tidak ditawarkan.
     async sharableLocations(partyId: string, parameters: URLSearchParams) {
-        return incrementalList(this.db, {
+        const batch = await incrementalList(this.db, {
             query: `select l.id, l.name, pa.formatted, pa.country_region_code, pa.province_id, pa.regency_id,
                            pa.district_id, pa.village_id, pa.postal_code_id, pa.group_of_houses_id, pa.province, pa.city,
                            pa.district, pa.village, pa.group_of_houses, pa.rt, pa.rw, pa.street, pa.building, pa.postbox,
@@ -340,6 +363,10 @@ export class PartyAddresses {
             defaultSort: 'name',
             defaultDirection: 'asc',
         });
+        return {
+            data: batch.data.map((row) => sharableSchema.parse(row)),
+            next_cursor: batch.next_cursor,
+        };
     }
 
     // Membuat atau mengubah satu alamat (saveLocation CoreERP). `location_id` menautkan tempat yang sudah ada tanpa

@@ -4,7 +4,10 @@ import {
     base,
     expectedVersion,
     laravelBody,
+    listParametersSchema,
     ok,
+    recordInput,
+    typedQuery,
     type Context,
 } from '../http/index.ts';
 import { checkContact, checkLocation } from './party-address.schema.ts';
@@ -91,7 +94,7 @@ function routes(
     const none = { status: 204, headers: {}, body: undefined };
     return {
         locations: route('GET', '/{id}/locations')
-            .input(ownerInput)
+            .input(recordInput)
             .handler(async ({ context, input }) => {
                 const { addresses, partyId } = await owner(
                     context,
@@ -105,7 +108,11 @@ function routes(
                 });
             }),
         sharableLocations: route('GET', '/{id}/sharable-locations')
-            .input(ownerInput)
+            .input(
+                recordInput.extend(
+                    typedQuery<z.input<typeof listParametersSchema>>().shape,
+                ),
+            )
             .handler(async ({ context, input }) => {
                 const { addresses, partyId } = await owner(
                     context,
@@ -176,7 +183,7 @@ function routes(
                 return none;
             }),
         contacts: route('GET', '/{id}/contacts')
-            .input(ownerInput)
+            .input(recordInput)
             .handler(async ({ context, input }) => {
                 const { addresses, partyId } = await owner(
                     context,

@@ -183,6 +183,28 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                     },
                 ],
             },
+            {
+                id: 'address-book',
+                label: 'Buku alamat',
+                href: '/settings/global-address-book',
+                items: [
+                    {
+                        id: 'parties',
+                        label: 'Pihak',
+                        href: '/settings/global-address-book',
+                    },
+                    {
+                        id: 'occupations',
+                        label: 'Pekerjaan',
+                        href: '/settings/occupations',
+                    },
+                    {
+                        id: 'party-duplicate-check',
+                        label: 'Cek data ganda',
+                        href: '/settings/party-duplicate-check',
+                    },
+                ],
+            },
         ]);
         expect(data.environment).toBeNull();
 
@@ -197,10 +219,17 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
         );
     });
 
-    test('the menu shows organization screens only to members who may read them', async () => {
+    test('the menu shows organization, address book, and address setup screens only to members who may read them', async () => {
         const viewers = [
-            [['core.organization.inquire'], ['dashboard', 'organization']],
-            [['core.organization.manage'], ['dashboard', 'organization']],
+            [
+                ['core.organization.inquire'],
+                ['dashboard', 'organization', 'address-book'],
+            ],
+            [
+                ['core.organization.manage'],
+                ['dashboard', 'organization', 'address-book'],
+            ],
+            [['core.reference-data.inquire'], ['dashboard', 'address-setup']],
             [[], ['dashboard']],
         ] as const;
         for (const [duties, groups] of viewers) {
