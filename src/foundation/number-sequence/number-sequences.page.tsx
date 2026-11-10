@@ -10,8 +10,9 @@ import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
+import { Eraser, ListChecks } from 'lucide-react';
 import { useCallback, useId, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { Key, ReactNode } from 'react';
 import { z } from 'zod';
 import {
     api,
@@ -20,13 +21,19 @@ import {
     type ApiBody,
 } from '../../platform/shell/index.ts';
 import {
+    appliesTo,
     NumberSequenceCard,
     scopeLabels,
     statusLabels,
 } from './number-sequence-card.tsx';
+import {
+    StatusListDialog,
+    useCleanup,
+} from './number-sequence-status-list.tsx';
 
 // Nomor dokumen, layar Number sequences F&O: setiap baris satu pengaturan nomor untuk satu jenis nomor (reference)
-// dan satu nilai scope. Saringan area dan reference di panel kiri, seperti daftar Number sequences F&O.
+// dan satu nilai scope, dengan kolom Smallest, Largest, Next, dan Format seperti daftar F&O. Saringan Area dan
+// Reference di panel kiri (aturan layar repo ini), dan Status list serta Manual cleanup di grup Administrasi toolbar.
 
 const route = getRouteApi('/_app/settings/number-sequences');
 const ALL = 'all';
@@ -60,6 +67,12 @@ function NumberSequencesPage(): ReactNode {
     const [creating, setCreating] = useState(false);
     // Naik setiap kali kartu tersimpan, supaya kartu dipasang ulang dalam mode baca.
     const [revision, setRevision] = useState(0);
+    const [selected, setSelected] = useState<Key[]>([]);
+    const [statusFor, setStatusFor] = useState<{
+        id: string;
+        title: string;
+    } | null>(null);
+    const { cleanup, busy: cleaning, confirmation } = useCleanup();
     const filterPanelId = useId();
     const { area, reference, scope, status } = search;
     const setSearch = (next: Partial<Search>) =>
@@ -111,6 +124,16 @@ function NumberSequencesPage(): ReactNode {
         getKey: (item) => item.id,
     });
     const open = (id: string | undefined) => setSearch({ sequence: id });
+    const title = (row: {
+        reference_name: string;
+        scope_value_name: string | null;
+        fiscal_period_name: string | null;
+    }) => `${row.reference_name} · ${appliesTo(row)}`;
+    const selectedRows = list.items.filter((row) => selected.includes(row.id));
+    const [onlySelected] = selectedRows;
+    const cleanupRows = async (ids: string[]) => {
+        if (await cleanup(ids)) list.reload();
+    };
 
     return (
         <>
@@ -124,6 +147,49 @@ function NumberSequencesPage(): ReactNode {
                             label: 'Cari pengaturan nomor',
                             placeholder: 'Cari jenis nomor atau organisasi...',
                         }}
+                        groups={[
+                            {
+                                id: 'administration',
+                                label: 'Administrasi',
+                                actions: [
+                                    {
+                                        id: 'status-list',
+                                        label: 'Status list',
+                                        icon: <ListChecks aria-hidden="true" />,
+                                        disabled: selectedRows.length !== 1,
+                                        title: 'Pilih satu pengaturan nomor untuk melihat nomor yang sedang dipesan.',
+                                        onSelect: () => {
+                                            if (onlySelected)
+                                                setStatusFor({
+                                                    id: onlySelected.id,
+                                                    title: title(onlySelected),
+                                                });
+                                        },
+                                    },
+                                    ...(metadata.canManage
+                                        ? [
+                                              {
+                                                  id: 'cleanup',
+                                                  label: 'Bersihkan manual',
+                                                  icon: (
+                                                      <Eraser aria-hidden="true" />
+                                                  ),
+                                                  disabled:
+                                                      cleaning ||
+                                                      selectedRows.length === 0,
+                                                  title: 'Pilih pengaturan nomor yang nomor lewat batas waktunya akan dikembalikan.',
+                                                  onSelect: () =>
+                                                      void cleanupRows(
+                                                          selectedRows.map(
+                                                              (row) => row.id,
+                                                          ),
+                                                      ),
+                                              },
+                                          ]
+                                        : []),
+                                ],
+                            },
+                        ]}
                         filter={{
                             open: filtersOpen,
                             onOpenChange: setFiltersOpen,
@@ -272,10 +338,26 @@ function NumberSequencesPage(): ReactNode {
                 <DataTable
                     data={list.items}
                     getRowKey={(row) => row.id}
-                    getRowLabel={(row) => row.reference_name}
+                    getRowLabel={title}
                     actionsPlacement="inline"
-                    actions={[{ id: 'open', label: 'Buka' }]}
-                    onRowAction={(_, row) => open(row.id)}
+                    selection={{
+                        selectedKeys: selected,
+                        onSelectedKeysChange: setSelected,
+                    }}
+                    actions={[
+                        { id: 'open', label: 'Buka' },
+                        { id: 'status-list', label: 'Status list' },
+                        ...(metadata.canManage
+                            ? [{ id: 'cleanup', label: 'Bersihkan manual' }]
+                            : []),
+                    ]}
+                    onRowAction={(action, row) => {
+                        if (action === 'status-list')
+                            setStatusFor({ id: row.id, title: title(row) });
+                        else if (action === 'cleanup')
+                            void cleanupRows([row.id]);
+                        else open(row.id);
+                    }}
                     activeRowKey={search.sequence}
                     onRowClick={(row) => open(row.id)}
                     sort={list.sort}
@@ -290,6 +372,7 @@ function NumberSequencesPage(): ReactNode {
                     columns={[
                         {
                             id: 'reference_name',
+                            width: 180,
                             header: 'Jenis nomor',
                             cell: (row) => (
                                 <DataTableText>
@@ -299,15 +382,59 @@ function NumberSequencesPage(): ReactNode {
                             sortValue: (row) => row.reference_name,
                         },
                         {
-                            id: 'area_name',
-                            header: 'Area',
+                            id: 'scope_value_name',
+                            width: 200,
+                            header: 'Berlaku untuk',
                             cell: (row) => (
-                                <DataTableText>{row.area_name}</DataTableText>
+                                <DataTableText>{appliesTo(row)}</DataTableText>
                             ),
-                            sortValue: (row) => row.area_name,
+                            sortValue: (row) => row.scope_value_name ?? '',
+                        },
+                        {
+                            id: 'format',
+                            width: 170,
+                            header: 'Format',
+                            cell: (row) => (
+                                <DataTableText>{row.format}</DataTableText>
+                            ),
+                        },
+                        {
+                            id: 'minimum_number',
+                            width: 100,
+                            header: 'Terkecil',
+                            align: 'right',
+                            cell: (row) => (
+                                <DataTableText>
+                                    {row.minimum_number}
+                                </DataTableText>
+                            ),
+                            sortValue: (row) => row.minimum_number,
+                        },
+                        {
+                            id: 'maximum_number',
+                            width: 110,
+                            header: 'Terbesar',
+                            align: 'right',
+                            cell: (row) => (
+                                <DataTableText>
+                                    {row.maximum_number ?? 'Tanpa batas'}
+                                </DataTableText>
+                            ),
+                            sortValue: (row) => row.maximum_number ?? 0,
+                        },
+                        {
+                            id: 'next_number',
+                            width: 110,
+                            header: 'Berikutnya',
+                            align: 'right',
+                            cell: (row) => (
+                                <DataTableText>{row.next_number}</DataTableText>
+                            ),
+                            sortValue: (row) => row.next_number,
                         },
                         {
                             id: 'scope',
+                            width: 160,
                             header: 'Scope',
                             cell: (row) => (
                                 <DataTableText>
@@ -316,38 +443,17 @@ function NumberSequencesPage(): ReactNode {
                             ),
                         },
                         {
-                            id: 'scope_value_name',
-                            header: 'Berlaku untuk',
+                            id: 'area_name',
+                            width: 150,
+                            header: 'Area',
                             cell: (row) => (
-                                <DataTableText>
-                                    {[
-                                        row.scope_value_name,
-                                        row.fiscal_period_name,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(' · ') || 'Seluruh tenant'}
-                                </DataTableText>
+                                <DataTableText>{row.area_name}</DataTableText>
                             ),
-                            sortValue: (row) => row.scope_value_name ?? '',
-                        },
-                        {
-                            id: 'format',
-                            header: 'Format',
-                            cell: (row) => (
-                                <DataTableText>{row.format}</DataTableText>
-                            ),
-                        },
-                        {
-                            id: 'continuous',
-                            header: 'Berkelanjutan',
-                            cell: (row) => (
-                                <DataTableText>
-                                    {row.is_continuous ? 'Ya' : 'Tidak'}
-                                </DataTableText>
-                            ),
+                            sortValue: (row) => row.area_name,
                         },
                         {
                             id: 'status',
+                            width: 120,
                             header: 'Status',
                             cell: (row) => (
                                 <Badge
@@ -374,6 +480,14 @@ function NumberSequencesPage(): ReactNode {
                         setCreating(false);
                         open(undefined);
                     }}
+                    onOpenSequence={(id) => {
+                        setCreating(false);
+                        open(id);
+                    }}
+                    onStatusList={(stored) =>
+                        setStatusFor({ id: stored.id, title: title(stored) })
+                    }
+                    onCleanup={(stored) => void cleanupRows([stored.id])}
                     onSaved={(saved) => {
                         list.reload();
                         setRevision((current) => current + 1);
@@ -384,6 +498,16 @@ function NumberSequencesPage(): ReactNode {
                     }}
                 />
             )}
+            {statusFor && (
+                <StatusListDialog
+                    key={statusFor.id}
+                    sequenceId={statusFor.id}
+                    title={statusFor.title}
+                    canManage={metadata.canManage}
+                    onClose={() => setStatusFor(null)}
+                />
+            )}
+            {confirmation}
         </>
     );
 }

@@ -114,6 +114,73 @@ describe.skipIf(!process.env.DB_HOST)('number sequence screen', () => {
         ).toBe(false);
     });
 
+    test('the list shows Smallest, Largest, and Next, and the card shows the block in use', async () => {
+        const unit = await createOperatingUnit(
+            pool,
+            tenantId,
+            'Puskesmas D',
+            'PKD',
+        );
+        const response = await manager.post(path, {
+            ...settings,
+            reference_id: reference.id,
+            scope_type: 'operating_unit',
+            operating_unit_id: unit,
+            segments: [
+                { type: 'scope' },
+                { type: 'constant', value: '-' },
+                { type: 'number', length: 6 },
+            ],
+        });
+        expect(response.status).toBe(201);
+        const created = (
+            (await response.json()) as {
+                data: Sequence & {
+                    allocated_next: number | null;
+                    allocated_last: number | null;
+                };
+            }
+        ).data;
+        expect(created.format).toBe('PKD-######');
+        expect(created.next_number).toBe(1);
+        expect(created.allocated_next).toBeNull();
+        await pool.unsafe(
+            "insert into number_sequence_counters (id, sequence_id, scope_key, period_key, next_number, created_at, updated_at) values ($1, $2, $3, 'all', 21, now(), now())",
+            [Bun.randomUUIDv7(), created.id, 'operating_unit:' + unit],
+        );
+        await pool.unsafe(
+            "insert into number_sequence_allocations (id, sequence_id, scope_key, period_key, first_number, last_number, next_number, created_at, updated_at) values ($1, $2, $3, 'all', 1, 20, 4, now(), now())",
+            [Bun.randomUUIDv7(), created.id, 'operating_unit:' + unit],
+        );
+        const list = await reader.get(`${path}?reference_id=${reference.id}`);
+        const row = (
+            (await list.json()) as {
+                data: (Sequence & {
+                    minimum_number: number;
+                    maximum_number: number;
+                })[];
+            }
+        ).data.find((item) => item.id === created.id);
+        expect(row).toEqual(
+            expect.objectContaining({
+                minimum_number: 1,
+                maximum_number: 999999,
+                next_number: 21,
+                format: 'PKD-######',
+            }),
+        );
+        const card = await reader.get(`${path}/${created.id}`);
+        expect(
+            (
+                (await card.json()) as {
+                    data: { allocated_next: number; allocated_last: number };
+                }
+            ).data,
+        ).toEqual(
+            expect.objectContaining({ allocated_next: 4, allocated_last: 20 }),
+        );
+    });
+
     test('reading needs the inquire duty and changing needs the manage duty', async () => {
         expect((await outsider.get(path)).status).toBe(403);
         const response = await reader.post(path, {

@@ -157,6 +157,29 @@ export class NumberSequences {
         }
     }
 
+    // Segmen organisasi pada scope operating unit mencetak nomor unit. Unit tanpa nomor tidak punya kode untuk dicetak,
+    // jadi formatnya ditolak sejak disimpan, bukan baru saat dokumen pertama meminta nomor.
+    private async checkUnitNumber(
+        operatingUnitId: string | null,
+        settings: Settings,
+    ): Promise<void> {
+        if (
+            operatingUnitId === null ||
+            !settings.segments.some((segment) => segment.type === 'scope')
+        )
+            return;
+        const unit = await this.db.one(
+            z.object({ number: z.string().nullable() }),
+            'select number from operating_units where organization_id=$1 and tenant_id=$2 limit 1',
+            [operatingUnitId, this.tenantId],
+        );
+        if (!unit?.number)
+            validation({
+                segments:
+                    'Operating unit ini belum punya nomor unit, jadi segmen Operating unit tidak punya kode untuk dicetak. Isi nomor unitnya lebih dulu, atau hapus segmen itu.',
+            });
+    }
+
     private checkSettings(
         settings: Settings,
         scopeType: ScopeType,
@@ -415,6 +438,7 @@ export class NumberSequences {
         const reference = await this.reference(data.reference_id);
         await this.checkScopeValue(data);
         this.checkSettings(data, data.scope_type, reference);
+        await this.checkUnitNumber(data.operating_unit_id, data);
         const id = Bun.randomUUIDv7();
         return this.save(async () => {
             await this.checkOverlap(null, reference.id, data, data);
@@ -491,6 +515,7 @@ export class NumberSequences {
                 );
             const reference = await this.reference(current.reference_id);
             this.checkSettings(data, current.scope_type, reference);
+            await this.checkUnitNumber(current.operating_unit_id, data);
             if (
                 canonical(data.segments) !== canonical(current.segments) &&
                 (await this.hasNumberingState(id))
@@ -690,23 +715,29 @@ const listRowSchema = z.object({
     scope_type: z.enum(scopeTypes),
     scope_value_name: z.string().nullable(),
     company_code: z.string().nullable(),
+    scope_code: z.string().nullable(),
     fiscal_period_name: z.string().nullable(),
     status: z.enum(sequenceStatuses),
     is_continuous: z.boolean(),
     segments: z.string(),
     minimum_number: z.coerce.number(),
     maximum_number: z.coerce.number().nullable(),
+    next_number: z.coerce.number(),
     version: z.number(),
 });
 const listQuery = `select s.id,s.reference_id,r.code as reference_code,r.name as reference_name,r.app_id as area_id,
         a.name as area_name,s.scope_type,o.name as scope_value_name,l.company_code,
+        case when s.scope_type='operating_unit' then u.number else l.company_code end as scope_code,
         case when p.id is null then null else y.name||' '||p.name end as fiscal_period_name,
-        s.status,s.is_continuous,s.segments::text as segments,s.minimum_number,s.maximum_number,s.version
+        s.status,s.is_continuous,s.segments::text as segments,s.minimum_number,s.maximum_number,
+        greatest(s.minimum_number,coalesce((select max(c.next_number) from number_sequence_counters c where c.sequence_id=s.id),0)) as next_number,
+        s.version
     from tenant_number_sequences s
     join app_number_sequence_references r on r.id=s.reference_id
     join apps a on a.id=r.app_id
     left join organizations o on o.id=coalesce(s.operating_unit_id,s.legal_entity_id)
     left join legal_entities l on l.organization_id=s.legal_entity_id
+    left join operating_units u on u.organization_id=s.operating_unit_id
     left join fiscal_periods p on p.id=s.fiscal_period_id
     left join fiscal_years y on y.id=p.fiscal_year_id
     where s.tenant_id=$1`;
@@ -716,8 +747,9 @@ const scopeValueSchema = z.object({
     code: z.string().nullable(),
 });
 
-// Pola nomor untuk dibaca orang: # untuk digit nomor, dan nama bagian yang nilainya baru diketahui saat terbit.
-function pattern(segments: Segment[], companyCode: string | null): string {
+// Pola nomor untuk dibaca orang: # untuk digit nomor, kode organisasi scope bila sudah diketahui, dan nama bagian
+// yang nilainya baru diketahui saat terbit.
+function pattern(segments: Segment[], scopeCode: string | null): string {
     return segments
         .map((segment) => {
             switch (segment.type) {
@@ -728,7 +760,7 @@ function pattern(segments: Segment[], companyCode: string | null): string {
                 case 'year':
                     return '[tahun]';
                 case 'scope':
-                    return companyCode ?? '[kode unit]';
+                    return scopeCode ?? '[kode organisasi]';
                 case 'fiscal_year':
                     return '[tahun fiskal]';
                 case 'fiscal_period':
@@ -746,7 +778,7 @@ function pattern(segments: Segment[], companyCode: string | null): string {
 
 function present(row: z.infer<typeof listRowSchema>) {
     const segments = z.array(segmentSchema).parse(JSON.parse(row.segments));
-    return { ...row, segments, format: pattern(segments, row.company_code) };
+    return { ...row, segments, format: pattern(segments, row.scope_code) };
 }
 
 // Bacaan layar Nomor dokumen: daftar, kartu, pilihan nilai scope, dan data pendukungnya.
@@ -778,6 +810,9 @@ export class NumberSequenceDirectory {
                 area_name: 'area_name',
                 scope_value_name: 'scope_value_name',
                 status: 'status',
+                minimum_number: 'minimum_number',
+                maximum_number: 'maximum_number',
+                next_number: 'next_number',
             },
             searchColumns: [
                 'reference_name',
@@ -785,7 +820,7 @@ export class NumberSequenceDirectory {
                 'area_name',
                 'scope_value_name',
             ],
-            numericColumns: [],
+            numericColumns: ['minimum_number', 'maximum_number', 'next_number'],
             defaultSort: 'reference_name',
             defaultDirection: 'asc',
         });
@@ -836,10 +871,15 @@ export class NumberSequenceDirectory {
         if (!row || !sequence) abort(404, 'Pengaturan nomor tidak ditemukan.');
         const state = await this.db.one(
             z.object({
-                next_number: z.coerce.number().nullable(),
                 used: z.boolean(),
+                allocated_next: z.coerce.number().nullable(),
+                allocated_last: z.coerce.number().nullable(),
             }),
-            'select (select max(next_number) from number_sequence_counters where sequence_id=$1) as next_number, exists(select 1 from number_sequence_counters where sequence_id=$1) or exists(select 1 from number_sequence_issues where sequence_id=$1) or exists(select 1 from number_sequence_reservations where sequence_id=$1) as used',
+            // Allocated numbers di Performance F&O: blok preallocation yang sedang dipakai, bila ada.
+            `select exists(select 1 from number_sequence_counters where sequence_id=$1) or exists(select 1 from number_sequence_issues where sequence_id=$1) or exists(select 1 from number_sequence_reservations where sequence_id=$1) as used,
+                a.next_number as allocated_next,a.last_number as allocated_last
+             from (select 1) one
+             left join lateral (select next_number,last_number from number_sequence_allocations where sequence_id=$1 and next_number<=last_number order by created_at desc limit 1) a on true`,
             [id],
         );
         return {
@@ -854,11 +894,9 @@ export class NumberSequenceDirectory {
             reset_period: sequence.reset_period,
             preallocation_enabled: sequence.preallocation_enabled,
             preallocation_quantity: sequence.preallocation_quantity,
-            next_number: Math.max(
-                state?.next_number ?? 0,
-                Number(sequence.minimum_number),
-            ),
             used: state?.used ?? false,
+            allocated_next: state?.allocated_next ?? null,
+            allocated_last: state?.allocated_last ?? null,
         };
     }
 

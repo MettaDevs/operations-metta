@@ -284,6 +284,77 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
         );
     });
 
+    test('the organization segment of a unit sequence prints the unit number, never its id', async () => {
+        const tenantId = await createTenant(pool);
+        const company = await createLegalEntity(pool, tenantId, 'PTA');
+        const numbered = await createOperatingUnit(
+            pool,
+            tenantId,
+            'Puskesmas A',
+            'PKA',
+        );
+        const unnumbered = await createOperatingUnit(
+            pool,
+            tenantId,
+            'Puskesmas B',
+        );
+        const reference = await createReference(pool, appId, 'Nomor rekam', [
+            'operating_unit',
+        ]);
+        const segments: Record<string, string | number>[] = [
+            { type: 'scope' },
+            { type: 'constant', value: '-' },
+            { type: 'number', length: 6 },
+        ];
+        await withDb((db) =>
+            new NumberSequences(db, tenantId, null).create({
+                ...settings,
+                reference_id: reference.id,
+                scope_type: 'operating_unit',
+                operating_unit_id: numbered,
+                segments,
+            }),
+        );
+        expect(
+            await issue(tenantId, {
+                reference: reference.code,
+                key: 'a',
+                legalEntityId: company,
+                operatingUnitId: numbered,
+            }),
+        ).toBe('PKA-000001');
+        expect(
+            await failure(
+                withDb((db) =>
+                    new NumberSequences(db, tenantId, null).create({
+                        ...settings,
+                        reference_id: reference.id,
+                        scope_type: 'operating_unit',
+                        operating_unit_id: unnumbered,
+                        segments,
+                    }),
+                ),
+            ),
+        ).toContain('belum punya nomor unit');
+        // Sequence yang lahir sebelum aturan ini (atau unit yang nomornya dikosongkan) ditolak saat terbit, tidak
+        // diam-diam mencetak id.
+        await createSequence(pool, tenantId, reference.id, {
+            scope_type: 'operating_unit',
+            operating_unit_id: unnumbered,
+            segments,
+        });
+        expect(
+            await failure(
+                issue(tenantId, {
+                    reference: reference.code,
+                    key: 'b',
+                    legalEntityId: company,
+                    operatingUnitId: unnumbered,
+                }),
+            ),
+        ).toContain('Puskesmas B belum punya nomor unit');
+    });
+
     test('the scope comes from the document and a missing scope is refused, not redirected', async () => {
         const tenantId = await createTenant(pool);
         const companyA = await createLegalEntity(pool, tenantId, 'PTA');

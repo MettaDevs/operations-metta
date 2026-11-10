@@ -1,5 +1,4 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
-import { Badge } from '@operations-metta/ui/badge';
 import { Button } from '@operations-metta/ui/button';
 import {
     CollapsibleSection,
@@ -10,6 +9,8 @@ import {
     Field,
     FieldDescription,
     FieldLabel,
+    FieldLegend,
+    FieldSet,
 } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
@@ -27,11 +28,10 @@ import {
 } from '@operations-metta/ui/record-edit-boundary';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
-import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import { Eraser, ListChecks } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
     api,
@@ -40,27 +40,33 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../platform/shell/index.ts';
+import {
+    formatOf,
+    rowsOf,
+    scopeSegmentLabel,
+    SegmentGrid,
+    type ScopeType,
+    type SegmentRow,
+} from './number-sequence-segments.tsx';
 
-// Kartu satu number sequence, mengikuti kartu Number sequences F&O: scope dan nilainya (hanya diisi saat membuat),
-// segmen format, General, Allow user changes, Performance (preallocation), dan Status list dengan Manual cleanup.
+// Kartu satu number sequence, dengan bagian dan urutan kartu Number sequences F&O: Identifikasi, Scope, Segmen
+// (dengan Format terhitung), Pengaturan lain untuk jenis nomor yang sama (pengganti References), Umum, dan Performa.
+// Status list dan Bersihkan manual ada di grup Administrasi di atas kartu, seperti toolbar F&O.
 
 export type Metadata = ApiBody<'numberSequenceMetadata'>['data'];
 type Reference = Metadata['references'][number];
 type Stored = ApiBody<'numberSequenceShow'>['data'];
-type ScopeType = Stored['scope_type'];
-type Segment = Stored['segments'][number];
-type SegmentType = Segment['type'];
 type ScopeValue = ApiBody<'numberSequenceScopeValues'>['data'][number];
 type Errors = Record<string, string[]>;
 
 export const scopeLabels: Record<ScopeType, string> = {
-    tenant: 'Seluruh tenant (Shared)',
+    tenant: 'Shared (semua perusahaan)',
     legal_entity: 'Perusahaan',
-    operating_unit: 'Unit',
+    operating_unit: 'Operating unit',
     legal_entity_fiscal_period: 'Perusahaan dan periode fiskal',
 };
 export const statusLabels: Record<Stored['status'], string> = {
-    draft: 'Draft',
+    draft: 'Belum dipakai',
     active: 'Dipakai',
     stopped: 'Dihentikan',
 };
@@ -70,36 +76,17 @@ const resetLabels: Record<Stored['reset_period'], string> = {
     fiscal_year: 'Setiap tahun fiskal',
     fiscal_period: 'Setiap periode fiskal',
 };
-const segmentLabels: Record<SegmentType, string> = {
-    constant: 'Teks tetap',
-    number: 'Nomor',
-    year: 'Tahun',
-    scope: 'Kode organisasi',
-    fiscal_year: 'Tahun fiskal',
-    fiscal_period: 'Periode fiskal',
-    context: 'Bagian dari data',
-};
 const scopeTypes: ScopeType[] = [
     'tenant',
     'legal_entity',
     'operating_unit',
     'legal_entity_fiscal_period',
 ];
-const statuses: Stored['status'][] = ['draft', 'active', 'stopped'];
 const resetPeriods: Stored['reset_period'][] = [
     'never',
     'calendar_year',
     'fiscal_year',
     'fiscal_period',
-];
-const segmentTypes: SegmentType[] = [
-    'constant',
-    'number',
-    'year',
-    'scope',
-    'fiscal_year',
-    'fiscal_period',
-    'context',
 ];
 const scopeValueColumns = [
     {
@@ -109,6 +96,18 @@ const scopeValueColumns = [
     },
     { id: 'name', header: 'Nama', cell: (item: ScopeValue) => item.name },
 ];
+
+// Kolom "Berlaku untuk" di daftar dan di tabel pengaturan lain.
+export function appliesTo(row: {
+    scope_value_name: string | null;
+    fiscal_period_name: string | null;
+}): string {
+    return (
+        [row.scope_value_name, row.fiscal_period_name]
+            .filter(Boolean)
+            .join(' · ') || 'Semua perusahaan'
+    );
+}
 
 type Draft = {
     reference_id: string;
@@ -128,17 +127,42 @@ type Draft = {
     minimum_number: string;
     maximum_number: string;
     next_number: string;
-    segments: Segment[];
+    segments: SegmentRow[];
 };
 
+// Segmen organisasi ada di depan format bila scope memilih organisasi, seperti F&O yang menambahkan segmen Legal
+// entity begitu scope Legal entity dipilih. Shared tidak punya organisasi untuk dicetak, jadi segmennya dibuang.
+function segmentsForScope(rows: SegmentRow[], scope: ScopeType): SegmentRow[] {
+    const hasScope = rows.some((row) => row.segment.type === 'scope');
+    if (scope === 'tenant') {
+        const index = rows.findIndex((row) => row.segment.type === 'scope');
+        const following = rows[index + 1]?.segment;
+        return rows.filter(
+            (row, position) =>
+                row.segment.type !== 'scope' &&
+                !(
+                    position === index + 1 &&
+                    following?.type === 'constant' &&
+                    following.value === '-'
+                ),
+        );
+    }
+    if (hasScope) return rows;
+    return [
+        ...rowsOf([{ type: 'scope' }, { type: 'constant', value: '-' }]),
+        ...rows,
+    ];
+}
+
 function emptyDraft(reference: Reference | undefined): Draft {
-    const scope = reference?.allowed_scopes[0];
+    const allowed = reference?.allowed_scopes[0];
+    const scope: ScopeType =
+        allowed === 'legal_entity' || allowed === 'operating_unit'
+            ? allowed
+            : 'tenant';
     return {
         reference_id: reference?.id ?? '',
-        scope_type:
-            scope === 'legal_entity' || scope === 'operating_unit'
-                ? scope
-                : 'tenant',
+        scope_type: scope,
         legal_entity: null,
         operating_unit: null,
         fiscal_period: null,
@@ -154,17 +178,20 @@ function emptyDraft(reference: Reference | undefined): Draft {
         minimum_number: '1',
         maximum_number: '19999',
         next_number: '1',
-        segments: [
-            ...(reference?.default_prefix
-                ? [
-                      {
-                          type: 'constant' as const,
-                          value: reference.default_prefix,
-                      },
-                  ]
-                : []),
-            { type: 'number', length: 5 },
-        ],
+        segments: segmentsForScope(
+            rowsOf([
+                ...(reference?.default_prefix
+                    ? [
+                          {
+                              type: 'constant' as const,
+                              value: reference.default_prefix,
+                          },
+                      ]
+                    : []),
+                { type: 'number', length: 5 },
+            ]),
+            scope,
+        ),
     };
 }
 
@@ -172,7 +199,11 @@ function storedDraft(stored: Stored): Draft {
     const value = (id: string | null) =>
         id === null
             ? null
-            : { id, name: stored.scope_value_name ?? id, code: null };
+            : {
+                  id,
+                  name: stored.scope_value_name ?? id,
+                  code: stored.scope_code,
+              };
     return {
         reference_id: stored.reference_id,
         scope_type: stored.scope_type,
@@ -199,65 +230,8 @@ function storedDraft(stored: Stored): Draft {
         maximum_number:
             stored.maximum_number === null ? '' : String(stored.maximum_number),
         next_number: String(stored.next_number),
-        segments: stored.segments,
+        segments: rowsOf(stored.segments),
     };
-}
-
-// Pratinjau nomor pertama dan terakhir, seperti preview CoreERP: bagian yang baru diketahui saat terbit ditulis
-// sebagai nama bagiannya.
-function preview(segments: Segment[], number: number): string {
-    return segments
-        .map((segment) => {
-            switch (segment.type) {
-                case 'constant':
-                    return segment.value;
-                case 'number':
-                    return String(number).padStart(segment.length, '0');
-                case 'year':
-                    return String(new Date().getFullYear());
-                case 'scope':
-                    return '[kode organisasi]';
-                case 'fiscal_year':
-                    return '[tahun fiskal]';
-                case 'fiscal_period':
-                    return '[periode]';
-                case 'context':
-                    return `[${segment.name ?? segment.value}]`;
-                default: {
-                    const exhaustive: never = segment;
-                    return exhaustive;
-                }
-            }
-        })
-        .join('');
-}
-
-function newSegment(type: SegmentType, reference?: Reference): Segment {
-    switch (type) {
-        case 'constant':
-            return { type, value: '' };
-        case 'number':
-            return { type, length: 5 };
-        case 'fiscal_period':
-            return { type, length: 2 };
-        case 'context': {
-            const field = reference?.context_fields[0];
-            return {
-                type,
-                value: field?.value ?? '',
-                length: field?.length ?? 10,
-                ...(field?.name ? { name: field.name } : {}),
-            };
-        }
-        case 'year':
-        case 'scope':
-        case 'fiscal_year':
-            return { type };
-        default: {
-            const exhaustive: never = type;
-            return exhaustive;
-        }
-    }
 }
 
 const numberOrNull = (text: string) =>
@@ -276,8 +250,8 @@ function ScopeValueLookup({
     legalEntityId?: string;
     value: ScopeValue | null;
     onChange: (value: ScopeValue) => void;
-    portalContainer: React.RefObject<HTMLDivElement | null>;
-}) {
+    portalContainer: RefObject<HTMLDivElement | null>;
+}): ReactNode {
     const loader = useCallback<LookupLoader<ScopeValue>>(
         async ({ query, cursor, signal }) => {
             const { body } = await api.numberSequenceScopeValues(
@@ -305,7 +279,9 @@ function ScopeValueLookup({
             onValueChange={onChange}
             loadItems={loader}
             getItemValue={(item) => item.id}
-            getItemLabel={(item) => item.name}
+            getItemLabel={(item) =>
+                item.code ? `${item.code} · ${item.name}` : item.name
+            }
             columns={scopeValueColumns}
             portalContainer={portalContainer}
             showDetails={false}
@@ -313,307 +289,80 @@ function ScopeValueLookup({
     );
 }
 
-function SegmentEditor({
-    segments,
-    onChange,
-    reference,
-    editable,
+// References F&O menampilkan jenis nomor yang memakai sequence ini. Di sini satu sequence milik satu jenis nomor,
+// jadi yang berguna adalah kebalikannya: pengaturan lain untuk jenis nomor yang sama, satu per nilai scope.
+function SiblingSequences({
+    referenceId,
+    currentId,
+    onOpen,
 }: {
-    segments: Segment[];
-    onChange: (segments: Segment[]) => void;
-    reference: Reference | undefined;
-    editable: boolean;
-}) {
-    const update = (index: number, segment: Segment) =>
-        onChange(
-            segments.map((current, position) =>
-                position === index ? segment : current,
-            ),
-        );
-    const move = (index: number, offset: number) => {
-        const next = [...segments];
-        const [segment] = next.splice(index, 1);
-        if (segment) next.splice(index + offset, 0, segment);
-        onChange(next);
-    };
-    const types = segmentTypes.filter(
-        (type) =>
-            type !== 'context' || Boolean(reference?.context_fields.length),
-    );
-    return (
-        <div className="flex flex-col gap-3">
-            {segments.map((segment, index) => (
-                <div
-                    key={index}
-                    className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                >
-                    <RecordEditControl label={`Jenis bagian ${index + 1}`}>
-                        <Select
-                            label={`Bagian ${index + 1}`}
-                            items={types.map((type) => ({
-                                value: type,
-                                label: segmentLabels[type],
-                            }))}
-                            value={segment.type}
-                            onValueChange={(value) => {
-                                const type = types.find(
-                                    (item) => item === value,
-                                );
-                                if (editable && type)
-                                    update(index, newSegment(type, reference));
-                            }}
-                        />
-                    </RecordEditControl>
-                    {segment.type === 'constant' && (
-                        <Input
-                            label="Teks"
-                            value={segment.value}
-                            readOnly={!editable}
-                            maxLength={20}
-                            onChange={(event) =>
-                                update(index, {
-                                    ...segment,
-                                    value: event.target.value,
-                                })
-                            }
-                        />
-                    )}
-                    {(segment.type === 'number' ||
-                        segment.type === 'fiscal_period') && (
-                        <Input
-                            label="Jumlah digit"
-                            inputMode="numeric"
-                            value={String(segment.length ?? '')}
-                            readOnly={!editable}
-                            onChange={(event) =>
-                                update(index, {
-                                    ...segment,
-                                    length: Number(event.target.value) || 0,
-                                })
-                            }
-                        />
-                    )}
-                    {segment.type === 'context' && (
-                        <RecordEditControl label="Data">
-                            <Select
-                                label="Data"
-                                items={(reference?.context_fields ?? []).map(
-                                    (field) => ({
-                                        value: field.value,
-                                        label: field.name ?? field.value,
-                                    }),
-                                )}
-                                value={segment.value}
-                                onValueChange={(value) => {
-                                    const field =
-                                        reference?.context_fields.find(
-                                            (item) => item.value === value,
-                                        );
-                                    if (editable && field)
-                                        update(index, {
-                                            type: 'context',
-                                            value: field.value,
-                                            length: field.length,
-                                            ...(field.name
-                                                ? { name: field.name }
-                                                : {}),
-                                        });
-                                }}
-                            />
-                        </RecordEditControl>
-                    )}
-                    {(segment.type === 'year' ||
-                        segment.type === 'scope' ||
-                        segment.type === 'fiscal_year') && <span />}
-                    {editable && (
-                        <div className="flex items-center gap-1">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Naikkan bagian ${index + 1}`}
-                                disabled={index === 0}
-                                onClick={() => move(index, -1)}
-                            >
-                                <ArrowUp />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Turunkan bagian ${index + 1}`}
-                                disabled={index === segments.length - 1}
-                                onClick={() => move(index, 1)}
-                            >
-                                <ArrowDown />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Hapus bagian ${index + 1}`}
-                                disabled={segments.length === 1}
-                                onClick={() =>
-                                    onChange(
-                                        segments.filter(
-                                            (_, position) => position !== index,
-                                        ),
-                                    )
-                                }
-                            >
-                                <Trash2 />
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            ))}
-            {editable && segments.length < 10 && (
-                <div>
-                    <ActionButton
-                        action="add"
-                        type="button"
-                        onClick={() =>
-                            onChange([...segments, newSegment('constant')])
-                        }
-                    />
-                </div>
-            )}
-        </div>
-    );
-}
-
-function StatusList({
-    sequenceId,
-    canManage,
-}: {
-    sequenceId: string;
-    canManage: boolean;
-}) {
-    const [busy, setBusy] = useState(false);
-    const { confirm, confirmation } = useConfirmation();
+    referenceId: string;
+    currentId: string | null;
+    onOpen: ((id: string) => void) | undefined;
+}): ReactNode {
     const list = useQuery({
-        queryKey: ['number-sequence-status-list', sequenceId],
+        queryKey: ['number-sequence-siblings', referenceId],
         queryFn: async () =>
             (
-                await api.numberSequenceStatusList({
-                    params: { id: sequenceId },
+                await api.numberSequenceList({
+                    query: { reference_id: referenceId, per_page: 100 },
                 })
             ).body.data,
+        enabled: referenceId !== '',
     });
-    const rows = list.data ?? [];
-    const expired = rows.filter((row) => row.expired).length;
-    const cleanup = async () => {
-        const confirmed = await confirm({
-            title: 'Kembalikan nomor yang tertahan?',
-            description:
-                'Nomor yang dipesan lebih dari 15 menit lalu dan tidak pernah dipakai dokumen dikembalikan, lalu dipakai lagi oleh dokumen berikutnya. Pesanan yang masih berlaku tidak disentuh.',
-            confirmLabel: 'Kembalikan',
-        });
-        if (!confirmed) return;
-        setBusy(true);
-        try {
-            const { body } = await api.numberSequenceCleanup({
-                params: { id: sequenceId },
-                body: {},
-            });
-            toast.success(
-                body.data.released
-                    ? `${body.data.released} nomor dikembalikan.`
-                    : 'Tidak ada nomor tertahan yang perlu dikembalikan.',
-            );
-            await list.refetch();
-        } catch (caught) {
-            toast.error(errorText(caught, 'Nomor belum dikembalikan.'));
-        } finally {
-            setBusy(false);
-        }
-    };
+    const rows = (list.data ?? []).filter((row) => row.id !== currentId);
+    if (list.isError)
+        return (
+            <p className="text-sm text-destructive">
+                {errorText(list.error, 'Pengaturan lain belum bisa dimuat.')}
+            </p>
+        );
     return (
-        <div className="flex flex-col gap-3">
-            {canManage && (
-                <div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        disabled={busy || expired === 0}
-                        onClick={() => void cleanup()}
-                    >
-                        Bersihkan manual
-                    </Button>
-                </div>
-            )}
-            {list.isError ? (
-                <p className="text-sm text-destructive">
-                    {errorText(list.error, 'Status nomor belum bisa dimuat.')}{' '}
-                    <Button
-                        type="button"
-                        variant="link"
-                        onClick={() => void list.refetch()}
-                    >
-                        Coba lagi
-                    </Button>
-                </p>
-            ) : (
-                <DataTable
-                    data={rows}
-                    getRowKey={(row) => row.id}
-                    scrollMode="inline"
-                    emptyMessage={
-                        list.isPending
-                            ? 'Memuat nomor yang sedang dipesan...'
-                            : 'Tidak ada nomor yang sedang dipesan.'
-                    }
-                    columns={[
-                        {
-                            id: 'number',
-                            header: 'Nomor',
-                            cell: (row) => (
-                                <DataTableText>{row.number}</DataTableText>
-                            ),
-                        },
-                        {
-                            id: 'reserved_at',
-                            header: 'Dipesan',
-                            cell: (row) => (
-                                <DataTableText>
-                                    {row.reserved_at
-                                        ? new Date(
-                                              row.reserved_at,
-                                          ).toLocaleString('id-ID')
-                                        : '-'}
-                                </DataTableText>
-                            ),
-                        },
-                        {
-                            id: 'expires_at',
-                            header: 'Berlaku sampai',
-                            cell: (row) => (
-                                <DataTableText>
-                                    {row.expires_at
-                                        ? new Date(
-                                              row.expires_at,
-                                          ).toLocaleString('id-ID')
-                                        : '-'}
-                                </DataTableText>
-                            ),
-                        },
-                        {
-                            id: 'state',
-                            header: 'Keadaan',
-                            cell: (row) =>
-                                row.expired ? (
-                                    <Badge variant="destructive">
-                                        Tertahan
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="secondary">Dipesan</Badge>
-                                ),
-                        },
-                    ]}
-                />
-            )}
-            {confirmation}
-        </div>
+        <DataTable
+            data={rows}
+            getRowKey={(row) => row.id}
+            getRowLabel={(row) => appliesTo(row)}
+            scrollMode="inline"
+            showRowNumbers={false}
+            onRowClick={onOpen ? (row) => onOpen(row.id) : undefined}
+            emptyMessage={
+                list.isPending
+                    ? 'Memuat pengaturan lain...'
+                    : 'Belum ada pengaturan lain untuk jenis nomor ini.'
+            }
+            columns={[
+                {
+                    id: 'scope',
+                    header: 'Scope',
+                    cell: (row) => (
+                        <DataTableText>
+                            {scopeLabels[row.scope_type]}
+                        </DataTableText>
+                    ),
+                },
+                {
+                    id: 'applies',
+                    header: 'Berlaku untuk',
+                    cell: (row) => (
+                        <DataTableText>{appliesTo(row)}</DataTableText>
+                    ),
+                },
+                {
+                    id: 'format',
+                    header: 'Format',
+                    cell: (row) => <DataTableText>{row.format}</DataTableText>,
+                },
+                {
+                    id: 'status',
+                    header: 'Status',
+                    cell: (row) => (
+                        <DataTableText>
+                            {statusLabels[row.status]}
+                        </DataTableText>
+                    ),
+                },
+            ]}
+        />
     );
 }
 
@@ -622,11 +371,17 @@ export function NumberSequenceCard({
     metadata,
     onClose,
     onSaved,
+    onOpenSequence,
+    onStatusList,
+    onCleanup,
 }: {
     sequenceId: string | null;
     metadata: Metadata;
     onClose: () => void;
     onSaved: (stored: Stored) => void;
+    onOpenSequence: (id: string) => void;
+    onStatusList: (stored: Stored) => void;
+    onCleanup: (stored: Stored) => void;
 }): ReactNode {
     const creating = sequenceId === null;
     const contentRef = useRef<HTMLDivElement>(null);
@@ -686,7 +441,7 @@ export function NumberSequenceCard({
             preallocation_quantity: Number(form.preallocation_quantity),
             minimum_number: Number(form.minimum_number),
             maximum_number: numberOrNull(form.maximum_number),
-            segments: form.segments,
+            segments: form.segments.map((row) => row.segment),
         };
         try {
             let saved: Stored;
@@ -722,6 +477,9 @@ export function NumberSequenceCard({
             toast.success('Pengaturan nomor disimpan.');
             // Halaman memasang ulang kartu dalam mode baca dengan data ini, jadi tidak ada state edit yang tersisa.
             queryClient.setQueryData(['number-sequence', saved.id], saved);
+            void queryClient.invalidateQueries({
+                queryKey: ['number-sequence-siblings', saved.reference_id],
+            });
             onSaved(saved);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
@@ -740,6 +498,49 @@ export function NumberSequenceCard({
     const editable = editing && metadata.canManage;
     const formatLocked = !creating && (record?.used ?? false);
     const maximum = numberOrNull(form?.maximum_number ?? '');
+    const scopeValue =
+        form?.scope_type === 'operating_unit'
+            ? form.operating_unit
+            : (form?.legal_entity ?? null);
+    const scopeCode = scopeValue?.code ?? null;
+    const fiscal =
+        form?.scope_type === 'legal_entity_fiscal_period' ||
+        (form?.scope_type !== 'tenant' &&
+            Boolean(form?.reset_period.startsWith('fiscal')));
+    const segments = form?.segments.map((row) => row.segment) ?? [];
+    const scopeSummary = form
+        ? `${scopeLabels[form.scope_type]}${scopeValue ? ` · ${scopeValue.name}` : ''}${form.fiscal_period ? ` · ${form.fiscal_period.name}` : ''}`
+        : '';
+    const recordTitle = reference
+        ? `${reference.name}${record ? ` · ${appliesTo(record)}` : ''}`
+        : 'Pengaturan nomor baru';
+
+    // Grup Administrasi F&O di atas kartu tersimpan: Status list dan Bersihkan manual.
+    const administration =
+        record && !editing ? (
+            <>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onStatusList(record)}
+                >
+                    <ListChecks aria-hidden="true" />
+                    Status list
+                </Button>
+                {metadata.canManage && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onCleanup(record)}
+                    >
+                        <Eraser aria-hidden="true" />
+                        Bersihkan manual
+                    </Button>
+                )}
+            </>
+        ) : undefined;
 
     return (
         <PageDialog
@@ -751,13 +552,10 @@ export function NumberSequenceCard({
             <PageDialogContent
                 ref={contentRef}
                 title="Nomor dokumen"
-                recordTitle={
-                    reference
-                        ? `${reference.name}${record?.scope_value_name ? ` · ${record.scope_value_name}` : ''}`
-                        : 'Pengaturan nomor baru'
-                }
+                recordTitle={recordTitle}
                 editing={editing}
                 busy={busy}
+                secondaryNavigation={administration}
                 onEdit={
                     !creating && metadata.canManage && !editing
                         ? () => setEditing(true)
@@ -822,176 +620,250 @@ export function NumberSequenceCard({
                             >
                                 <CollapsibleSectionGroup
                                     defaultValue={[
+                                        'identification',
                                         'scope',
                                         'segments',
+                                        'references',
                                         'general',
-                                        'user-changes',
                                         'performance',
-                                        'status-list',
                                     ]}
                                 >
                                     <CollapsibleSection
-                                        value="scope"
-                                        title="Scope"
-                                        summary={`${scopeLabels[form.scope_type]}${record?.scope_value_name ? ` · ${record.scope_value_name}` : ''}`}
+                                        value="identification"
+                                        title="Identifikasi"
+                                        summary={
+                                            reference
+                                                ? `${reference.name} · ${reference.area_name}`
+                                                : ''
+                                        }
                                     >
                                         <FormGrid>
                                             {creating ? (
-                                                <>
-                                                    <FormControl
-                                                        error={error(
-                                                            'reference_id',
-                                                        )}
-                                                    >
-                                                        <Select
-                                                            label="Jenis nomor"
-                                                            required
-                                                            portalContainer={
-                                                                contentRef
-                                                            }
-                                                            items={metadata.references.map(
-                                                                (item) => ({
-                                                                    value: item.id,
-                                                                    label: `${item.name} (${item.area_name})`,
-                                                                }),
-                                                            )}
-                                                            value={
-                                                                form.reference_id
-                                                            }
-                                                            onValueChange={(
-                                                                value,
-                                                            ) => {
-                                                                const next =
-                                                                    metadata.references.find(
-                                                                        (
-                                                                            item,
-                                                                        ) =>
-                                                                            item.id ===
-                                                                            value,
-                                                                    );
-                                                                if (next)
-                                                                    setDraft(
-                                                                        emptyDraft(
-                                                                            next,
-                                                                        ),
-                                                                    );
-                                                            }}
-                                                        />
-                                                    </FormControl>
-                                                    <FormControl
-                                                        error={error(
-                                                            'scope_type',
-                                                        )}
-                                                        hint="Organisasi yang memakai pengaturan ini. Satu jenis nomor boleh punya pengaturan sendiri untuk setiap perusahaan, unit, atau periode fiskal."
-                                                    >
-                                                        <Select
-                                                            label="Scope"
-                                                            required
-                                                            portalContainer={
-                                                                contentRef
-                                                            }
-                                                            items={scopeTypes
-                                                                .filter(
-                                                                    (type) =>
-                                                                        reference?.allowed_scopes.includes(
-                                                                            type ===
-                                                                                'legal_entity_fiscal_period'
-                                                                                ? 'legal_entity'
-                                                                                : type,
-                                                                        ),
-                                                                )
-                                                                .map(
-                                                                    (type) => ({
-                                                                        value: type,
-                                                                        label: scopeLabels[
-                                                                            type
-                                                                        ],
-                                                                    }),
-                                                                )}
-                                                            value={
-                                                                form.scope_type
-                                                            }
-                                                            onValueChange={(
-                                                                value,
-                                                            ) => {
-                                                                const type =
-                                                                    scopeTypes.find(
-                                                                        (
-                                                                            item,
-                                                                        ) =>
-                                                                            item ===
-                                                                            value,
-                                                                    );
-                                                                if (type)
-                                                                    setDraft({
-                                                                        ...form,
-                                                                        scope_type:
-                                                                            type,
-                                                                        legal_entity:
-                                                                            null,
-                                                                        operating_unit:
-                                                                            null,
-                                                                        fiscal_period:
-                                                                            null,
-                                                                        reset_period:
-                                                                            type ===
-                                                                            'legal_entity_fiscal_period'
-                                                                                ? 'never'
-                                                                                : form.reset_period,
-                                                                    });
-                                                            }}
-                                                        />
-                                                    </FormControl>
-                                                    {(form.scope_type ===
-                                                        'legal_entity' ||
-                                                        form.scope_type ===
-                                                            'legal_entity_fiscal_period') && (
-                                                        <FormControl
-                                                            error={error(
-                                                                'legal_entity_id',
-                                                            )}
-                                                        >
-                                                            <ScopeValueLookup
-                                                                label="Perusahaan"
-                                                                kind="legal_entity"
-                                                                value={
-                                                                    form.legal_entity
-                                                                }
-                                                                onChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    setDraft({
-                                                                        ...form,
-                                                                        legal_entity:
-                                                                            value,
-                                                                        fiscal_period:
-                                                                            null,
-                                                                    })
-                                                                }
-                                                                portalContainer={
-                                                                    contentRef
-                                                                }
-                                                            />
-                                                        </FormControl>
+                                                <FormControl
+                                                    error={error(
+                                                        'reference_id',
                                                     )}
-                                                    {form.scope_type ===
-                                                        'operating_unit' && (
+                                                    hint="Dokumen atau master yang diberi nomor. Satu jenis nomor boleh punya pengaturan sendiri untuk setiap perusahaan, operating unit, atau periode fiskal."
+                                                >
+                                                    <Select
+                                                        label="Jenis nomor"
+                                                        searchPlaceholder="Cari jenis nomor"
+                                                        emptyMessage="Jenis nomor tidak ditemukan."
+                                                        required
+                                                        portalContainer={
+                                                            contentRef
+                                                        }
+                                                        items={metadata.references.map(
+                                                            (item) => ({
+                                                                value: item.id,
+                                                                label: item.name,
+                                                            }),
+                                                        )}
+                                                        value={
+                                                            form.reference_id
+                                                        }
+                                                        onValueChange={(
+                                                            value,
+                                                        ) => {
+                                                            const next =
+                                                                metadata.references.find(
+                                                                    (item) =>
+                                                                        item.id ===
+                                                                        value,
+                                                                );
+                                                            if (next)
+                                                                setDraft(
+                                                                    emptyDraft(
+                                                                        next,
+                                                                    ),
+                                                                );
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                            ) : (
+                                                <FormControl>
+                                                    <Input
+                                                        label="Jenis nomor"
+                                                        readOnly
+                                                        value={
+                                                            reference?.name ??
+                                                            record?.reference_name ??
+                                                            ''
+                                                        }
+                                                    />
+                                                </FormControl>
+                                            )}
+                                            <FormControl>
+                                                <Input
+                                                    label="Area"
+                                                    readOnly
+                                                    value={
+                                                        reference?.area_name ??
+                                                        record?.area_name ??
+                                                        ''
+                                                    }
+                                                />
+                                            </FormControl>
+                                        </FormGrid>
+                                    </CollapsibleSection>
+                                    <CollapsibleSection
+                                        value="scope"
+                                        title="Scope"
+                                        summary={scopeSummary}
+                                    >
+                                        {creating ? (
+                                            <FormGrid>
+                                                <FormControl
+                                                    error={error('scope_type')}
+                                                    hint="Shared memakai satu urutan nomor untuk semua perusahaan. Perusahaan, operating unit, atau periode fiskal memberi urutan nomor sendiri untuk organisasi yang dipilih."
+                                                >
+                                                    <Select
+                                                        label="Scope"
+                                                        searchPlaceholder="Cari scope"
+                                                        required
+                                                        portalContainer={
+                                                            contentRef
+                                                        }
+                                                        items={scopeTypes
+                                                            .filter((type) =>
+                                                                reference?.allowed_scopes.includes(
+                                                                    type ===
+                                                                        'legal_entity_fiscal_period'
+                                                                        ? 'legal_entity'
+                                                                        : type,
+                                                                ),
+                                                            )
+                                                            .map((type) => ({
+                                                                value: type,
+                                                                label: scopeLabels[
+                                                                    type
+                                                                ],
+                                                            }))}
+                                                        value={form.scope_type}
+                                                        onValueChange={(
+                                                            value,
+                                                        ) => {
+                                                            const type =
+                                                                scopeTypes.find(
+                                                                    (item) =>
+                                                                        item ===
+                                                                        value,
+                                                                );
+                                                            if (type)
+                                                                setDraft({
+                                                                    ...form,
+                                                                    scope_type:
+                                                                        type,
+                                                                    legal_entity:
+                                                                        null,
+                                                                    operating_unit:
+                                                                        null,
+                                                                    fiscal_period:
+                                                                        null,
+                                                                    reset_period:
+                                                                        type ===
+                                                                            'legal_entity_fiscal_period' ||
+                                                                        type ===
+                                                                            'tenant'
+                                                                            ? form.reset_period.startsWith(
+                                                                                  'fiscal',
+                                                                              )
+                                                                                ? 'never'
+                                                                                : form.reset_period
+                                                                            : form.reset_period,
+                                                                    segments:
+                                                                        segmentsForScope(
+                                                                            form.segments,
+                                                                            type,
+                                                                        ),
+                                                                });
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                {(form.scope_type ===
+                                                    'legal_entity' ||
+                                                    form.scope_type ===
+                                                        'legal_entity_fiscal_period') && (
+                                                    <FormControl
+                                                        error={error(
+                                                            'legal_entity_id',
+                                                        )}
+                                                    >
+                                                        <ScopeValueLookup
+                                                            label="Perusahaan"
+                                                            kind="legal_entity"
+                                                            value={
+                                                                form.legal_entity
+                                                            }
+                                                            onChange={(value) =>
+                                                                setDraft({
+                                                                    ...form,
+                                                                    legal_entity:
+                                                                        value,
+                                                                    fiscal_period:
+                                                                        null,
+                                                                })
+                                                            }
+                                                            portalContainer={
+                                                                contentRef
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                )}
+                                                {form.scope_type ===
+                                                    'operating_unit' && (
+                                                    <FormControl
+                                                        error={error(
+                                                            'operating_unit_id',
+                                                        )}
+                                                    >
+                                                        <ScopeValueLookup
+                                                            label="Operating unit"
+                                                            kind="operating_unit"
+                                                            value={
+                                                                form.operating_unit
+                                                            }
+                                                            onChange={(value) =>
+                                                                set(
+                                                                    'operating_unit',
+                                                                    value,
+                                                                )
+                                                            }
+                                                            portalContainer={
+                                                                contentRef
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                )}
+                                                {form.scope_type ===
+                                                    'legal_entity_fiscal_period' &&
+                                                    form.legal_entity && (
                                                         <FormControl
                                                             error={error(
-                                                                'operating_unit_id',
+                                                                'fiscal_period_id',
                                                             )}
                                                         >
                                                             <ScopeValueLookup
-                                                                label="Unit"
-                                                                kind="operating_unit"
+                                                                key={
+                                                                    form
+                                                                        .legal_entity
+                                                                        .id
+                                                                }
+                                                                label="Periode fiskal"
+                                                                kind="fiscal_period"
+                                                                legalEntityId={
+                                                                    form
+                                                                        .legal_entity
+                                                                        .id
+                                                                }
                                                                 value={
-                                                                    form.operating_unit
+                                                                    form.fiscal_period
                                                                 }
                                                                 onChange={(
                                                                     value,
                                                                 ) =>
                                                                     set(
-                                                                        'operating_unit',
+                                                                        'fiscal_period',
                                                                         value,
                                                                     )
                                                                 }
@@ -1001,413 +873,547 @@ export function NumberSequenceCard({
                                                             />
                                                         </FormControl>
                                                     )}
-                                                    {form.scope_type ===
-                                                        'legal_entity_fiscal_period' &&
-                                                        form.legal_entity && (
-                                                            <FormControl
-                                                                error={error(
-                                                                    'fiscal_period_id',
-                                                                )}
-                                                            >
-                                                                <ScopeValueLookup
-                                                                    key={
-                                                                        form
-                                                                            .legal_entity
-                                                                            .id
-                                                                    }
-                                                                    label="Periode fiskal"
-                                                                    kind="fiscal_period"
-                                                                    legalEntityId={
-                                                                        form
-                                                                            .legal_entity
-                                                                            .id
-                                                                    }
-                                                                    value={
-                                                                        form.fiscal_period
-                                                                    }
-                                                                    onChange={(
-                                                                        value,
-                                                                    ) =>
-                                                                        set(
-                                                                            'fiscal_period',
-                                                                            value,
-                                                                        )
-                                                                    }
-                                                                    portalContainer={
-                                                                        contentRef
-                                                                    }
-                                                                />
-                                                            </FormControl>
-                                                        )}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <FormControl>
-                                                        <Input
-                                                            label="Jenis nomor"
-                                                            readOnly
-                                                            value={`${record?.reference_name ?? ''} (${record?.area_name ?? ''})`}
-                                                        />
-                                                    </FormControl>
+                                            </FormGrid>
+                                        ) : (
+                                            <>
+                                                <FormGrid>
                                                     <FormControl>
                                                         <Input
                                                             label="Scope"
                                                             readOnly
-                                                            value={`${scopeLabels[form.scope_type]}${record?.scope_value_name ? ` · ${record.scope_value_name}` : ''}${record?.fiscal_period_name ? ` · ${record.fiscal_period_name}` : ''}`}
+                                                            value={
+                                                                scopeLabels[
+                                                                    form
+                                                                        .scope_type
+                                                                ]
+                                                            }
                                                         />
                                                     </FormControl>
-                                                </>
-                                            )}
-                                        </FormGrid>
-                                        {!creating && (
-                                            <FieldDescription className="mt-2">
-                                                Scope dan nilainya tidak bisa
-                                                diubah. Untuk kebijakan baru,
-                                                buat pengaturan baru lalu
-                                                hentikan yang ini; nomor yang
-                                                sudah terbit tetap utuh.
-                                            </FieldDescription>
+                                                    {scopeValue && (
+                                                        <FormControl>
+                                                            <Input
+                                                                label={scopeSegmentLabel(
+                                                                    form.scope_type,
+                                                                )}
+                                                                readOnly
+                                                                value={
+                                                                    scopeCode
+                                                                        ? `${scopeCode} · ${scopeValue.name}`
+                                                                        : scopeValue.name
+                                                                }
+                                                            />
+                                                        </FormControl>
+                                                    )}
+                                                    {form.fiscal_period && (
+                                                        <FormControl>
+                                                            <Input
+                                                                label="Periode fiskal"
+                                                                readOnly
+                                                                value={
+                                                                    form
+                                                                        .fiscal_period
+                                                                        .name
+                                                                }
+                                                            />
+                                                        </FormControl>
+                                                    )}
+                                                </FormGrid>
+                                                <FieldDescription className="mt-2">
+                                                    Scope dan organisasinya
+                                                    tidak bisa diubah setelah
+                                                    disimpan. Untuk aturan baru,
+                                                    buat pengaturan baru lalu
+                                                    hentikan yang ini; nomor
+                                                    yang sudah terbit tetap
+                                                    utuh.
+                                                </FieldDescription>
+                                            </>
                                         )}
                                     </CollapsibleSection>
                                     <CollapsibleSection
                                         value="segments"
-                                        title="Format"
-                                        summary={`${preview(form.segments, Number(form.minimum_number) || 0)} – ${preview(form.segments, maximum ?? 0)}`}
+                                        title="Segmen"
+                                        summary={formatOf(
+                                            segments,
+                                            form.scope_type,
+                                            scopeCode,
+                                        )}
                                     >
-                                        <p
-                                            className="mb-3 text-sm"
-                                            aria-live="polite"
-                                        >
-                                            Nomor pertama dan terakhir:{' '}
-                                            <strong>
-                                                {preview(
-                                                    form.segments,
-                                                    Number(
-                                                        form.minimum_number,
-                                                    ) || 0,
-                                                )}
-                                            </strong>{' '}
-                                            sampai{' '}
-                                            <strong>
-                                                {maximum === null
-                                                    ? 'tanpa batas'
-                                                    : preview(
-                                                          form.segments,
-                                                          maximum,
-                                                      )}
-                                            </strong>
-                                        </p>
-                                        {formatLocked && (
-                                            <FieldDescription className="mb-3">
-                                                Format terkunci karena nomor
-                                                sudah diterbitkan.
-                                            </FieldDescription>
-                                        )}
-                                        {error('segments') && (
+                                        <div className="flex flex-col gap-3">
+                                            {formatLocked && (
+                                                <FieldDescription>
+                                                    Segmen terkunci karena nomor
+                                                    sudah diterbitkan.
+                                                </FieldDescription>
+                                            )}
+                                            {error('segments') && (
+                                                <p
+                                                    className="text-sm text-destructive"
+                                                    data-error-field="segments"
+                                                >
+                                                    {error('segments')}
+                                                </p>
+                                            )}
+                                            <SegmentGrid
+                                                rows={form.segments}
+                                                onChange={(rows) =>
+                                                    set('segments', rows)
+                                                }
+                                                scope={form.scope_type}
+                                                scopeCode={scopeCode}
+                                                fiscal={fiscal}
+                                                reference={reference}
+                                                editable={
+                                                    editable && !formatLocked
+                                                }
+                                                portalContainer={contentRef}
+                                            />
+                                            <FormGrid>
+                                                <FormControl>
+                                                    <Input
+                                                        label="Format"
+                                                        readOnly
+                                                        editActivation={false}
+                                                        value={formatOf(
+                                                            segments,
+                                                            form.scope_type,
+                                                            scopeCode,
+                                                        )}
+                                                    />
+                                                </FormControl>
+                                            </FormGrid>
                                             <p
-                                                className="mb-3 text-sm text-destructive"
-                                                data-error-field="segments"
+                                                className="text-sm text-muted-foreground"
+                                                aria-live="polite"
                                             >
-                                                {error('segments')}
+                                                Nomor pertama{' '}
+                                                <strong className="text-foreground">
+                                                    {formatOf(
+                                                        segments,
+                                                        form.scope_type,
+                                                        scopeCode,
+                                                        Number(
+                                                            form.minimum_number,
+                                                        ) || 0,
+                                                    )}
+                                                </strong>
+                                                , nomor terakhir{' '}
+                                                <strong className="text-foreground">
+                                                    {maximum === null
+                                                        ? 'tanpa batas'
+                                                        : formatOf(
+                                                              segments,
+                                                              form.scope_type,
+                                                              scopeCode,
+                                                              maximum,
+                                                          )}
+                                                </strong>
+                                                .
                                             </p>
-                                        )}
-                                        <SegmentEditor
-                                            segments={form.segments}
-                                            onChange={(segments) =>
-                                                set('segments', segments)
+                                        </div>
+                                    </CollapsibleSection>
+                                    <CollapsibleSection
+                                        value="references"
+                                        title="Pengaturan lain untuk jenis nomor ini"
+                                    >
+                                        <SiblingSequences
+                                            referenceId={form.reference_id}
+                                            currentId={record?.id ?? null}
+                                            onOpen={
+                                                editing
+                                                    ? undefined
+                                                    : onOpenSequence
                                             }
-                                            reference={reference}
-                                            editable={editable && !formatLocked}
                                         />
                                     </CollapsibleSection>
                                     <CollapsibleSection
                                         value="general"
                                         title="Umum"
-                                        summary={`${statusLabels[form.status]} · ${form.is_continuous ? 'Berkelanjutan' : 'Tidak berkelanjutan'}`}
+                                        summary={`${statusLabels[form.status]} · ${form.is_continuous ? 'Berkelanjutan' : 'Boleh ada nomor terlewat'}`}
                                     >
-                                        <FormGrid>
-                                            <FormControl
-                                                error={error('status')}
-                                                hint="Dipakai: dokumen baru mengambil nomor dari pengaturan ini. Dihentikan: tidak lagi menerbitkan nomor; nomor yang sudah terbit tetap utuh."
-                                            >
-                                                <RecordEditControl label="Status">
-                                                    <Select
-                                                        label="Status"
-                                                        required
-                                                        portalContainer={
-                                                            contentRef
+                                        <div className="flex flex-col gap-4">
+                                            <FieldSet className="gap-0">
+                                                <FieldLegend variant="label">
+                                                    Penyiapan
+                                                </FieldLegend>
+                                                <FormGrid>
+                                                    <SwitchField
+                                                        id="sequence-in-use"
+                                                        label="Dipakai"
+                                                        checked={
+                                                            form.status !==
+                                                            'draft'
                                                         }
-                                                        items={statuses.map(
-                                                            (status) => ({
-                                                                value: status,
-                                                                label: statusLabels[
-                                                                    status
-                                                                ],
-                                                            }),
-                                                        )}
-                                                        value={form.status}
-                                                        onValueChange={(
-                                                            value,
-                                                        ) => {
-                                                            const status =
-                                                                statuses.find(
-                                                                    (item) =>
-                                                                        item ===
-                                                                        value,
-                                                                );
-                                                            if (status)
-                                                                set(
-                                                                    'status',
-                                                                    status,
-                                                                );
-                                                        }}
-                                                    />
-                                                </RecordEditControl>
-                                            </FormControl>
-                                            <FormControl
-                                                error={error('reset_period')}
-                                            >
-                                                <RecordEditControl label="Reset">
-                                                    <Select
-                                                        label="Mulai dari awal"
-                                                        required
-                                                        portalContainer={
-                                                            contentRef
-                                                        }
-                                                        items={resetPeriods.map(
-                                                            (period) => ({
-                                                                value: period,
-                                                                label: resetLabels[
-                                                                    period
-                                                                ],
-                                                            }),
-                                                        )}
-                                                        value={
-                                                            form.reset_period
-                                                        }
-                                                        onValueChange={(
-                                                            value,
-                                                        ) => {
-                                                            const period =
-                                                                resetPeriods.find(
-                                                                    (item) =>
-                                                                        item ===
-                                                                        value,
-                                                                );
-                                                            if (period)
-                                                                set(
-                                                                    'reset_period',
-                                                                    period,
-                                                                );
-                                                        }}
-                                                    />
-                                                </RecordEditControl>
-                                            </FormControl>
-                                            <FormControl
-                                                error={error('minimum_number')}
-                                            >
-                                                <Input
-                                                    label="Nomor terkecil"
-                                                    required
-                                                    inputMode="numeric"
-                                                    readOnly={!editable}
-                                                    value={form.minimum_number}
-                                                    onChange={(event) =>
-                                                        set(
-                                                            'minimum_number',
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                />
-                                            </FormControl>
-                                            <FormControl
-                                                error={error('maximum_number')}
-                                            >
-                                                <Input
-                                                    label="Nomor terbesar"
-                                                    inputMode="numeric"
-                                                    readOnly={!editable}
-                                                    value={form.maximum_number}
-                                                    onChange={(event) =>
-                                                        set(
-                                                            'maximum_number',
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                />
-                                            </FormControl>
-                                            {!creating && (
-                                                <FormControl
-                                                    error={error('next_number')}
-                                                    hint="Nomor berikutnya hanya boleh dinaikkan. Nomor berkelanjutan tidak bisa dilompati."
-                                                >
-                                                    <Input
-                                                        label="Nomor berikutnya"
-                                                        inputMode="numeric"
-                                                        readOnly={
-                                                            !editable ||
-                                                            form.is_continuous
-                                                        }
-                                                        value={form.next_number}
-                                                        onChange={(event) =>
+                                                        onChange={(value) =>
                                                             set(
-                                                                'next_number',
-                                                                event.target
-                                                                    .value,
+                                                                'status',
+                                                                value
+                                                                    ? 'active'
+                                                                    : 'draft',
                                                             )
                                                         }
+                                                        error={error('status')}
+                                                        hint="Dokumen baru mengambil nomor dari pengaturan yang dipakai dan tidak dihentikan."
                                                     />
-                                                </FormControl>
-                                            )}
-                                            <SwitchField
-                                                id="sequence-continuous"
-                                                label="Berkelanjutan (tanpa nomor yang terlewat)"
-                                                checked={form.is_continuous}
-                                                onChange={(value) =>
-                                                    set('is_continuous', value)
-                                                }
-                                                error={error('is_continuous')}
-                                                hint="Nomor dokumen yang batal disimpan dipakai lagi, jadi tidak ada nomor yang terlewat. Hanya untuk dokumen yang memang diaudit, karena lebih lambat. Mengubah pengaturan yang sudah dipakai menjadi berkelanjutan tidak membuat nomor lamanya tanpa celah."
-                                            />
-                                            <SwitchField
-                                                id="sequence-automatic"
-                                                label="Nomor dibuat otomatis"
-                                                checked={form.allow_automatic}
-                                                onChange={(value) =>
-                                                    set(
-                                                        'allow_automatic',
-                                                        value,
-                                                    )
-                                                }
-                                                error={error('allow_automatic')}
-                                            />
-                                            <SwitchField
-                                                id="sequence-manual"
-                                                label="Nomor boleh diketik sendiri (manual)"
-                                                checked={form.allow_manual}
-                                                onChange={(value) =>
-                                                    set('allow_manual', value)
-                                                }
-                                                error={error('allow_manual')}
-                                            />
-                                        </FormGrid>
-                                    </CollapsibleSection>
-                                    <CollapsibleSection
-                                        value="user-changes"
-                                        title="Izinkan pengguna mengubah nomor"
-                                        summary={
-                                            [
-                                                form.allow_lower_number
-                                                    ? 'Ke nomor lebih kecil'
-                                                    : null,
-                                                form.allow_higher_number
-                                                    ? 'Ke nomor lebih besar'
-                                                    : null,
-                                            ]
-                                                .filter(Boolean)
-                                                .join(' · ') || 'Tidak'
-                                        }
-                                    >
-                                        <FormGrid>
-                                            <SwitchField
-                                                id="sequence-lower"
-                                                label="Ke nomor yang lebih kecil"
-                                                checked={
-                                                    form.allow_lower_number
-                                                }
-                                                onChange={(value) =>
-                                                    set(
-                                                        'allow_lower_number',
-                                                        value,
-                                                    )
-                                                }
-                                                error={error(
-                                                    'allow_lower_number',
-                                                )}
-                                                hint="Pengguna boleh mengganti nomor otomatis dengan nomor yang lebih kecil dari nomor berikutnya, selama formatnya sama dan nomor itu belum pernah dipakai."
-                                            />
-                                            <SwitchField
-                                                id="sequence-higher"
-                                                label="Ke nomor yang lebih besar"
-                                                checked={
-                                                    form.allow_higher_number
-                                                }
-                                                onChange={(value) =>
-                                                    set(
-                                                        'allow_higher_number',
-                                                        value,
-                                                    )
-                                                }
-                                                error={error(
-                                                    'allow_higher_number',
-                                                )}
-                                                hint="Pengguna boleh mengganti nomor otomatis dengan nomor yang lebih besar dari nomor berikutnya. Nomor otomatis berikutnya melewati nomor itu."
-                                            />
-                                        </FormGrid>
+                                                    <SwitchField
+                                                        id="sequence-stopped"
+                                                        label="Dihentikan"
+                                                        checked={
+                                                            form.status ===
+                                                            'stopped'
+                                                        }
+                                                        onChange={(value) =>
+                                                            set(
+                                                                'status',
+                                                                value
+                                                                    ? 'stopped'
+                                                                    : 'active',
+                                                            )
+                                                        }
+                                                        hint="Pengaturan yang dihentikan tidak lagi menerbitkan nomor. Nomor yang sudah terbit tetap utuh."
+                                                    />
+                                                    <SwitchField
+                                                        id="sequence-manual"
+                                                        label="Manual"
+                                                        checked={
+                                                            form.allow_manual
+                                                        }
+                                                        onChange={(value) => {
+                                                            if (!editing)
+                                                                return;
+                                                            setDraft({
+                                                                ...form,
+                                                                allow_manual:
+                                                                    value,
+                                                                allow_automatic:
+                                                                    !value,
+                                                            });
+                                                        }}
+                                                        error={
+                                                            error(
+                                                                'allow_manual',
+                                                            ) ??
+                                                            error(
+                                                                'allow_automatic',
+                                                            )
+                                                        }
+                                                        hint="Pengguna mengetik nomornya sendiri saat membuat dokumen; tidak ada nomor otomatis."
+                                                    />
+                                                    <SwitchField
+                                                        id="sequence-continuous"
+                                                        label="Berkelanjutan"
+                                                        checked={
+                                                            form.is_continuous
+                                                        }
+                                                        onChange={(value) =>
+                                                            set(
+                                                                'is_continuous',
+                                                                value,
+                                                            )
+                                                        }
+                                                        error={error(
+                                                            'is_continuous',
+                                                        )}
+                                                        hint="Tidak ada nomor yang terlewat: nomor dokumen yang batal disimpan dipakai lagi. Hanya untuk dokumen yang memang diaudit, karena lebih lambat."
+                                                    />
+                                                </FormGrid>
+                                            </FieldSet>
+                                            <FieldSet className="gap-0">
+                                                <FieldLegend variant="label">
+                                                    Izinkan pengguna mengubah
+                                                    nomor
+                                                </FieldLegend>
+                                                <FormGrid>
+                                                    <SwitchField
+                                                        id="sequence-lower"
+                                                        label="Ke nomor lebih kecil"
+                                                        checked={
+                                                            form.allow_lower_number
+                                                        }
+                                                        onChange={(value) =>
+                                                            set(
+                                                                'allow_lower_number',
+                                                                value,
+                                                            )
+                                                        }
+                                                        error={error(
+                                                            'allow_lower_number',
+                                                        )}
+                                                        hint="Nomor otomatis boleh diganti dengan nomor yang lebih kecil dari nomor berikutnya, selama formatnya sama dan nomor itu belum pernah dipakai."
+                                                    />
+                                                    <SwitchField
+                                                        id="sequence-higher"
+                                                        label="Ke nomor lebih besar"
+                                                        checked={
+                                                            form.allow_higher_number
+                                                        }
+                                                        onChange={(value) =>
+                                                            set(
+                                                                'allow_higher_number',
+                                                                value,
+                                                            )
+                                                        }
+                                                        error={error(
+                                                            'allow_higher_number',
+                                                        )}
+                                                        hint="Nomor otomatis boleh diganti dengan nomor yang lebih besar. Nomor otomatis berikutnya melewati nomor itu."
+                                                    />
+                                                </FormGrid>
+                                            </FieldSet>
+                                            <FieldSet className="gap-0">
+                                                <FieldLegend variant="label">
+                                                    Alokasi nomor
+                                                </FieldLegend>
+                                                <FormGrid>
+                                                    <FormControl
+                                                        error={error(
+                                                            'minimum_number',
+                                                        )}
+                                                    >
+                                                        <Input
+                                                            label="Terkecil"
+                                                            required
+                                                            inputMode="numeric"
+                                                            readOnly={!editable}
+                                                            value={
+                                                                form.minimum_number
+                                                            }
+                                                            onChange={(event) =>
+                                                                set(
+                                                                    'minimum_number',
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                    <FormControl
+                                                        error={error(
+                                                            'maximum_number',
+                                                        )}
+                                                    >
+                                                        <Input
+                                                            label="Terbesar"
+                                                            inputMode="numeric"
+                                                            readOnly={!editable}
+                                                            value={
+                                                                form.maximum_number
+                                                            }
+                                                            onChange={(event) =>
+                                                                set(
+                                                                    'maximum_number',
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                    <FormControl
+                                                        error={error(
+                                                            'next_number',
+                                                        )}
+                                                        hint={
+                                                            creating
+                                                                ? 'Nomor berikutnya mulai dari nomor terkecil.'
+                                                                : 'Nomor berikutnya hanya boleh dinaikkan. Nomor berkelanjutan tidak bisa dilompati.'
+                                                        }
+                                                    >
+                                                        <Input
+                                                            label="Berikutnya"
+                                                            inputMode="numeric"
+                                                            readOnly={
+                                                                creating ||
+                                                                !editable ||
+                                                                form.is_continuous
+                                                            }
+                                                            value={
+                                                                creating
+                                                                    ? form.minimum_number
+                                                                    : form.next_number
+                                                            }
+                                                            onChange={(event) =>
+                                                                set(
+                                                                    'next_number',
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                    <FormControl
+                                                        error={error(
+                                                            'reset_period',
+                                                        )}
+                                                    >
+                                                        <RecordEditControl label="Reset setiap">
+                                                            <Select
+                                                                label="Reset setiap"
+                                                                searchPlaceholder="Cari"
+                                                                required
+                                                                portalContainer={
+                                                                    contentRef
+                                                                }
+                                                                items={resetPeriods
+                                                                    .filter(
+                                                                        (
+                                                                            period,
+                                                                        ) =>
+                                                                            !period.startsWith(
+                                                                                'fiscal',
+                                                                            ) ||
+                                                                            (form.scope_type !==
+                                                                                'tenant' &&
+                                                                                form.scope_type !==
+                                                                                    'legal_entity_fiscal_period'),
+                                                                    )
+                                                                    .map(
+                                                                        (
+                                                                            period,
+                                                                        ) => ({
+                                                                            value: period,
+                                                                            label: resetLabels[
+                                                                                period
+                                                                            ],
+                                                                        }),
+                                                                    )}
+                                                                value={
+                                                                    form.reset_period
+                                                                }
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) => {
+                                                                    const period =
+                                                                        resetPeriods.find(
+                                                                            (
+                                                                                item,
+                                                                            ) =>
+                                                                                item ===
+                                                                                value,
+                                                                        );
+                                                                    if (period)
+                                                                        set(
+                                                                            'reset_period',
+                                                                            period,
+                                                                        );
+                                                                }}
+                                                            />
+                                                        </RecordEditControl>
+                                                    </FormControl>
+                                                </FormGrid>
+                                            </FieldSet>
+                                        </div>
                                     </CollapsibleSection>
                                     <CollapsibleSection
                                         value="performance"
                                         title="Performa"
                                         summary={
                                             form.preallocation_enabled
-                                                ? `Ambil ${form.preallocation_quantity} nomor sekaligus`
-                                                : 'Satu per satu'
+                                                ? `Siapkan ${form.preallocation_quantity} nomor sekaligus`
+                                                : 'Nomor diambil satu per satu'
                                         }
                                     >
-                                        <FormGrid>
-                                            <SwitchField
-                                                id="sequence-preallocation"
-                                                label="Siapkan nomor sekaligus (preallocation)"
-                                                checked={
-                                                    form.preallocation_enabled
-                                                }
-                                                onChange={(value) =>
-                                                    set(
-                                                        'preallocation_enabled',
-                                                        value,
-                                                    )
-                                                }
-                                                error={error(
-                                                    'preallocation_enabled',
-                                                )}
-                                                hint="Nomor disiapkan dalam satu blok agar dokumen yang disimpan bersamaan tidak saling menunggu. Nomor blok yang tidak terpakai bisa terlewat pada pengaturan yang tidak berkelanjutan."
-                                            />
-                                            <FormControl
-                                                error={error(
-                                                    'preallocation_quantity',
-                                                )}
-                                            >
-                                                <Input
-                                                    label="Jumlah nomor per blok"
-                                                    inputMode="numeric"
-                                                    readOnly={
-                                                        !editable ||
-                                                        !form.preallocation_enabled
-                                                    }
-                                                    value={
-                                                        form.preallocation_quantity
-                                                    }
-                                                    onChange={(event) =>
-                                                        set(
+                                        <div className="flex flex-col gap-4">
+                                            <FieldDescription>
+                                                Nomor disiapkan per blok agar
+                                                dokumen yang disimpan bersamaan
+                                                tidak saling menunggu. Pada
+                                                pengaturan yang tidak
+                                                berkelanjutan, sisa blok yang
+                                                tidak terpakai bisa membuat
+                                                nomor terlewat.
+                                            </FieldDescription>
+                                            <FieldSet className="gap-0">
+                                                <FieldLegend variant="label">
+                                                    Siapkan nomor sekaligus
+                                                </FieldLegend>
+                                                <FormGrid>
+                                                    <SwitchField
+                                                        id="sequence-preallocation"
+                                                        label="Preallocation"
+                                                        checked={
+                                                            form.preallocation_enabled
+                                                        }
+                                                        onChange={(value) =>
+                                                            set(
+                                                                'preallocation_enabled',
+                                                                value,
+                                                            )
+                                                        }
+                                                        error={error(
+                                                            'preallocation_enabled',
+                                                        )}
+                                                    />
+                                                    <FormControl
+                                                        error={error(
                                                             'preallocation_quantity',
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                />
-                                            </FormControl>
-                                        </FormGrid>
+                                                        )}
+                                                    >
+                                                        <Input
+                                                            label="Jumlah nomor"
+                                                            inputMode="numeric"
+                                                            readOnly={
+                                                                !editable ||
+                                                                !form.preallocation_enabled
+                                                            }
+                                                            value={
+                                                                form.preallocation_quantity
+                                                            }
+                                                            onChange={(event) =>
+                                                                set(
+                                                                    'preallocation_quantity',
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                </FormGrid>
+                                            </FieldSet>
+                                            <FieldSet className="gap-0">
+                                                <FieldLegend variant="label">
+                                                    Nomor yang sudah disiapkan
+                                                </FieldLegend>
+                                                <FormGrid>
+                                                    <FormControl>
+                                                        <Input
+                                                            label="Berikutnya"
+                                                            readOnly
+                                                            editActivation={
+                                                                false
+                                                            }
+                                                            value={
+                                                                record?.allocated_next ===
+                                                                    null ||
+                                                                record === null
+                                                                    ? ''
+                                                                    : String(
+                                                                          record.allocated_next,
+                                                                      )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                    <FormControl>
+                                                        <Input
+                                                            label="Terbesar"
+                                                            readOnly
+                                                            editActivation={
+                                                                false
+                                                            }
+                                                            value={
+                                                                record?.allocated_last ===
+                                                                    null ||
+                                                                record === null
+                                                                    ? ''
+                                                                    : String(
+                                                                          record.allocated_last,
+                                                                      )
+                                                            }
+                                                        />
+                                                    </FormControl>
+                                                </FormGrid>
+                                            </FieldSet>
+                                        </div>
                                     </CollapsibleSection>
-                                    {record && (
-                                        <CollapsibleSection
-                                            value="status-list"
-                                            title="Nomor yang sedang dipesan"
-                                        >
-                                            <StatusList
-                                                sequenceId={record.id}
-                                                canManage={metadata.canManage}
-                                            />
-                                        </CollapsibleSection>
-                                    )}
                                 </CollapsibleSectionGroup>
                             </RecordEditBoundary>
                         </PageDialogBody>
@@ -1432,7 +1438,7 @@ function SwitchField({
     onChange: (value: boolean) => void;
     error?: string | undefined;
     hint?: string;
-}) {
+}): ReactNode {
     return (
         <FormControl error={error} hint={hint}>
             <RecordEditControl label={label}>
