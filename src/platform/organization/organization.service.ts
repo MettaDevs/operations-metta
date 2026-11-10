@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Workspace } from '../access/index.ts';
+import { checkDetails, PartyAddresses } from '../address-book/index.ts';
 import { Database, isoSql, nowSql } from '../database/index.ts';
 import {
     abort,
@@ -164,6 +165,11 @@ export class Organizations {
     async create(body: unknown) {
         this.requireManage();
         const data = createOrganizationSchema.parse(body);
+        const addresses = new PartyAddresses(this.db, this.workspace);
+        const details = checkDetails(
+            data.party_details,
+            await addresses.references(),
+        );
         const tenantId = this.workspace.tenantId;
         if (
             data.classification === 'legal_entity' &&
@@ -215,6 +221,12 @@ export class Organizations {
                         created_at: stamp,
                         updated_at: stamp,
                     });
+                // Party organisasi dibuat bersama alamat dan kontaknya, dalam transaksi yang sama.
+                if (details.locations.length || details.contacts.length)
+                    await addresses.saveDetails(
+                        await addresses.organizationParty(id),
+                        details,
+                    );
             });
         } catch (error) {
             // Dua permintaan yang lolos pemeriksaan di atas bersamaan: indeks unik yang memutuskan, dan transaksinya

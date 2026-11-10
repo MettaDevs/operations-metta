@@ -29,6 +29,7 @@ import {
     typedBody,
     type Context,
 } from './platform/http/index.ts';
+import { addressBookRoutes } from './platform/address-book/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
 import {
     loginInputSchema,
@@ -100,6 +101,7 @@ export const router = {
     ...shellRoutes(),
     ...organizationRoutes(),
     ...geographyRoutes(),
+    ...addressBookRoutes(),
     ...assetManagementRoutes(),
 };
 export type Router = typeof router;

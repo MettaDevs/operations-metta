@@ -131,13 +131,6 @@ const text = (value: unknown) => (typeof value === 'string' ? value : null);
 export const createOrganizationSchema = laravelBody
     .transform(withUnitNumber)
     .transform((input) => {
-        // Alamat dan kontak tersimpan sebagai party di buku alamat, yang belum pindah ke repo ini. Kirimannya
-        // ditolak supaya tidak hilang diam-diam.
-        if (input.party_details != null)
-            validation({
-                party_details:
-                    'Alamat dan kontak belum dapat disimpan bersama organisasi.',
-            });
         const legalEntity = input.classification === 'legal_entity';
         const operatingUnit = input.classification === 'operating_unit';
         failOn({
@@ -201,6 +194,8 @@ export const createOrganizationSchema = laravelBody
             operating_unit_number: legalEntity
                 ? null
                 : text(input.operating_unit_number),
+            // Alamat dan kontak organisasi baru, diperiksa buku alamat (PartyDetailData::details CoreERP).
+            party_details: input.party_details,
         };
     });
 
