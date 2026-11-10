@@ -53,6 +53,30 @@ if (!baseDomain) {
 }
 const port = process.env.PORT ?? '8000';
 const source = readMigrationSource(root);
+
+// Database runtime dev dibuat bila belum ada, supaya laptop baru cukup menjalankan satu perintah ini.
+const maintenance = postgres({
+    host: settings.DB_HOST,
+    port: settings.DB_PORT,
+    database: 'postgres',
+    username: settings.DB_USERNAME,
+    password: settings.DB_PASSWORD,
+    max: 1,
+    onnotice: () => {},
+});
+try {
+    const [exists] =
+        await maintenance`select 1 from pg_database where datname = ${settings.DB_DATABASE}`;
+    if (!exists) {
+        await maintenance.unsafe(
+            `create database "${settings.DB_DATABASE.replaceAll('"', '""')}"`,
+        );
+        console.log(`database ${settings.DB_DATABASE} dibuat`);
+    }
+} finally {
+    await maintenance.end();
+}
+
 const sql = postgres({
     host: settings.DB_HOST,
     port: settings.DB_PORT,
