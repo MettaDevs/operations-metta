@@ -59,7 +59,8 @@ export function AppSidebar({
             onKeyDown={(event) => {
                 if (
                     event.key === 'Escape' &&
-                    event.currentTarget.contains(event.target as Node)
+                    event.target instanceof Node &&
+                    event.currentTarget.contains(event.target)
                 ) {
                     setPreviewId(null);
                     if (isMobile) setOpenMobile(false);

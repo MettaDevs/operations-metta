@@ -115,6 +115,10 @@ export async function refreshSearchStrings(
         );
 }
 
+function orderedPair(a: string, b: string): [string, string] {
+    return a < b ? [a, b] : [b, a];
+}
+
 const candidateSchema = z.object({
     id: z.string(),
     name: z.string(),
@@ -289,7 +293,7 @@ export class PartyDuplicates {
                 : null;
         if (!other || other === partyId)
             validation({ party_id: 'Pilih pihak lain dari daftar kandidat.' });
-        const [low, high] = [partyId, other].sort() as [string, string];
+        const [low, high] = orderedPair(partyId, other);
         const found = await this.db.rows(
             z.object({ id: z.string() }),
             'select id from parties where tenant_id = $1 and id in ($2, $3) and deleted_at is null',
@@ -310,7 +314,7 @@ export class PartyDuplicates {
         this.workspace.guard('organization', 'update');
         const other = lookupId(otherPartyId);
         if (!other) abort(404, 'Not Found');
-        const [low, high] = [partyId, other].sort() as [string, string];
+        const [low, high] = orderedPair(partyId, other);
         const removed = await this.db.execute(
             'update party_separations set deleted_at = $1, updated_at = $1 where tenant_id = $2 and party_id = $3 and other_party_id = $4 and deleted_at is null',
             [nowSql(), this.workspace.tenantId, low, high],

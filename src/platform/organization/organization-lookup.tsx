@@ -2,8 +2,17 @@ import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
-import { api } from '../shell/index.ts';
+import { api, type ApiBody } from '../shell/index.ts';
 import type { Organization } from './organization-directory.tsx';
+
+type HierarchyBatchRow = Exclude<
+    ApiBody<'hierarchyPage'>,
+    { purposes: unknown }
+>['data'][number];
+
+function isOrganization(row: HierarchyBatchRow): row is Organization {
+    return 'classification' in row;
+}
 
 /**
  * Organisasi aktif tenant ini untuk hierarki, dimuat bertahap dari layar hierarki. Dengan `excludeVersionId`,
@@ -43,9 +52,13 @@ export function OrganizationLookup({
                 throw new Error(
                     'Jawaban daftar organisasi tidak berisi batch.',
                 );
-            // `resource=organizations` selalu dijawab dengan baris organisasi.
+            const items = body.data.filter(isOrganization);
+            if (items.length !== body.data.length)
+                throw new Error(
+                    'Jawaban daftar organisasi berisi baris yang bukan organisasi.',
+                );
             return {
-                items: body.data as Organization[],
+                items,
                 nextCursor: body.next_cursor,
             };
         },

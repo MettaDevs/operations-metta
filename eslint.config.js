@@ -32,6 +32,11 @@ export default tseslint.config(
             // Repo ini menulis bentuk data dengan `type`, dan schema zod adalah sumbernya.
             '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
             '@typescript-eslint/consistent-type-imports': 'error',
+            // `as` hanya janji kepada compiler. Persempit dengan pemeriksaan atau parse schema; `as const` tetap boleh.
+            '@typescript-eslint/consistent-type-assertions': [
+                'error',
+                { assertionStyle: 'never' },
+            ],
             '@typescript-eslint/switch-exhaustiveness-check': [
                 'error',
                 {
@@ -68,6 +73,8 @@ export default tseslint.config(
         files: ['**/test/**'],
         rules: {
             'no-console': 'off',
+            // Test meng-cast body JSON ke bentuk yang diharapkannya; bentuk yang salah tetap menggagalkan assertion.
+            '@typescript-eslint/consistent-type-assertions': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
             '@typescript-eslint/no-empty-function': 'off',
             // Matcher seperti expect.objectContaining() bertipe `any` di tipe Bun.

@@ -12,6 +12,11 @@ export function lookupId(value: string): string | null {
 }
 
 export const nullableText = z.string().nullable();
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export const dateSchema = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

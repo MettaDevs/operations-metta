@@ -9,6 +9,11 @@ import { AppSidebarHeader } from './app-sidebar-header.tsx';
 import { EnvironmentBanner } from './environment-banner.tsx';
 import { useDocumentTitle } from './use-document-title.ts';
 
+const sidebarStyle: CSSProperties & Record<`--${string}`, string> = {
+    '--sidebar-width': '16rem',
+    '--sidebar-width-icon': '5.5rem',
+};
+
 function sidebarOpen(): boolean {
     // Cookie yang ditulis SidebarProvider @operations-metta/ui; bawaannya terbuka.
     return !/(?:^|;\s*)sidebar_state=false(?:;|$)/.test(document.cookie);
@@ -36,12 +41,7 @@ export function AppLayout(): ReactNode {
         <SidebarProvider
             defaultOpen={defaultOpen}
             className="h-svh min-h-0 min-w-[320px] overflow-hidden"
-            style={
-                {
-                    '--sidebar-width': '16rem',
-                    '--sidebar-width-icon': '5.5rem',
-                } as CSSProperties
-            }
+            style={sidebarStyle}
         >
             <AppSidebar navigation={shell.navigation} />
             <SidebarInset className="h-svh min-w-0 overflow-hidden bg-muted/30 py-2 pr-2 pl-0">

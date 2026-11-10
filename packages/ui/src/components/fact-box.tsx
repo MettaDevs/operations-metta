@@ -6,9 +6,10 @@ import {
     PanelRightOpen,
     Paperclip,
 } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type {} from '../css-properties';
 import { cn } from '../utils';
 import { Button } from './button';
 import { Card, CardContent, CardHeader } from './card';
@@ -133,7 +134,7 @@ export function FactBox({
             open={open}
             onOpenChange={setOpen}
             data-slot="fact-box-layout"
-            style={{ '--fact-box-width': `${panelWidth}px` } as CSSProperties}
+            style={{ '--fact-box-width': `${panelWidth}px` }}
             className={cn(
                 'grid min-w-0 items-start gap-3',
                 open

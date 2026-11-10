@@ -26,6 +26,10 @@ export const contractFile = join(
 );
 const layouts = ['app', 'auth'] as const;
 type Layout = (typeof layouts)[number];
+
+function isLayout(value: string): value is Layout {
+    return layouts.some((layout) => layout === value);
+}
 export type PageFile = {
     file: string;
     path: string;
@@ -102,7 +106,7 @@ export function readPage(file: string): PageFile {
                 return value.text;
             };
             const layout = literal('layout');
-            if (!layouts.includes(layout as Layout))
+            if (!isLayout(layout))
                 throw new Error(
                     `${shown}: layout harus salah satu dari ${layouts.join(', ')}.`,
                 );
@@ -115,7 +119,7 @@ export function readPage(file: string): PageFile {
             return {
                 file,
                 path: literal('path'),
-                layout: layout as Layout,
+                layout,
                 validatesSearch,
             };
         }

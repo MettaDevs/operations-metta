@@ -21,6 +21,7 @@ export {
     dateSchema,
     expectedVersion,
     idSchema,
+    isRecord,
     lookupId,
     nullableText,
 } from './schema.ts';

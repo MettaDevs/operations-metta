@@ -54,8 +54,11 @@ export async function resolvePostalRegions(
                 });
             resolved[field] = record.id;
             resolved[text] = record.name;
-        } else resolved[field] = null;
-        parentId = resolved[field] as string | null;
+            parentId = record.id;
+        } else {
+            resolved[field] = null;
+            parentId = null;
+        }
     }
     const villageId = parentId;
 

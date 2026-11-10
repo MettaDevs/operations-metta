@@ -1,9 +1,9 @@
 import { createORPCClient, ORPCError } from '@orpc/client';
-import type { AnyContractRouter } from '@orpc/contract';
 import type { JsonifiedClient } from '@orpc/openapi-client';
 import { OpenAPILink } from '@orpc/openapi-client/fetch';
 import type { RouterClient } from '@orpc/server';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';
+import { z } from 'zod';
 import type { Router } from '../../main.ts';
 import contract from './api-contract.generated.json';
 
@@ -55,9 +55,29 @@ function cookie(name: string): string | null {
     return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+// Impor JSON melebarkan method dan path menjadi string biasa, jadi bentuk minifyContractRouter diperiksa sekali saat
+// modul dimuat. Hanya empat field route ini yang dibaca OpenAPILink.
+const contractSchema = z.record(
+    z.string(),
+    z.object({
+        '~orpc': z.object({
+            errorMap: z.object({}),
+            meta: z.object({}),
+            route: z.object({
+                method: z
+                    .enum(['HEAD', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+                    .optional(),
+                path: z.templateLiteral(['/', z.string()]).optional(),
+                inputStructure: z.enum(['compact', 'detailed']).optional(),
+                outputStructure: z.enum(['compact', 'detailed']).optional(),
+            }),
+        }),
+    }),
+);
+
 // Sesi dan CSRF memakai mekanisme yang sudah ada di src/platform/identity/: cookie sesi ikut terkirim, dan permintaan
 // yang mengubah data membawa header X-XSRF-TOKEN dari cookie XSRF-TOKEN, seperti axios di layar CoreERP.
-const link = new OpenAPILink(contract as AnyContractRouter, {
+const link = new OpenAPILink(contractSchema.parse(contract), {
     url: () => window.location.origin,
     headers: () => {
         const token = cookie('XSRF-TOKEN');
