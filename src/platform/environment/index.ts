@@ -22,6 +22,11 @@ export {
     type ExpireRequest,
 } from './expire.service.ts';
 export {
+    restoreEnvironment,
+    restoreRequestSchema,
+    type RestoreRequest,
+} from './restore.service.ts';
+export {
     migrateEnvironment,
     migrateRequestSchema,
     type MigrateRequest,

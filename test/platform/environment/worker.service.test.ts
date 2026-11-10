@@ -497,4 +497,95 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             'Parameter expire tidak sah',
         );
     });
+
+    test('restore menyalakan lagi alamat yang dinonaktifkan expire, dan aman diulang', async () => {
+        const demo = await parameters();
+        demo.environment = { kind: 'demo', name: 'Demo' };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', demo),
+            ),
+        ).toBe('succeeded');
+        const target = {
+            tenant_slug: demo.tenant.slug,
+            database: demo.database,
+        };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('expire', target),
+            ),
+        ).toBe('succeeded');
+        expect(await findRoute(runtime, demo.tenant.slug, 'demo')).toBeNull();
+        const first = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                first.client,
+                claimed('restore', { ...target, kind: 'demo' }),
+            ),
+        ).toBe('succeeded');
+        expect(first.reports).toEqual([
+            { status: 'running', step: 'enable-route' },
+            { status: 'succeeded', step: 'done' },
+        ]);
+        expect(
+            (await findRoute(runtime, demo.tenant.slug, 'demo'))?.database_name,
+        ).toBe(demo.database);
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('restore', { ...target, kind: 'demo' }),
+            ),
+        ).toBe('succeeded');
+    }, 120_000);
+
+    test('restore menolak alamat yang tidak tercatat atau menunjuk database lain', async () => {
+        const slug = `restore-${crypto.randomUUID().slice(-12)}`;
+        await runtime.unsafe(
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name, disabled_at) values ($1, 'demo', $2, 'Demo', 'env_demo_lain', now())",
+            [slug, Bun.randomUUIDv7()],
+        );
+        const other = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                other.client,
+                claimed('restore', {
+                    tenant_slug: slug,
+                    kind: 'demo',
+                    database: 'env_demo_ini',
+                }),
+            ),
+        ).toBe('failed');
+        expect(other.reports.at(-1)?.failure_message).toContain(
+            'points to database env_demo_lain',
+        );
+        expect(await findRoute(runtime, slug, 'demo')).toBeNull();
+        const missing = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                missing.client,
+                claimed('restore', {
+                    tenant_slug: `missing-${crypto.randomUUID().slice(-8)}`,
+                    kind: 'production',
+                    database: null,
+                }),
+            ),
+        ).toBe('failed');
+        expect(missing.reports.at(-1)?.failure_message).toContain(
+            'is not recorded',
+        );
+    });
 });
