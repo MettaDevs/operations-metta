@@ -11,10 +11,8 @@ import {
     type Context,
 } from '../http/index.ts';
 import { OrganizationHierarchies } from './hierarchy.service.ts';
-import {
-    operatingUnitTypes,
-    organizationPageQuerySchema,
-} from './organization.schema.ts';
+import type { organizationPageQuerySchema } from './organization.schema.ts';
+import { operatingUnitTypes } from './organization.schema.ts';
 import { Organizations, timezoneOptions } from './organization.service.ts';
 
 // `$request->boolean()` Laravel.

@@ -103,7 +103,10 @@ function RoleComposer({
     const formId = `role-${role?.id ?? 'new'}`;
 
     const cancel = () => {
-        if (creating) return onCancelNew();
+        if (creating) {
+            onCancelNew();
+            return;
+        }
         setName(role.name);
         setDuties(role.duty_codes);
         setErrors({});
@@ -386,7 +389,10 @@ function SecurityConfigurationPage(): ReactNode {
         void navigate({
             search: (previous) =>
                 Object.fromEntries(
-                    Object.entries({ ...previous, ...next }).filter(
+                    Object.entries<string | undefined>({
+                        ...previous,
+                        ...next,
+                    }).filter(
                         ([, value]) => value !== undefined && value !== '',
                     ),
                 ),

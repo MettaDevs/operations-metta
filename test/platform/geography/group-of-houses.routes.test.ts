@@ -138,7 +138,7 @@ describe.skipIf(!process.env.DB_HOST)('group of houses', () => {
             village_id: jimbaran,
             name: 'Banjar Uji Indeks',
         });
-        await expect(
+        expect(
             pool.unsafe(
                 "insert into ref_group_of_houses (id, tenant_id, village_id, name) values ($1, $2, $3, 'BANJAR UJI INDEKS')",
                 [Bun.randomUUIDv7(), tenantId, first.village_id],

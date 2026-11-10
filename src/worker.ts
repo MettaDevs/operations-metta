@@ -19,8 +19,8 @@ if (
     !config.WORKER_HOST_ID ||
     !config.WORKER_PRIVATE_KEY_PATH
 ) {
-    console.error(
-        'Isi CONTROL_PLANE_URL, WORKER_HOST_ID, dan WORKER_PRIVATE_KEY_PATH untuk menjalankan worker.',
+    process.stderr.write(
+        'Isi CONTROL_PLANE_URL, WORKER_HOST_ID, dan WORKER_PRIVATE_KEY_PATH untuk menjalankan worker.\n',
     );
     process.exit(1);
 }
@@ -43,6 +43,8 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     });
 
 log({ event: 'worker-started', host_id: config.WORKER_HOST_ID });
+// Handler sinyal di atas yang mengubah stopping; TypeScript tidak melihat penulisan itu.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 while (!stopping) {
     try {
         const claimed = await client.claim();

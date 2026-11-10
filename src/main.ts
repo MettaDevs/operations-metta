@@ -4,11 +4,11 @@ import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
+import type { workspaceSelectionSchema } from './platform/access/index.ts';
 import {
     accessRoutes,
     shellRoutes,
     Workspace,
-    workspaceSelectionSchema,
 } from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {
@@ -37,11 +37,8 @@ import {
     type EnvironmentRoute,
 } from './platform/environment/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
-import {
-    loginInputSchema,
-    Session,
-    ValkeySessions,
-} from './platform/identity/index.ts';
+import type { loginInputSchema } from './platform/identity/index.ts';
+import { Session, ValkeySessions } from './platform/identity/index.ts';
 import { organizationRoutes } from './platform/organization/index.ts';
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
@@ -161,7 +158,7 @@ export function createApplication(config: Config) {
     const valkey = valkeySessions(config);
     const client = clientBuild(config.CLIENT_DIR);
     const handler = new OpenAPIHandler(router, {
-        customErrorResponseBodyEncoder: (error) =>
+        customErrorResponseBodyEncoder: (error): unknown =>
             error.data ?? { message: error.message },
     });
     return {
@@ -310,14 +307,11 @@ if (import.meta.main) {
             port: app.server?.port,
         }) + '\n',
     );
-    process.on('SIGTERM', async () => {
+    const shutdown = async () => {
         await app.stop();
         await application.close();
         await flushErrorReporting();
-    });
-    process.on('SIGINT', async () => {
-        await app.stop();
-        await application.close();
-        await flushErrorReporting();
-    });
+    };
+    process.on('SIGTERM', () => void shutdown());
+    process.on('SIGINT', () => void shutdown());
 }

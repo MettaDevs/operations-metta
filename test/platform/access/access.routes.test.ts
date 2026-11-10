@@ -432,7 +432,9 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
         expect(after.workspace.org_units.map((item) => item.id)).toEqual([
             clinicA,
         ]);
-        const [closed] = await pool.unsafe(
+        const [closed] = await pool.unsafe<
+            { status: string; closed: boolean }[]
+        >(
             'select status, valid_until is not null as closed from role_assignments where membership_id = $1 and role_id = $2',
             [member.membershipId, cashier.id],
         );
@@ -446,7 +448,7 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
             ]),
             200,
         );
-        const rows = await pool.unsafe(
+        const rows = await pool.unsafe<{ status: string }[]>(
             'select status from role_assignments where membership_id = $1 and role_id = $2',
             [member.membershipId, cashier.id],
         );
@@ -684,7 +686,9 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
             ).status,
         ).toBe(204);
         expect((await session.get('/api/v1/access')).status).toBe(403);
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<
+            { is_active: boolean; deleted: boolean }[]
+        >(
             'select is_active, deleted_at is not null as deleted from roles where id = $1',
             [role.id],
         );

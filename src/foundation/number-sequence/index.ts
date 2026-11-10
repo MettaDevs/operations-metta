@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Workspace } from '../../platform/access/index.ts';
-import {
-    Database,
-    nowSql,
-    sqlErrorCode,
-} from '../../platform/database/index.ts';
+import type { Database } from '../../platform/database/index.ts';
+import { nowSql, sqlErrorCode } from '../../platform/database/index.ts';
 import { coded } from '../../platform/http/index.ts';
 
 const segmentSchema = z.discriminatedUnion('type', [
@@ -161,7 +158,7 @@ export class NumberIssuer {
                     ? 'FY:' + fiscal.year_id
                     : `FP:${fiscal.year_id}:${fiscal.period_ordinal}`;
             if (sequence.scope_type === 'operating_unit')
-                key += '|legal_entity:' + this.scope.legalEntityId;
+                key += '|legal_entity:' + String(this.scope.legalEntityId);
         }
         return {
             key,

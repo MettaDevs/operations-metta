@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import { coreWorkspace } from '../access/index.ts';
 import { base, ok, typedQuery, type Context } from '../http/index.ts';
-import {
+import type {
     divisionQuerySchema,
     hierarchyLevelQuerySchema,
     regionLookupQuerySchema,

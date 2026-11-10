@@ -117,10 +117,12 @@ export class PartyRelationships {
                 'Tanggal akhir tidak boleh sebelum tanggal mulai.',
             );
         problems.fail();
+        if (!type)
+            throw new Error('Jenis hubungan lolos pemeriksaan tanpa nilai.');
         const data = {
             from_party_id: input.from_party_id as string,
             to_party_id: input.to_party_id as string,
-            relationship_type_code: type!.code,
+            relationship_type_code: type.code,
             valid_from: input.valid_from as string,
             valid_to: (input.valid_to as string | null | undefined) ?? null,
         };
@@ -152,8 +154,8 @@ export class PartyRelationships {
                 ? 'person'
                 : 'organization';
         if (
-            identity(data.from_party_id) !== type!.from_type ||
-            identity(data.to_party_id) !== type!.to_type
+            identity(data.from_party_id) !== type.from_type ||
+            identity(data.to_party_id) !== type.to_type
         )
             validation({
                 relationship_type_code:

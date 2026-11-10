@@ -64,11 +64,12 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     function recorder(loseAt?: string) {
         const reports: StepReport[] = [];
         const client: ControlPlaneClient = {
-            claim: async () => null,
-            report: async (_id, step) => {
+            claim: () => Promise.resolve(null),
+            report: (_id, step) => {
                 if (step.step === loseAt)
-                    throw new OperationLost('diambil alih');
+                    return Promise.reject(new OperationLost('diambil alih'));
                 reports.push(step);
+                return Promise.resolve();
             },
         };
         return { client, reports };

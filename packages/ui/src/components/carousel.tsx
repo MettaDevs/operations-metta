@@ -65,7 +65,7 @@ function Carousel({
     const subscribe = React.useCallback(
         (onStoreChange: () => void) => {
             if (!api) {
-                return () => {};
+                return () => undefined;
             }
 
             api.on('reInit', onStoreChange);
@@ -124,9 +124,7 @@ function Carousel({
                 carouselRef,
                 api: api,
                 opts,
-                orientation:
-                    orientation ||
-                    (opts?.axis === 'y' ? 'vertical' : 'horizontal'),
+                orientation,
                 scrollPrev,
                 scrollNext,
                 canScrollPrev,

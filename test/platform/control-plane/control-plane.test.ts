@@ -85,7 +85,7 @@ test('operasi yang diambil dibaca, dan 409 berarti operasi hilang', async () => 
     expect(await client.claim()).toEqual(operation);
     answer = () =>
         Response.json({ error: 'operation_not_held' }, { status: 409 });
-    await expect(
+    expect(
         client.report(operation.id, { status: 'running', step: 'migrate' }),
     ).rejects.toBeInstanceOf(OperationLost);
 });

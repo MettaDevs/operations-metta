@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Database } from '../database/index.ts';
+import type { Database } from '../database/index.ts';
 import { abort, validation } from '../http/index.ts';
 import type { Session } from '../identity/index.ts';
 

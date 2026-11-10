@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { coreWorkspace, type Workspace } from '../access/index.ts';
+import type { listParametersSchema } from '../http/index.ts';
 import {
     base,
     expectedVersion,
     laravelBody,
-    listParametersSchema,
     ok,
     recordInput,
     typedQuery,

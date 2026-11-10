@@ -14,9 +14,7 @@ type ErrorBody = {
 };
 
 function errorBody(value: unknown): ErrorBody {
-    return value !== null && typeof value === 'object'
-        ? (value as ErrorBody)
-        : {};
+    return value !== null && typeof value === 'object' ? value : {};
 }
 
 /**
@@ -51,8 +49,8 @@ export class ApiError extends ORPCError<'API_ERROR', ErrorBody> {
 }
 
 function cookie(name: string): string | null {
-    const match = document.cookie.match(
-        new RegExp(`(?:^|;\\s*)${name}=([^;]+)`),
+    const match = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(
+        document.cookie,
     );
     return match?.[1] ? decodeURIComponent(match[1]) : null;
 }

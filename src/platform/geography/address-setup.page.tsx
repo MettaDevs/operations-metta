@@ -99,9 +99,10 @@ function VillageCascade({
         <>
             {fields.map(([field, level], index) => {
                 const label = levels.name(level);
-                const parent =
-                    index === 0 ? 'ID' : value[fields[index - 1]![0]];
-                const query = options[index]!;
+                const previous = fields[index - 1];
+                const parent = previous ? value[previous[0]] : 'ID';
+                const query = options[index];
+                if (!query) return null;
                 return (
                     <FormControl
                         key={field}

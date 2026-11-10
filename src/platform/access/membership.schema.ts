@@ -85,6 +85,8 @@ export function parseMembershipInput(body: unknown): AssignmentInput[] {
                     errors[`${prefix}.policy_code`] = [
                         `The ${prefix}.policy_code field is required.`,
                     ];
+                // Dihitung per code point, sama dengan mb_strlen Laravel.
+                // eslint-disable-next-line @typescript-eslint/no-misused-spread
                 else if ([...code].length > 160)
                     errors[`${prefix}.policy_code`] = [
                         `The ${prefix}.policy_code field must not be greater than 160 characters.`,

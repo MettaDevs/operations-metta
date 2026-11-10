@@ -56,6 +56,8 @@ export function fieldErrors(
             case 'max':
                 if (
                     typeof value === 'string' &&
+                    // Dihitung per code point, sama dengan mb_strlen Laravel.
+                    // eslint-disable-next-line @typescript-eslint/no-misused-spread
                     [...value].length > rule.length
                 )
                     errors.push(
@@ -65,6 +67,8 @@ export function fieldErrors(
             case 'size':
                 if (
                     typeof value === 'string' &&
+                    // Dihitung per code point, sama dengan mb_strlen Laravel.
+                    // eslint-disable-next-line @typescript-eslint/no-misused-spread
                     [...value].length !== rule.length
                 )
                     errors.push(

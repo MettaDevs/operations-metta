@@ -31,6 +31,8 @@ export async function runOperation(
             );
         const operation = claimed.operation as KnownOperation;
         switch (operation) {
+            // KnownOperation baru punya satu anggota, jadi bagi aturan ini perbandingannya selalu benar.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             case 'provision': {
                 const request = provisionRequestSchema.safeParse(
                     claimed.parameters,

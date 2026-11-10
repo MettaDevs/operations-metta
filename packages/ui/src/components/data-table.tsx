@@ -316,15 +316,17 @@ function DataTable<T>({
             return data;
         }
 
-        const column = columns.find((item) => item.id === sort.columnId);
+        const sortValue = columns.find(
+            (item) => item.id === sort.columnId,
+        )?.sortValue;
 
-        if (!column?.sortValue) {
+        if (!sortValue) {
             return data;
         }
 
         return [...data].sort((left, right) => {
-            const a = column.sortValue!(left);
-            const b = column.sortValue!(right);
+            const a = sortValue(left);
+            const b = sortValue(right);
             const result =
                 typeof a === 'number' && typeof b === 'number'
                     ? a - b
@@ -531,7 +533,7 @@ function DataTable<T>({
                         data-column-id={column.id}
                         ref={(cell) => {
                             if (cell) {
-                                cell.title = cell.textContent ?? '';
+                                cell.title = cell.textContent;
                             }
                         }}
                         style={
@@ -1018,8 +1020,29 @@ function DataTable<T>({
                                                     );
                                                     const measured =
                                                         measureWidths();
+                                                    const startWidth =
+                                                        measured[column.id];
+                                                    const nextStartWidth =
+                                                        measured[
+                                                            nextColumn?.id ??
+                                                                column.id
+                                                        ];
+                                                    const headerCell =
+                                                        event.currentTarget
+                                                            .parentElement;
+
+                                                    if (
+                                                        startWidth ===
+                                                            undefined ||
+                                                        nextStartWidth ===
+                                                            undefined ||
+                                                        !headerCell
+                                                    ) {
+                                                        return;
+                                                    }
+
                                                     const guideLeft =
-                                                        event.currentTarget.parentElement!.getBoundingClientRect()
+                                                        headerCell.getBoundingClientRect()
                                                             .right -
                                                         (containerRef.current?.getBoundingClientRect()
                                                             .left ?? 0);
@@ -1030,15 +1053,8 @@ function DataTable<T>({
                                                             nextColumn?.id ??
                                                             column.id,
                                                         startX: event.clientX,
-                                                        startWidth:
-                                                            measured[
-                                                                column.id
-                                                            ]!,
-                                                        nextStartWidth:
-                                                            measured[
-                                                                nextColumn?.id ??
-                                                                    column.id
-                                                            ]!,
+                                                        startWidth,
+                                                        nextStartWidth,
                                                         minWidth:
                                                             column.minWidth ??
                                                             80,
@@ -1057,24 +1073,25 @@ function DataTable<T>({
                                                         resize.current;
 
                                                     if (
-                                                        !current ||
-                                                        current.columnId !==
-                                                            column.id
+                                                        current?.columnId !==
+                                                        column.id
                                                     ) {
                                                         return;
                                                     }
 
-                                                    const nextWidths =
-                                                        resizedWidths(
-                                                            current,
-                                                            event.clientX -
-                                                                current.startX,
-                                                        );
+                                                    const width = resizedWidths(
+                                                        current,
+                                                        event.clientX -
+                                                            current.startX,
+                                                    )[current.columnId];
+
+                                                    if (width === undefined) {
+                                                        return;
+                                                    }
+
                                                     setResizeGuide(
                                                         current.guideLeft +
-                                                            nextWidths[
-                                                                current.columnId
-                                                            ]! -
+                                                            width -
                                                             current.startWidth,
                                                     );
                                                 }}
@@ -1122,6 +1139,23 @@ function DataTable<T>({
                                                     event.preventDefault();
                                                     const measured =
                                                         measureWidths();
+                                                    const startWidth =
+                                                        measured[column.id];
+                                                    const nextStartWidth =
+                                                        measured[
+                                                            nextColumn?.id ??
+                                                                column.id
+                                                        ];
+
+                                                    if (
+                                                        startWidth ===
+                                                            undefined ||
+                                                        nextStartWidth ===
+                                                            undefined
+                                                    ) {
+                                                        return;
+                                                    }
+
                                                     const measuredUtilityWidths =
                                                         measureUtilityWidths();
                                                     setUtilityWidths(
@@ -1136,16 +1170,8 @@ function DataTable<T>({
                                                                     nextColumn?.id ??
                                                                     column.id,
                                                                 startX: 0,
-                                                                startWidth:
-                                                                    measured[
-                                                                        column
-                                                                            .id
-                                                                    ]!,
-                                                                nextStartWidth:
-                                                                    measured[
-                                                                        nextColumn?.id ??
-                                                                            column.id
-                                                                    ]!,
+                                                                startWidth,
+                                                                nextStartWidth,
                                                                 minWidth:
                                                                     column.minWidth ??
                                                                     80,

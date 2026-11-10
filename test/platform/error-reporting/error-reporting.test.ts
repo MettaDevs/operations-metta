@@ -40,7 +40,7 @@ const previous = Object.fromEntries(
 Object.assign(process.env, environment);
 const config = loadConfig();
 for (const [name, value] of Object.entries(previous))
-    if (value === undefined) delete process.env[name];
+    if (value === undefined) Reflect.deleteProperty(process.env, name);
     else process.env[name] = value;
 const unique = crypto.randomUUID();
 const handler = new OpenAPIHandler(
@@ -55,7 +55,7 @@ const handler = new OpenAPIHandler(
         }),
     },
     {
-        customErrorResponseBodyEncoder: (error) =>
+        customErrorResponseBodyEncoder: (error): unknown =>
             error.data ?? { message: error.message },
     },
 );

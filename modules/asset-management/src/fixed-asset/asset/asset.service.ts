@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
-import { Database, nowSql } from '@core/platform/database/index.ts';
-import type { Bind } from '@core/platform/database/index.ts';
+import { nowSql } from '@core/platform/database/index.ts';
+import type { Bind, Database } from '@core/platform/database/index.ts';
 import {
     abort,
     dateSchema,
@@ -269,6 +269,8 @@ export class Inventory {
                         raw === true ||
                         raw === 1 ||
                         ['1', 'true', 'on', 'yes'].includes(
+                            // Schema menerima JSON apa pun, jadi array dan objek ikut di-cast seperti nilai skalar.
+                            // eslint-disable-next-line @typescript-eslint/no-base-to-string
                             String(raw).toLowerCase(),
                         );
                     break;
@@ -287,15 +289,18 @@ export class Inventory {
                             choice.tipe_atribut_id ===
                             definition.tipe_atribut_id,
                     );
+                    // Schema menerima JSON apa pun, jadi array dan objek ikut di-cast seperti nilai skalar.
+                    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                    const text = String(raw);
                     const choice = eligible.find(
-                        (candidate) => candidate.nilai === String(raw),
+                        (candidate) => candidate.nilai === text,
                     );
                     if (eligible.length && !choice)
                         errors[field] =
                             definition.nama +
                             ' harus dipilih dari daftar yang tersedia.';
                     else {
-                        value.nilai_text = choice?.nilai ?? String(raw);
+                        value.nilai_text = choice?.nilai ?? text;
                         value.tipe_atribut_nilai_id = choice?.id ?? null;
                     }
                     break;

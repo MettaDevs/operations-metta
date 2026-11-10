@@ -9,7 +9,7 @@ import { DataTable } from './data-table';
 import type { DataTableProps, DataTableSelection } from './data-table';
 import { PageDialog, PageDialogContent } from './page-dialog';
 
-const subscribe = () => () => {};
+const subscribe = () => () => undefined;
 const clientSnapshot = () => true;
 const serverSnapshot = () => false;
 const editable =
@@ -236,8 +236,10 @@ export function DocumentLines<T>({
 
         event.preventDefault();
 
-        if (rowControls[index + 1]) {
-            rowControls[index + 1].focus();
+        const nextControl = rowControls[index + 1];
+
+        if (nextControl) {
+            nextControl.focus();
         } else {
             add(columns.find((column) => column.content === 'control')?.id);
         }

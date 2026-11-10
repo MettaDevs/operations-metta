@@ -72,7 +72,7 @@ function Input({
                 onClick?.(event);
 
                 if (!event.defaultPrevented && canActivate) {
-                    activation?.activate(event.currentTarget, true);
+                    activation.activate(event.currentTarget, true);
                 }
             }}
             onKeyDown={(event) => {
@@ -83,7 +83,7 @@ function Input({
                     canActivate &&
                     !event.nativeEvent.isComposing &&
                     (event.key === 'Enter' || event.key === ' ') &&
-                    activation?.activate(event.currentTarget, true)
+                    activation.activate(event.currentTarget, true)
                 ) {
                     event.preventDefault();
                 }

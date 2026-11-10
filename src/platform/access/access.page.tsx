@@ -62,7 +62,7 @@ function AccessPage(): ReactNode {
             search: (previous) => {
                 const merged = { ...previous, ...next };
                 return Object.fromEntries(
-                    Object.entries(merged).filter(
+                    Object.entries<string | undefined>(merged).filter(
                         ([, value]) => value !== undefined && value !== '',
                     ),
                 );

@@ -4,12 +4,11 @@ import { FinancePostings } from '@core/foundation/finance-posting/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
-    Database,
     jsonObject,
     nowSql,
     sqlErrorCode,
 } from '@core/platform/database/index.ts';
-import type { Bind } from '@core/platform/database/index.ts';
+import type { Bind, Database } from '@core/platform/database/index.ts';
 import {
     abort,
     coded,
@@ -454,7 +453,7 @@ export class Receipts {
         }
         if (data.vendor_id) {
             const vendor = await this.finance.vendor(data.vendor_id);
-            if (!vendor || vendor.legal_entity_id !== data.legal_entity_id)
+            if (vendor?.legal_entity_id !== data.legal_entity_id)
                 validation({
                     vendor_id:
                         'Pilih vendor milik entitas legal penerimaan ini.',

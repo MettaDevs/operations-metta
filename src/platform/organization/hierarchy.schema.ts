@@ -40,6 +40,8 @@ export function effectiveFromErrors(value: unknown): string[] {
 
 // HierarchyRequest CoreERP. Keunikan nama dan keberadaan kode tujuan diperiksa service, karena butuh database.
 export const createHierarchySchema = laravelBody.transform((input) => {
+    // Kiriman bertipe unknown; sesudah cek null TypeScript menyebutnya {}, padahal isinya bisa teks.
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const name = input.name == null ? null : String(input.name).trim() || null;
     const codes = input.purpose_codes;
     const purposeErrors: Record<string, string[]> = {};

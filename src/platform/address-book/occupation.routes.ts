@@ -1,9 +1,9 @@
 import type { z } from 'zod';
 import { coreWorkspace } from '../access/index.ts';
+import type { listParametersSchema } from '../http/index.ts';
 import {
     base,
     bodyInput,
-    listParametersSchema,
     mutationInput,
     ok,
     typedQuery,

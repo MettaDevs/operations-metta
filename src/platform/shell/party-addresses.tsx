@@ -211,7 +211,8 @@ export function draftPayload(draft: PartyDraft) {
     };
 }
 
-function locationEndpoints(owner: AddressOwner) {
+function locationEndpoints(owner: AddressOwner | null) {
+    if (owner === null) throw new Error('Pihak belum tersimpan.');
     return owner.kind === 'party'
         ? {
               list: () => api.partyLocations({ params: { id: owner.id } }),
@@ -265,7 +266,8 @@ function locationEndpoints(owner: AddressOwner) {
           };
 }
 
-function contactEndpoints(owner: AddressOwner) {
+function contactEndpoints(owner: AddressOwner | null) {
+    if (owner === null) throw new Error('Pihak belum tersimpan.');
     return owner.kind === 'party'
         ? {
               list: () => api.partyContacts({ params: { id: owner.id } }),
@@ -340,7 +342,7 @@ function LoadState({
             <p role="alert" className="text-sm text-destructive">
                 {errorText(
                     error,
-                    `${what[0]!.toUpperCase()}${what.slice(1)} belum dapat dimuat.`,
+                    `${what.charAt(0).toUpperCase()}${what.slice(1)} belum dapat dimuat.`,
                 )}
             </p>
             <Button type="button" variant="outline" size="sm" onClick={retry}>
@@ -521,7 +523,9 @@ function RegionFields({
         ['postal_code_id', 'postal_code'],
     ];
     const choose = (index: number, value: string | null) => {
-        const [field, text] = children[index]!;
+        const child = children[index];
+        if (!child) return;
+        const [field, text] = child;
         const label =
             options[field].data?.find((item) => item.value === value)?.label ??
             '';
@@ -592,8 +596,8 @@ function RegionFields({
                 const level = regionFields[index]?.[2];
                 const label = level ? levels.name(level) : 'Kode pos';
                 const query = options[field];
-                const parent =
-                    index === 0 ? 'ID' : form[children[index - 1]![0]];
+                const previous = children[index - 1];
+                const parent = previous ? form[previous[0]] : 'ID';
                 const items = query.data ?? [];
                 if (
                     form[field] &&
@@ -676,7 +680,10 @@ function LocationDialog({
     countries: Option[];
     draftMode: boolean;
     onClose: () => void;
-    onSaved: (form: LocationForm, chosen: Sharable | null) => Promise<void>;
+    onSaved: (
+        form: LocationForm,
+        chosen: Sharable | null,
+    ) => void | Promise<void>;
 }) {
     const contentRef = useRef<HTMLDivElement>(null);
     const [form, setFormState] = useState<LocationForm>(() =>
@@ -1058,7 +1065,7 @@ export function PartyAddressesSection({
 }): ReactNode {
     const stored = useQuery({
         queryKey: ['party-locations', owner?.kind, owner?.id],
-        queryFn: async () => (await locationEndpoints(owner!).list()).body,
+        queryFn: async () => (await locationEndpoints(owner).list()).body,
         enabled: !draft && owner !== null,
     });
     const [editing, setEditing] = useState<PartyLocation | 'new' | null>(null);
@@ -1082,9 +1089,10 @@ export function PartyAddressesSection({
     const countryName = (code: string | null) =>
         countries.find((country) => country.code === code)?.name ?? code;
 
-    const saveDraft = async (form: LocationForm, chosen: Sharable | null) => {
+    const saveDraft = (form: LocationForm, chosen: Sharable | null) => {
+        if (!draft) throw new Error('Alamat ini tidak ditahan sebagai draft.');
         const id = editing === 'new' || !editing ? newDraftKey() : editing.id;
-        const others = draft!.value.locations.filter((row) => row.id !== id);
+        const others = draft.value.locations.filter((row) => row.id !== id);
         const primary = form.is_primary || others.length === 0;
         // Pemeriksaan isian wajib yang sama dengan server, supaya kesalahan tampil sebelum party disimpan.
         const errors: Errors = {};
@@ -1147,11 +1155,11 @@ export function PartyAddressesSection({
                         ? countryName(form.country_region_code)
                         : '',
                 ]
-                    .filter((line) => line && line.trim())
+                    .filter((line) => line?.trim())
                     .join('\n'),
         };
-        draft!.onChange({
-            ...draft!.value,
+        draft.onChange({
+            ...draft.value,
             locations: [
                 ...others.map((other) =>
                     primary ? { ...other, is_primary: false } : other,
@@ -1163,7 +1171,7 @@ export function PartyAddressesSection({
     };
 
     const saveStored = async (form: LocationForm, chosen: Sharable | null) => {
-        const endpoints = locationEndpoints(owner!);
+        const endpoints = locationEndpoints(owner);
         if (editing === 'new') {
             await endpoints.create(
                 chosen
@@ -1216,7 +1224,7 @@ export function PartyAddressesSection({
         }
         setFailed(null);
         try {
-            await locationEndpoints(owner!).remove(
+            await locationEndpoints(owner).remove(
                 location.id,
                 location.version,
             );
@@ -1240,7 +1248,7 @@ export function PartyAddressesSection({
         }
         setFailed(null);
         try {
-            await locationEndpoints(owner!).create({
+            await locationEndpoints(owner).create({
                 location_id: location.location_id,
                 purposes: location.purposes,
                 is_primary: true,
@@ -1449,7 +1457,7 @@ function ContactDialog({
     locations: PartyLocation[];
     draftMode: boolean;
     onClose: () => void;
-    onSaved: (form: ContactForm) => Promise<void>;
+    onSaved: (form: ContactForm) => void | Promise<void>;
 }) {
     const contentRef = useRef<HTMLDivElement>(null);
     const [form, setForm] = useState<ContactForm>(() =>
@@ -1690,12 +1698,12 @@ export function PartyContactsSection({
 }): ReactNode {
     const stored = useQuery({
         queryKey: ['party-contacts', owner?.kind, owner?.id],
-        queryFn: async () => (await contactEndpoints(owner!).list()).body,
+        queryFn: async () => (await contactEndpoints(owner).list()).body,
         enabled: !draft && owner !== null,
     });
     const storedLocations = useQuery({
         queryKey: ['party-locations', owner?.kind, owner?.id],
-        queryFn: async () => (await locationEndpoints(owner!).list()).body,
+        queryFn: async () => (await locationEndpoints(owner).list()).body,
         enabled: !draft && owner !== null,
     });
     const [editing, setEditing] = useState<PartyContact | 'new' | null>(null);
@@ -1709,9 +1717,10 @@ export function PartyContactsSection({
         ? draft.value.locations
         : (storedLocations.data?.data ?? []);
 
-    const saveDraft = async (form: ContactForm) => {
+    const saveDraft = (form: ContactForm) => {
+        if (!draft) throw new Error('Kontak ini tidak ditahan sebagai draft.');
         const id = editing === 'new' || !editing ? newDraftKey() : editing.id;
-        const others = draft!.value.contacts.filter((row) => row.id !== id);
+        const others = draft.value.contacts.filter((row) => row.id !== id);
         const primary =
             form.is_primary || !others.some((row) => row.type === form.type);
         const row: PartyContact = {
@@ -1730,8 +1739,8 @@ export function PartyContactsSection({
         // Pemeriksaan isian wajib yang sama dengan server, supaya kesalahan tampil sebelum party disimpan.
         if (!form.value.trim())
             throw new ApiError(422, { errors: { value: ['Wajib diisi.'] } });
-        draft!.onChange({
-            ...draft!.value,
+        draft.onChange({
+            ...draft.value,
             contacts: [
                 ...others.map((other) =>
                     primary && other.type === form.type
@@ -1745,7 +1754,7 @@ export function PartyContactsSection({
     };
 
     const saveStored = async (form: ContactForm) => {
-        const endpoints = contactEndpoints(owner!);
+        const endpoints = contactEndpoints(owner);
         const body = {
             ...form,
             purpose: form.purpose || null,
@@ -1782,17 +1791,15 @@ export function PartyContactsSection({
             const replacement = contacts.findIndex(
                 (row) => row.type === contact.type,
             );
-            if (contact.is_primary && replacement >= 0)
-                contacts[replacement] = {
-                    ...contacts[replacement]!,
-                    is_primary: true,
-                };
+            const promoted = contacts[replacement];
+            if (contact.is_primary && promoted)
+                contacts[replacement] = { ...promoted, is_primary: true };
             draft.onChange({ ...draft.value, contacts });
             return;
         }
         setFailed(null);
         try {
-            await contactEndpoints(owner!).remove(contact.id, contact.version);
+            await contactEndpoints(owner).remove(contact.id, contact.version);
             toast.success('Kontak dihapus.');
             await stored.refetch();
         } catch (caught) {

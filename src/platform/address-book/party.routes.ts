@@ -11,7 +11,7 @@ import {
 import { PartyDuplicates } from './party-duplicate.service.ts';
 import { PartyIdentifications } from './party-identification.service.ts';
 import { PartyRelationships } from './party-relationship.service.ts';
-import {
+import type {
     partyListQuerySchema,
     partyOptionsQuerySchema,
 } from './party.schema.ts';

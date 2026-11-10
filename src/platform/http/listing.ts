@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Database, jsonObject } from '../database/index.ts';
-import type { Bind, JsonObject } from '../database/index.ts';
+import { jsonObject } from '../database/index.ts';
+import type { Bind, JsonObject, Database } from '../database/index.ts';
 import { validation } from './errors.ts';
 import { idSchema, lookupId } from './schema.ts';
 
@@ -89,7 +89,7 @@ export async function incrementalList(
     const bindings = [...options.bindings];
     const bind = (binding: Bind) => {
         bindings.push(binding);
-        return '$' + bindings.length;
+        return `$${bindings.length}`;
     };
     const filters: string[] = [];
     if (value.record_id) filters.push('id=' + bind(recordKey(value.record_id)));

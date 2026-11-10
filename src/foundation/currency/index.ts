@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Database } from '../../platform/database/index.ts';
+import type { Database } from '../../platform/database/index.ts';
 import { validation } from '../../platform/http/index.ts';
 
 const precisionSchema = z.object({

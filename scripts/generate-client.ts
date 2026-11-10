@@ -137,7 +137,7 @@ function importName(file: string): string {
             .map((word, index) =>
                 index === 0
                     ? word.toLowerCase()
-                    : word[0]!.toUpperCase() + word.slice(1),
+                    : word.charAt(0).toUpperCase() + word.slice(1),
             )
             .join('') + 'Page'
     );

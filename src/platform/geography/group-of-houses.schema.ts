@@ -41,6 +41,8 @@ const flag = (field: string, value: unknown, fallback: boolean): boolean => {
 
 const text = (value: unknown) => (typeof value === 'string' ? value : null);
 const longer = (value: string | null, length: number) =>
+    // Dihitung per code point, sama dengan mb_strlen Laravel dan panjang varchar PostgreSQL.
+    // eslint-disable-next-line @typescript-eslint/no-misused-spread
     value !== null && [...value].length > length;
 
 // Kiriman simpan dusun/banjar. Desa wajib dipilih dari master wilayah, nama wajib, dan kode boleh kosong: master
@@ -81,9 +83,11 @@ export const saveGroupOfHousesSchema = laravelBody.transform((input) => {
         input.override_postal_code,
         false,
     );
+    if (villageId === null || name === null)
+        throw new Error('Desa atau nama lolos pemeriksaan tanpa nilai.');
     return {
-        village_id: villageId!,
-        name: name!,
+        village_id: villageId,
+        name,
         code,
         active: flag('active', input.active, true),
         // Kode pos sendiri hanya berlaku bila memang diisi.

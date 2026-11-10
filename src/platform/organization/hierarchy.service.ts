@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Workspace } from '../access/index.ts';
-import { Database, isoSql, nowSql } from '../database/index.ts';
+import type { Database } from '../database/index.ts';
+import { isoSql, nowSql } from '../database/index.ts';
 import {
     abort,
     coded,

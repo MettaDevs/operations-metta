@@ -299,7 +299,7 @@ function RecordActionBar({
                                         title
                                     )}
                                 </span>
-                                {(search ||
+                                {(Boolean(search) ||
                                     hasCommands ||
                                     hasGroups ||
                                     trailing ||

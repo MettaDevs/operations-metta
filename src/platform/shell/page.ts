@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type { z } from 'zod';
 
 declare module '@tanstack/react-router' {
+    // Menambah field ke tipe milik pustaka hanya bisa lewat `interface`; `type` akan menimpanya.
+    // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
     interface StaticDataRouteOption {
         // Judul halaman di tab peramban.
         title?: string;
@@ -27,7 +29,10 @@ declare module '@tanstack/react-router' {
  * halaman; di dalam komponen, `getRouteApi(path).useSearch()` memberi nilainya dengan tipe dari schema itu.
  */
 export function definePage<
+    // Tipe kembalian disimpulkan dari `page`, jadi path literal dan schema search sampai ke route tree lewat dua parameter ini.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
     const TPath extends `/${string}`,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- alasan yang sama
     TSearch extends z.ZodType | undefined = undefined,
 >(page: {
     path: TPath;

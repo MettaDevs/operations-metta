@@ -19,6 +19,8 @@ export function useRecordNavigation<T>({
     onNavigate: (id: string) => void;
     hasMore?: boolean;
     loading?: boolean;
+    // Pemanggil boleh memberi fungsi tanpa nilai kembali; hanya `false` yang berarti batal.
+    // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
     loadMore?: () => boolean | void;
     scopeKey: string;
     disabled?: boolean;
@@ -33,15 +35,17 @@ export function useRecordNavigation<T>({
             return;
         }
 
+        const nextItem = index >= 0 ? items[index + 1] : undefined;
+
         if (
             pending.current.id !== currentId ||
             pending.current.scope !== scopeKey ||
             disabled
         ) {
             pending.current = null;
-        } else if (index >= 0 && index + 1 < items.length) {
+        } else if (nextItem !== undefined) {
             pending.current = null;
-            onNavigate(getId(items[index + 1]!));
+            onNavigate(getId(nextItem));
         } else if (!loading) {
             pending.current = null;
         }
@@ -64,8 +68,15 @@ export function useRecordNavigation<T>({
             index < 0 ||
             (index + 1 >= items.length && !(hasMore && loadMore)),
         previous: () => {
-            if (!disabled && !loading && !pending.current && index > 0) {
-                onNavigate(getId(items[index - 1]!));
+            const previousItem = index > 0 ? items[index - 1] : undefined;
+
+            if (
+                !disabled &&
+                !loading &&
+                !pending.current &&
+                previousItem !== undefined
+            ) {
+                onNavigate(getId(previousItem));
             }
         },
         next: () => {
@@ -73,8 +84,10 @@ export function useRecordNavigation<T>({
                 return;
             }
 
-            if (index + 1 < items.length) {
-                onNavigate(getId(items[index + 1]!));
+            const nextItem = items[index + 1];
+
+            if (nextItem !== undefined) {
+                onNavigate(getId(nextItem));
             } else if (hasMore && loadMore && currentId) {
                 pending.current = { id: currentId, scope: scopeKey };
 

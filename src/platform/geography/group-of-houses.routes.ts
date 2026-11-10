@@ -8,7 +8,7 @@ import {
     typedQuery,
     type Context,
 } from '../http/index.ts';
-import { groupOfHousesQuerySchema } from './group-of-houses.schema.ts';
+import type { groupOfHousesQuerySchema } from './group-of-houses.schema.ts';
 import { GroupsOfHouses } from './group-of-houses.service.ts';
 
 const path = '/api/v1/settings/address-setup/group-of-houses';

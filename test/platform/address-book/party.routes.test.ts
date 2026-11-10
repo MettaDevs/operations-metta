@@ -299,7 +299,7 @@ describe.skipIf(!process.env.DB_HOST)('party directory', () => {
 
         // Indeks unik parsial menolak NIK kedua yang lolos pemeriksaan aplikasi.
         const other = await created({ name: 'Tanpa NIK' });
-        await expect(
+        expect(
             pool.unsafe(
                 "insert into party_identifications (id, tenant_id, party_id, type_code, number) values ($1, $2, $3, 'nik', $4)",
                 [Bun.randomUUIDv7(), tenantId, other.data.id, nik('1')],
@@ -365,7 +365,7 @@ describe.skipIf(!process.env.DB_HOST)('party directory', () => {
         );
         await assignRole(vendor.data.id, 'vendor', 'core');
         await assignRole(vendor.data.id, 'vendor', 'core');
-        await expect(
+        expect(
             assignRole(plain.data.id, 'vendor', 'other-app'),
         ).rejects.toThrow('milik core');
 
@@ -654,7 +654,7 @@ describe.skipIf(!process.env.DB_HOST)('party directory', () => {
             ).status,
         ).toBe(204);
         expect((await show(data.id)).status).toBe(404);
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<{ version: number }[]>(
             'select version from parties where id = $1',
             [data.id],
         );

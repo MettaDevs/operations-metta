@@ -55,7 +55,7 @@ let timer: Timer | undefined;
 for (const folder of ['src', 'modules', join('packages', 'ui', 'src')])
     watch(join(root, folder), { recursive: true }, (_event, file) => {
         if (!file) return;
-        const path = join(root, folder, file.toString());
+        const path = join(root, folder, file);
         if (generated.has(path) || path.split(sep).includes('node_modules'))
             return;
         clearTimeout(timer);

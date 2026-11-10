@@ -910,7 +910,7 @@ export function OrganizationHierarchies({
             );
             // Tanpa `resource` dan `record_id`, barisnya baris daftar hierarki.
             return {
-                items: batch.data as HierarchyRow[],
+                items: batch.data,
                 nextCursor: batch.next_cursor,
             };
         },

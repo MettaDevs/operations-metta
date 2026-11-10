@@ -1,6 +1,6 @@
-import { z } from 'zod';
 import type { Workspace } from '../access/index.ts';
-import { Database, isoSql, type Bind } from '../database/index.ts';
+import type { Database } from '../database/index.ts';
+import { isoSql, type Bind } from '../database/index.ts';
 import {
     fieldErrors,
     failOn,
@@ -118,6 +118,7 @@ export class AddressSetup {
                 return this.children(districtSql, 'regency_id', parentId);
             case 'district':
                 return this.children(villageSql, 'district_id', parentId);
+            case null:
             default:
                 return {
                     provinces: await this.provinces(
@@ -208,11 +209,13 @@ export class AddressSetup {
                 { kind: 'size', length: 2 },
             ]),
         });
+        if (countryCode === null)
+            throw new Error('Kode negara lolos pemeriksaan tanpa nilai.');
         return {
             data: await this.db.rows(
                 hierarchyLevelSchema,
                 'select level, level_code, level_name, description from ref_country_hierarchy_levels where country_code = $1 order by level',
-                [countryCode!.toUpperCase()],
+                [countryCode.toUpperCase()],
             ),
         };
     }

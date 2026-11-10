@@ -44,6 +44,8 @@ export function searchString(
     length: number,
 ): string | null {
     if (value === null) return null;
+    // Dipotong per code point, supaya huruf di luar BMP tidak terbelah.
+    // eslint-disable-next-line @typescript-eslint/no-misused-spread
     const cleaned = [...value.replace(ignored, '')];
     const take = Math.min(length, cleaned.length);
     if (take <= 0) return null;

@@ -104,7 +104,8 @@ const testFiles = [
     ...files(packages),
 ].filter((file) => testRootOf(file) !== null);
 for (const file of testFiles) {
-    const tests = testRootOf(file)!;
+    const tests = testRootOf(file);
+    if (tests === null) continue;
     const mirrored = isTest(file) ? mirroredFolder(file, tests) : null;
     if (mirrored !== null && !existsSync(mirrored))
         violations.push(
@@ -204,7 +205,7 @@ for (const file of files(packages)) {
         const path = target(file, specifier);
         if (
             importedModule(file, specifier) !== null ||
-            (path !== null && path.startsWith(core + sep))
+            path?.startsWith(core + sep)
         )
             violations.push(
                 `${shown(file)}:${lineOf(imported.pos)} imports ${specifier}; packages/ must not import Core or a module.`,

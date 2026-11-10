@@ -1,7 +1,7 @@
 import type { z } from 'zod';
+import type { listParametersSchema } from '../http/index.ts';
 import {
     base,
-    listParametersSchema,
     ok,
     recordInput,
     typedBody,

@@ -14,11 +14,14 @@ type FakeButton = {
     closest: () => object | null;
     focus(): void;
 };
-const asElement = <T>(value: unknown) => value as T;
 
 const frames: FrameRequestCallback[] = [];
 const cleanups = new Set<() => void>();
-const previousAnimationFrame = globalThis.requestAnimationFrame;
+// Di luar peramban, misalnya di bun test, requestAnimationFrame tidak ada walau tipe DOM menyebutnya selalu ada.
+const animationFrameHost = globalThis as {
+    requestAnimationFrame?: typeof requestAnimationFrame;
+};
+const previousAnimationFrame = animationFrameHost.requestAnimationFrame;
 beforeAll(() => {
     globalThis.requestAnimationFrame = (callback) => frames.push(callback);
 });
@@ -32,8 +35,7 @@ afterAll(() => {
     if (previousAnimationFrame) {
         globalThis.requestAnimationFrame = previousAnimationFrame;
     } else {
-        delete (globalThis as { requestAnimationFrame?: unknown })
-            .requestAnimationFrame;
+        delete animationFrameHost.requestAnimationFrame;
     }
 });
 
@@ -49,7 +51,7 @@ function button(isInert = () => false): FakeButton {
 }
 function shell(initiallyInert = false) {
     const background = { inert: initiallyInert };
-    const host = asElement<HTMLElement>({
+    const host = {
         closest(selector: string) {
             assert.equal(selector, '[data-shell-content]');
 
@@ -61,7 +63,7 @@ function shell(initiallyInert = false) {
                 },
             };
         },
-    });
+    } as unknown as HTMLElement;
     const launcher = button(() => background.inert);
 
     return { host, background, launcher };
@@ -70,8 +72,10 @@ function open(host: HTMLElement, opener: FakeButton) {
     const cleanup = registerPageDialog({
         id: Symbol(),
         host,
-        opener: asElement<HTMLElement>(opener),
-        node: asElement<HTMLDivElement>({ querySelector: () => button() }),
+        opener: opener as unknown as HTMLElement,
+        node: {
+            querySelector: () => button(),
+        } as unknown as HTMLDivElement,
     });
     const close = () => {
         cleanups.delete(close);

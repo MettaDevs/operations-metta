@@ -11,9 +11,9 @@ const id = '019313d0-6c4b-1b08-d2b8-cf3c1114ca74';
 
 function list(parameters: string) {
     const statements: { query: string; parameters: Bind[] }[] = [];
-    const unsafe = async (query: string, parameters: Bind[]) => {
+    const unsafe = (query: string, parameters: Bind[]) => {
         statements.push({ query, parameters });
-        return Object.assign([], { count: 0 });
+        return Promise.resolve(Object.assign([], { count: 0 }));
     };
     const db = new Database(
         { unsafe } as unknown as postgres.ReservedSql,

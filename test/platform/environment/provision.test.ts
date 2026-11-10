@@ -100,7 +100,9 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
         expect(await provisionEnvironment(settings, source, provision)).toEqual(
             { created: false },
         );
-        const [counts] = await runtime.unsafe(
+        const [counts] = await runtime.unsafe<
+            { memberships: number; roles: number }[]
+        >(
             'select (select count(*)::int from tenant_memberships where tenant_id = $1) as memberships, (select count(*)::int from roles where tenant_id = $1) as roles',
             [provision.tenant.id],
         );
@@ -127,7 +129,7 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
                 onnotice: () => {},
             });
             try {
-                const owners = await environment.unsafe(
+                const owners = await environment.unsafe<{ owner: string }[]>(
                     'select distinct owner from schema_migrations order by owner',
                 );
                 expect(owners.map((row) => row.owner)).toEqual(['core']);
@@ -144,7 +146,9 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
                 [provision.tenant.id],
             );
             expect(shared?.count).toBe(0);
-            const [route] = await runtime.unsafe(
+            const [route] = await runtime.unsafe<
+                { tenant_id: string; kind: string; database_name: string }[]
+            >(
                 'select tenant_id, kind, database_name from environment_routes where tenant_slug = $1',
                 [provision.tenant.slug],
             );
@@ -167,7 +171,7 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
 
     test('menolak database runtime dan nama yang bukan identifier aman', async () => {
         const provision = await request(settings.DB_DATABASE);
-        await expect(
+        expect(
             provisionEnvironment(settings, source, provision),
         ).rejects.toThrow('runtime or a system database');
         const [tenant] = await runtime.unsafe(
@@ -187,7 +191,7 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
         const first = await request(null);
         await provisionEnvironment(settings, source, first);
         const second = await request(null);
-        await expect(
+        expect(
             provisionEnvironment(settings, source, {
                 ...second,
                 tenant: { ...second.tenant, slug: first.tenant.slug },

@@ -139,16 +139,25 @@ function AddRole({
     ];
 
     const add = () => {
-        if (!role) return setError('Pilih role yang akan diberikan.');
+        if (!role) {
+            setError('Pilih role yang akan diberikan.');
+            return;
+        }
         if (policies.length && !everywhere) {
-            if (needsCompany && !company)
-                return setError('Pilih perusahaan tempat role ini berlaku.');
-            if (needsUnit && !unit)
-                return setError('Pilih unit kerja tempat role ini berlaku.');
-            if (!company && !unit)
-                return setError(
+            if (needsCompany && !company) {
+                setError('Pilih perusahaan tempat role ini berlaku.');
+                return;
+            }
+            if (needsUnit && !unit) {
+                setError('Pilih unit kerja tempat role ini berlaku.');
+                return;
+            }
+            if (!company && !unit) {
+                setError(
                     'Pilih perusahaan atau unit kerja, atau berlakukan di seluruh organisasi.',
                 );
+                return;
+            }
         }
         onAdd(
             role,

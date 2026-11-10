@@ -64,7 +64,7 @@ test('InlineLookup keeps hidden combobox inputs out of the visual height', () =>
             ],
             getItemValue: (item) => item.id,
             getItemLabel: (item) => item.name,
-            loadItems: async () => ({ items: [], nextCursor: null }),
+            loadItems: () => Promise.resolve({ items: [], nextCursor: null }),
             onValueChange: () => {},
         }),
     );

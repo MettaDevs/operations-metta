@@ -148,7 +148,9 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             number: 'KLN-A',
             tenant_id: tenantId,
         });
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<
+            { number: string; tenant_id: string }[]
+        >(
             'select number, tenant_id from operating_units where organization_id = $1',
             [data.id],
         );
@@ -207,7 +209,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         const first = await unit('Klinik C', 'business_unit', 'KLN-C');
         const second = await unit('Klinik D', 'business_unit', 'KLN-D');
         expect(first.id).not.toBe(second.id);
-        await expect(
+        expect(
             pool.unsafe(
                 "update operating_units set number = 'KLN-C' where organization_id = $1",
                 [second.id],
@@ -478,7 +480,9 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             operating_unit_number: 'POLI-LAMA',
         });
         expect(saved.status).toBe(200);
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<
+            { number: string; tenant_id: string }[]
+        >(
             'select number, tenant_id from operating_units where organization_id = $1',
             [data.id],
         );

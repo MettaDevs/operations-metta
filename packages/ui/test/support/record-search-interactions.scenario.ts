@@ -138,13 +138,13 @@ try {
         'local lookup shares matching semantics',
     );
     let requested = '';
-    const loadItems: LoadItems = async ({ query }) => {
+    const loadItems: LoadItems = ({ query }) => {
         requested = query;
 
-        return {
+        return Promise.resolve({
             items: [{ id: 'server', text: 'Label lain' }],
             nextCursor: null,
-        };
+        });
     };
     await React.act(async () => {
         root.render(h(LookupProbe, { query: '12 345', loadItems }));
@@ -212,6 +212,9 @@ try {
         'Record search interactions: Select, remote bypass, InlineLookup data, and command palette passed.',
     );
 } finally {
-    await React.act(async () => root.unmount());
+    await React.act(() => {
+        root.unmount();
+        return Promise.resolve();
+    });
     window.close();
 }

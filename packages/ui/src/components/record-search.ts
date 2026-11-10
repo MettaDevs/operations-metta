@@ -16,7 +16,7 @@ export function recordSearchTerms(query: string): RecordSearchTerm[] {
         .normalize('NFC')
         .matchAll(/"([^"]*)"|([^\s"]+)/gu)) {
         const phrase = match[1] !== undefined;
-        const text = (phrase ? match[1] : match[2])!.trim();
+        const text = (match[1] ?? match[2] ?? '').trim();
 
         if (words(text).length) {
             terms.push({ phrase, text });

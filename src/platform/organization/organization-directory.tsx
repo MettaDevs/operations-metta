@@ -62,7 +62,7 @@ type Errors = Record<string, string[]>;
 
 // Jawaban GET layar bergantung pada `incremental`; tanpa itu, isinya props halaman.
 export function directoryProps(
-    body: ApiBody<'legalEntityPage'> | ApiBody<'operatingUnitPage'>,
+    body: ApiBody<'legalEntityPage'>,
 ): DirectoryProps {
     if (!('canManage' in body))
         throw new Error('Jawaban layar organisasi tidak berisi props halaman.');

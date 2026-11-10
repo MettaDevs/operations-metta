@@ -41,8 +41,13 @@ async function emitFonts(
     for (const match of css.matchAll(
         /url\((['"]?)([^'")]+\.(?:woff2?|ttf|otf))\1\)/g,
     )) {
-        const url = match[2]!;
-        if (replacements.has(url) || /^(?:[a-z]+:|\/)/i.test(url)) continue;
+        const url = match[2];
+        if (
+            url === undefined ||
+            replacements.has(url) ||
+            /^(?:[a-z]+:|\/)/i.test(url)
+        )
+            continue;
         const source = resolve(base, url);
         const bytes = new Uint8Array(await Bun.file(source).arrayBuffer());
         const extension = extname(source);
@@ -76,7 +81,9 @@ function tailwind(outdir: string, fonts: Set<string>): BunPlugin {
                         {
                             base,
                             shouldRewriteUrls: true,
-                            onDependency: () => {},
+                            onDependency: () => {
+                                // Build sekali jalan tidak memantau berkas yang di-import CSS.
+                            },
                         },
                     );
                     const sources = [

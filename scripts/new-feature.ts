@@ -43,7 +43,9 @@ function parse(argv: string[]): Feature {
     const audience = values.audience;
     if (!isAudience(audience))
         fail(`Audience "${audience}" tidak dikenal.\n${usage}`);
-    const segments = positionals.length === 1 ? positionals[0]!.split('/') : [];
+    const [target, ...extra] = positionals;
+    const segments =
+        target !== undefined && extra.length === 0 ? target.split('/') : [];
     const [module, area, feature] = segments;
     if (segments.length !== 3 || !module || !area || !feature) fail(usage);
     for (const segment of segments)
@@ -54,10 +56,11 @@ function parse(argv: string[]): Feature {
 
 function names(kebab: string): Names {
     const words = kebab.split('-');
-    const capital = (word: string) => word[0]!.toUpperCase() + word.slice(1);
+    const capital = (word: string) =>
+        word.charAt(0).toUpperCase() + word.slice(1);
     return {
         kebab,
-        camel: words[0] + words.slice(1).map(capital).join(''),
+        camel: (words[0] ?? '') + words.slice(1).map(capital).join(''),
         pascal: words.map(capital).join(''),
     };
 }
@@ -153,8 +156,8 @@ function register(index: string, exportName: string, from: string): string {
         ts.forEachChild(node, visit);
     };
     visit(source);
-    const object = objects.length === 1 ? objects[0]! : null;
-    if (object === null)
+    const [object, ...others] = objects;
+    if (object === undefined || others.length > 0)
         fail(
             'index.ts module harus punya tepat satu `return { ...xRoutes() }`. Daftarkan route-nya dengan tangan.',
         );
