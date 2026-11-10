@@ -1,6 +1,9 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
+import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
+import { page as platformAccessSecurityConfigurationPage } from './platform/access/security-configuration.page.tsx';
 import { page as platformAddressBookDuplicateSettingsPage } from './platform/address-book/duplicate-settings.page.tsx';
 import { page as platformAddressBookGlobalAddressBookPage } from './platform/address-book/global-address-book.page.tsx';
 import { page as platformAddressBookOccupationsPage } from './platform/address-book/occupations.page.tsx';
@@ -18,6 +21,30 @@ import {
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const platformAccessAccessRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAccessAccessPage.path,
+    component: platformAccessAccessPage.component,
+    validateSearch: platformAccessAccessPage.validateSearch,
+    staticData: { title: platformAccessAccessPage.title },
+});
+
+const platformAccessRolesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAccessRolesPage.path,
+    component: platformAccessRolesPage.component,
+    validateSearch: platformAccessRolesPage.validateSearch,
+    staticData: { title: platformAccessRolesPage.title },
+});
+
+const platformAccessSecurityConfigurationRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAccessSecurityConfigurationPage.path,
+    component: platformAccessSecurityConfigurationPage.component,
+    validateSearch: platformAccessSecurityConfigurationPage.validateSearch,
+    staticData: { title: platformAccessSecurityConfigurationPage.title },
+});
 
 const platformAddressBookDuplicateSettingsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -92,6 +119,9 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     appLayoutRoute.addChildren([
+        platformAccessAccessRoute,
+        platformAccessRolesRoute,
+        platformAccessSecurityConfigurationRoute,
         platformAddressBookDuplicateSettingsRoute,
         platformAddressBookGlobalAddressBookRoute,
         platformAddressBookOccupationsRoute,

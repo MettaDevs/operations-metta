@@ -5,6 +5,7 @@ import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
 import {
+    accessRoutes,
     shellRoutes,
     Workspace,
     workspaceSelectionSchema,
@@ -104,6 +105,7 @@ export const router = {
             );
         }),
     ...shellRoutes(),
+    ...accessRoutes(),
     ...organizationRoutes(),
     ...geographyRoutes(),
     ...addressBookRoutes(),
