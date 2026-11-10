@@ -66,7 +66,7 @@ describe.skipIf(!process.env.DB_HOST)('address setup', () => {
     };
 
     test('the Kepmendagri data is loaded at every level with deterministic ids', async () => {
-        const [counts] = await pool.unsafe(`
+        const [counts] = await pool.unsafe<Record<string, number>[]>(`
             select (select count(*) from ref_provinces where country_code = 'ID' and tenant_id is null)::int as provinces,
                    (select count(*) from ref_regencies where tenant_id is null)::int as regencies,
                    (select count(*) from ref_regencies where tenant_id is null and type = 'kota')::int as cities,
@@ -89,7 +89,7 @@ describe.skipIf(!process.env.DB_HOST)('address setup', () => {
             "select id from ref_provinces where country_code = 'ID' and code = '51'",
         );
         expect(bali?.id).toBe(regionId('ID:51'));
-        const [benoa] = await pool.unsafe(
+        const [benoa] = await pool.unsafe<Record<string, string>[]>(
             "select id, name, type, postal_code from ref_villages where code = '5103051004'",
         );
         expect({ ...benoa }).toEqual({
@@ -99,7 +99,7 @@ describe.skipIf(!process.env.DB_HOST)('address setup', () => {
             postal_code: '80362',
         });
         // Nama diambil dari wilayah.sql, bukan dari JSON CoreERP yang memotong apostrof dan angka Romawi.
-        const names = await pool.unsafe(
+        const names = await pool.unsafe<{ name: string }[]>(
             "select name from ref_villages where code in ('7318022004', '1101052001') order by code",
         );
         expect(names.map((row) => row.name)).toEqual([
@@ -258,9 +258,7 @@ describe.skipIf(!process.env.DB_HOST)('address setup', () => {
         });
         expect(found.data.map((row) => row.name)).toContain('Tanjung Benoa');
         expect(
-            found.data.every((row) =>
-                String(row.name).toLowerCase().includes('benoa'),
-            ),
+            found.data.every((row) => row.name.toLowerCase().includes('benoa')),
         ).toBe(true);
 
         // Kata yang bukan awalan tidak cocok, dan beberapa kata harus semuanya ditemukan.

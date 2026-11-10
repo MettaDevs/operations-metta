@@ -75,7 +75,13 @@ function baselineTables(migration: Migration): string[] {
 export async function migrate(
     sql: postgres.Sql,
     source: MigrationSource,
-    { modules, adoptCoreErp = false, log = () => {} }: MigrateOptions = {},
+    {
+        modules,
+        adoptCoreErp = false,
+        log = () => {
+            // Tanpa `log`, kemajuan migration tidak dicetak.
+        },
+    }: MigrateOptions = {},
 ): Promise<void> {
     // Kunci advisory berlaku per sesi, jadi kunci dan seluruh migration harus berjalan di satu koneksi yang sama.
     if (sql.options.max !== 1)

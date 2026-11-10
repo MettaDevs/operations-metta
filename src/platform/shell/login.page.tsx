@@ -67,10 +67,14 @@ function LoginPage(): ReactNode {
                 onSubmit={(event) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
+                    const field = (name: string) => {
+                        const value = form.get(name);
+                        return typeof value === 'string' ? value : '';
+                    };
                     login.mutate({
                         body: {
-                            email: String(form.get('email') ?? ''),
-                            password: String(form.get('password') ?? ''),
+                            email: field('email'),
+                            password: field('password'),
                         },
                     });
                 }}

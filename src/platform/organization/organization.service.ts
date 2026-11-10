@@ -158,7 +158,9 @@ export class Organizations {
             defaultDirection: 'asc',
         });
         return {
-            data: await this.rows(batch.data.map((row) => String(row.id))),
+            data: await this.rows(
+                batch.data.map((row) => z.string().parse(row.id)),
+            ),
             next_cursor: batch.next_cursor,
         };
     }

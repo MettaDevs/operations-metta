@@ -104,7 +104,10 @@ function GlobalAddressBookPage(): ReactNode {
         void navigate({
             search: (current) =>
                 Object.fromEntries(
-                    Object.entries({ ...current, ...next }).filter(
+                    Object.entries<string | undefined>({
+                        ...current,
+                        ...next,
+                    }).filter(
                         ([, value]) => value !== undefined && value !== '',
                     ),
                 ),

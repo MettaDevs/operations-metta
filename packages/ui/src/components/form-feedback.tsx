@@ -295,7 +295,7 @@ function findFeedbackControl(
     const candidates = scope.querySelectorAll<HTMLElement>(
         '[name], [id], [data-error-field]',
     );
-    const elements = Array.from(candidates ?? []);
+    const elements = Array.from(candidates);
     const matched =
         elements.find(
             (element) =>
@@ -407,19 +407,19 @@ export function FormErrorSummary({
         () => collectFormFeedback(providedFeedback),
         [providedFeedback],
     );
-    const feedback = React.useMemo(
-        () =>
-            entries.length
-                ? {
-                      ...entries[0]!,
-                      issues: entries.flatMap((entry) => entry.issues ?? []),
-                      focusSummary: entries.some(
-                          (entry) => entry.focusSummary !== false,
-                      ),
-                  }
-                : null,
-        [entries],
-    );
+    const feedback = React.useMemo(() => {
+        const [first] = entries;
+
+        return first
+            ? {
+                  ...first,
+                  issues: entries.flatMap((entry) => entry.issues ?? []),
+                  focusSummary: entries.some(
+                      (entry) => entry.focusSummary !== false,
+                  ),
+              }
+            : null;
+    }, [entries]);
     const summaryRef = React.useRef<HTMLDivElement>(null);
     const previousEntries = React.useRef<readonly FormFeedback[]>([]);
     const inlineId = React.useId();
@@ -449,7 +449,7 @@ export function FormErrorSummary({
     React.useEffect(() => {
         const scope = scopeRef?.current;
 
-        if (!feedback || !scope || !feedback.issues?.length) {
+        if (!feedback || !scope || !feedback.issues.length) {
             return;
         }
 
@@ -466,7 +466,7 @@ export function FormErrorSummary({
                 { field: string; messages: string[] }
             >();
 
-            for (const issue of feedback.issues ?? []) {
+            for (const issue of feedback.issues) {
                 const control = findFeedbackControl(scope, issue.field);
 
                 if (!control) {
@@ -726,7 +726,7 @@ function FormErrorNotice({
                         ))}
                     </ul>
                 )}
-                {(feedback.actions?.length || feedback.details) && (
+                {(Boolean(feedback.actions?.length) || feedback.details) && (
                     <div className="mt-2 flex flex-wrap gap-2">
                         {feedback.actions?.map((action) => (
                             <Button

@@ -298,7 +298,7 @@ function PageDialogSurface({
                                 event.target as Node | null,
                             ) ||
                             popupEscapes.has(event) ||
-                            nodeRef.current?.querySelector(
+                            nodeRef.current.querySelector(
                                 '[role="combobox"][aria-expanded="true"]',
                             )
                         ) {
@@ -373,7 +373,12 @@ function PageDialogHeader({
     navigation?: PageDialogNavigation;
 }) {
     const page = React.useContext(PageDialogContext);
-    const store = React.useContext(PageDialogRecordContext)!;
+    const store = React.useContext(PageDialogRecordContext);
+
+    if (!store) {
+        throw new Error('PageDialogHeader requires PageDialogContent.');
+    }
+
     React.useSyncExternalStore(
         store.subscribe,
         store.getRevision,
@@ -467,7 +472,7 @@ function PageDialogHeader({
                     role="group"
                     aria-label="Aksi record"
                 >
-                    {(record.onEdit || record.editing) && (
+                    {(Boolean(record.onEdit) || record.editing) && (
                         <Button
                             type="button"
                             size="icon-sm"
@@ -488,7 +493,7 @@ function PageDialogHeader({
                             <Pencil />
                         </Button>
                     )}
-                    {(record.onShare || record.recordUrl) && (
+                    {(Boolean(record.onShare) || record.recordUrl) && (
                         <Button
                             type="button"
                             size="icon-sm"
@@ -534,8 +539,8 @@ function PageDialogHeader({
                             variant="outline"
                             className="shrink-0 text-xs"
                             role="status"
-                            aria-label={page.count + ' halaman terbuka'}
-                            title={page.count + ' halaman terbuka'}
+                            aria-label={`${page.count} halaman terbuka`}
+                            title={`${page.count} halaman terbuka`}
                         >
                             {page.count}
                         </Badge>

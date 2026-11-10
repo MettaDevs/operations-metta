@@ -1,15 +1,16 @@
 import { $ } from 'bun';
 import { statSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
+import { z } from 'zod';
 
 type Worktree = { path: string; branch: string | null };
 type Verdict =
     { kind: 'remove'; branch: string } | { kind: 'keep'; reason: string };
-type PullRequest = {
-    number: number;
-    state: 'OPEN' | 'CLOSED' | 'MERGED';
-    headRefOid: string;
-};
+const pullRequestSchema = z.object({
+    number: z.number(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+    headRefOid: z.string(),
+});
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -65,8 +66,11 @@ async function verdict(worktree: Worktree): Promise<Verdict> {
         }
         return { kind: 'remove', branch: worktree.branch };
     }
-    const pulls: PullRequest[] =
-        await $`gh pr list --head ${worktree.branch} --state all --json number,state,headRefOid --limit 1`.json();
+    const pulls = z
+        .array(pullRequestSchema)
+        .parse(
+            await $`gh pr list --head ${worktree.branch} --state all --json number,state,headRefOid --limit 1`.json(),
+        );
     const pull = pulls[0];
     if (pull === undefined) {
         return { kind: 'keep', reason: 'belum masuk main' };

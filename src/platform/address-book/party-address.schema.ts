@@ -29,6 +29,8 @@ export type Fields = Record<string, unknown>;
 export const contactTypes = ['email', 'phone', 'whatsapp', 'fax', 'url'];
 
 const text = (value: unknown) => (typeof value === 'string' ? value : null);
+// Dihitung per code point, sama dengan mb_strlen Laravel dan panjang varchar PostgreSQL.
+// eslint-disable-next-line @typescript-eslint/no-misused-spread
 const length = (value: string) => [...value].length;
 
 // Aturan `boolean` Laravel.
@@ -200,7 +202,7 @@ export function checkDetails(
         problems.fail();
         return empty;
     }
-    const list = (field: 'locations' | 'contacts') => {
+    const list = (field: 'locations' | 'contacts'): unknown[] => {
         const value = record.data[field];
         if (value === undefined || value === null) return [];
         if (!Array.isArray(value) || value.length > 100) {

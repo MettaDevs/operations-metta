@@ -257,7 +257,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
 
     test('a member of two tenants sees both, each under its own name', async () => {
         const other = await createTenant(pool, 'Klinik Uji Kedua');
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<{ id: string }[]>(
             'select id from tenant_memberships where user_id = $1',
             [member.userId],
         );

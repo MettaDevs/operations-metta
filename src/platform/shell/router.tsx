@@ -97,9 +97,15 @@ function ShellError({ error }: ErrorComponentProps): ReactNode {
                     <Button
                         size="sm"
                         variant="ghost"
-                        onClick={async () => {
-                            await api.logout({ body: {} }).catch(() => {});
-                            window.location.assign('/login');
+                        onClick={() => {
+                            void api
+                                .logout({ body: {} })
+                                .catch(() => {
+                                    // Logout yang gagal tetap membawa pengguna ke halaman login.
+                                })
+                                .then(() => {
+                                    window.location.assign('/login');
+                                });
                         }}
                     >
                         Keluar
@@ -121,9 +127,14 @@ export const appLayoutRoute = createRoute({
     id: '_app',
     beforeLoad: async ({ context, location }): Promise<void> => {
         try {
-            await context.queryClient.ensureQueryData(shellQuery);
+            await context.queryClient.query({
+                ...shellQuery,
+                staleTime: 'static',
+            });
         } catch (error) {
             if (error instanceof ApiError && error.status === 401)
+                // TanStack Router membaca redirect dari nilai yang dilempar, bukan dari Error.
+                // eslint-disable-next-line @typescript-eslint/only-throw-error
                 throw redirect({
                     href: `/login?redirect=${encodeURIComponent(location.href)}`,
                 });
@@ -145,6 +156,8 @@ export const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
     beforeLoad: (): never => {
+        // TanStack Router membaca redirect dari nilai yang dilempar, bukan dari Error.
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw redirect({ href: '/dashboard' });
     },
 });

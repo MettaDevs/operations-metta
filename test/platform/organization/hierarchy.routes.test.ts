@@ -122,7 +122,9 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         ancestor: string,
         descendant: string,
     ) {
-        const [row] = await pool.unsafe(
+        const [row] = await pool.unsafe<
+            { distance: number; deleted_at: Date | null }[]
+        >(
             'select distance, deleted_at from organization_hierarchy_closures where version_id = $1 and ancestor_organization_id = $2 and descendant_organization_id = $3',
             [versionId, ancestor, descendant],
         );
@@ -193,7 +195,9 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         const company = await organization('legal_entity', 'PT Bersama');
         await hierarchy('Management bersama', company, ['management']);
         await hierarchy('Procurement bersama', company, ['procurement']);
-        const [counts] = await pool.unsafe(
+        const [counts] = await pool.unsafe<
+            { organizations: number; nodes: number }[]
+        >(
             `select (select count(*)::int from organizations where tenant_id = $1 and name = 'PT Bersama') as organizations,
                     (select count(*)::int from organization_hierarchy_nodes where organization_id = $2) as nodes`,
             [tenantId, company],

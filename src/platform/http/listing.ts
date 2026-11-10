@@ -89,7 +89,7 @@ export async function incrementalList(
     const bindings = [...options.bindings];
     const bind = (binding: Bind) => {
         bindings.push(binding);
-        return '$' + bindings.length;
+        return `$${bindings.length}`;
     };
     const filters: string[] = [];
     if (value.record_id) filters.push('id=' + bind(recordKey(value.record_id)));

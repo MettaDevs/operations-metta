@@ -61,7 +61,10 @@ try {
             children: 'Daftar aset',
         }),
     );
-    await React.act(async () => root.render(app));
+    await React.act(() => {
+        root.render(app);
+        return Promise.resolve();
+    });
     const attachmentTab = () =>
         document.querySelector('[role="tab"][id$="attachments"]');
     const home = () => document.querySelector('[data-action-group="home"]');
@@ -202,7 +205,10 @@ try {
             }),
         });
     }
-    await React.act(async () => root.render(h(VendorToolbarHarness)));
+    await React.act(() => {
+        root.render(h(VendorToolbarHarness));
+        return Promise.resolve();
+    });
     assert.equal(
         document.querySelector('[data-slot="filter-pane"]'),
         null,
@@ -265,6 +271,9 @@ try {
         'PASS: first-load FactBox tab/button, nonmodal ribbon outside click, pin/unpin, Escape focus, search focus, external panel toggle, closed filters, server-search Enter, title hint toggle. DOM/CSS pointer inheritance only; no browser layout or hit-testing.',
     );
 } finally {
-    await React.act(async () => root.unmount());
+    await React.act(() => {
+        root.unmount();
+        return Promise.resolve();
+    });
     window.close();
 }

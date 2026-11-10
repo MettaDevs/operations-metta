@@ -177,7 +177,8 @@ export class Parties {
         );
         if (!party) abort(404, 'Not Found');
         const [presented] = await this.present([party]);
-        return presented!;
+        if (!presented) throw new Error('Pihak tidak dapat disajikan.');
+        return presented;
     }
 
     // Daftar bertahap direktori dengan pencarian nama dan saringan jenis, status, peran, dan arsip.
@@ -348,6 +349,8 @@ export class Parties {
         const types =
             current === null ? ['person', 'organization'] : [current.type];
         if (input.type == null) problems.add('type', 'Pilih jenis pihak.');
+        // Kiriman bertipe unknown; sesudah cek null TypeScript menyebutnya {}, padahal isinya bisa teks.
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
         else if (!types.includes(String(input.type)))
             problems.add(
                 'type',
@@ -467,8 +470,11 @@ export class Parties {
                     : countFields.includes(field)
                       ? Number(value)
                       : field === 'nationality_country_code'
-                        ? String(value).toUpperCase()
-                        : String(value);
+                        ? // Kiriman bertipe unknown; sesudah cek null TypeScript menyebutnya {}, padahal isinya teks.
+                          // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                          String(value).toUpperCase()
+                        : // eslint-disable-next-line @typescript-eslint/no-base-to-string -- alasan yang sama
+                          String(value);
         }
         if (
             !('search_name' in input) &&
@@ -541,11 +547,12 @@ export class Parties {
             'select type, name, search_name from parties where tenant_id = $1 and id = $2',
             [this.workspace.tenantId, partyId],
         );
+        if (!current) abort(404, 'Not Found');
         const input = laravelBody.parse(body);
-        const problems = await this.check(input, current!);
+        const problems = await this.check(input, current);
         problems.fail();
         const version = expectedVersion(request, body);
-        const data = this.columns(input, current!);
+        const data = this.columns(input, current);
         await this.db.transaction(async () => {
             await this.claim(partyId, version);
             const organization = await this.db.one(
@@ -553,7 +560,7 @@ export class Parties {
                 'select true as found from organization_parties where tenant_id = $1 and party_id = $2',
                 [this.workspace.tenantId, partyId],
             );
-            if (organization && data.name !== current!.name)
+            if (organization && data.name !== current.name)
                 validation({
                     name: 'Ubah nama organisasi melalui halaman Organisasi agar identitasnya tetap sama.',
                 });

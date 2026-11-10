@@ -8,15 +8,17 @@ export function lookupComparator<T>(
     columns: DataTableColumn<T>[],
     sort: DataTableSort | null,
 ) {
-    const column = columns.find((item) => item.id === sort?.columnId);
+    const sortValue = columns.find(
+        (item) => item.id === sort?.columnId,
+    )?.sortValue;
 
-    if (!sort || !column?.sortValue) {
+    if (!sort || !sortValue) {
         return undefined;
     }
 
     return (left: T, right: T) => {
-        const a = column.sortValue!(left);
-        const b = column.sortValue!(right);
+        const a = sortValue(left);
+        const b = sortValue(right);
         const result =
             typeof a === 'number' && typeof b === 'number'
                 ? a - b

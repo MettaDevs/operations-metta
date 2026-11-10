@@ -453,7 +453,7 @@ export class Receipts {
         }
         if (data.vendor_id) {
             const vendor = await this.finance.vendor(data.vendor_id);
-            if (!vendor || vendor.legal_entity_id !== data.legal_entity_id)
+            if (vendor?.legal_entity_id !== data.legal_entity_id)
                 validation({
                     vendor_id:
                         'Pilih vendor milik entitas legal penerimaan ini.',

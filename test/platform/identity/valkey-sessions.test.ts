@@ -54,13 +54,13 @@ function harness(failing = false, principal: string | number = user.id) {
         },
     };
     const statements: string[] = [];
-    const unsafe = async (query: string, parameters: Bind[]) => {
+    const unsafe = (query: string, parameters: Bind[]) => {
         statements.push(query);
         const rows =
             query.startsWith('select * from users') && parameters[0] === user.id
                 ? [user]
                 : [];
-        return Object.assign(rows, { count: rows.length });
+        return Promise.resolve(Object.assign(rows, { count: rows.length }));
     };
     const db = new Database(
         { unsafe } as unknown as postgres.ReservedSql,
@@ -102,7 +102,7 @@ test('logout deletes the old key and saves the new session with the lifetime TTL
         ['DEL', prefix + id],
         ['SET', prefix + session.id, 'EX', 7200],
     ]);
-    const saved = JSON.parse(
+    const saved: unknown = JSON.parse(
         Buffer.from(store.get(prefix + session.id)!, 'base64').toString(),
     );
     expect(saved).toEqual({ _token: session.data._token });

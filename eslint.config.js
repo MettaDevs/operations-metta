@@ -25,6 +25,8 @@ export default tseslint.config(
         plugins: { 'react-hooks': reactHooks },
         rules: {
             eqeqeq: ['error', 'always', { null: 'ignore' }],
+            // Kode yang di-deploy mencatat lewat error reporting, bukan console.
+            'no-console': 'error',
             'react-hooks/rules-of-hooks': 'error',
             'react-hooks/exhaustive-deps': 'error',
             // Repo ini menulis bentuk data dengan `type`, dan schema zod adalah sumbernya.
@@ -65,8 +67,14 @@ export default tseslint.config(
         // noUncheckedIndexedAccess membuat `rows[0]!` wajar di test, dan tiruan sering berisi fungsi kosong.
         files: ['**/test/**'],
         rules: {
+            'no-console': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
             '@typescript-eslint/no-empty-function': 'off',
         },
+    },
+    {
+        // Skrip berjalan di terminal, jadi console adalah keluarannya.
+        files: ['scripts/**'],
+        rules: { 'no-console': 'off' },
     },
 );

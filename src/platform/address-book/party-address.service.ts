@@ -485,7 +485,10 @@ export class PartyAddresses {
                 );
                 await this.savePostalAddress(locationId, data);
             }
-            await this.syncPurposes(link.id, (data.purposes as string[]) ?? []);
+            await this.syncPurposes(
+                link.id,
+                (data.purposes as string[] | undefined) ?? [],
+            );
             return this.location(partyId, link.id);
         });
     }
@@ -782,7 +785,8 @@ export class PartyAddresses {
             this.contactSql('and e.id = $3'),
             [this.tenantId, partyId, saved],
         );
-        return row!;
+        if (!row) throw new Error('Kontak yang baru disimpan tidak ditemukan.');
+        return row;
     }
 
     private async promoteOldest(

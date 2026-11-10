@@ -165,8 +165,9 @@ for (const file of screens) {
                 element,
                 'Pencarian daftar halaman ada di toolbar lewat `search` pada RecordActionBar, bukan kotak pencarian sendiri.',
             );
-        if (imports.get(name)?.imported === 'DataTable') {
-            if (imports.get(name)!.module !== '@operations-metta/ui/data-table')
+        const binding = imports.get(name);
+        if (binding?.imported === 'DataTable') {
+            if (binding.module !== '@operations-metta/ui/data-table')
                 report(
                     element,
                     'Impor DataTable dari @operations-metta/ui/data-table.',

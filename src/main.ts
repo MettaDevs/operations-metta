@@ -153,7 +153,7 @@ export function createApplication(config: Config) {
     const valkey = valkeySessions(config);
     const client = clientBuild(config.CLIENT_DIR);
     const handler = new OpenAPIHandler(router, {
-        customErrorResponseBodyEncoder: (error) =>
+        customErrorResponseBodyEncoder: (error): unknown =>
             error.data ?? { message: error.message },
     });
     return {
@@ -302,14 +302,11 @@ if (import.meta.main) {
             port: app.server?.port,
         }) + '\n',
     );
-    process.on('SIGTERM', async () => {
+    const shutdown = async () => {
         await app.stop();
         await application.close();
         await flushErrorReporting();
-    });
-    process.on('SIGINT', async () => {
-        await app.stop();
-        await application.close();
-        await flushErrorReporting();
-    });
+    };
+    process.on('SIGTERM', () => void shutdown());
+    process.on('SIGINT', () => void shutdown());
 }

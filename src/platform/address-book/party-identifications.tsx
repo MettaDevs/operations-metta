@@ -261,16 +261,18 @@ export function PartyIdentifications({
                 ...draft.value.filter((row) => row.key !== key),
                 { key, ...value },
             ]);
+        } else if (partyId === null) {
+            throw new Error('Pihak belum tersimpan.');
         } else if (editing === 'new') {
             await api.partyIdentificationCreate({
-                params: { id: partyId! },
+                params: { id: partyId },
                 body: value,
             });
             toast.success('Nomor identitas ditambahkan.');
             onChanged();
         } else if (editing && 'id' in editing) {
             await api.partyIdentificationUpdate({
-                params: { id: partyId!, child: editing.id },
+                params: { id: partyId, child: editing.id },
                 body: { number: value.number, version: editing.version },
             });
             toast.success('Nomor identitas disimpan.');
@@ -293,8 +295,9 @@ export function PartyIdentifications({
         }
         setFailed(null);
         try {
+            if (partyId === null) throw new Error('Pihak belum tersimpan.');
             await api.partyIdentificationDelete({
-                params: { id: partyId!, child: row.id },
+                params: { id: partyId, child: row.id },
                 body: { version: row.version },
             });
             toast.success('Nomor identitas dihapus.');

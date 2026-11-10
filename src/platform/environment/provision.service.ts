@@ -16,7 +16,9 @@ function connect(settings: DatabaseSettings, database: string) {
         username: settings.DB_USERNAME,
         password: settings.DB_PASSWORD,
         max: 1,
-        onnotice: () => {},
+        onnotice: () => {
+            // NOTICE PostgreSQL sengaja tidak dicetak.
+        },
     });
 }
 

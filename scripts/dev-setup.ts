@@ -62,7 +62,9 @@ const maintenance = postgres({
     username: settings.DB_USERNAME,
     password: settings.DB_PASSWORD,
     max: 1,
-    onnotice: () => {},
+    onnotice: () => {
+        // NOTICE PostgreSQL sengaja tidak dicetak.
+    },
 });
 try {
     const [exists] =
@@ -84,7 +86,9 @@ const sql = postgres({
     username: settings.DB_USERNAME,
     password: settings.DB_PASSWORD,
     max: 1,
-    onnotice: () => {},
+    onnotice: () => {
+        // NOTICE PostgreSQL sengaja tidak dicetak.
+    },
 });
 
 try {

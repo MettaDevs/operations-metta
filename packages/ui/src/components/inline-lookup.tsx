@@ -335,7 +335,9 @@ export function InlineLookup<T>({
                                     </Button>
                                 </div>
                             )}
-                            {(onCreate || showDetails || showFullList) && (
+                            {(Boolean(onCreate) ||
+                                showDetails ||
+                                showFullList) && (
                                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-1 border-t p-2">
                                     {onCreate && (
                                         <ActionButton

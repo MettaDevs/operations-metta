@@ -153,7 +153,7 @@ function ChartTooltipContent({
         }
 
         const [item] = payload;
-        const key = `${labelKey ?? item?.dataKey ?? item?.name ?? 'value'}`;
+        const key = String(labelKey ?? item?.dataKey ?? item?.name ?? 'value');
         const itemConfig = getPayloadConfigFromPayload(config, item, key);
         const value =
             !labelKey && typeof label === 'string'
@@ -201,14 +201,16 @@ function ChartTooltipContent({
                 {payload
                     .filter((item) => item.type !== 'none')
                     .map((item, index) => {
-                        const key = `${nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
+                        const key = String(
+                            nameKey ?? item.name ?? item.dataKey ?? 'value',
+                        );
                         const itemConfig = getPayloadConfigFromPayload(
                             config,
                             item,
                             key,
                         );
                         const indicatorColor =
-                            color ?? item.payload?.fill ?? item.color;
+                            color ?? payloadFill(item.payload) ?? item.color;
 
                         return (
                             <div
@@ -219,13 +221,15 @@ function ChartTooltipContent({
                                 )}
                             >
                                 {formatter &&
-                                item?.value !== undefined &&
+                                item.value !== undefined &&
                                 item.name ? (
                                     formatter(
                                         item.value,
                                         item.name,
                                         item,
                                         index,
+                                        // Baris data diteruskan sebagai argumen kelima seperti bawaan shadcn, walau recharts mengetiknya sebagai daftar payload.
+                                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                                         item.payload,
                                     )
                                 ) : (
@@ -329,7 +333,7 @@ function ChartLegendContent({
             {payload
                 .filter((item) => item.type !== 'none')
                 .map((item, index) => {
-                    const key = `${nameKey ?? item.dataKey ?? 'value'}`;
+                    const key = String(nameKey ?? item.dataKey ?? 'value');
                     const itemConfig = getPayloadConfigFromPayload(
                         config,
                         item,
@@ -359,6 +363,15 @@ function ChartLegendContent({
                 })}
         </div>
     );
+}
+
+function payloadFill(payload: unknown): string | undefined {
+    return typeof payload === 'object' &&
+        payload !== null &&
+        'fill' in payload &&
+        typeof payload.fill === 'string'
+        ? payload.fill
+        : undefined;
 }
 
 // Helper to extract item config from a payload.

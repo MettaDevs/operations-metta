@@ -66,6 +66,10 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # Aturan type-aware: nilai `any` yang bocor, promise yang tidak ditunggu, `!`, dan switch yang tidak lengkap.
+      - name: Lint
+        run: bun run lint
+
       - name: Check formatting
         run: bun run format:check
 

@@ -46,7 +46,7 @@ async function harness() {
                   .replace(routeKey, 'Kr')
                   .replace(fortifyKey, 'Kf')
             : '';
-    const unsafe = async (query: string, parameters: Bind[]) => {
+    const unsafe = (query: string, parameters: Bind[]) => {
         const [first, second, third] = parameters;
         const keys = [first, second].filter(
             (value) => typeof value === 'string',
@@ -94,7 +94,7 @@ async function harness() {
         } else if (query.startsWith('select * from users')) {
             rows = first === email ? [user] : [];
         }
-        return Object.assign(rows, { count });
+        return Promise.resolve(Object.assign(rows, { count }));
     };
     const db = new Database(
         { unsafe } as unknown as postgres.ReservedSql,

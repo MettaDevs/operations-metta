@@ -100,8 +100,7 @@ function Select({
     };
 
     const inputId = React.useId();
-    const hasValue =
-        selected !== null && selected !== undefined && selected !== '';
+    const hasValue = selected !== null && selected !== '';
 
     return (
         <Combobox
@@ -185,7 +184,7 @@ function Select({
                 </ComboboxEmpty>
                 <ComboboxList>
                     <ComboboxCollection>
-                        {(item) => (
+                        {(item: (typeof displayedItems)[number]) => (
                             <ComboboxItem key={item.value} value={item}>
                                 {item.label}
                             </ComboboxItem>

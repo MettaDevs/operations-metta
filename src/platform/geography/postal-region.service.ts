@@ -2,15 +2,13 @@ import { z } from 'zod';
 import type { Database } from '../database/index.ts';
 import { lookupId, validation } from '../http/index.ts';
 
-const regionIdFields = [
-    'province_id',
-    'regency_id',
-    'district_id',
-    'village_id',
-    'postal_code_id',
-    'group_of_houses_id',
-] as const;
-type RegionIdField = (typeof regionIdFields)[number];
+type RegionIdField =
+    | 'province_id'
+    | 'regency_id'
+    | 'district_id'
+    | 'village_id'
+    | 'postal_code_id'
+    | 'group_of_houses_id';
 export type PostalRegionIds = Record<RegionIdField, string | null>;
 
 const named = z.object({ id: z.string(), name: z.string() });

@@ -248,8 +248,10 @@ export function PartyCard({
     const creating = partyId === null;
     const stored = useQuery({
         queryKey: ['party', partyId],
-        queryFn: async () =>
-            (await api.partyShow({ params: { id: partyId! } })).body.data,
+        queryFn: async () => {
+            if (partyId === null) throw new Error('Pihak belum tersimpan.');
+            return (await api.partyShow({ params: { id: partyId } })).body.data;
+        },
         enabled: !creating,
     });
     const party = stored.data ?? null;
@@ -472,7 +474,9 @@ function PartyCardBody({
                   editing: false,
                   onEdit: canManage ? () => setEditing(true) : undefined,
                   onDelete: canManage ? () => void remove() : undefined,
-                  recordUrl: `/settings/global-address-book?party=${party!.id}`,
+                  recordUrl: party
+                      ? `/settings/global-address-book?party=${party.id}`
+                      : undefined,
               },
     );
 
@@ -985,7 +989,7 @@ function PartyCardBody({
                                 )}
                             </CollapsibleSection>
                         )}
-                        {party && party.type === 'person' && (
+                        {party?.type === 'person' && (
                             <CollapsibleSection
                                 value="duplicates"
                                 title="Kemungkinan data ganda"

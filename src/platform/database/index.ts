@@ -18,7 +18,9 @@ export function createPool(config: Config) {
         max: config.DB_POOL_SIZE,
         idle_timeout: 30,
         connect_timeout: 10,
-        onnotice: () => {},
+        onnotice: () => {
+            // NOTICE PostgreSQL sengaja tidak dicetak.
+        },
         types: {
             rawDate: {
                 to: 1082,

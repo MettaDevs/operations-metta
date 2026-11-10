@@ -60,7 +60,7 @@ function Textarea({
                 onClick?.(event);
 
                 if (!event.defaultPrevented && canActivate) {
-                    activation?.activate(event.currentTarget, true);
+                    activation.activate(event.currentTarget, true);
                 }
             }}
             onKeyDown={(event) => {
@@ -71,7 +71,7 @@ function Textarea({
                     canActivate &&
                     !event.nativeEvent.isComposing &&
                     (event.key === 'Enter' || event.key === ' ') &&
-                    activation?.activate(event.currentTarget, true)
+                    activation.activate(event.currentTarget, true)
                 ) {
                     event.preventDefault();
                 }

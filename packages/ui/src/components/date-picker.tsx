@@ -42,10 +42,12 @@ export function parseDateInput(text: string): string | undefined {
         return '';
     }
 
-    const parts = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text.trim());
-    const iso = parts
-        ? `${parts[3]}-${parts[2]!.padStart(2, '0')}-${parts[1]!.padStart(2, '0')}`
-        : text.trim();
+    const [, day, month, year] =
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text.trim()) ?? [];
+    const iso =
+        day && month && year
+            ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+            : text.trim();
 
     return parseDate(iso) ? iso : undefined;
 }
@@ -96,7 +98,7 @@ export function formatDateInput(
     let digits = 0;
 
     while (nextCaret < formatted.length && digits < digitsBeforeCaret) {
-        if (/\d/.test(formatted[nextCaret]!)) {
+        if (/\d/.test(formatted.charAt(nextCaret))) {
             digits += 1;
         }
 

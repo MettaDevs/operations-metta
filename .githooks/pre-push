@@ -1,0 +1,3 @@
+#!/bin/sh
+# Push ditolak bila lint gagal. CI menjalankan pemeriksaan yang sama, jadi ini hanya memendekkan putarannya.
+exec bun run lint

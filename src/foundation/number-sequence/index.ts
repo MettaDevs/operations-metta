@@ -158,7 +158,7 @@ export class NumberIssuer {
                     ? 'FY:' + fiscal.year_id
                     : `FP:${fiscal.year_id}:${fiscal.period_ordinal}`;
             if (sequence.scope_type === 'operating_unit')
-                key += '|legal_entity:' + this.scope.legalEntityId;
+                key += '|legal_entity:' + String(this.scope.legalEntityId);
         }
         return {
             key,

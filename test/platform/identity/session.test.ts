@@ -19,7 +19,9 @@ test('encrypted cookies validate both the envelope MAC and the cookie-name prefi
     const encrypted = cipher.encrypt('laravel-session', session);
     expect(cipher.decrypt('laravel-session', encrypted)).toBe(session);
     expect(cipher.decrypt('XSRF-TOKEN', encrypted)).toBeNull();
-    const data = JSON.parse(Buffer.from(encrypted, 'base64').toString());
+    const data = JSON.parse(Buffer.from(encrypted, 'base64').toString()) as {
+        value: string;
+    };
     data.value = data.value.slice(0, -2) + 'AA';
     expect(
         cipher.decrypt(

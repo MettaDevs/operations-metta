@@ -59,6 +59,7 @@ export function depreciationStart(
                     .slice(0, 10);
             return midpoint.toISOString().slice(0, 10);
         }
+        case null:
         default:
             return current.toISOString().slice(0, 10);
     }

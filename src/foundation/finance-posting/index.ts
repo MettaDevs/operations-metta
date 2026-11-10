@@ -217,8 +217,7 @@ export class FinancePostings {
                 : await this.vendor(input.vendor_id);
         if (
             (input.vendor_id !== null &&
-                (!vendor ||
-                    vendor.legal_entity_id !== input.legal_entity_id)) ||
+                vendor?.legal_entity_id !== input.legal_entity_id) ||
             (input.requires_vendor && !vendor && !ignoreMissingVendor)
         )
             coded(500, 'posting_failed', this.failure);
@@ -390,7 +389,7 @@ export class FinancePostings {
             const dimensions: Dimension[] = [];
             let businessUnitCode: string | null = null;
             let departmentCode: string | null = null;
-            if (!unit || unit.classification !== 'operating_unit')
+            if (unit?.classification !== 'operating_unit')
                 issue(
                     'ORG_UNIT_UNKNOWN',
                     'Unit organisasi baris ini tidak ditemukan.',
@@ -645,7 +644,7 @@ export class FinancePostings {
                 'select id,input_hash,currency_decimals,status,payload,hold_reasons from finance_postings where tenant_id=$1 and posting_id=$2 limit 1',
                 [this.tenantId, value.input.posting_id],
             );
-            if (!existing || existing.input_hash !== value.hash)
+            if (existing?.input_hash !== value.hash)
                 coded(500, 'posting_failed', this.failure);
         }
     }
