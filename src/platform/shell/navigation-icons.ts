@@ -4,6 +4,7 @@ import {
     Database,
     LayoutDashboard,
     Map as MapIcon,
+    ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -14,6 +15,7 @@ const icons: Record<string, LucideIcon> = {
     organization: Building2,
     'address-book': Contact,
     'address-setup': MapIcon,
+    access: ShieldCheck,
 };
 
 export function navigationIcon(groupId: string): LucideIcon {
