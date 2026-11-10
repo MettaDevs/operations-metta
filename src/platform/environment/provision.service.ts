@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import type { DatabaseSettings } from '../config/index.ts';
 import { migrate, type MigrationSource } from '../migration/index.ts';
 import type { ProvisionRequest } from './provision.schema.ts';
+import { recordRoute } from './route.service.ts';
 
 // Nama role yang dibuat untuk admin pertama. Pengguna boleh menggantinya; yang menandai pemilik adalah is_owner.
 const ownerRoleName = 'Pemilik';
@@ -101,10 +102,10 @@ async function bootstrapTenant(
     });
 }
 
-// Menyiapkan satu lingkungan sampai admin pertamanya bisa login: membuat database lingkungan dan memigrasi Core di
-// dalamnya, lalu menulis tenant. Database bersama (database null) dimigrasi oleh deploy runtime, bukan di sini.
-// Module belum ikut: module dipasang dari entitlement. Aman diulang di setiap langkah. Mengembalikan false bila tenant
-// itu sudah ada.
+// Menyiapkan satu lingkungan sampai admin pertamanya bisa login di alamatnya: membuat database lingkungan dan
+// memigrasi Core di dalamnya, menulis tenant, lalu mencatat alamatnya di database runtime. Database bersama (database
+// null) dimigrasi oleh deploy runtime, bukan di sini. Module belum ikut: module dipasang dari entitlement. Aman
+// diulang di setiap langkah. Mengembalikan false bila tenant itu sudah ada.
 export async function provisionEnvironment(
     settings: DatabaseSettings,
     source: MigrationSource,
@@ -114,11 +115,26 @@ export async function provisionEnvironment(
         await createDatabase(settings, request.database);
     }
     const sql = connect(settings, request.database ?? settings.DB_DATABASE);
+    let created: boolean;
     try {
         if (request.database !== null)
             await migrate(sql, source, { modules: [] });
-        return { created: await bootstrapTenant(sql, request) };
+        created = await bootstrapTenant(sql, request);
     } finally {
         await sql.end();
     }
+    // Alamat dicatat terakhir, sesudah tenant lengkap, supaya alamat tidak pernah menunjuk lingkungan setengah jadi.
+    const runtime = connect(settings, settings.DB_DATABASE);
+    try {
+        await recordRoute(runtime, {
+            tenant_slug: request.tenant.slug,
+            kind: request.environment.kind,
+            tenant_id: request.tenant.id,
+            name: request.environment.name,
+            database_name: request.database,
+        });
+    } finally {
+        await runtime.end();
+    }
+    return { created };
 }

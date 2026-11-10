@@ -47,9 +47,12 @@ export function shellRoutes() {
                         coreNavigation,
                         shell.permissions,
                     ),
-                    // Spanduk demo/sandbox CoreERP membaca lingkungan dari alamat (COREERP_BASE_DOMAIN), dan
-                    // pembacaan itu belum ada di repo ini; config mengunci domain dasarnya kosong.
-                    environment: null,
+                    environment: context.session.environment
+                        ? {
+                              kind: context.session.environment.kind,
+                              name: context.session.environment.name,
+                          }
+                        : null,
                 });
             }),
     };

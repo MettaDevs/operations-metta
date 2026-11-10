@@ -41,6 +41,7 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
         const id = Bun.randomUUIDv7();
         const slug = `uji-${id.slice(-12)}`;
         return provisionRequestSchema.parse({
+            environment: { kind: 'production', name: 'Produksi' },
             database,
             client: {
                 id: Bun.randomUUIDv7(),
@@ -143,6 +144,15 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
                 [provision.tenant.id],
             );
             expect(shared?.count).toBe(0);
+            const [route] = await runtime.unsafe(
+                'select tenant_id, kind, database_name from environment_routes where tenant_slug = $1',
+                [provision.tenant.slug],
+            );
+            expect({ ...route }).toEqual({
+                tenant_id: provision.tenant.id,
+                kind: 'production',
+                database_name: ownDatabase,
+            });
             const own = operationsTestApp({ DB_DATABASE: ownDatabase });
             try {
                 expect(

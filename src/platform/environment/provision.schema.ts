@@ -1,14 +1,23 @@
 import { z } from 'zod';
+import { environmentKinds, reservedLabels } from './address.ts';
 
 // Slug tenant menjadi label alamat `<tenant>.<base>`, jadi bentuknya mengikuti label DNS.
 const label = z
     .string()
-    .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, 'Slug harus label DNS.');
+    .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, 'Slug harus label DNS.')
+    .refine(
+        (slug) => !reservedLabels.has(slug),
+        'Slug ini dipakai layanan lain.',
+    );
 
-// Satu lingkungan yang disiapkan: database-nya (null berarti database bersama runtime), customer, tenant, dan admin
-// pertama. Id datang dari control plane, pemilik registrinya, sehingga penyiapan yang diulang menemukan tenant yang
+// Satu lingkungan yang disiapkan: jenis dan namanya, database-nya (null berarti database bersama runtime), customer,
+// tenant, dan admin pertama. Id datang dari control plane, pemilik registrinya, sehingga penyiapan yang diulang menemukan tenant yang
 // sama dan tidak membuat apa pun lagi.
 export const provisionRequestSchema = z.object({
+    environment: z.object({
+        kind: z.enum(environmentKinds),
+        name: z.string().trim().min(1).max(100),
+    }),
     database: z
         .string()
         .regex(

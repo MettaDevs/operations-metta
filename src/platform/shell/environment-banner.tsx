@@ -14,14 +14,14 @@ const copy: Record<string, { label: string; sentence: string }> = {
 /**
  * Memberi tahu pengguna bahwa ia sedang tidak berada di tempat kerja yang sebenarnya, dipindah dari environment-banner
  * CoreERP. Permanen dan tidak dapat ditutup: pengguna yang tidak tahu ia di sandbox akan memperlakukan angka sandbox
- * sebagai angka sungguhan. Server belum membaca lingkungan dari alamat, jadi `environment` saat ini selalu null.
+ * sebagai angka sungguhan. Lingkungan dibaca server dari alamat; produksi juga dikirim, dan tidak diberi spanduk.
  */
 export function EnvironmentBanner({
     environment,
 }: {
     environment: { kind: string; name: string } | null;
 }) {
-    if (!environment) return null;
+    if (!environment || environment.kind === 'production') return null;
     const text = copy[environment.kind] ?? {
         label: environment.kind,
         sentence:

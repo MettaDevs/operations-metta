@@ -30,6 +30,11 @@ import {
     type Context,
 } from './platform/http/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
+import {
+    findRoute,
+    parseAddress,
+    type EnvironmentRoute,
+} from './platform/environment/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
 import {
     loginInputSchema,
@@ -107,7 +112,50 @@ export const router = {
 export type Router = typeof router;
 
 export function createApplication(config: Config) {
+    // Pool database runtime: peta alamat, dan data lingkungan yang memakai database bersama. Lingkungan dengan
+    // database sendiri mendapat pool-nya saat pertama kali dibuka.
     const pool = createPool(config);
+    const environmentPools = new Map<string, ReturnType<typeof createPool>>();
+    function poolFor(route: EnvironmentRoute | null) {
+        if (!route?.database_name) return pool;
+        let environmentPool = environmentPools.get(route.database_name);
+        if (!environmentPool) {
+            environmentPool = createPool({
+                ...config,
+                DB_DATABASE: route.database_name,
+            });
+            environmentPools.set(route.database_name, environmentPool);
+        }
+        return environmentPool;
+    }
+    // Alamat di bawah domain dasar yang tidak menunjuk lingkungan tercatat dijawab 404, begitu pula alamat lain saat
+    // domain dasar diisi, supaya tidak ada request yang jatuh ke database runtime tanpa tenant.
+    async function resolve(
+        request: Request,
+    ): Promise<EnvironmentRoute | null | 'not-found'> {
+        const address = parseAddress(
+            request.headers.get('host') ?? new URL(request.url).host,
+            config.BASE_DOMAIN,
+        );
+        switch (address.kind) {
+            case 'unrouted':
+                return config.BASE_DOMAIN ? 'not-found' : null;
+            case 'unknown':
+                return 'not-found';
+            case 'environment':
+                return (
+                    (await findRoute(
+                        pool,
+                        address.tenantSlug,
+                        address.environment,
+                    )) ?? 'not-found'
+                );
+            default: {
+                const unknown: never = address;
+                throw new Error(`Alamat tidak dikenal: ${String(unknown)}`);
+            }
+        }
+    }
     const valkey = valkeySessions(config);
     const client = clientBuild(config.CLIENT_DIR);
     const handler = new OpenAPIHandler(router, {
@@ -122,7 +170,32 @@ export function createApplication(config: Config) {
             // Berkas build dan dokumen layar tidak membuka sesi maupun koneksi database.
             const served = await client.serve(request);
             if (served) return served;
-            const connection = await pool.reserve();
+            let environment: EnvironmentRoute | null;
+            try {
+                const resolved = await resolve(request);
+                if (resolved === 'not-found')
+                    return Response.json(
+                        { message: 'Not Found' },
+                        {
+                            status: 404,
+                            headers: { 'Cache-Control': 'no-cache, private' },
+                        },
+                    );
+                environment = resolved;
+            } catch (error) {
+                reportError(error, {
+                    method: request.method,
+                    path: new URL(request.url).pathname,
+                });
+                return Response.json(
+                    { message: 'Server Error' },
+                    {
+                        status: 500,
+                        headers: { 'Cache-Control': 'no-cache, private' },
+                    },
+                );
+            }
+            const connection = await poolFor(environment).reserve();
             const db = new Database(
                 connection,
                 config.TRACE_FILE,
@@ -137,6 +210,7 @@ export function createApplication(config: Config) {
                     request,
                     clientAddress,
                     valkey,
+                    environment,
                 );
                 const context: Context = {
                     db,
@@ -195,7 +269,12 @@ export function createApplication(config: Config) {
         },
         close: async () => {
             valkey?.close();
-            await pool.end();
+            await Promise.all([
+                pool.end(),
+                ...[...environmentPools.values()].map((environmentPool) =>
+                    environmentPool.end(),
+                ),
+            ]);
         },
     };
 }

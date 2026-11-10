@@ -44,10 +44,13 @@ export class Workspace {
         session: Session,
     ): Promise<Membership[]> {
         const user = session.requireUser();
+        // Alamat lingkungan menentukan tenant-nya. Di database bersama, pengguna yang menjadi anggota beberapa tenant
+        // hanya bekerja di tenant pemilik alamat yang dibukanya.
+        const tenantId = session.environment?.tenant_id ?? null;
         const memberships = await db.rows(
             membershipSchema,
-            "select m.id,m.tenant_id from tenant_memberships m where m.user_id=$1 and m.status='active' order by m.created_at",
-            [user.id],
+            `select m.id,m.tenant_id from tenant_memberships m where m.user_id=$1 and m.status='active'${tenantId ? ' and m.tenant_id=$2' : ''} order by m.created_at`,
+            tenantId ? [user.id, tenantId] : [user.id],
         );
         if (memberships.length) {
             const tenantIds = memberships.map(
