@@ -17,7 +17,7 @@ import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { useRecordNavigation } from '@operations-metta/ui/use-record-navigation';
 import { useRecordTransition } from '@operations-metta/ui/use-record-transition';
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -92,7 +92,6 @@ function PatientsPage(): ReactNode {
     );
     const search = route.useSearch();
     const navigate = route.useNavigate();
-    const queryClient = useQueryClient();
     const contentRef = useRef<HTMLDivElement>(null);
     const [creating, setCreating] = useState(false);
     const [createKey, setCreateKey] = useState(0);
@@ -413,15 +412,6 @@ function PatientsPage(): ReactNode {
                                 list.reload();
                                 closePatient();
                             }}
-                            onOpenPatient={(id) =>
-                                transition.request(() => {
-                                    setCreating(false);
-                                    void queryClient.invalidateQueries({
-                                        queryKey: ['healthcare-patient', id],
-                                    });
-                                    openPatient(id);
-                                })
-                            }
                         />
                     </PageDialogContent>
                 </PageDialog>

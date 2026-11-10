@@ -292,10 +292,23 @@ describe.skipIf(!process.env.DB_HOST)('party directory', () => {
                     type: 'person',
                     status: 'active',
                     name: 'Format Salah',
-                    identifications: [{ type_code: 'nik', number: '123' }],
+                    identifications: [{ type_code: 'nik', number: '12A' }],
                 }),
             ),
         ).toEqual({ 'identifications.0.number': ['Format NIK tidak sesuai.'] });
+        // NIK hanya angka, tanpa batas panjang, mengikuti form pasien aplikasi lama (Core 0015).
+        await created({
+            name: 'NIK Pendek',
+            identifications: [{ type_code: 'nik', number: '00000000' }],
+        });
+        // NIK pengganti boleh dipakai banyak pihak.
+        for (const name of ['Asing Satu', 'Asing Dua'])
+            await created({
+                name,
+                identifications: [
+                    { type_code: 'nik', number: '9999999999999999' },
+                ],
+            });
 
         // Indeks unik parsial menolak NIK kedua yang lolos pemeriksaan aplikasi.
         const other = await created({ name: 'Tanpa NIK' });

@@ -10,7 +10,6 @@ import {
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
 import type {
-    partyLookupInputSchema,
     patientInputSchema,
     patientListQuerySchema,
 } from './patient.schema.ts';
@@ -22,7 +21,7 @@ async function patients(context: Context, body?: unknown) {
     return new Patients(context.db, await moduleWorkspace(context, body));
 }
 
-// Master pasien: daftar dan pencarian, data form, cari party lewat NIK, detail, daftar baru, ubah, dan hapus.
+// Master pasien: daftar dan pencarian, data form, detail, daftar baru, ubah, dan hapus.
 export function patientRoutes() {
     const path: `/${string}` = `/api/modules/${moduleId}/v1/patients`;
     const route = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', suffix = '') =>
@@ -59,15 +58,6 @@ export function patientRoutes() {
                     await (
                         await patients(context)
                     ).occupations(new URL(context.request.url).searchParams),
-                ),
-            ),
-        healthcarePatientPartyLookup: route('POST', '/party-lookup')
-            .input(typedBody<z.input<typeof partyLookupInputSchema>>())
-            .handler(async ({ context, input }) =>
-                ok(
-                    await (
-                        await patients(context, input.body)
-                    ).lookup(input.body),
                 ),
             ),
         healthcarePatientShow: route('GET', '/{id}')

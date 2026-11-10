@@ -1147,18 +1147,6 @@
             }
         }
     },
-    "healthcarePatientPartyLookup": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "POST",
-                "path": "/api/modules/healthcare/v1/patients/party-lookup",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
     "healthcarePatientShow": {
         "~orpc": {
             "errorMap": {},

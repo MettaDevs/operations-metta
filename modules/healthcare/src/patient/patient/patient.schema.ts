@@ -62,8 +62,6 @@ export const patientInputSchema = z.object({
 export type PatientInput = z.infer<typeof patientInputSchema>;
 export type PatientAddressInput = z.infer<typeof patientAddressInputSchema>;
 
-export const partyLookupInputSchema = z.object({ nik: z.string() });
-
 // Query string daftar pasien. Handler membaca URL-nya sendiri; skema ini memberi tipe bagi pemanggil di layar.
 export const patientListQuerySchema = listParametersSchema.extend({
     status: z.enum(['active', 'inactive']).optional(),

@@ -8,6 +8,7 @@ import {
     Parties,
     PartyAddresses,
     PartyIdentifications,
+    placeholderNik,
     registerPartyRole,
 } from '@core/platform/address-book/index.ts';
 import {
@@ -32,7 +33,6 @@ import {
     PatientSharing,
 } from '../patient-sharing/patient-sharing.service.ts';
 import {
-    partyLookupInputSchema,
     patientAddressSchema,
     patientInputSchema,
     patientListRowSchema,
@@ -504,58 +504,9 @@ export class Patients {
         };
     }
 
-    // Pencarian party lewat NIK sebelum mendaftarkan pasien baru (POST, supaya NIK tidak masuk URL). Bila party sudah
-    // ada, pendaftaran hanya menambah peran pasien; bila ia sudah pasien yang terlihat bagi pengguna, NRM-nya ikut
-    // dikirim. Bila ia pasien di kelompok atau legal entity lain yang tidak terlihat, jawabannya hanya "NIK sudah
-    // terdaftar" tanpa nama, jenis kelamin, atau tanggal dan tempat lahir (keputusan pemilik produk, 10 November 2026).
-    async lookup(body: unknown) {
-        this.workspace.guard('patient', 'create');
-        const parsed = partyLookupInputSchema.safeParse(body);
-        const nik = parsed.success ? parsed.data.nik.replace(/\s+/gu, '') : '';
-        if (!/^[0-9]{16}$/.test(nik)) validation({ nik: 'Isi NIK 16 angka.' });
-        const party = await this.partyByNik(nik);
-        if (!party) return { data: null };
-        const summary = await this.db.one(
-            z.object({
-                id: z.string(),
-                name: z.string(),
-                gender: z.string().nullable(),
-                birth_date: z.string().nullable(),
-                birth_place: z.string().nullable(),
-            }),
-            'select id, name, gender, birth_date::text as birth_date, birth_place from parties where tenant_id = $1 and id = $2',
-            [this.workspace.tenantId, party],
-        );
-        if (!summary) return { data: null };
-        const patient = await this.existingPatient(party);
-        if (!patient && (await this.patientElsewhere(party)))
-            return {
-                data: {
-                    id: summary.id,
-                    name: null,
-                    gender: null,
-                    birth_date: null,
-                    birth_place: null,
-                    patient: null,
-                    registered_elsewhere: true,
-                },
-            };
-        return {
-            data: { ...summary, patient, registered_elsewhere: false },
-        };
-    }
-
-    private async patientElsewhere(partyId: string): Promise<boolean> {
-        return (
-            (await this.db.one(
-                z.object({ found: z.boolean() }),
-                'select true as found from sim_m_pasien where tenant_id = $1 and party_id = $2 and deleted_at is null limit 1',
-                [this.workspace.tenantId, partyId],
-            )) !== undefined
-        );
-    }
-
+    // Party pemilik NIK ini. NIK pengganti dipakai banyak orang, jadi tidak pernah menunjuk satu party.
     private async partyByNik(nik: string): Promise<string | null> {
+        if (nik === placeholderNik) return null;
         const found = await this.db.one(
             z.object({ party_id: z.string() }),
             `select i.party_id from party_identifications i
@@ -564,24 +515,6 @@ export class Patients {
             [this.workspace.tenantId, nik],
         );
         return found?.party_id ?? null;
-    }
-
-    // Catatan pasien party ini yang terlihat bagi pengguna.
-    private async existingPatient(partyId: string) {
-        const bindings: Bind[] = [this.workspace.tenantId, partyId];
-        const bind = (value: Bind) => {
-            bindings.push(value);
-            return `$${bindings.length}`;
-        };
-        return (
-            (await this.db.one(
-                z.object({ id: z.string(), nrm: z.string() }),
-                `select k.id, k.nrm from sim_m_pasien k
-                 where k.tenant_id = $1 and k.party_id = $2 and k.deleted_at is null and ${await this.visibility(bind)}
-                 order by k.created_at limit 1`,
-                bindings,
-            )) ?? null
-        );
     }
 
     // Aturan wajib form pasien sistem lama (common/patients/form.php dan Patient_m::rules):
@@ -628,7 +561,8 @@ export class Patients {
             if (domestic) {
                 // NIK yang tidak dikirim saat mengubah berarti tidak diubah.
                 if ('nik' in input || creating)
-                    if (blank(input.nik)) add(errors, 'nik', 'Isi NIK.');
+                    if (blank(input.nik))
+                        add(errors, 'nik', 'No Identitas harus diisi!');
                 requireAddress(
                     'identity_address',
                     input.identity_address,
@@ -753,6 +687,14 @@ export class Patients {
                     party_reused: false,
                 },
             };
+        // Form lama mengisi NIK warga negara asing dengan NIK pengganti (common/views/patients/form.php).
+        const nationality = trimmed(input.nationality_country_code);
+        if (
+            nationality !== null &&
+            nationality.toUpperCase() !== indonesia &&
+            blank(input.nik)
+        )
+            input.nik = placeholderNik;
         const nik = trimmed(input.nik)?.replace(/\s+/gu, '') ?? null;
         const existingParty = nik ? await this.partyByNik(nik) : null;
         // Cara bayar yang tidak dikirim memakai tipe pasien bawaan beserta penjamin bawaannya.
@@ -780,9 +722,11 @@ export class Patients {
                     legalEntityId,
                     unitId,
                 );
+                // Pesan form lama persis (common/controllers/Patients.php, create). Pasien itu terlihat bagi pengguna,
+                // jadi NRM dan namanya tidak membocorkan data di luar cakupan berbaginya.
                 if (already)
                     validation({
-                        nik: `NIK ini sudah terdaftar sebagai pasien dengan NRM ${already}.`,
+                        nik: `NIK sudah terdaftar! dengan NRM: ${already.nrm} dan Nama: ${already.name}`,
                     });
                 partyId = existingParty;
             } else {
@@ -861,8 +805,8 @@ export class Patients {
         };
     }
 
-    // NRM pasien party ini yang sudah terlihat dari legal entity dan unit pendaftar, sehingga orang yang sama tidak
-    // didaftarkan dua kali di data pasien yang dipakai bersama.
+    // Pasien party ini yang sudah terlihat dari legal entity dan unit pendaftar. Padanan "NIK sudah ada di mPasien"
+    // form lama: di sana satu database satu klinik, di sini cakupannya cakupan berbagi pasien unit pendaftar.
     private async patientInGroup(
         partyId: string,
         legalEntityId: string,
@@ -873,13 +817,17 @@ export class Patients {
             bindings.push(value);
             return `$${bindings.length}`;
         };
-        const found = await this.db.one(
-            z.object({ nrm: z.string() }),
-            `select k.nrm from sim_m_pasien k where k.tenant_id = $1 and k.party_id = $2 and k.deleted_at is null
-               and ${await this.sharing.clause(legalEntityId, [unitId], bind)} limit 1`,
-            bindings,
+        return (
+            (await this.db.one(
+                z.object({ nrm: z.string(), name: z.string() }),
+                `select k.nrm, p.name from sim_m_pasien k
+                 join parties p on p.tenant_id = k.tenant_id and p.id = k.party_id
+                 where k.tenant_id = $1 and k.party_id = $2 and k.deleted_at is null
+                   and ${await this.sharing.clause(legalEntityId, [unitId], bind)}
+                 order by k.created_at limit 1`,
+                bindings,
+            )) ?? null
         );
-        return found?.nrm ?? null;
     }
 
     // Kolom pasien dari kiriman. Saat mengubah, isian yang tidak dikirim tidak diubah.

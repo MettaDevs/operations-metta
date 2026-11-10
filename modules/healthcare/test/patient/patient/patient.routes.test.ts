@@ -508,20 +508,59 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ((await again.json()) as { errors: Record<string, string[]> })
                 .errors.nik,
         ).toEqual([
-            `NIK ini sudah terdaftar sebagai pasien dengan NRM ${reused.data.nrm}.`,
+            // Pesan form lama persis (common/controllers/Patients.php, create).
+            `NIK sudah terdaftar! dengan NRM: ${reused.data.nrm} dan Nama: Pasien Uji`,
         ]);
-        const lookup = await json<{
-            data: { id: string; patient: { nrm: string } | null } | null;
-        }>(
-            await clerks.pustu!.post(`${api}/patients/party-lookup`, {
-                nik: nik(10),
-            }),
-            200,
+        // Pencarian NIK saat mengetik dicabut; form lama tidak punya.
+        expect(
+            (
+                await clerks.pustu!.post(`${api}/patients/party-lookup`, {
+                    nik: nik(10),
+                })
+            ).status,
+        ).toBe(404);
+    }, 30_000);
+
+    test('NIK follows the old form: digits of any length, required for citizens, and a shared placeholder for foreigners', async () => {
+        const missing = await register(
+            clerks.lepas!,
+            patientBody({ nik: null }),
         );
-        expect(lookup.data).toMatchObject({
-            id: first.data.party_id,
-            patient: { nrm: reused.data.nrm },
-        });
+        expect(
+            ((await missing.json()) as { errors: Record<string, string[]> })
+                .errors.nik,
+        ).toEqual(['No Identitas harus diisi!']);
+        // Panjang tidak diperiksa, seperti input angka form lama: isian pengganti bayi diterima.
+        const baby = await created(
+            clerks.lepas!,
+            patientBody({ nik: '00000000', name: 'Bayi Uji' }),
+        );
+        expect(baby.data.nik.number).toBe('****0000');
+        const letters = await register(
+            clerks.lepas!,
+            patientBody({ nik: '12AB' }),
+        );
+        expect(letters.status).toBe(422);
+        // Warga negara asing mendapat NIK pengganti, dan banyak orang boleh memakainya.
+        const foreigner = () =>
+            created(
+                clerks.lepas!,
+                patientBody({
+                    nationality_country_code: 'AU',
+                    nik: null,
+                    identity_address: null,
+                    passport_number: `PA${Math.floor(Math.random() * 1e6)}`,
+                    domicile_address: { street: 'Jl. Tinggal No. 9' },
+                }),
+            );
+        const first = await foreigner();
+        const second = await foreigner();
+        expect(second.data.party_id).not.toBe(first.data.party_id);
+        const [placeholders] = await pool.unsafe(
+            "select count(*)::int as count from party_identifications where tenant_id = $1 and type_code = 'nik' and number = '9999999999999999' and deleted_at is null",
+            [tenantId],
+        );
+        expect(Number(placeholders?.count)).toBeGreaterThanOrEqual(2);
     }, 30_000);
 
     test('the form rules of the old patient form are required', async () => {
@@ -883,22 +922,8 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         );
         expect(await listed(clerks.lepas!)).not.toContain(other.data.id);
         expect(await listed(admin)).not.toContain(other.data.id);
-        // NIK yang sudah terdaftar di legal entity lain hanya disebut terdaftar, tanpa nama atau tanggal lahir.
-        const lookup = await json<{ data: Record<string, unknown> | null }>(
-            await clerks.kedua!.post(`${api}/patients/party-lookup`, {
-                nik: nik(20),
-            }),
-            200,
-        );
-        expect(lookup.data).toMatchObject({
-            name: null,
-            gender: null,
-            birth_date: null,
-            birth_place: null,
-            patient: null,
-            registered_elsewhere: true,
-        });
-        // Party tetap dipakai ulang: orang yang sama didaftarkan di legal entity kedua dengan NRM-nya sendiri.
+        // NIK yang hanya dipakai pasien di luar cakupan berbagi tidak ditolak dan tidak disebut: party yang sama dipakai
+        // ulang, dan orang itu didaftarkan di legal entity kedua dengan NRM-nya sendiri.
         const reused = await created(
             clerks.kedua!,
             patientBody({ nik: nik(20), name: '' }),
@@ -906,17 +931,12 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(reused.party_reused).toBe(true);
         expect(reused.data.party_id).toBe(lepas.data.party_id);
         expect(reused.data.legal_entity_id).toBe(otherCompany);
-        // Kelompok lain di legal entity yang sama juga hanya mendapat "NIK sudah terdaftar".
-        const group = await json<{ data: Record<string, unknown> | null }>(
-            await clerks.barat!.post(`${api}/patients/party-lookup`, {
-                nik: nik(20),
-            }),
-            200,
+        // Kelompok lain di legal entity yang sama juga di luar cakupan berbagi Lepas.
+        const group = await created(
+            clerks.barat!,
+            patientBody({ nik: nik(20), name: '' }),
         );
-        expect(group.data).toMatchObject({
-            name: null,
-            registered_elsewhere: true,
-        });
+        expect(group.data.party_id).toBe(lepas.data.party_id);
     }, 30_000);
 
     test('a sharing policy chooses legal entities that see each other, one active policy per legal entity', async () => {
@@ -1000,6 +1020,13 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             patientBody({ nik: lepasNik?.number ?? '' }),
         );
         expect(duplicate.status).toBe(422);
+        // Pasien itu terlihat lewat kebijakan, jadi pesan form lama menyebut NRM dan namanya.
+        expect(
+            ((await duplicate.json()) as { errors: Record<string, string[]> })
+                .errors.nik,
+        ).toEqual([
+            `NIK sudah terdaftar! dengan NRM: ${lepas.data.nrm} dan Nama: Pasien Dibagi`,
+        ]);
         // Kebijakan yang dinonaktifkan menutup lagi, dan perubahannya tercatat.
         await json(
             await admin.patch(`${policies}/${future.data.id}`, {
