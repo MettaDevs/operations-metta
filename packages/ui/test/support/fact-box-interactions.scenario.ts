@@ -162,10 +162,7 @@ try {
         'card panel has no duplicate controls',
     );
     await click(document.querySelector('[role="tab"][id$="attachments"]'));
-    assert.match(
-        document.querySelector('aside')!.textContent!,
-        /Lampiran card/,
-    );
+    assert.match(document.querySelector('aside')!.textContent, /Lampiran card/);
     let vendorSearches = 0;
     function VendorToolbarHarness() {
         const [open, setOpen] = React.useState(false);
@@ -255,7 +252,7 @@ try {
     assert.ok(titleButton!.className.includes('hover:underline'));
     await click(titleButton);
     assert.match(
-        document.querySelector('[role="tooltip"]')!.textContent!,
+        document.querySelector('[role="tooltip"]')!.textContent,
         /Akun vendor per perusahaan/,
     );
     await click(titleButton);

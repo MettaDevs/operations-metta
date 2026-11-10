@@ -10,7 +10,7 @@ import {
 import { z } from 'zod';
 import type { Config } from '../config/index.ts';
 import type { EnvironmentRoute } from '../environment/index.ts';
-import { Database } from '../database/index.ts';
+import type { Database } from '../database/index.ts';
 import { abort, HttpFailure, idSchema, validation } from '../http/index.ts';
 import { RateLimiter } from './login-limiter.ts';
 import type { ValkeySessions } from './valkey-sessions.ts';

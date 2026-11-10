@@ -390,7 +390,7 @@ export class Parties {
             checkDate(problems, input, field);
             if (
                 typeof input[field] === 'string' &&
-                (input[field] as string) > today &&
+                input[field] > today &&
                 !problems.errors[field]
             )
                 problems.add(field, 'Tanggal tidak boleh melewati hari ini.');

@@ -4,12 +4,11 @@ import { FinancePostings } from '@core/foundation/finance-posting/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
-    Database,
     jsonObject,
     nowSql,
     sqlErrorCode,
 } from '@core/platform/database/index.ts';
-import type { Bind } from '@core/platform/database/index.ts';
+import type { Bind, Database } from '@core/platform/database/index.ts';
 import {
     abort,
     coded,

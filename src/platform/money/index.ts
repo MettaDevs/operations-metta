@@ -8,7 +8,7 @@ export class Decimal {
 
     static of(value: string | number): Decimal {
         const match = decimalPattern.exec(String(value).trim());
-        if (!match || !match[2]) {
+        if (!match?.[2]) {
             throw new Error('Invalid decimal value.');
         }
         const fraction = match[3] ?? '';

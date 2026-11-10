@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Workspace } from '../../platform/access/index.ts';
-import {
-    Database,
-    nowSql,
-    sqlErrorCode,
-} from '../../platform/database/index.ts';
+import type { Database } from '../../platform/database/index.ts';
+import { nowSql, sqlErrorCode } from '../../platform/database/index.ts';
 import { coded } from '../../platform/http/index.ts';
 
 const segmentSchema = z.discriminatedUnion('type', [

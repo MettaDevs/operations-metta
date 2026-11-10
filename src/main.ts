@@ -4,11 +4,8 @@ import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
-import {
-    shellRoutes,
-    Workspace,
-    workspaceSelectionSchema,
-} from './platform/access/index.ts';
+import type { workspaceSelectionSchema } from './platform/access/index.ts';
+import { shellRoutes, Workspace } from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {
     flushErrorReporting,
@@ -36,11 +33,8 @@ import {
     type EnvironmentRoute,
 } from './platform/environment/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
-import {
-    loginInputSchema,
-    Session,
-    ValkeySessions,
-} from './platform/identity/index.ts';
+import type { loginInputSchema } from './platform/identity/index.ts';
+import { Session, ValkeySessions } from './platform/identity/index.ts';
 import { organizationRoutes } from './platform/organization/index.ts';
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.

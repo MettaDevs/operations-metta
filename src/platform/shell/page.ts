@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type { z } from 'zod';
 
 declare module '@tanstack/react-router' {
+    // Menambah field ke tipe milik pustaka hanya bisa lewat `interface`; `type` akan menimpanya.
+    // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
     interface StaticDataRouteOption {
         // Judul halaman di tab peramban.
         title?: string;

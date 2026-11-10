@@ -112,7 +112,7 @@ function FormControl({ ...props }: React.ComponentProps<typeof Slot.Root>) {
             id={formItemId}
             aria-describedby={
                 !error
-                    ? `${formDescriptionId}`
+                    ? formDescriptionId
                     : `${formDescriptionId} ${formMessageId}`
             }
             aria-invalid={!!error}

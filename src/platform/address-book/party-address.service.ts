@@ -779,7 +779,7 @@ export class PartyAddresses {
         });
         const [row] = await this.db.rows(
             contactSchema,
-            `${this.contactSql('and e.id = $3')}`,
+            this.contactSql('and e.id = $3'),
             [this.tenantId, partyId, saved],
         );
         return row!;

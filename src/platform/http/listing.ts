@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Database, jsonObject } from '../database/index.ts';
-import type { Bind, JsonObject } from '../database/index.ts';
+import { jsonObject } from '../database/index.ts';
+import type { Bind, JsonObject, Database } from '../database/index.ts';
 import { validation } from './errors.ts';
 import { idSchema, lookupId } from './schema.ts';
 

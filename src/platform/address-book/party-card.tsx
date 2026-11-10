@@ -376,7 +376,10 @@ function PartyCardBody({
     const error = (field: string) => errors[field]?.[0];
 
     const cancel = () => {
-        if (party === null) return onCancelNew();
+        if (party === null) {
+            onCancelNew();
+            return;
+        }
         setForm(formOf(party));
         setErrors({});
         setMessage(null);

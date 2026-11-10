@@ -230,7 +230,7 @@ export function useIncrementalList<T>({
                 ...current,
                 items:
                     typeof update === 'function'
-                        ? (update as (items: T[]) => T[])(current.items)
+                        ? update(current.items)
                         : update,
             })),
     };

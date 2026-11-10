@@ -1,4 +1,4 @@
-import { RedisClient } from 'bun';
+import type { RedisClient } from 'bun';
 import { HttpFailure } from '../http/index.ts';
 
 // Sesi di Valkey (SESSION_BACKEND=valkey): nilainya string payload yang sama dengan kolom sessions.payload.

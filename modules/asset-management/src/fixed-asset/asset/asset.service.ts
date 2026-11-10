@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
-import { Database, nowSql } from '@core/platform/database/index.ts';
-import type { Bind } from '@core/platform/database/index.ts';
+import { nowSql } from '@core/platform/database/index.ts';
+import type { Bind, Database } from '@core/platform/database/index.ts';
 import {
     abort,
     dateSchema,
