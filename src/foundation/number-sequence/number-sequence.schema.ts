@@ -22,7 +22,13 @@ export const sequenceStatuses = ['draft', 'active', 'stopped'] as const;
 
 export const segmentSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('constant'), value: z.string() }),
-    z.object({ type: z.literal('number'), length: z.number().int() }),
+    // `mask` adalah format segmen Alphanumeric F&O: setiap `#` diganti satu digit nomor dari kiri, karakter lain
+    // dicetak apa adanya, misalnya `##.##.##` untuk nomor enam digit `12.36.65`. Jumlah `#` sama dengan `length`.
+    z.object({
+        type: z.literal('number'),
+        length: z.number().int(),
+        mask: z.string().optional(),
+    }),
     z.object({
         type: z.literal('context'),
         value: z.string(),

@@ -5,6 +5,7 @@ import {
     abort,
     coded,
     expectedVersion,
+    HttpFailure,
     laravelBody,
     lookupId,
     staleMessage,
@@ -219,6 +220,71 @@ export class PartyIdentifications {
                 item.number,
                 `identifications.${index}.`,
             );
+    }
+
+    // Nomor satu jenis milik party, diganti dari fitur pemilik peran di transaksi pemanggil: nomor baru ditambah atau
+    // menggantikan yang lama, dan null mengarsipkannya. Pemanggil sudah memeriksa izinnya sendiri. `field` adalah
+    // nama isian pemanggil untuk pesan kesalahan.
+    async replaceNumber(
+        partyId: string,
+        typeCode: string,
+        input: string | null,
+        field: string,
+    ): Promise<void> {
+        const current = await this.db.one(
+            z.object({ id: z.string(), number: z.string() }),
+            `select id, number from party_identifications
+             where tenant_id = $1 and party_id = $2 and type_code = $3 and deleted_at is null for update`,
+            [this.workspace.tenantId, partyId, typeCode],
+        );
+        if (input === null) {
+            if (current)
+                await this.db.execute(
+                    'update party_identifications set deleted_at = $1, updated_at = $1 where id = $2',
+                    [nowSql(), current.id],
+                );
+            return;
+        }
+        const checked = this.check(
+            { number: input },
+            await this.types(),
+            typeCode,
+        );
+        if (checked.problems.failed)
+            validation({
+                [field]: checked.problems.errors.number ?? ['Isi nomor.'],
+            });
+        if (current?.number === checked.number) return;
+        try {
+            if (!current) {
+                await this.insert(partyId, typeCode, checked.number, '');
+                return;
+            }
+            await this.ensureFree(
+                partyId,
+                typeCode,
+                checked.number,
+                current.id,
+                '',
+            );
+            await this.write('', () =>
+                this.db.execute(
+                    'update party_identifications set number = $1, updated_at = $2 where id = $3',
+                    [checked.number, nowSql(), current.id],
+                ),
+            );
+        } catch (error) {
+            const errors =
+                error instanceof HttpFailure && error.status === 422
+                    ? z
+                          .object({
+                              errors: z.record(z.string(), z.array(z.string())),
+                          })
+                          .safeParse(error.body).data?.errors
+                    : undefined;
+            if (errors) validation({ [field]: Object.values(errors).flat() });
+            throw error;
+        }
     }
 
     async create(partyId: string, body: unknown) {

@@ -74,6 +74,19 @@ export function timezoneOptions(): { value: string; label: string }[] {
         .map(({ value, label }) => ({ value, label }));
 }
 
+// Yang harus ikut dibuat saat operating unit lahir, didaftarkan berkas proses (src/main.ts) supaya Platform tidak
+// meng-import Foundation, misalnya number sequence bawaan per unit. Dipanggil di dalam transaksi pembuatan unit, jadi
+// kegagalannya membatalkan unit itu juga.
+export type OperatingUnitCreated = (
+    db: Database,
+    unit: { tenantId: string; operatingUnitId: string; userId: string },
+) => Promise<void>;
+const operatingUnitCreated: OperatingUnitCreated[] = [];
+
+export function onOperatingUnitCreated(listener: OperatingUnitCreated): void {
+    operatingUnitCreated.push(listener);
+}
+
 function unitNumberInUse(): never {
     return validation({
         operating_unit_number:
@@ -215,7 +228,7 @@ export class Organizations {
                         created_at: stamp,
                         updated_at: stamp,
                     });
-                else
+                else {
                     await this.db.insert('operating_units', {
                         organization_id: id,
                         tenant_id: tenantId,
@@ -224,6 +237,13 @@ export class Organizations {
                         created_at: stamp,
                         updated_at: stamp,
                     });
+                    for (const listener of operatingUnitCreated)
+                        await listener(this.db, {
+                            tenantId,
+                            operatingUnitId: id,
+                            userId: this.workspace.userId,
+                        });
+                }
                 // Party organisasi dibuat bersama alamat dan kontaknya, dalam transaksi yang sama.
                 if (details.locations.length || details.contacts.length)
                     await addresses.saveDetails(

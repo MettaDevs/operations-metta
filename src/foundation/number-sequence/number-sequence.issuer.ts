@@ -10,6 +10,16 @@ export const reservationMinutes = 15;
 const maximumOutstandingReservations = 500;
 const releaseBatch = 100;
 
+type NumberSegment = Extract<Sequence['segments'][number], { type: 'number' }>;
+
+// Angka yang sudah diberi nol di depan, dicetak lewat mask segmen nomor: setiap `#` mengambil satu digit dari kiri,
+// seperti segmen Alphanumeric F&O.
+export function printNumber(segment: NumberSegment, digits: string): string {
+    if (segment.mask === undefined) return digits;
+    let position = 0;
+    return segment.mask.replace(/#/g, () => digits.charAt(position++));
+}
+
 type Scope = {
     key: string;
     period: string;
@@ -628,42 +638,57 @@ export class NumberIssuer {
         });
     }
 
-    private numberLength(sequence: Sequence): number {
+    private numberSegment(sequence: Sequence): NumberSegment {
         for (const segment of sequence.segments)
-            if (segment.type === 'number') return segment.length;
+            if (segment.type === 'number') return segment;
         throw new Error('Sequence has no number segment.');
     }
 
     private format(sequence: Sequence, scope: Scope, number: bigint): string {
-        const length = this.numberLength(sequence);
+        const segment = this.numberSegment(sequence);
         const text = String(number);
-        if (text.length > length)
+        if (text.length > segment.length)
             failSequence(
                 'Nomor sudah melampaui panjang segmen yang dikonfigurasi.',
             );
         return this.parts(sequence, scope)
-            .map((part) => part ?? text.padStart(length, '0'))
+            .map(
+                (part) =>
+                    part ??
+                    printNumber(segment, text.padStart(segment.length, '0')),
+            )
             .join('');
     }
 
     // Angka di dalam nomor yang diketik pengguna, bila nomor itu persis mengikuti format sequence.
     private parse(sequence: Sequence, scope: Scope, value: string): bigint {
-        const length = this.numberLength(sequence);
+        const segment = this.numberSegment(sequence);
+        const mask = segment.mask ?? '#'.repeat(segment.length);
+        const parts = this.parts(sequence, scope);
         const pattern = new RegExp(
             '^' +
-                this.parts(sequence, scope)
+                parts
                     .map((part) =>
-                        part === null ? `(\\d{${length}})` : escapeRegex(part),
+                        part === null
+                            ? mask
+                                  .split('')
+                                  .map((character) =>
+                                      character === '#'
+                                          ? '(\\d)'
+                                          : escapeRegex(character),
+                                  )
+                                  .join('')
+                            : escapeRegex(part),
                     )
                     .join('') +
                 '$',
         );
-        const digits = pattern.exec(value)?.[1];
-        if (digits === undefined)
+        const match = pattern.exec(value);
+        if (!match)
             failSequence(
-                `Nomor ${value} tidak mengikuti format ${this.format(sequence, scope, 0n).replace(/0+$/, (zeros) => '#'.repeat(zeros.length))}.`,
+                `Nomor ${value} tidak mengikuti format ${parts.map((part) => part ?? mask).join('')}.`,
             );
-        return BigInt(digits);
+        return BigInt(match.slice(1).join(''));
     }
 
     // Nomor yang akan diterima penerbitan otomatis berikutnya, tanpa mengambilnya. Dipakai untuk membandingkan nomor

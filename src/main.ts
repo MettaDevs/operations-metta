@@ -4,6 +4,7 @@ import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
+import { healthcareRoutes } from '../modules/healthcare/src/index.ts';
 import type { workspaceSelectionSchema } from './platform/access/index.ts';
 import {
     accessRoutes,
@@ -30,7 +31,10 @@ import {
     typedBody,
     type Context,
 } from './platform/http/index.ts';
-import { numberSequenceRoutes } from './foundation/number-sequence/index.ts';
+import {
+    NumberSequences,
+    numberSequenceRoutes,
+} from './foundation/number-sequence/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import {
     findRoute,
@@ -40,7 +44,18 @@ import {
 import { geographyRoutes } from './platform/geography/index.ts';
 import type { loginInputSchema } from './platform/identity/index.ts';
 import { Session, ValkeySessions } from './platform/identity/index.ts';
-import { organizationRoutes } from './platform/organization/index.ts';
+import {
+    onOperatingUnitCreated,
+    organizationRoutes,
+} from './platform/organization/index.ts';
+
+// Unit baru mendapat number sequence bawaan untuk setiap reference module yang memintanya lewat
+// app_number_sequence_references. Organization ada di Platform, jadi ia tidak meng-import Foundation sendiri.
+onOperatingUnitCreated((db, unit) =>
+    new NumberSequences(db, unit.tenantId, unit.userId).createUnitDefaults(
+        unit.operatingUnitId,
+    ),
+);
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {
@@ -109,6 +124,7 @@ export const router = {
     ...addressBookRoutes(),
     ...numberSequenceRoutes(),
     ...assetManagementRoutes(),
+    ...healthcareRoutes(),
 };
 export type Router = typeof router;
 
