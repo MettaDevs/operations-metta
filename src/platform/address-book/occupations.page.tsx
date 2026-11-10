@@ -339,7 +339,19 @@ function OccupationsPage(): ReactNode {
     return (
         <ListPageLayout
             header={
-                <RecordActionBar title="Pekerjaan">
+                <RecordActionBar
+                    title="Pekerjaan"
+                    search={{
+                        value: q,
+                        onValueChange: (next) =>
+                            void navigate({
+                                search: next ? { q: next } : {},
+                                replace: true,
+                            }),
+                        label: 'Cari pekerjaan',
+                        placeholder: 'Cari nama...',
+                    }}
+                >
                     {metadata.canManage && (
                         <CreateOccupation onCreated={saved} />
                     )}
@@ -351,22 +363,6 @@ function OccupationsPage(): ReactNode {
                 onDetailOpenChange={setShowDetail}
                 list={
                     <aside className="flex h-full min-h-0 min-w-0 flex-col">
-                        <div className="shrink-0 border-b p-3">
-                            <Input
-                                type="search"
-                                aria-label="Cari pekerjaan"
-                                placeholder="Cari nama..."
-                                value={q}
-                                onChange={(event) =>
-                                    void navigate({
-                                        search: event.target.value
-                                            ? { q: event.target.value }
-                                            : {},
-                                        replace: true,
-                                    })
-                                }
-                            />
-                        </div>
                         <DataTable
                             data={list.items}
                             getRowKey={(item) => item.id}

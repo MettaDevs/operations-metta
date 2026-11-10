@@ -715,7 +715,15 @@ export function OrganizationDirectory({
     return (
         <ListPageLayout
             header={
-                <RecordActionBar title={title}>
+                <RecordActionBar
+                    title={title}
+                    search={{
+                        value: search,
+                        onValueChange: onSearchChange,
+                        label: `Cari ${title.toLocaleLowerCase()}`,
+                        placeholder: 'Cari nama atau kode...',
+                    }}
+                >
                     {props.canManage && (
                         <CreateOrganizationDialog
                             classification={classification}
@@ -735,17 +743,6 @@ export function OrganizationDirectory({
                 onDetailOpenChange={setShowDetail}
                 list={
                     <aside className="flex h-full min-h-0 min-w-0 flex-col">
-                        <div className="shrink-0 border-b p-3">
-                            <Input
-                                type="search"
-                                aria-label={`Cari ${title.toLocaleLowerCase()}`}
-                                placeholder="Cari nama atau kode..."
-                                value={search}
-                                onChange={(event) =>
-                                    onSearchChange(event.target.value)
-                                }
-                            />
-                        </div>
                         <DataTable
                             data={list.items}
                             getRowKey={(item) => item.id}
