@@ -30,6 +30,7 @@ import {
     typedBody,
     type Context,
 } from './platform/http/index.ts';
+import { numberSequenceRoutes } from './foundation/number-sequence/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import {
     findRoute,
@@ -106,6 +107,7 @@ export const router = {
     ...organizationRoutes(),
     ...geographyRoutes(),
     ...addressBookRoutes(),
+    ...numberSequenceRoutes(),
     ...assetManagementRoutes(),
 };
 export type Router = typeof router;

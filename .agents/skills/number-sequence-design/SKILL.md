@@ -46,7 +46,7 @@ Map that model to this repository:
 | --- | --- |
 | Module number-sequence references | `app_number_sequence_references` rows for the owning module (declared in the CoreERP manifest; declaration place here not decided) |
 | Generate wizard | Materializing every declared reference for a tenant — not ported |
-| Number sequences page | CoreERP's **Atur nomor** screen — not ported |
+| Number sequences page | **Nomor dokumen** (`/settings/number-sequences`, `src/foundation/number-sequence/number-sequences.page.tsx`): list filtered by area, reference, scope, and status; card with scope (create only), format, General, Allow user changes, Performance, and Status list with Manual cleanup. Guarded by `core.number-sequence.read` / `.update` |
 | Reference association | `NumberIssuer.issue({ reference, key, documentDate, legalEntityId, operatingUnitId })`, called inside the document transaction |
 | Shared, Company/Legal entity, Operating unit, Legal entity + Fiscal calendar period | One `tenant_number_sequences` row per scope value: `scope_type` `tenant`, `legal_entity`, `operating_unit`, `legal_entity_fiscal_period`, with `legal_entity_id`, `operating_unit_id`, `fiscal_period_id`. Operating unit type is not supported |
 | Allow user changes: To a lower number / To a higher number | `allow_lower_number`, `allow_higher_number`; the typed value is passed as `number` |
@@ -170,7 +170,7 @@ Then verify:
 2. Every declared reference has exactly one four-letter uppercase prefix, all references share the module's final letter, and prefixes do not collide within the module.
 3. A tenant that has the module gets every declared reference exactly once.
 4. New defaults are active and bounded.
-5. All references appear in the number-sequence screen with first/last previews, once that screen exists.
+5. Every sequence of the reference appears on the Nomor dokumen screen with first/last previews.
 6. Save persists after reload and validation errors are visible.
 7. Automatic issue is idempotent and unique within scope.
 8. Continuous flows, when approved, use reserve/confirm/cancel and recovery.

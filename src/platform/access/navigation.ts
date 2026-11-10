@@ -43,6 +43,12 @@ export const coreNavigation: NavigationGroupEntry[] = [
                 href: '/settings/organization-hierarchies',
                 permission: 'core.organization.read',
             },
+            {
+                id: 'number-sequences',
+                label: 'Nomor dokumen',
+                href: '/settings/number-sequences',
+                permission: 'core.number-sequence.read',
+            },
         ],
     },
     {

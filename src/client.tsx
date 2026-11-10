@@ -1,6 +1,7 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
 import { page as platformAccessSecurityConfigurationPage } from './platform/access/security-configuration.page.tsx';
@@ -21,6 +22,14 @@ import {
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const foundationNumberSequenceNumberSequencesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationNumberSequenceNumberSequencesPage.path,
+    component: foundationNumberSequenceNumberSequencesPage.component,
+    validateSearch: foundationNumberSequenceNumberSequencesPage.validateSearch,
+    staticData: { title: foundationNumberSequenceNumberSequencesPage.title },
+});
 
 const platformAccessAccessRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -119,6 +128,7 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     appLayoutRoute.addChildren([
+        foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
         platformAccessSecurityConfigurationRoute,
