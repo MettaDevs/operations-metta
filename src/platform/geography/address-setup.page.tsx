@@ -8,6 +8,7 @@ import {
     EmptyTitle,
 } from '@operations-metta/ui/empty';
 import { Field, FieldLabel, FieldSet } from '@operations-metta/ui/field';
+import { FilterPane } from '@operations-metta/ui/filter-pane';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
@@ -30,7 +31,7 @@ import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -597,6 +598,8 @@ function AddressSetupPage(): ReactNode {
     };
     const [selected, setSelected] = useState<Row | null>(null);
     const [showDetail, setShowDetail] = useState(false);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const filterPanelId = useId();
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.groupOfHousesList(
@@ -632,7 +635,28 @@ function AddressSetupPage(): ReactNode {
     return (
         <ListPageLayout
             header={
-                <RecordActionBar title="Setup alamat">
+                <RecordActionBar
+                    title="Setup alamat"
+                    search={{
+                        value: search.q ?? '',
+                        onValueChange: (next) =>
+                            void navigate({
+                                search: (current) => ({
+                                    ...current,
+                                    q: next || undefined,
+                                }),
+                                replace: true,
+                            }),
+                        label: `Cari ${levelName.toLocaleLowerCase()}`,
+                        placeholder: 'Cari nama atau kode...',
+                    }}
+                    filter={{
+                        open: filtersOpen,
+                        onOpenChange: setFiltersOpen,
+                        active: Boolean(village.province_id),
+                        controls: filterPanelId,
+                    }}
+                >
                     {props.canManage && !levels.loading && (
                         <CreateDialog
                             levelName={levelName}
@@ -642,32 +666,57 @@ function AddressSetupPage(): ReactNode {
                     )}
                 </RecordActionBar>
             }
-            filters={
-                <div className="grid gap-3 px-4 pb-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <VillageCascade
-                        value={village}
-                        onChange={(next) =>
-                            void navigate({
-                                search: {
-                                    ...(search.q ? { q: search.q } : {}),
-                                    ...(next.province_id
-                                        ? { province: next.province_id }
-                                        : {}),
-                                    ...(next.regency_id
-                                        ? { regency: next.regency_id }
-                                        : {}),
-                                    ...(next.district_id
-                                        ? { district: next.district_id }
-                                        : {}),
-                                    ...(next.village_id
-                                        ? { village: next.village_id }
-                                        : {}),
-                                },
-                                replace: true,
-                            })
-                        }
-                    />
-                </div>
+            filterPanel={
+                filtersOpen ? (
+                    <FilterPane
+                        id={filterPanelId}
+                        title="Filter"
+                        description="Hasil diperbarui otomatis saat filter diubah."
+                        onClose={() => setFiltersOpen(false)}
+                    >
+                        <div className="p-4">
+                            <FormGrid columns={1}>
+                                <VillageCascade
+                                    value={village}
+                                    onChange={(next) =>
+                                        void navigate({
+                                            search: {
+                                                ...(search.q
+                                                    ? { q: search.q }
+                                                    : {}),
+                                                ...(next.province_id
+                                                    ? {
+                                                          province:
+                                                              next.province_id,
+                                                      }
+                                                    : {}),
+                                                ...(next.regency_id
+                                                    ? {
+                                                          regency:
+                                                              next.regency_id,
+                                                      }
+                                                    : {}),
+                                                ...(next.district_id
+                                                    ? {
+                                                          district:
+                                                              next.district_id,
+                                                      }
+                                                    : {}),
+                                                ...(next.village_id
+                                                    ? {
+                                                          village:
+                                                              next.village_id,
+                                                      }
+                                                    : {}),
+                                            },
+                                            replace: true,
+                                        })
+                                    }
+                                />
+                            </FormGrid>
+                        </div>
+                    </FilterPane>
+                ) : null
             }
         >
             <MasterDetailLayout
@@ -675,23 +724,6 @@ function AddressSetupPage(): ReactNode {
                 onDetailOpenChange={setShowDetail}
                 list={
                     <aside className="flex h-full min-h-0 min-w-0 flex-col">
-                        <div className="shrink-0 border-b p-3">
-                            <Input
-                                type="search"
-                                aria-label={`Cari ${levelName.toLocaleLowerCase()}`}
-                                placeholder="Cari nama atau kode..."
-                                value={search.q ?? ''}
-                                onChange={(event) =>
-                                    void navigate({
-                                        search: (current) => ({
-                                            ...current,
-                                            q: event.target.value || undefined,
-                                        }),
-                                        replace: true,
-                                    })
-                                }
-                            />
-                        </div>
                         <DataTable
                             data={list.items}
                             getRowKey={(row) => row.id}

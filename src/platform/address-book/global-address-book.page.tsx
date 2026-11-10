@@ -1,7 +1,8 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
-import { Input } from '@operations-metta/ui/input';
+import { FilterPane } from '@operations-metta/ui/filter-pane';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
     NativeSelect,
@@ -18,7 +19,7 @@ import { useRecordNavigation } from '@operations-metta/ui/use-record-navigation'
 import { useRecordTransition } from '@operations-metta/ui/use-record-transition';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -63,6 +64,8 @@ function GlobalAddressBookPage(): ReactNode {
         candidates: DuplicateCandidate[];
     } | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const filterPanelId = useId();
     const transition = useRecordTransition(dirty, busy);
     const archived = search.archived === 'only';
     const { type, role, status } = search;
@@ -147,121 +150,146 @@ function GlobalAddressBookPage(): ReactNode {
         <>
             <ListPageLayout
                 header={
-                    <RecordActionBar title="Buku alamat">
+                    <RecordActionBar
+                        title="Buku alamat"
+                        search={{
+                            value: search.q ?? '',
+                            onValueChange: (q) => setSearch({ q }),
+                            label: 'Cari pihak',
+                            placeholder: 'Cari nama...',
+                        }}
+                        filter={{
+                            open: filtersOpen,
+                            onOpenChange: setFiltersOpen,
+                            active: Boolean(type || role || status || archived),
+                            controls: filterPanelId,
+                        }}
+                    >
                         {metadata.canManage && (
                             <ActionButton action="create" onClick={startNew} />
                         )}
                     </RecordActionBar>
                 }
                 filters={
-                    <div className="flex flex-col gap-3 px-4 pb-3 sm:flex-row sm:flex-wrap">
-                        <div className="w-full sm:w-64">
-                            <Input
-                                type="search"
-                                label="Cari nama"
-                                value={search.q ?? ''}
-                                onChange={(event) =>
-                                    setSearch({ q: event.target.value })
-                                }
-                            />
-                        </div>
-                        <div className="w-full sm:w-44">
-                            <NativeSelect
-                                label="Jenis pihak"
-                                value={search.type ?? ''}
-                                onChange={(event) =>
-                                    setSearch({ type: event.target.value })
-                                }
-                            >
-                                <NativeSelectOption value="">
-                                    Semua jenis
-                                </NativeSelectOption>
-                                {metadata.partyTypes.map((type) => (
-                                    <NativeSelectOption
-                                        key={type.code}
-                                        value={type.code}
-                                    >
-                                        {type.name}
-                                    </NativeSelectOption>
-                                ))}
-                            </NativeSelect>
-                        </div>
-                        <div className="w-full sm:w-44">
-                            <NativeSelect
-                                label="Peran"
-                                value={search.role ?? ''}
-                                onChange={(event) =>
-                                    setSearch({ role: event.target.value })
-                                }
-                            >
-                                <NativeSelectOption value="">
-                                    Semua peran
-                                </NativeSelectOption>
-                                {metadata.roles.map((role) => (
-                                    <NativeSelectOption
-                                        key={role.code}
-                                        value={role.code}
-                                    >
-                                        {role.name}
-                                    </NativeSelectOption>
-                                ))}
-                            </NativeSelect>
-                        </div>
-                        <div className="w-full sm:w-40">
-                            <NativeSelect
-                                label="Status"
-                                value={search.status ?? ''}
-                                onChange={(event) =>
-                                    setSearch({
-                                        status:
-                                            event.target.value === ''
-                                                ? undefined
-                                                : (event.target.value as
-                                                      'active' | 'inactive'),
-                                    })
-                                }
-                            >
-                                <NativeSelectOption value="">
-                                    Semua status
-                                </NativeSelectOption>
-                                <NativeSelectOption value="active">
-                                    Aktif
-                                </NativeSelectOption>
-                                <NativeSelectOption value="inactive">
-                                    Nonaktif
-                                </NativeSelectOption>
-                            </NativeSelect>
-                        </div>
-                        <div className="w-full sm:w-44">
-                            <NativeSelect
-                                label="Tampilkan"
-                                value={archived ? 'only' : ''}
-                                onChange={(event) =>
-                                    setSearch({
-                                        archived:
-                                            event.target.value === 'only'
-                                                ? 'only'
-                                                : undefined,
-                                    })
-                                }
-                            >
-                                <NativeSelectOption value="">
-                                    Belum dihapus
-                                </NativeSelectOption>
-                                <NativeSelectOption value="only">
-                                    Sudah dihapus
-                                </NativeSelectOption>
-                            </NativeSelect>
-                        </div>
-                        {failed && (
-                            <p
-                                role="alert"
-                                className="w-full text-sm text-destructive"
-                            >
-                                {failed}
-                            </p>
-                        )}
-                    </div>
+                    failed && (
+                        <p
+                            role="alert"
+                            className="px-4 pb-3 text-sm text-destructive"
+                        >
+                            {failed}
+                        </p>
+                    )
+                }
+                filterPanel={
+                    filtersOpen ? (
+                        <FilterPane
+                            id={filterPanelId}
+                            title="Filter"
+                            description="Hasil diperbarui otomatis saat filter diubah."
+                            onClose={() => setFiltersOpen(false)}
+                        >
+                            <div className="p-4">
+                                <FormGrid columns={1}>
+                                    <FormControl>
+                                        <NativeSelect
+                                            label="Jenis pihak"
+                                            value={search.type ?? ''}
+                                            onChange={(event) =>
+                                                setSearch({
+                                                    type: event.target.value,
+                                                })
+                                            }
+                                        >
+                                            <NativeSelectOption value="">
+                                                Semua jenis
+                                            </NativeSelectOption>
+                                            {metadata.partyTypes.map((type) => (
+                                                <NativeSelectOption
+                                                    key={type.code}
+                                                    value={type.code}
+                                                >
+                                                    {type.name}
+                                                </NativeSelectOption>
+                                            ))}
+                                        </NativeSelect>
+                                    </FormControl>
+                                    <FormControl>
+                                        <NativeSelect
+                                            label="Peran"
+                                            value={search.role ?? ''}
+                                            onChange={(event) =>
+                                                setSearch({
+                                                    role: event.target.value,
+                                                })
+                                            }
+                                        >
+                                            <NativeSelectOption value="">
+                                                Semua peran
+                                            </NativeSelectOption>
+                                            {metadata.roles.map((role) => (
+                                                <NativeSelectOption
+                                                    key={role.code}
+                                                    value={role.code}
+                                                >
+                                                    {role.name}
+                                                </NativeSelectOption>
+                                            ))}
+                                        </NativeSelect>
+                                    </FormControl>
+                                    <FormControl>
+                                        <NativeSelect
+                                            label="Status"
+                                            value={search.status ?? ''}
+                                            onChange={(event) =>
+                                                setSearch({
+                                                    status:
+                                                        event.target.value ===
+                                                        ''
+                                                            ? undefined
+                                                            : (event.target
+                                                                  .value as
+                                                                  | 'active'
+                                                                  | 'inactive'),
+                                                })
+                                            }
+                                        >
+                                            <NativeSelectOption value="">
+                                                Semua status
+                                            </NativeSelectOption>
+                                            <NativeSelectOption value="active">
+                                                Aktif
+                                            </NativeSelectOption>
+                                            <NativeSelectOption value="inactive">
+                                                Nonaktif
+                                            </NativeSelectOption>
+                                        </NativeSelect>
+                                    </FormControl>
+                                    <FormControl>
+                                        <NativeSelect
+                                            label="Tampilkan"
+                                            value={archived ? 'only' : ''}
+                                            onChange={(event) =>
+                                                setSearch({
+                                                    archived:
+                                                        event.target.value ===
+                                                        'only'
+                                                            ? 'only'
+                                                            : undefined,
+                                                })
+                                            }
+                                        >
+                                            <NativeSelectOption value="">
+                                                Belum dihapus
+                                            </NativeSelectOption>
+                                            <NativeSelectOption value="only">
+                                                Sudah dihapus
+                                            </NativeSelectOption>
+                                        </NativeSelect>
+                                    </FormControl>
+                                </FormGrid>
+                            </div>
+                        </FilterPane>
+                    ) : null
                 }
                 footer={
                     <p className="p-3 text-sm text-muted-foreground">

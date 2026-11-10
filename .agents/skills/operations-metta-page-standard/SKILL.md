@@ -77,12 +77,12 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 - Collapsing a section hides secondary material, never the reason the user opened the page. A directory page whose record list starts closed shows a form and two clickable headings; the data it exists to show is behind a guess. Keep the primary list open and collapse what supports it. A section that is closed by default must still say what is inside it on its header line — `@operations-metta/ui/collapsible-section` exists for exactly that — or the user has to open it just to learn whether it was worth opening.
 - Guidance the user needs before acting stays visible. Moving an explanation inside a collapsed section hides it from precisely the person it was written for: the one who does not yet know there is something to open.
 
-## Filters
+## Search and filters
 
-- Desktop filter bars are horizontal with wrapping: `flex flex-col ... sm:flex-row`.
-- Inspect component wrappers. `NativeSelect` owns a `w-full` wrapper, so constrain it with a parent such as `<div className="w-full sm:w-52">`; setting width only on the select does not fix stacking.
-- Keep search first and related filters next. Every control needs a visible label or `aria-label`.
-- Vertical stacking is the mobile fallback, not the desktop default.
+- **Pencarian daftar halaman ada di toolbar** (`RecordActionBar` `search`), dan isian filter lain di panel filter kiri, mengikuti bagian *Daftar datatable module* di skill `operations-metta-ui`. Jangan menaruh pencarian sebagai `Input` di baris filter atau di atas daftar, termasuk daftar kiri `MasterDetailLayout`. `test/platform/shell/list-search.test.ts` menolak kotak pencarian sendiri pada berkas yang memakai `ListPageLayout`.
+- Pencarian di dialog dan pemilih (`InlineLookup`, pemilih alamat bersama) adalah pencarian lookup, bukan pencarian daftar halaman, dan tetap di tempatnya.
+- Inspect component wrappers. `NativeSelect` owns a `w-full` wrapper, so constrain it with a parent such as `<div className="w-full sm:w-52">` when it sits outside a `FormGrid`; setting width only on the select does not fix stacking.
+- Every control needs a visible label or `aria-label`.
 
 ## Shared master pages
 
@@ -103,4 +103,4 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 
 - Write everyday Indonesian that explains the action or consequence. Standard technical terms (push, pull, scope, token, webhook, endpoint, GET/POST/PUT) stay as they are.
 - Never expose internal architecture terms (`tenant_id`, entitlement, class names) on business screens.
-- Verify: one clear title; page-level hint is optional; field help is attached to its field; hover opens it after roughly one second and closes it when the pointer leaves; label/title click toggles a persistent open state; keyboard can perform the same toggle; action inside the card; desktop filters horizontal; no decorative navigation bullets; SDK font/theme inherited; Shell header stays visible; list scrollbars remain reachable without scrolling to the last record; empty and error states readable.
+- Verify: one clear title; page-level hint is optional; field help is attached to its field; hover opens it after roughly one second and closes it when the pointer leaves; label/title click toggles a persistent open state; keyboard can perform the same toggle; action inside the card; list search in the toolbar and filters in the left filter pane; no decorative navigation bullets; SDK font/theme inherited; Shell header stays visible; list scrollbars remain reachable without scrolling to the last record; empty and error states readable.

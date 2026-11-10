@@ -968,7 +968,15 @@ export function OrganizationHierarchies({
                 )
             }
             header={
-                <RecordActionBar title="Hierarki organisasi">
+                <RecordActionBar
+                    title="Hierarki organisasi"
+                    search={{
+                        value: search,
+                        onValueChange: onSearchChange,
+                        label: 'Cari hierarki',
+                        placeholder: 'Cari hierarki...',
+                    }}
+                >
                     {props.canManage && (
                         <CreateHierarchyDialog
                             purposes={props.purposes}
@@ -986,17 +994,6 @@ export function OrganizationHierarchies({
                 onDetailOpenChange={setShowDetail}
                 list={
                     <aside className="flex h-full min-h-0 min-w-0 flex-col">
-                        <div className="shrink-0 border-b p-3">
-                            <Input
-                                type="search"
-                                aria-label="Cari hierarki"
-                                placeholder="Cari hierarki..."
-                                value={search}
-                                onChange={(event) =>
-                                    onSearchChange(event.target.value)
-                                }
-                            />
-                        </div>
                         <DataTable
                             data={list.items}
                             getRowKey={(item) => item.id}
