@@ -101,7 +101,8 @@ function RelationshipDialog({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const selected = choices.find((item) => item.key === choice);
-    const [typeCode, direction] = choice.split(':') as [string, Direction];
+    const [typeCode = '', side] = choice.split(':');
+    const direction: Direction = side === 'to' ? 'to' : 'from';
     const loadParties = useCallback<LookupLoader<PartyOption>>(
         async ({ query, signal }) => {
             const { body } = await api.partyOptions(

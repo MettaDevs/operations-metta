@@ -83,6 +83,17 @@ export const hierarchyLevelSchema = z.object({
 
 // Bagian Address setup yang bisa dicari, beserta tabelnya (AddressSetupRecords::TABLES CoreERP). Jalan, gedung, dan
 // bidang tanah belum pindah; dusun/banjar milik tenant dicari lewat daftarnya sendiri.
+const sections = [
+    'countries',
+    'provinces',
+    'regencies',
+    'cities',
+    'districts',
+    'villages',
+    'postalCodes',
+] as const;
+export type DivisionSection = (typeof sections)[number];
+const sectionSchema = z.enum(sections);
 export const divisionTables = {
     countries: 'country_regions',
     provinces: 'ref_provinces',
@@ -91,9 +102,7 @@ export const divisionTables = {
     districts: 'ref_districts',
     villages: 'ref_villages',
     postalCodes: 'ref_postal_codes',
-} as const;
-export type DivisionSection = keyof typeof divisionTables;
-const sections = Object.keys(divisionTables) as DivisionSection[];
+} as const satisfies Record<DivisionSection, string>;
 
 // Query string tiga bacaan wilayah. Handler membaca URL-nya sendiri; skema ini memberi tipe bagi pemanggil di layar.
 export const regionLookupQuerySchema = z.object({
@@ -108,7 +117,7 @@ export const regionLookupQuerySchema = z.object({
     district_id: z.string().optional(),
 });
 export const divisionQuerySchema = listParametersSchema.extend({
-    section: z.enum(sections as [DivisionSection, ...DivisionSection[]]),
+    section: sectionSchema,
     country: z.string().optional(),
     province_id: z.string().optional(),
     regency_id: z.string().optional(),
@@ -167,7 +176,7 @@ export function divisionFilters(parameters: URLSearchParams): DivisionFilters {
                 : ['The include cities field must be true or false.'],
     });
     return {
-        section: section as DivisionSection,
+        section: sectionSchema.parse(section),
         country,
         ...ids,
         include_cities: includeCities === '1',

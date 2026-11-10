@@ -8,6 +8,7 @@ import {
     HttpFailure,
     incrementalList,
     lookupId,
+    nullableText,
     staleMessage,
     validation,
 } from '../http/index.ts';
@@ -29,6 +30,9 @@ const regionIds = [
     'postal_code_id',
     'group_of_houses_id',
 ] as const;
+const validationBody = z.object({
+    errors: z.record(z.string(), z.array(z.string())).optional(),
+});
 
 const locationSchema = z.object({
     id: z.string(),
@@ -394,7 +398,7 @@ export class PartyAddresses {
                        and exists (select 1 from postal_addresses pa where pa.location_id = l.id)
                        and not exists (select 1 from party_locations private where private.location_id = l.id
                                        and private.is_private and private.deleted_at is null)`,
-                    [this.tenantId, data.location_id as string],
+                    [this.tenantId, z.string().parse(data.location_id)],
                 );
                 if (!shared) abort(404, 'Not Found');
                 locationId = shared.id;
@@ -450,10 +454,14 @@ export class PartyAddresses {
                     ? { is_private: flag(data.is_private) ?? false }
                     : {}),
                 ...('valid_from' in data
-                    ? { valid_from: (data.valid_from as string | null) ?? null }
+                    ? {
+                          valid_from: nullableText.parse(
+                              data.valid_from ?? null,
+                          ),
+                      }
                     : {}),
                 ...('valid_to' in data
-                    ? { valid_to: (data.valid_to as string | null) ?? null }
+                    ? { valid_to: nullableText.parse(data.valid_to ?? null) }
                     : {}),
             };
             const stamp = nowSql();
@@ -487,7 +495,7 @@ export class PartyAddresses {
             }
             await this.syncPurposes(
                 link.id,
-                (data.purposes as string[] | undefined) ?? [],
+                z.array(z.string()).parse(data.purposes ?? []),
             );
             return this.location(partyId, link.id);
         });
@@ -533,7 +541,7 @@ export class PartyAddresses {
             ...Object.fromEntries(
                 regionIds.map((field) => [
                     field,
-                    (data[field] as string | null) ?? null,
+                    nullableText.parse(data[field] ?? null),
                 ]),
             ),
             formatted: formatPostalAddress(fields, country?.name ?? null),
@@ -862,8 +870,7 @@ export class PartyAddresses {
         } catch (error) {
             const errors =
                 error instanceof HttpFailure && error.status === 422
-                    ? (error.body as { errors?: Record<string, string[]> })
-                          .errors
+                    ? validationBody.safeParse(error.body).data?.errors
                     : undefined;
             if (errors)
                 validation(

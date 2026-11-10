@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { failOn, laravelBody } from '../http/index.ts';
+import { failOn, isRecord, laravelBody } from '../http/index.ts';
 
 // Batas data satu penugasan untuk satu kebijakan data. Tanpa legal entity dan organisasi berarti seluruh organisasi,
 // dan itu harus dinyatakan lewat `unrestricted` supaya tidak tertukar dengan isian yang belum lengkap.
@@ -48,15 +48,10 @@ export function parseMembershipInput(body: unknown): AssignmentInput[] {
         failOn({ assignments: ['The assignments field must be an array.'] });
     const items: unknown[] = Array.isArray(raw) ? raw : [];
     const roleIds = items.map((item) =>
-        item && typeof item === 'object'
-            ? (item as Record<string, unknown>).role_id
-            : undefined,
+        isRecord(item) ? item.role_id : undefined,
     );
     const assignments = items.map((item, index): AssignmentInput => {
-        const record =
-            item && typeof item === 'object'
-                ? (item as Record<string, unknown>)
-                : {};
+        const record = isRecord(item) ? item : {};
         const roleId = record.role_id;
         if (typeof roleId !== 'string' || roleId === '')
             errors[`assignments.${index}.role_id`] = [
@@ -75,10 +70,7 @@ export function parseMembershipInput(body: unknown): AssignmentInput[] {
         return {
             role_id: typeof roleId === 'string' ? roleId : '',
             policy_scopes: list.map((scope, position) => {
-                const value =
-                    scope && typeof scope === 'object'
-                        ? (scope as Record<string, unknown>)
-                        : {};
+                const value = isRecord(scope) ? scope : {};
                 const prefix = `assignments.${index}.policy_scopes.${position}`;
                 const code = value.policy_code;
                 if (typeof code !== 'string' || code === '')

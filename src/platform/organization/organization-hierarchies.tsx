@@ -85,6 +85,12 @@ type HierarchyRow = Exclude<
 >;
 type Errors = Record<string, string[]>;
 
+function isHierarchy(
+    row: HierarchyRow | Organization | Hierarchy,
+): row is Hierarchy {
+    return 'versions' in row;
+}
+
 export function hierarchyProps(body: HierarchyPageBody): HierarchyProps {
     if (!('purposes' in body))
         throw new Error('Jawaban layar hierarki tidak berisi props halaman.');
@@ -142,9 +148,10 @@ function CreateHierarchyDialog({
     purposes: HierarchyProps['purposes'];
     onSaved: (saved: Saved) => void;
 }) {
+    const emptyCodes: string[] = [];
     const blank = {
         name: '',
-        purpose_codes: [] as string[],
+        purpose_codes: emptyCodes,
         root_organization_id: '',
         // Tanpa nilai awal: CoreERP mengisinya dengan hari ini menurut jam server, dan data itu belum dikirim
         // `/api/v1/shell`. Layar tidak menghitung hari ini dari jam perangkat.
@@ -893,10 +900,7 @@ export function OrganizationHierarchies({
     search: string;
     onSearchChange: (search: string) => void;
 }): ReactNode {
-    const operatingUnitTypes = props.operatingUnitTypes as Record<
-        string,
-        string
-    >;
+    const operatingUnitTypes: Record<string, string> = props.operatingUnitTypes;
     const [showDetail, setShowDetail] = useState(false);
     const [selected, setSelected] = useState<Hierarchy | null>(null);
     const [error, setError] = useState('');
@@ -938,7 +942,11 @@ export function OrganizationHierarchies({
                 controller.signal,
             );
             // Dengan `record_id`, isinya satu hierarki lengkap.
-            const [hierarchy] = batch.data as Hierarchy[];
+            const [hierarchy] = batch.data;
+            if (hierarchy && !isHierarchy(hierarchy))
+                throw new Error(
+                    'Jawaban hierarki tidak berisi hierarki lengkap.',
+                );
             if (!controller.signal.aborted && hierarchy) {
                 setSelected(hierarchy);
                 setShowDetail(true);

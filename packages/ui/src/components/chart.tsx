@@ -4,6 +4,7 @@ import * as React from 'react';
 import * as RechartsPrimitive from 'recharts';
 import type { TooltipValueType } from 'recharts';
 
+import type {} from '../css-properties';
 import { cn } from '../utils';
 
 // Format: { THEME_NAME: CSS_SELECTOR }
@@ -99,9 +100,9 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 ${prefix} [data-chart=${id}] {
 ${colorConfig
     .map(([key, itemConfig]) => {
-        const color =
-            itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ??
-            itemConfig.color;
+        const themeColors: Record<string, string> | undefined =
+            itemConfig.theme;
+        const color = themeColors?.[theme] ?? itemConfig.color;
 
         return color ? `  --color-${key}: ${color};` : null;
     })
@@ -257,14 +258,12 @@ function ChartTooltipContent({
                                                                     'dashed',
                                                         },
                                                     )}
-                                                    style={
-                                                        {
-                                                            '--color-bg':
-                                                                indicatorColor,
-                                                            '--color-border':
-                                                                indicatorColor,
-                                                        } as React.CSSProperties
-                                                    }
+                                                    style={{
+                                                        '--color-bg':
+                                                            indicatorColor,
+                                                        '--color-border':
+                                                            indicatorColor,
+                                                    }}
                                                 />
                                             )
                                         )}
@@ -391,22 +390,18 @@ function getPayloadConfigFromPayload(
             ? payload.payload
             : undefined;
 
-    let configLabelKey: string = key;
-
-    if (
-        key in payload &&
-        typeof payload[key as keyof typeof payload] === 'string'
-    ) {
-        configLabelKey = payload[key as keyof typeof payload];
-    } else if (
-        payloadPayload &&
-        key in payloadPayload &&
-        typeof payloadPayload[key as keyof typeof payloadPayload] === 'string'
-    ) {
-        configLabelKey = payloadPayload[key as keyof typeof payloadPayload];
-    }
+    const configLabelKey =
+        stringProperty(payload, key) ??
+        (payloadPayload ? stringProperty(payloadPayload, key) : undefined) ??
+        key;
 
     return configLabelKey in config ? config[configLabelKey] : config[key];
+}
+
+function stringProperty(source: object, key: string): string | undefined {
+    const value: unknown = Reflect.get(source, key);
+
+    return typeof value === 'string' ? value : undefined;
 }
 
 export {

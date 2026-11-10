@@ -17,10 +17,14 @@ export type RoleInput = {
     child_role_ids: string[];
 };
 
-const stringArray = (value: unknown, field: string, required: boolean) => {
+const stringArray = (
+    value: unknown,
+    field: string,
+    required: boolean,
+): { items: string[]; errors: Record<string, string[]> } => {
     if (value === null || value === undefined)
         return {
-            items: [] as string[],
+            items: [],
             errors: required
                 ? {
                       [field]: [
@@ -31,7 +35,7 @@ const stringArray = (value: unknown, field: string, required: boolean) => {
         };
     if (!Array.isArray(value))
         return {
-            items: [] as string[],
+            items: [],
             errors: {
                 [field]: [
                     `The ${field.replaceAll('_', ' ')} field must be an array.`,

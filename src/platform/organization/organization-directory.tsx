@@ -179,7 +179,7 @@ function OrganizationFields({
     props: DirectoryProps;
     portalContainer?: RefObject<HTMLElement | null>;
 }) {
-    const unitTypes = props.operatingUnitTypes as Record<string, string>;
+    const unitTypes: Record<string, string> = props.operatingUnitTypes;
     const numbered = ['business_unit', 'department'].includes(
         data.operating_unit_type,
     );

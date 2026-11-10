@@ -13,6 +13,7 @@ import {
     expectedVersion,
     laravelBody,
     lookupId,
+    nullableText,
     staleMessage,
     validation,
 } from '../http/index.ts';
@@ -120,11 +121,11 @@ export class PartyRelationships {
         if (!type)
             throw new Error('Jenis hubungan lolos pemeriksaan tanpa nilai.');
         const data = {
-            from_party_id: input.from_party_id as string,
-            to_party_id: input.to_party_id as string,
+            from_party_id: z.string().parse(input.from_party_id),
+            to_party_id: z.string().parse(input.to_party_id),
             relationship_type_code: type.code,
-            valid_from: input.valid_from as string,
-            valid_to: (input.valid_to as string | null | undefined) ?? null,
+            valid_from: z.string().parse(input.valid_from),
+            valid_to: nullableText.parse(input.valid_to ?? null),
         };
         if (data.from_party_id !== partyId && data.to_party_id !== partyId)
             validation({

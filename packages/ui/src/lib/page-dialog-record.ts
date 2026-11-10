@@ -36,8 +36,8 @@ export function createPageDialogRecordStore<T extends object>() {
                     (key) =>
                         Object.hasOwn(previous, key) &&
                         Object.is(
-                            previous[key as keyof T],
-                            record[key as keyof T],
+                            Reflect.get(previous, key),
+                            Reflect.get(record, key),
                         ),
                 )
             ) {

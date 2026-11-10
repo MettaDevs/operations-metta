@@ -23,6 +23,7 @@ import {
     registerPageDialog,
     subscribePageDialogs,
 } from '../lib/page-dialog-stack';
+import type {} from '../css-properties';
 import { cn } from '../utils';
 import { Badge } from './badge';
 import { Button } from './button';
@@ -277,13 +278,11 @@ function PageDialogSurface({
                     data-expanded={expanded}
                     aria-hidden={!active || undefined}
                     inert={!active || undefined}
-                    style={
-                        {
-                            ...style,
-                            '--stack-depth': depth,
-                            zIndex: 31 + Math.max(index, 0),
-                        } as React.CSSProperties
-                    }
+                    style={{
+                        ...style,
+                        '--stack-depth': depth,
+                        zIndex: 31 + Math.max(index, 0),
+                    }}
                     onInteractOutside={(event) => {
                         onInteractOutside?.(event);
                         event.preventDefault();
@@ -294,9 +293,8 @@ function PageDialogSurface({
                         if (
                             busy ||
                             !active ||
-                            !nodeRef.current?.contains(
-                                event.target as Node | null,
-                            ) ||
+                            !(event.target instanceof Node) ||
+                            !nodeRef.current?.contains(event.target) ||
                             popupEscapes.has(event) ||
                             nodeRef.current.querySelector(
                                 '[role="combobox"][aria-expanded="true"]',

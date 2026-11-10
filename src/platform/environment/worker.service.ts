@@ -8,10 +8,12 @@ import type { MigrationSource } from '../migration/index.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
 
-type KnownOperation = 'provision';
-const knownOperations: readonly string[] = [
-    'provision',
-] satisfies KnownOperation[];
+const knownOperations = ['provision'] as const;
+type KnownOperation = (typeof knownOperations)[number];
+
+function isKnownOperation(value: string): value is KnownOperation {
+    return knownOperations.some((known) => known === value);
+}
 
 // Menjalankan satu operasi yang sudah diambil worker sampai ditutup. Setiap langkah dilaporkan lebih dulu, sehingga
 // tenggatnya diperpanjang dan worker berhenti di antara langkah bila operasinya tidak lagi dipegang. Kegagalan
@@ -25,11 +27,9 @@ export async function runOperation(
     const step = (name: string) =>
         client.report(claimed.id, { status: 'running', step: name });
     try {
-        if (!knownOperations.includes(claimed.operation))
-            throw new Error(
-                `Worker ini tidak mengenal operasi ${claimed.operation}.`,
-            );
-        const operation = claimed.operation as KnownOperation;
+        const operation = claimed.operation;
+        if (!isKnownOperation(operation))
+            throw new Error(`Worker ini tidak mengenal operasi ${operation}.`);
         switch (operation) {
             // KnownOperation baru punya satu anggota, jadi bagi aturan ini perbandingannya selalu benar.
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition

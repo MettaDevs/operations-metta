@@ -1,5 +1,6 @@
 import postgres from 'postgres';
 import type { DatabaseSettings } from '../config/index.ts';
+import { sqlErrorCode } from '../database/index.ts';
 import { migrate, type MigrationSource } from '../migration/index.ts';
 import type { ProvisionRequest } from './provision.schema.ts';
 import { recordRoute } from './route.service.ts';
@@ -39,7 +40,7 @@ async function createDatabase(
         await sql.unsafe(`create database "${database}"`);
     } catch (error) {
         // Penyiapan yang diulang menemukan database dari percobaan sebelumnya.
-        if ((error as { code?: string }).code !== '42P04') throw error;
+        if (sqlErrorCode(error) !== '42P04') throw error;
     } finally {
         await sql.end();
     }

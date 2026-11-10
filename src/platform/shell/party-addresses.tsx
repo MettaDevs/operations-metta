@@ -517,9 +517,7 @@ function RegionFields({
         postal_code_id: useRegionOptions('village', form.village_id),
     };
     const children: [RegionId, RegionText][] = [
-        ...regionFields.map(
-            ([id, text]) => [id, text] as [RegionId, RegionText],
-        ),
+        ...regionFields.map(([id, text]): [RegionId, RegionText] => [id, text]),
         ['postal_code_id', 'postal_code'],
     ];
     const choose = (index: number, value: string | null) => {
