@@ -43,7 +43,9 @@ test('the three organization screens are app pages at the menu addresses', () =>
         },
     ]);
     const menu = coreNavigation.find((group) => group.id === 'organization');
-    expect(menu?.items.map((item) => [item.href, item.permission])).toEqual(
-        pages.map((page) => [page.path, 'core.organization.read']),
-    );
+    // Nomor dokumen ikut kelompok Organisasi, seperti Number sequences di Organization administration F&O.
+    expect(menu?.items.map((item) => [item.href, item.permission])).toEqual([
+        ...pages.map((page) => [page.path, 'core.organization.read']),
+        ['/settings/number-sequences', 'core.number-sequence.read'],
+    ]);
 });

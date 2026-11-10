@@ -302,9 +302,11 @@ export class NumberIssuer {
             const organization = await this.db.one(
                 z.object({
                     id: z.string(),
+                    name: z.string(),
                     company_code: z.string().nullable(),
+                    unit_number: z.string().nullable(),
                 }),
-                "select o.id,l.company_code from organizations o left join legal_entities l on l.organization_id=o.id where o.id=$1 and o.tenant_id=$2 and o.status='active' limit 1",
+                "select o.id,o.name,l.company_code,u.number as unit_number from organizations o left join legal_entities l on l.organization_id=o.id left join operating_units u on u.organization_id=o.id where o.id=$1 and o.tenant_id=$2 and o.status='active' limit 1",
                 [organizationId, this.owner.tenantId],
             );
             if (!organization)
@@ -312,7 +314,16 @@ export class NumberIssuer {
                     'Organisasi untuk pengaturan nomor ini sudah tidak aktif.',
                 );
             const unit = sequence.scope_type === 'operating_unit';
-            code = unit ? organization.id : organization.company_code;
+            // Segmen organisasi mencetak kode yang dikenal orang: kode perusahaan, atau nomor operating unit. Id
+            // internal tidak pernah dicetak; unit tanpa nomor ditolak bila formatnya memuat segmen ini.
+            code = unit ? organization.unit_number : organization.company_code;
+            if (
+                code === null &&
+                sequence.segments.some((segment) => segment.type === 'scope')
+            )
+                failSequence(
+                    `Operating unit ${organization.name} belum punya nomor unit, padahal format nomornya mencetak nomor unit. Isi nomor unitnya lebih dulu.`,
+                );
             key =
                 (unit ? 'operating_unit:' : 'legal_entity:') + organization.id;
         }

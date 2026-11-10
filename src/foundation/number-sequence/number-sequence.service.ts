@@ -1,14 +1,22 @@
 import { z } from 'zod';
 import type { Database } from '../../platform/database/index.ts';
 import { nowSql, sqlErrorCode } from '../../platform/database/index.ts';
-import { abort, coded, validation } from '../../platform/http/index.ts';
+import {
+    abort,
+    coded,
+    incrementalList,
+    validation,
+} from '../../platform/http/index.ts';
 import { audit, releaseExpired } from './number-sequence.issuer.ts';
 import {
     createSchema,
     type ScopeType,
+    scopeTypes,
     type Segment,
+    segmentSchema,
     type Sequence,
     sequenceSchema,
+    sequenceStatuses,
     type Settings,
     updateSchema,
 } from './number-sequence.schema.ts';
@@ -147,6 +155,29 @@ export class NumberSequences {
                     operating_unit_id: 'Pilih unit milik tenant ini.',
                 });
         }
+    }
+
+    // Segmen organisasi pada scope operating unit mencetak nomor unit. Unit tanpa nomor tidak punya kode untuk dicetak,
+    // jadi formatnya ditolak sejak disimpan, bukan baru saat dokumen pertama meminta nomor.
+    private async checkUnitNumber(
+        operatingUnitId: string | null,
+        settings: Settings,
+    ): Promise<void> {
+        if (
+            operatingUnitId === null ||
+            !settings.segments.some((segment) => segment.type === 'scope')
+        )
+            return;
+        const unit = await this.db.one(
+            z.object({ number: z.string().nullable() }),
+            'select number from operating_units where organization_id=$1 and tenant_id=$2 limit 1',
+            [operatingUnitId, this.tenantId],
+        );
+        if (!unit?.number)
+            validation({
+                segments:
+                    'Operating unit ini belum punya nomor unit, jadi segmen Operating unit tidak punya kode untuk dicetak. Isi nomor unitnya lebih dulu, atau hapus segmen itu.',
+            });
     }
 
     private checkSettings(
@@ -407,6 +438,7 @@ export class NumberSequences {
         const reference = await this.reference(data.reference_id);
         await this.checkScopeValue(data);
         this.checkSettings(data, data.scope_type, reference);
+        await this.checkUnitNumber(data.operating_unit_id, data);
         const id = Bun.randomUUIDv7();
         return this.save(async () => {
             await this.checkOverlap(null, reference.id, data, data);
@@ -483,6 +515,7 @@ export class NumberSequences {
                 );
             const reference = await this.reference(current.reference_id);
             this.checkSettings(data, current.scope_type, reference);
+            await this.checkUnitNumber(current.operating_unit_id, data);
             if (
                 canonical(data.segments) !== canonical(current.segments) &&
                 (await this.hasNumberingState(id))
@@ -669,5 +702,238 @@ export class NumberSequences {
                 if (count === 0) return released;
             }
         });
+    }
+}
+
+const listRowSchema = z.object({
+    id: z.string(),
+    reference_id: z.string(),
+    reference_code: z.string(),
+    reference_name: z.string(),
+    area_id: z.string(),
+    area_name: z.string(),
+    scope_type: z.enum(scopeTypes),
+    scope_value_name: z.string().nullable(),
+    company_code: z.string().nullable(),
+    scope_code: z.string().nullable(),
+    fiscal_period_name: z.string().nullable(),
+    status: z.enum(sequenceStatuses),
+    is_continuous: z.boolean(),
+    segments: z.string(),
+    minimum_number: z.coerce.number(),
+    maximum_number: z.coerce.number().nullable(),
+    next_number: z.coerce.number(),
+    version: z.number(),
+});
+const listQuery = `select s.id,s.reference_id,r.code as reference_code,r.name as reference_name,r.app_id as area_id,
+        a.name as area_name,s.scope_type,o.name as scope_value_name,l.company_code,
+        case when s.scope_type='operating_unit' then u.number else l.company_code end as scope_code,
+        case when p.id is null then null else y.name||' '||p.name end as fiscal_period_name,
+        s.status,s.is_continuous,s.segments::text as segments,s.minimum_number,s.maximum_number,
+        greatest(s.minimum_number,coalesce((select max(c.next_number) from number_sequence_counters c where c.sequence_id=s.id),0)) as next_number,
+        s.version
+    from tenant_number_sequences s
+    join app_number_sequence_references r on r.id=s.reference_id
+    join apps a on a.id=r.app_id
+    left join organizations o on o.id=coalesce(s.operating_unit_id,s.legal_entity_id)
+    left join legal_entities l on l.organization_id=s.legal_entity_id
+    left join operating_units u on u.organization_id=s.operating_unit_id
+    left join fiscal_periods p on p.id=s.fiscal_period_id
+    left join fiscal_years y on y.id=p.fiscal_year_id
+    where s.tenant_id=$1`;
+const scopeValueSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string().nullable(),
+});
+
+// Pola nomor untuk dibaca orang: # untuk digit nomor, kode organisasi scope bila sudah diketahui, dan nama bagian
+// yang nilainya baru diketahui saat terbit.
+function pattern(segments: Segment[], scopeCode: string | null): string {
+    return segments
+        .map((segment) => {
+            switch (segment.type) {
+                case 'constant':
+                    return segment.value;
+                case 'number':
+                    return '#'.repeat(segment.length);
+                case 'year':
+                    return '[tahun]';
+                case 'scope':
+                    return scopeCode ?? '[kode organisasi]';
+                case 'fiscal_year':
+                    return '[tahun fiskal]';
+                case 'fiscal_period':
+                    return '[periode]';
+                case 'context':
+                    return `[${segment.name ?? segment.value}]`;
+                default: {
+                    const exhaustive: never = segment;
+                    return exhaustive;
+                }
+            }
+        })
+        .join('');
+}
+
+function present(row: z.infer<typeof listRowSchema>) {
+    const segments = z.array(segmentSchema).parse(JSON.parse(row.segments));
+    return { ...row, segments, format: pattern(segments, row.scope_code) };
+}
+
+// Bacaan layar Nomor dokumen: daftar, kartu, pilihan nilai scope, dan data pendukungnya.
+export class NumberSequenceDirectory {
+    constructor(
+        private readonly db: Database,
+        private readonly tenantId: string,
+    ) {}
+
+    async list(parameters: URLSearchParams) {
+        const bindings: string[] = [this.tenantId];
+        let query = listQuery;
+        const filter = (column: string, name: string) => {
+            const value = parameters.get(name);
+            if (!value) return;
+            bindings.push(value);
+            query += ` and ${column}=$${bindings.length}`;
+        };
+        filter('r.id::text', 'reference_id');
+        filter('r.app_id', 'area_id');
+        filter('s.scope_type', 'scope_type');
+        filter('s.status', 'status');
+        const batch = await incrementalList(this.db, {
+            query,
+            bindings,
+            parameters,
+            columns: {
+                reference_name: 'reference_name',
+                area_name: 'area_name',
+                scope_value_name: 'scope_value_name',
+                status: 'status',
+                minimum_number: 'minimum_number',
+                maximum_number: 'maximum_number',
+                next_number: 'next_number',
+            },
+            searchColumns: [
+                'reference_name',
+                'reference_code',
+                'area_name',
+                'scope_value_name',
+            ],
+            numericColumns: ['minimum_number', 'maximum_number', 'next_number'],
+            defaultSort: 'reference_name',
+            defaultDirection: 'asc',
+        });
+        return {
+            data: batch.data.map((row) => present(listRowSchema.parse(row))),
+            next_cursor: batch.next_cursor,
+        };
+    }
+
+    async metadata(canManage: boolean) {
+        const references = await this.db.rows(
+            z.object({
+                id: z.string(),
+                code: z.string(),
+                name: z.string(),
+                area_id: z.string(),
+                area_name: z.string(),
+                allowed_scopes: z.array(z.string()),
+                default_prefix: z.string().nullable(),
+                context_fields: z.array(
+                    z.object({
+                        value: z.string(),
+                        name: z.string().nullable(),
+                        length: z.number(),
+                    }),
+                ),
+            }),
+            `select r.id,r.code,r.name,r.app_id as area_id,a.name as area_name,r.allowed_scopes,r.default_prefix,
+                coalesce((select json_agg(json_build_object('value',x->>'value','name',x->>'name','length',(x->>'length')::int))
+                    from jsonb_array_elements(coalesce(r.default_settings->'segments','[]'::jsonb)) x
+                    where x->>'type'='context'),'[]'::json) as context_fields
+             from app_number_sequence_references r join apps a on a.id=r.app_id order by a.name,r.name`,
+        );
+        return { canManage, references };
+    }
+
+    async show(id: string) {
+        const row = await this.db.one(
+            listRowSchema,
+            listQuery + ' and s.id=$2 limit 1',
+            [this.tenantId, id],
+        );
+        const sequence = await this.db.one(
+            sequenceSchema,
+            'select * from tenant_number_sequences where id=$1 and tenant_id=$2',
+            [id, this.tenantId],
+        );
+        if (!row || !sequence) abort(404, 'Pengaturan nomor tidak ditemukan.');
+        const state = await this.db.one(
+            z.object({
+                used: z.boolean(),
+                allocated_next: z.coerce.number().nullable(),
+                allocated_last: z.coerce.number().nullable(),
+            }),
+            // Allocated numbers di Performance F&O: blok preallocation yang sedang dipakai, bila ada.
+            `select exists(select 1 from number_sequence_counters where sequence_id=$1) or exists(select 1 from number_sequence_issues where sequence_id=$1) or exists(select 1 from number_sequence_reservations where sequence_id=$1) as used,
+                a.next_number as allocated_next,a.last_number as allocated_last
+             from (select 1) one
+             left join lateral (select next_number,last_number from number_sequence_allocations where sequence_id=$1 and next_number<=last_number order by created_at desc limit 1) a on true`,
+            [id],
+        );
+        return {
+            ...present(row),
+            legal_entity_id: sequence.legal_entity_id,
+            operating_unit_id: sequence.operating_unit_id,
+            fiscal_period_id: sequence.fiscal_period_id,
+            allow_automatic: sequence.allow_automatic,
+            allow_manual: sequence.allow_manual,
+            allow_lower_number: sequence.allow_lower_number,
+            allow_higher_number: sequence.allow_higher_number,
+            reset_period: sequence.reset_period,
+            preallocation_enabled: sequence.preallocation_enabled,
+            preallocation_quantity: sequence.preallocation_quantity,
+            used: state?.used ?? false,
+            allocated_next: state?.allocated_next ?? null,
+            allocated_last: state?.allocated_last ?? null,
+        };
+    }
+
+    // Pilihan nilai scope saat membuat: perusahaan, unit, atau periode fiskal milik perusahaan yang dipilih.
+    async scopeValues(parameters: URLSearchParams) {
+        const kind = parameters.get('kind');
+        const periods = kind === 'fiscal_period';
+        const batch = await incrementalList(this.db, {
+            query: periods
+                ? `select p.id,y.name||' '||p.name as name,to_char(p.starts_on,'YYYY-MM-DD') as code
+                   from legal_entities l join organizations o on o.id=l.organization_id
+                   join fiscal_years y on y.fiscal_calendar_id=l.fiscal_calendar_id
+                   join fiscal_periods p on p.fiscal_year_id=y.id
+                   where o.tenant_id=$1 and l.organization_id::text=$2`
+                : `select o.id,o.name,coalesce(l.company_code,u.number) as code
+                   from organizations o
+                   left join legal_entities l on l.organization_id=o.id
+                   left join operating_units u on u.organization_id=o.id
+                   where o.tenant_id=$1 and o.status='active' and o.classification=$2`,
+            bindings: [
+                this.tenantId,
+                periods
+                    ? (parameters.get('legal_entity_id') ?? '')
+                    : kind === 'operating_unit'
+                      ? 'operating_unit'
+                      : 'legal_entity',
+            ],
+            parameters,
+            columns: { name: 'name', code: 'code' },
+            searchColumns: ['name', 'code'],
+            numericColumns: [],
+            defaultSort: periods ? 'code' : 'name',
+            defaultDirection: 'asc',
+        });
+        return {
+            data: batch.data.map((row) => scopeValueSchema.parse(row)),
+            next_cursor: batch.next_cursor,
+        };
     }
 }

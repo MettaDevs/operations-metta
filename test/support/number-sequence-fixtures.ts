@@ -99,6 +99,7 @@ export async function createOperatingUnit(
     sql: postgres.Sql,
     tenantId: string,
     name: string,
+    number: string | null = null,
 ): Promise<string> {
     const id = Bun.randomUUIDv7();
     await sql.unsafe(
@@ -106,8 +107,8 @@ export async function createOperatingUnit(
         [id, tenantId, name],
     );
     await sql.unsafe(
-        "insert into operating_units (organization_id, tenant_id, type, created_at, updated_at) values ($1, $2, 'department', now(), now())",
-        [id, tenantId],
+        "insert into operating_units (organization_id, tenant_id, type, number, created_at, updated_at) values ($1, $2, 'department', $3, now(), now())",
+        [id, tenantId, number],
     );
     return id;
 }
