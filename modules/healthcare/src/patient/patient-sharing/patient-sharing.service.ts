@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
-import type { Database } from '@core/platform/database/index.ts';
+import type { Bind, Database } from '@core/platform/database/index.ts';
 import { validation } from '@core/platform/http/index.ts';
 
 // Tujuan hierarchy yang dipasang migration module ini. Sysadmin menyusun kelompok di layar Hierarki organisasi.
@@ -9,16 +9,20 @@ export const sharingPurpose = 'healthcare.patient-sharing';
 const ids = (start: number, count: number) =>
     Array.from({ length: count }, (_, index) => `$${start + index}`).join(',');
 
-// Kelompok berbagi pasien. Rancangan kita sendiri, karena F&O tidak punya scope data menurut hierarchy:
+// Siapa melihat pasien siapa. Pola F&O (keputusan pemilik produk, 10 November 2026):
 //
-// - Kelompok dibaca dari hierarchy Organization bertujuan "kelompok berbagi pasien", memakai versi terbit yang
-//   sedang berlaku (tanggal berlaku paling akhir yang sudah lewat) di setiap hierarchy aktif.
-// - Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar. Kelompok adalah kepala itu beserta
-//   semua operating unit di bawahnya. Bila akar hierarchy perusahaan, setiap unit langsung di bawahnya memimpin
-//   kelompoknya sendiri; bila akarnya operating unit, seluruh pohon satu kelompok.
-// - Unit yang tidak ditempatkan di hierarchy itu menjadi kelompok sendiri.
-// - Memisah atau menggabung kelompok berarti versi hierarchy baru. Catatan pasien tidak ditulis ulang: kelompok
-//   dihitung setiap kali data dibaca.
+// - Bawaan: pasien terlihat di semua operating unit yang bekerja untuk legal entity pendaftarnya. Operating unit tidak
+//   memisahkan data dalam satu legal entity, sama dengan F&O.
+// - Antar legal entity pasien tidak terlihat, kecuali kedua legal entity ikut satu kebijakan berbagi yang aktif dan
+//   sudah berlaku (cross-company data sharing F&O). Satu legal entity hanya ikut satu kebijakan aktif.
+// - Mempersempit dalam legal entity: unit yang ditempatkan sysadmin di hierarchy "kelompok berbagi pasien" hanya
+//   berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada
+//   versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang
+//   tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan.
+//
+// Jadi pasien p terlihat dari legal entity L dan unit g bila legal entity p sama dengan L atau sekebijakan dengannya,
+// dan unit pendaftar p sekelompok dengan g (keduanya di kelompok yang sama, atau keduanya tidak ditempatkan).
+// Kelompok dan kebijakan dihitung setiap kali data dibaca; catatan pasien tidak pernah ditulis ulang.
 export class PatientSharing {
     private versionCache: string[] | null = null;
 
@@ -69,8 +73,9 @@ export class PatientSharing {
         );
     }
 
-    // Unit pemilik nomor rekam medis untuk pasien yang didaftarkan di unit ini: kepala kelompoknya.
-    async numberingUnit(unitId: string): Promise<string> {
+    // Unit pemilik nomor rekam medis untuk pasien yang didaftarkan di unit ini: kepala kelompoknya, atau null bila unit
+    // tidak ditempatkan di kelompok, yang berarti NRM diambil dari sequence legal entity.
+    async numberingUnit(unitId: string): Promise<string | null> {
         const heads = [
             ...new Set((await this.heads([unitId])).map((row) => row.head_id)),
         ];
@@ -79,21 +84,53 @@ export class PatientSharing {
                 org_unit_id:
                     'Unit kerja ini masuk lebih dari satu kelompok berbagi pasien. Minta admin merapikan susunan kelompoknya di Hierarki organisasi.',
             });
-        return heads[0] ?? unitId;
+        return heads[0] ?? null;
     }
 
-    // Semua operating unit yang sekelompok dengan salah satu unit yang disebut, termasuk unit itu sendiri.
-    async members(unitIds: string[]): Promise<string[]> {
-        const unique = [...new Set(unitIds)];
+    // Legal entity yang pasiennya terlihat dari legal entity ini: dirinya sendiri, ditambah anggota kebijakan berbagi
+    // yang aktif dan sudah berlaku yang ia ikuti.
+    async sharedLegalEntities(legalEntityId: string): Promise<string[]> {
+        const rows = await this.db.rows(
+            z.object({ legal_entity_id: z.string() }),
+            `select distinct other.legal_entity_id
+             from sim_m_kebijakan_berbagi_perusahaan own
+             join sim_m_kebijakan_berbagi policy on policy.tenant_id = own.tenant_id and policy.id = own.kebijakan_id
+                  and policy.aktif and policy.deleted_at is null and policy.berlaku_mulai <= current_date
+             join sim_m_kebijakan_berbagi_perusahaan other on other.tenant_id = policy.tenant_id
+                  and other.kebijakan_id = policy.id and other.deleted_at is null
+             where own.tenant_id = $1 and own.legal_entity_id = $2 and own.deleted_at is null`,
+            [this.tenantId, legalEntityId],
+        );
+        return [
+            ...new Set([
+                legalEntityId,
+                ...rows.map((row) => row.legal_entity_id),
+            ]),
+        ];
+    }
+
+    // Syarat SQL bahwa pasien `k` terlihat dari legal entity ini dan dari salah satu unit yang disebut. units null
+    // berarti semua unit (batas data "seluruh organisasi"): hanya aturan legal entity yang berlaku.
+    async clause(
+        legalEntityId: string | null,
+        units: string[] | null,
+        bind: (value: Bind) => string,
+    ): Promise<string> {
+        if (!legalEntityId) return 'false';
+        const companies = await this.sharedLegalEntities(legalEntityId);
+        const company = `k.legal_entity_id in (${companies.map((id) => bind(id)).join(',')})`;
+        if (units === null) return company;
+        const unique = [...new Set(units)];
+        if (!unique.length) return 'false';
         const heads = await this.heads(unique);
         const placed = new Set(heads.map((row) => row.unit_id));
-        const members = new Set(unique.filter((id) => !placed.has(id)));
+        const parts: string[] = [];
         if (heads.length) {
             const pairs = heads.map(
                 (_, index) =>
                     `(c.version_id = $${index * 2 + 1} and c.ancestor_organization_id = $${index * 2 + 2})`,
             );
-            const rows = await this.db.rows(
+            const members = await this.db.rows(
                 z.object({ id: z.string() }),
                 `select distinct c.descendant_organization_id as id
                  from organization_hierarchy_closures c
@@ -101,27 +138,54 @@ export class PatientSharing {
                  where c.deleted_at is null and (${pairs.join(' or ')})`,
                 heads.flatMap((row) => [row.version_id, row.head_id]),
             );
-            for (const row of rows) members.add(row.id);
+            parts.push(
+                `k.org_unit_id in (${members.map((row) => bind(row.id)).join(',') || 'null'})`,
+            );
         }
-        return [...members];
+        if (unique.some((id) => !placed.has(id))) {
+            const versions = await this.versions();
+            parts.push(
+                versions.length
+                    ? `not exists (select 1 from organization_hierarchy_closures placed
+                                   where placed.distance = 0 and placed.deleted_at is null
+                                     and placed.descendant_organization_id = k.org_unit_id
+                                     and placed.version_id in (${versions.map((id) => bind(id)).join(',')}))`
+                    : 'true',
+            );
+        }
+        return `${company} and (${parts.join(' or ') || 'false'})`;
     }
 
-    // Unit pendaftar pasien yang terlihat bagi pengguna: anggota kelompok setiap unit yang diberikan kepadanya lewat
-    // kebijakan data pasien. null berarti seluruh tenant (batas data "seluruh organisasi").
-    async visibleUnits(workspace: Workspace): Promise<string[] | null> {
-        if (workspace.policy.kind === 'all') return null;
-        return this.members(
-            workspace.policy.grants.flatMap((grant) => grant.operatingUnitIds),
+    // Syarat SQL pasien yang terlihat bagi pengguna. Urutannya: tenant (pemanggil), izin (guard pemanggil), legal
+    // entity aktif beserta kebijakan berbaginya, lalu kelompok dari unit yang diberikan kepadanya lewat kebijakan data
+    // `healthcare.patient-unit` di legal entity aktif. Batas "seluruh organisasi" tidak membatasi unit.
+    async visible(
+        workspace: Workspace,
+        bind: (value: Bind) => string,
+    ): Promise<string> {
+        return this.clause(
+            workspace.legalEntityId,
+            grantedUnits(workspace),
+            bind,
         );
     }
 }
 
+// Unit yang diberikan kepada pengguna lewat kebijakan data pasien untuk legal entity aktif (atau tanpa legal entity).
+// null berarti seluruh organisasi.
+export function grantedUnits(workspace: Workspace): string[] | null {
+    if (workspace.policy.kind === 'all') return null;
+    return workspace.policy.grants
+        .filter(
+            (grant) =>
+                grant.legalEntityId === null ||
+                grant.legalEntityId === workspace.legalEntityId,
+        )
+        .flatMap((grant) => grant.operatingUnitIds);
+}
+
 // Unit yang boleh menjadi unit pendaftar: unit aktif di tempat kerja, dan unit itu sendiri termasuk batas data pengguna.
 export function grantsUnit(workspace: Workspace, unitId: string): boolean {
-    return (
-        workspace.policy.kind === 'all' ||
-        workspace.policy.grants.some((grant) =>
-            grant.operatingUnitIds.includes(unitId),
-        )
-    );
+    const units = grantedUnits(workspace);
+    return units === null || units.includes(unitId);
 }

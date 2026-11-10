@@ -101,19 +101,44 @@ const timezoneRules = (prohibited: boolean): Rule[] => [
     },
 ];
 const companyCodeRules = (required: boolean): Rule[] => [
-    { kind: 'required', when: required },
+    { kind: 'required', when: required, message: 'Isi kode perusahaan.' },
     { kind: 'string' },
-    { kind: 'regex', pattern: companyCodeFormat },
+    {
+        kind: 'regex',
+        pattern: companyCodeFormat,
+        message:
+            'Kode perusahaan berisi 2 sampai 16 huruf, angka, atau tanda hubung, dan tidak diawali tanda hubung.',
+    },
 ];
 const countryCodeRules = (required: boolean): Rule[] => [
-    { kind: 'required', when: required },
+    { kind: 'required', when: required, message: 'Isi kode negara.' },
     { kind: 'string' },
-    { kind: 'size', length: 2 },
+    {
+        kind: 'size',
+        length: 2,
+        message: 'Kode negara terdiri dari 2 huruf, misalnya ID.',
+    },
 ];
 const nameRules: Rule[] = [
-    { kind: 'required' },
+    { kind: 'required', message: 'Isi nama organisasi.' },
     { kind: 'string' },
-    { kind: 'max', length: 150 },
+    {
+        kind: 'max',
+        length: 150,
+        message: 'Nama organisasi paling banyak 150 karakter.',
+    },
+];
+const unitTypeRules = (required: boolean): Rule[] => [
+    {
+        kind: 'required',
+        when: required,
+        message: 'Pilih tipe operating unit.',
+    },
+    {
+        kind: 'in',
+        values: unitTypeCodes,
+        message: 'Pilih tipe operating unit dari daftar.',
+    },
 ];
 
 // Nomor unit dirapikan sebelum divalidasi: huruf kecil dan spasi di ujung adalah salah ketik yang wajar, bukan
@@ -161,10 +186,7 @@ export const createOrganizationSchema = laravelBody
             operating_unit_type: fieldErrors(
                 'operating_unit_type',
                 input.operating_unit_type,
-                [
-                    { kind: 'required', when: operatingUnit },
-                    { kind: 'in', values: unitTypeCodes },
-                ],
+                unitTypeRules(operatingUnit),
             ),
             operating_unit_number: fieldErrors(
                 'operating_unit_number',
@@ -231,10 +253,7 @@ export function updateOrganizationSchema(organization: OrganizationRow) {
             operating_unit_type: fieldErrors(
                 'operating_unit_type',
                 input.operating_unit_type,
-                [
-                    { kind: 'required', when: operatingUnit },
-                    { kind: 'in', values: unitTypeCodes },
-                ],
+                unitTypeRules(operatingUnit),
             ),
             operating_unit_number: fieldErrors(
                 'operating_unit_number',

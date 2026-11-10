@@ -1,7 +1,11 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
-import { Field, FieldLabel } from '@operations-metta/ui/field';
+import {
+    Field,
+    FieldDescription,
+    FieldLabel,
+} from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
@@ -68,6 +72,7 @@ function PatientTypeCard({
         behaviors: type?.behaviors ?? [],
         // Tipe baru langsung aktif.
         is_active: type?.is_active ?? true,
+        is_default: type?.is_default ?? false,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -251,6 +256,25 @@ function PatientTypeCard({
                             Aktif
                         </FieldLabel>
                     </Field>
+                    <Field orientation="horizontal" className="w-auto">
+                        <Switch
+                            id="patient-type-default"
+                            checked={form.is_default}
+                            disabled={!editing}
+                            onCheckedChange={(checked) =>
+                                setForm({ ...form, is_default: checked })
+                            }
+                        />
+                        <FieldLabel htmlFor="patient-type-default">
+                            Bawaan pasien baru
+                        </FieldLabel>
+                    </Field>
+                    {editing && form.is_default && (
+                        <FieldDescription>
+                            Pasien baru otomatis memakai tipe ini. Tipe lain
+                            yang sebelumnya bawaan dilepas saat disimpan.
+                        </FieldDescription>
+                    )}
                 </FormGrid>
             </PageDialogBody>
             {confirmation}
@@ -383,6 +407,7 @@ function PatientTypesPage(): ReactNode {
                                     }
                                 >
                                     {type.is_active ? 'Aktif' : 'Nonaktif'}
+                                    {type.is_default ? ' · Bawaan' : ''}
                                 </Badge>
                             ),
                         },

@@ -27,21 +27,30 @@ import {
 export const guarantorRole = `${moduleId}.guarantor`;
 
 const rowSql = `select g.id, g.party_id, p.name, g.tipe_pasien_id as patient_type_id, t.nama as patient_type_name,
-                       g.aktif as is_active, g.version
-                from kes_penjamin g
+                       g.aktif as is_active, g.bawaan as is_default, g.version
+                from sim_m_penjamin g
                 join parties p on p.tenant_id = g.tenant_id and p.id = g.party_id
-                join kes_tipe_pasien t on t.tenant_id = g.tenant_id and t.id = g.tipe_pasien_id
+                join sim_m_tipe_pasien t on t.tenant_id = g.tenant_id and t.id = g.tipe_pasien_id
                 where g.tenant_id = $1 and g.deleted_at is null`;
 
 function taken(error: unknown): void {
     if (
         sqlErrorCode(error) === '23505' &&
         error instanceof Error &&
-        error.message.includes('kes_penjamin_party_tipe_unique')
+        error.message.includes('sim_m_penjamin_party_tipe_unique')
     )
         validation({
             patient_type_id:
                 'Penjamin ini sudah terdaftar untuk tipe pasien yang dipilih.',
+        });
+    if (
+        sqlErrorCode(error) === '23505' &&
+        error instanceof Error &&
+        error.message.includes('sim_m_penjamin_bawaan_unique')
+    )
+        validation({
+            is_default:
+                'Penjamin lain baru saja dijadikan bawaan tipe pasien ini. Muat ulang, lalu coba lagi.',
         });
 }
 
@@ -104,7 +113,7 @@ export class Guarantors {
             id && lookupId(id)
                 ? await this.db.one(
                       z.object({ id: z.string() }),
-                      'select id from kes_tipe_pasien where tenant_id = $1 and id = $2 and deleted_at is null',
+                      'select id from sim_m_tipe_pasien where tenant_id = $1 and id = $2 and deleted_at is null',
                       [this.workspace.tenantId, id],
                   )
                 : undefined;
@@ -160,12 +169,15 @@ export class Guarantors {
                     owningAppId: moduleId,
                 });
                 const stamp = nowSql();
-                await this.db.insert('kes_penjamin', {
+                if (data?.is_default)
+                    await this.clearDefault(patientTypeId, id);
+                await this.db.insert('sim_m_penjamin', {
                     id,
                     tenant_id: this.workspace.tenantId,
                     party_id: partyId,
                     tipe_pasien_id: patientTypeId,
                     aktif: data?.is_active ?? true,
+                    bawaan: data?.is_default ?? false,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -185,19 +197,25 @@ export class Guarantors {
         const data = parsed.success ? parsed.data : null;
         const patientTypeId = await this.patientType(data?.patient_type_id);
         const version = expectedVersion(request, body);
-        let updated: number;
+        const isDefault = data?.is_default ?? current.is_default;
+        let updated = 0;
         try {
-            updated = await this.db.execute(
-                'update kes_penjamin set tipe_pasien_id = $1, aktif = $2, updated_at = $3 where tenant_id = $4 and id = $5 and version = $6 and deleted_at is null',
-                [
-                    patientTypeId,
-                    data?.is_active ?? current.is_active,
-                    nowSql(),
-                    this.workspace.tenantId,
-                    current.id,
-                    version,
-                ],
-            );
+            await this.db.transaction(async () => {
+                if (isDefault)
+                    await this.clearDefault(patientTypeId, current.id);
+                updated = await this.db.execute(
+                    'update sim_m_penjamin set tipe_pasien_id = $1, aktif = $2, bawaan = $7, updated_at = $3 where tenant_id = $4 and id = $5 and version = $6 and deleted_at is null',
+                    [
+                        patientTypeId,
+                        data?.is_active ?? current.is_active,
+                        nowSql(),
+                        this.workspace.tenantId,
+                        current.id,
+                        version,
+                        isDefault,
+                    ],
+                );
+            });
         } catch (error) {
             taken(error);
             throw error;
@@ -206,12 +224,20 @@ export class Guarantors {
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
+    // Penjamin bawaan berpindah di dalam satu tipe pasien, sama dengan tipe pasien bawaan.
+    private async clearDefault(patientTypeId: string, keepId: string) {
+        await this.db.execute(
+            'update sim_m_penjamin set bawaan = false, updated_at = $1 where tenant_id = $2 and tipe_pasien_id = $3 and bawaan and id <> $4 and deleted_at is null',
+            [nowSql(), this.workspace.tenantId, patientTypeId, keepId],
+        );
+    }
+
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('guarantor', 'update');
         const current = await this.row(id);
         const stamp = nowSql();
         const deleted = await this.db.execute(
-            'update kes_penjamin set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
+            'update sim_m_penjamin set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
             [
                 stamp,
                 this.workspace.tenantId,

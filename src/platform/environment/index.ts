@@ -26,5 +26,10 @@ export {
     migrateRequestSchema,
     type MigrateRequest,
 } from './migrate.service.ts';
+export {
+    installModule,
+    installModuleRequestSchema,
+    type InstallModuleRequest,
+} from './install-module.service.ts';
 export { findRoute, type EnvironmentRoute } from './route.service.ts';
 export { runOperation } from './worker.service.ts';

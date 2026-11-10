@@ -65,7 +65,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             country_code: 'id',
         };
         expect(await errors(await create(base))).toEqual({
-            company_code: ['The company code field is required.'],
+            company_code: ['Isi kode perusahaan.'],
         });
 
         const created = await create({ ...base, company_code: 'asset-01' });
@@ -349,9 +349,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
                 }),
             ),
         ).toEqual({
-            operating_unit_type: [
-                'The selected operating unit type is invalid.',
-            ],
+            operating_unit_type: ['Pilih tipe operating unit dari daftar.'],
         });
         const [purpose] = await pool.unsafe(
             "select name from hierarchy_purposes where code = 'establishment'",
@@ -517,7 +515,9 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
                 }),
             ),
         ).toEqual({
-            company_code: ['The company code has already been taken.'],
+            company_code: [
+                'Kode perusahaan sudah dipakai perusahaan lain dalam bisnis ini.',
+            ],
         });
         const updated = await owner.patch(`/api/v1/organizations/${one.id}`, {
             version: await versionOf(one.id),

@@ -233,10 +233,18 @@ export class NumberIssuer {
         reference: { id: string; name: string },
         request: Omit<NumberRequest, 'key'>,
     ): Promise<never> {
+        // Reference yang nomornya unik per nilai scope boleh punya sequence aktif dengan beberapa jenis scope. Pesannya
+        // memakai jenis scope yang disebut dokumen: unit bila dokumen hanya menyebut unit.
         const active = await this.db.one(
             z.object({ scope_type: z.string() }),
-            "select scope_type from tenant_number_sequences where tenant_id=$1 and reference_id=$2 and status='active' limit 1",
-            [this.owner.tenantId, reference.id],
+            "select scope_type from tenant_number_sequences where tenant_id=$1 and reference_id=$2 and status='active' order by (scope_type='operating_unit') = $3 desc limit 1",
+            [
+                this.owner.tenantId,
+                reference.id,
+                request.operatingUnitId !== null &&
+                    request.operatingUnitId !== undefined &&
+                    !request.legalEntityId,
+            ],
         );
         const organizationId =
             active?.scope_type === 'operating_unit'

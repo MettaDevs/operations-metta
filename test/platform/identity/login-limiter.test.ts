@@ -115,15 +115,18 @@ async function harness() {
         log = [];
         let status = 200;
         let headers: Record<string, string> = {};
+        let body: object = {};
         try {
             await session.login({ email: 'User@Example.test', password });
         } catch (error) {
             if (!(error instanceof HttpFailure)) throw error;
             status = error.status;
             headers = error.headers;
+            body = error.body;
         }
         return {
             status,
+            body,
             headers: { ...session.responseHeaders, ...headers },
             statements: log,
         };
@@ -149,6 +152,10 @@ test('failed login hits the route key before and the Fortify key after the crede
     const { cache, attempt } = await harness();
     const first = await attempt('wrong');
     expect(first.status).toBe(422);
+    expect(first.body).toEqual({
+        message: 'Email atau kata sandi salah.',
+        errors: { email: ['Email atau kata sandi salah.'] },
+    });
     expect(first.statements).toEqual([
         readKr,
         ...hit('Kr'),
@@ -202,6 +209,9 @@ test('sixth login is throttled with retry headers and no further writes', async 
     const retryAfter = Number(throttled.headers['Retry-After']);
     expect(retryAfter).toBeGreaterThan(0);
     expect(retryAfter).toBeLessThanOrEqual(60);
+    expect(throttled.body).toEqual({
+        message: `Terlalu banyak percobaan masuk. Coba lagi dalam ${retryAfter} detik.`,
+    });
     expect(throttled.headers['X-RateLimit-Limit']).toBe('5');
     expect(throttled.headers['X-RateLimit-Remaining']).toBe('0');
     expect(

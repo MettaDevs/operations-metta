@@ -2,8 +2,8 @@ import { hierarchyRoutes } from './hierarchy.routes.ts';
 import { organizationRoutes as directoryRoutes } from './organization.routes.ts';
 
 export {
-    onOperatingUnitCreated,
-    type OperatingUnitCreated,
+    onOrganizationCreated,
+    type OrganizationCreated,
 } from './organization.service.ts';
 
 // Legal entity, operating unit, dan hierarchy organisasi: route pengguna tenant di bawah `/api/v1/settings/...` dan

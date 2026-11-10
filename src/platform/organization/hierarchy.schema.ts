@@ -30,12 +30,12 @@ function dateTime(value: unknown): string | null {
 
 export function effectiveFromErrors(value: unknown): string[] {
     const required = fieldErrors('effective_from', value, [
-        { kind: 'required' },
+        { kind: 'required', message: 'Isi tanggal berlaku mulai.' },
     ]);
     if (required.length) return required;
     return dateTime(value)
         ? []
-        : ['The effective from field must be a valid date.'];
+        : ['Isi tanggal berlaku mulai dengan format dd/mm/yyyy.'];
 }
 
 // HierarchyRequest CoreERP. Keunikan nama dan keberadaan kode tujuan diperiksa service, karena butuh database.
@@ -50,7 +50,9 @@ export const createHierarchySchema = laravelBody.transform((input) => {
         codes === undefined ||
         (Array.isArray(codes) && !codes.length)
     )
-        purposeErrors.purpose_codes = ['The purpose codes field is required.'];
+        purposeErrors.purpose_codes = [
+            'Pilih sedikitnya satu tujuan hierarki.',
+        ];
     else if (!Array.isArray(codes))
         purposeErrors.purpose_codes = [
             'The purpose codes field must be an array.',
@@ -74,15 +76,25 @@ export const createHierarchySchema = laravelBody.transform((input) => {
         effective_from: dateTime(input.effective_from) ?? '',
         errors: {
             name: fieldErrors('name', name, [
-                { kind: 'required' },
+                { kind: 'required', message: 'Isi nama hierarki.' },
                 { kind: 'string' },
-                { kind: 'max', length: 150 },
+                {
+                    kind: 'max',
+                    length: 150,
+                    message: 'Nama hierarki paling banyak 150 karakter.',
+                },
             ]),
             ...purposeErrors,
             root_organization_id: fieldErrors(
                 'root_organization_id',
                 input.root_organization_id,
-                [{ kind: 'required' }, { kind: 'string' }],
+                [
+                    {
+                        kind: 'required',
+                        message: 'Pilih organisasi paling atas.',
+                    },
+                    { kind: 'string' },
+                ],
             ),
             effective_from: effectiveFromErrors(input.effective_from),
         },
@@ -98,7 +110,10 @@ export const placementSchema = laravelBody.transform((input) => ({
             : '',
     errors: {
         organization_id: fieldErrors('organization_id', input.organization_id, [
-            { kind: 'required' },
+            {
+                kind: 'required',
+                message: 'Pilih organisasi yang ditambahkan.',
+            },
             { kind: 'string' },
         ]),
         parent_organization_id: fieldErrors(

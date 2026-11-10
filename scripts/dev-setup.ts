@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import postgres from 'postgres';
 import { z } from 'zod';
-import { databaseSettingsSchema } from '../src/platform/config/index.ts';
+import {
+    databaseSettingsSchema,
+    loadConfig,
+} from '../src/platform/config/index.ts';
 import {
     environmentHost,
     findRoute,
+    installModule,
     provisionEnvironment,
     provisionRequestSchema,
 } from '../src/platform/environment/index.ts';
@@ -13,11 +17,14 @@ import {
     migrate,
     readMigrationSource,
 } from '../src/platform/migration/index.ts';
+import { sampleSchema, seedSample } from './dev-sample.ts';
 
 // Menyiapkan laptop developer dalam satu perintah: memigrasi database runtime dev, lalu membuat setiap lingkungan
 // tenant contoh dari dev/tenants.json, masing-masing dengan database sendiri, lewat fungsi yang sama dengan penyiapan
-// di server. Aman diulang: lingkungan yang alamatnya sudah tercatat dilewati. Di server, tenant hanya lahir dari
-// admin.erp.
+// di server. Module yang dibeli tenant contoh (`modules`) dipasang lewat installModule: entitlement, migration module,
+// catatan pemasangan, dan duty module untuk role pemilik. Data contoh (`sample`) diisi lewat API sebagai admin pertama
+// (scripts/dev-sample.ts). Aman diulang: lingkungan yang alamatnya sudah tercatat tidak disiapkan ulang, module yang
+// sudah terpasang dan lingkungan yang sudah berisi perusahaan dilewati. Di server, tenant hanya lahir dari admin.erp.
 const tenantsSchema = z.array(
     z.object({
         legal_name: z.string(),
@@ -36,6 +43,9 @@ const tenantsSchema = z.array(
                 }),
             )
             .min(1),
+        // Module yang berhak dipakai dan dipasang untuk tenant contoh, misalnya healthcare.
+        modules: z.array(z.string()).default([]),
+        sample: sampleSchema.optional(),
     }),
 );
 
@@ -110,40 +120,94 @@ try {
                 tenant.slug,
                 environment.kind,
             );
+            const database =
+                `${settings.DB_DATABASE}_${tenant.slug}_${environment.kind}`
+                    .replaceAll('-', '_')
+                    .slice(0, 63);
             if (recorded) {
                 // Lingkungan tenant yang sama yang ditambahkan belakangan memakai id tenant yang sudah tercatat.
                 ids.tenant = recorded.tenant_id;
-                console.log(`${url}: sudah ada, dilewati`);
-                continue;
+                console.log(`${url}: sudah ada`);
+            } else {
+                await provisionEnvironment(
+                    settings,
+                    source,
+                    provisionRequestSchema.parse({
+                        environment,
+                        database,
+                        client: {
+                            id: ids.client,
+                            legal_name: tenant.legal_name,
+                            slug: tenant.slug,
+                        },
+                        tenant: {
+                            id: ids.tenant,
+                            name: tenant.name,
+                            slug: tenant.slug,
+                        },
+                        admin: {
+                            id: ids.admin,
+                            name: tenant.admin.name,
+                            email: tenant.admin.email,
+                            password_hash: passwordHash,
+                        },
+                    }),
+                );
+                console.log(`${url}: dibuat, login ${tenant.admin.email}`);
             }
-            await provisionEnvironment(
-                settings,
-                source,
-                provisionRequestSchema.parse({
-                    environment,
-                    database:
-                        `${settings.DB_DATABASE}_${tenant.slug}_${environment.kind}`
-                            .replaceAll('-', '_')
-                            .slice(0, 63),
-                    client: {
-                        id: ids.client,
-                        legal_name: tenant.legal_name,
-                        slug: tenant.slug,
+            const environmentDatabase = recorded
+                ? recorded.database_name
+                : database;
+            for (const module of tenant.modules) {
+                await installModule(settings, source, {
+                    database: environmentDatabase,
+                    tenant_id: ids.tenant,
+                    module_id: module,
+                });
+                console.log(`${url}: module ${module} terpasang`);
+            }
+            if (tenant.sample) {
+                const environmentSql = postgres({
+                    host: settings.DB_HOST,
+                    port: settings.DB_PORT,
+                    database: environmentDatabase ?? settings.DB_DATABASE,
+                    username: settings.DB_USERNAME,
+                    password: settings.DB_PASSWORD,
+                    max: 1,
+                    onnotice: () => {
+                        // NOTICE PostgreSQL sengaja tidak dicetak.
                     },
-                    tenant: {
-                        id: ids.tenant,
-                        name: tenant.name,
-                        slug: tenant.slug,
-                    },
-                    admin: {
-                        id: ids.admin,
-                        name: tenant.admin.name,
-                        email: tenant.admin.email,
-                        password_hash: passwordHash,
-                    },
-                }),
-            );
-            console.log(`${url}: dibuat, login ${tenant.admin.email}`);
+                });
+                try {
+                    const seeded = await seedSample(
+                        loadConfig({
+                            ...process.env,
+                            SESSION_BACKEND: 'database',
+                        }),
+                        environmentSql,
+                        {
+                            host: environmentHost(
+                                tenant.slug,
+                                environment.kind,
+                                baseDomain,
+                            ),
+                            tenantId: ids.tenant,
+                            admin: {
+                                email: tenant.admin.email,
+                                password: tenant.admin.password,
+                            },
+                            sample: tenant.sample,
+                        },
+                    );
+                    console.log(
+                        seeded
+                            ? `${url}: data contoh diisi, login petugas: ${tenant.sample.staff.map((person) => person.email).join(', ')}`
+                            : `${url}: data contoh sudah ada, dilewati`,
+                    );
+                } finally {
+                    await environmentSql.end();
+                }
+            }
         }
     }
 } catch (error) {

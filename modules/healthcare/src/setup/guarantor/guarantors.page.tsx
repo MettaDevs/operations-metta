@@ -66,6 +66,7 @@ function GuarantorCard({
             : null,
         // Penjamin baru langsung aktif.
         is_active: guarantor?.is_active ?? true,
+        is_default: guarantor?.is_default ?? false,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -105,6 +106,7 @@ function GuarantorCard({
                       body: {
                           patient_type_id: patientTypeId,
                           is_active: form.is_active,
+                          is_default: form.is_default,
                           version: guarantor.version,
                       },
                   })
@@ -113,6 +115,7 @@ function GuarantorCard({
                           name: form.name,
                           patient_type_id: patientTypeId,
                           is_active: form.is_active,
+                          is_default: form.is_default,
                       },
                   });
             toast.success(
@@ -245,6 +248,7 @@ function GuarantorCard({
                                               code: '',
                                               behaviors: [],
                                               is_active: true,
+                                              is_default: false,
                                               version: 0,
                                           }
                                         : null
@@ -296,6 +300,19 @@ function GuarantorCard({
                         />
                         <FieldLabel htmlFor="guarantor-active">
                             Aktif
+                        </FieldLabel>
+                    </Field>
+                    <Field orientation="horizontal" className="w-auto">
+                        <Switch
+                            id="guarantor-default"
+                            checked={form.is_default}
+                            disabled={!editing}
+                            onCheckedChange={(checked) =>
+                                setForm({ ...form, is_default: checked })
+                            }
+                        />
+                        <FieldLabel htmlFor="guarantor-default">
+                            Bawaan untuk tipe pasien ini
                         </FieldLabel>
                     </Field>
                 </FormGrid>
@@ -421,6 +438,7 @@ function GuarantorsPage(): ReactNode {
                                     }
                                 >
                                     {guarantor.is_active ? 'Aktif' : 'Nonaktif'}
+                                    {guarantor.is_default ? ' · Bawaan' : ''}
                                 </Badge>
                             ),
                         },

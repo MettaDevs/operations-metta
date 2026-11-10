@@ -38,9 +38,10 @@ const sessionSchema = z
             .optional(),
     })
     .catchall(z.json());
+// Form login memakai noValidate, jadi pesan ini yang tampil saat field dibiarkan kosong.
 export const loginInputSchema = z.object({
-    email: z.string().min(1),
-    password: z.string().min(1),
+    email: z.string({ error: 'Isi email.' }).min(1, 'Isi email.'),
+    password: z.string({ error: 'Isi kata sandi.' }).min(1, 'Isi kata sandi.'),
 });
 const userSchema = z.object({
     id: idSchema,
@@ -288,7 +289,9 @@ export class Session {
             const seconds = await limiter.availableIn(routeKey);
             throw new HttpFailure(
                 429,
-                { message: 'Too Many Attempts.' },
+                {
+                    message: `Terlalu banyak percobaan masuk. Coba lagi dalam ${seconds} detik.`,
+                },
                 {
                     'X-RateLimit-Limit': '5',
                     'X-RateLimit-Remaining': '0',
@@ -333,7 +336,7 @@ export class Session {
         if (!verified) {
             await limiter.hit(throttleKey);
             validation({
-                email: 'These credentials do not match our records.',
+                email: 'Email atau kata sandi salah.',
             });
         }
         if (first.two_factor_secret && first.two_factor_confirmed_at) {
@@ -348,7 +351,7 @@ export class Session {
         ) {
             await limiter.hit(throttleKey);
             validation({
-                email: 'These credentials do not match our records.',
+                email: 'Email atau kata sandi salah.',
             });
         }
         await this.forget();

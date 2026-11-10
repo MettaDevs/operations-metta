@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { tenantAppIds } from '../../platform/access/index.ts';
 import type { Database } from '../../platform/database/index.ts';
 import { nowSql, sqlErrorCode } from '../../platform/database/index.ts';
 import {
@@ -54,6 +55,7 @@ const scopeFields = [
 ] as const;
 const referenceSchema = z.object({
     id: z.string(),
+    app_id: z.string(),
     name: z.string(),
     allowed_scopes: z.array(z.string()),
     numbers_unique_per_scope: z.boolean(),
@@ -107,10 +109,16 @@ export class NumberSequences {
     private async reference(id: string) {
         const reference = await this.db.one(
             referenceSchema,
-            'select id,name,allowed_scopes,numbers_unique_per_scope,default_settings from app_number_sequence_references where id=$1 limit 1',
+            'select id,app_id,name,allowed_scopes,numbers_unique_per_scope,default_settings from app_number_sequence_references where id=$1 limit 1',
             [id],
         );
-        if (!reference)
+        // Reference module hanya tersedia bagi tenant yang berhak memakai module itu.
+        if (
+            !reference ||
+            !(await tenantAppIds(this.db, this.tenantId)).includes(
+                reference.app_id,
+            )
+        )
             validation({ reference_id: 'Pilih jenis nomor yang tersedia.' });
         return reference;
     }
@@ -433,16 +441,20 @@ export class NumberSequences {
     }
 
     // Semua sequence aktif satu reference memakai jenis scope yang sama, supaya satu dokumen tidak cocok dengan dua
-    // sequence (misalnya satu per tenant dan satu per perusahaan) dan nomor tidak dipilih diam-diam.
+    // sequence (misalnya satu per tenant dan satu per perusahaan) dan nomor tidak dipilih diam-diam. Reference yang
+    // nomornya unik per nilai scope (numbers_unique_per_scope) dikecualikan: pemanggilnya menyebut tepat satu nilai
+    // scope per dokumen, misalnya NRM per legal entity atau per unit kepala kelompok, dan NumberIssuer tetap menolak
+    // dokumen yang cocok dengan dua sequence.
     private async checkActiveScopeType(
         id: string | null,
-        referenceId: string,
+        reference: z.infer<typeof referenceSchema>,
         scopeType: ScopeType,
     ): Promise<void> {
+        if (reference.numbers_unique_per_scope) return;
         const other = await this.db.one(
             z.object({ scope_type: z.string() }),
             "select scope_type from tenant_number_sequences where tenant_id=$1 and reference_id=$2 and status='active' and scope_type<>$3 and ($4::uuid is null or id<>$4) limit 1",
-            [this.tenantId, referenceId, scopeType, id],
+            [this.tenantId, reference.id, scopeType, id],
         );
         if (other)
             validation({
@@ -483,7 +495,7 @@ export class NumberSequences {
             if (data.status === 'active')
                 await this.checkActiveScopeType(
                     null,
-                    reference.id,
+                    reference,
                     data.scope_type,
                 );
             const now = nowSql();
@@ -528,18 +540,37 @@ export class NumberSequences {
         });
     }
 
-    // Sequence bawaan untuk unit yang baru dibuat: satu per reference yang meminta sequence per operating unit
-    // (`default_per_operating_unit`), dengan setelan dari default_settings reference itu. Reference yang sudah punya
-    // sequence untuk unit ini dilewati, jadi aman dipanggil ulang. Core tidak tahu module mana yang meminta.
+    // Sequence bawaan untuk organisasi yang baru dibuat: satu per reference yang memintanya per operating unit
+    // (`default_per_operating_unit`) atau per legal entity (`default_per_legal_entity`), dengan setelan dari
+    // default_settings reference itu. Hanya reference milik Core atau milik module yang entitlement-nya aktif untuk
+    // tenant ini. Reference yang sudah punya sequence untuk organisasi ini dilewati, jadi aman dipanggil ulang. Core
+    // tidak tahu module mana yang meminta.
     async createUnitDefaults(operatingUnitId: string): Promise<void> {
+        await this.createDefaults('operating_unit', operatingUnitId);
+    }
+
+    async createLegalEntityDefaults(legalEntityId: string): Promise<void> {
+        await this.createDefaults('legal_entity', legalEntityId);
+    }
+
+    private async createDefaults(
+        scope: 'operating_unit' | 'legal_entity',
+        organizationId: string,
+    ): Promise<void> {
+        const apps = await tenantAppIds(this.db, this.tenantId);
+        const unit = scope === 'operating_unit';
+        const flag = unit
+            ? 'r.default_per_operating_unit'
+            : 'r.default_per_legal_entity';
+        const column = unit ? 's.operating_unit_id' : 's.legal_entity_id';
         const references = await this.db.rows(
             z.object({ id: z.string(), default_settings: z.unknown() }),
             `select r.id, r.default_settings from app_number_sequence_references r
-             where r.default_per_operating_unit
+             where ${flag} and r.app_id in (${apps.map((_, index) => `$${index + 4}`).join(',')})
                and not exists (select 1 from tenant_number_sequences s where s.tenant_id=$1 and s.reference_id=r.id
-                               and s.scope_type='operating_unit' and s.operating_unit_id=$2)
+                               and s.scope_type=$3 and ${column}=$2)
              order by r.code`,
-            [this.tenantId, operatingUnitId],
+            [this.tenantId, organizationId, scope, ...apps],
         );
         for (const reference of references) {
             const declared = settingsSchema
@@ -549,8 +580,10 @@ export class NumberSequences {
                 ...unitDefaults,
                 ...declared,
                 reference_id: reference.id,
-                scope_type: 'operating_unit',
-                operating_unit_id: operatingUnitId,
+                scope_type: scope,
+                ...(scope === 'operating_unit'
+                    ? { operating_unit_id: organizationId }
+                    : { legal_entity_id: organizationId }),
             });
         }
     }
@@ -593,7 +626,7 @@ export class NumberSequences {
             if (data.status === 'active')
                 await this.checkActiveScopeType(
                     id,
-                    current.reference_id,
+                    reference,
                     current.scope_type,
                 );
             await this.db.execute(
@@ -895,7 +928,9 @@ export class NumberSequenceDirectory {
         };
     }
 
+    // Jenis nomor yang bisa diatur: milik Core, dan milik module yang berhak dipakai tenant ini.
     async metadata(canManage: boolean) {
+        const apps = await tenantAppIds(this.db, this.tenantId);
         const references = await this.db.rows(
             z.object({
                 id: z.string(),
@@ -917,7 +952,10 @@ export class NumberSequenceDirectory {
                 coalesce((select json_agg(json_build_object('value',x->>'value','name',x->>'name','length',(x->>'length')::int))
                     from jsonb_array_elements(coalesce(r.default_settings->'segments','[]'::jsonb)) x
                     where x->>'type'='context'),'[]'::json) as context_fields
-             from app_number_sequence_references r join apps a on a.id=r.app_id order by a.name,r.name`,
+             from app_number_sequence_references r join apps a on a.id=r.app_id
+             where r.app_id in (${apps.map((_, index) => `$${index + 1}`).join(',')})
+             order by a.name,r.name`,
+            apps,
         );
         return { canManage, references };
     }

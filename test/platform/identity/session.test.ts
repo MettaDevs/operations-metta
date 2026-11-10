@@ -213,3 +213,46 @@ for (const { backend, enabled } of backends)
             expect(await shellStatus(cookie)).toBe(200);
         });
     });
+
+// Pesan login yang dibaca pengguna di layar Masuk: form memakai noValidate, jadi pesan field kosong datang dari server.
+describe.skipIf(!process.env.DB_HOST)('login messages', () => {
+    if (!process.env.DB_HOST) return;
+    const app = operationsTestApp();
+    afterAll(() => app.close());
+
+    async function attempt(body: Record<string, string>) {
+        const response = await app.browser().request('POST', '/login', {
+            body,
+            headers: { 'sec-fetch-site': 'same-origin' },
+        });
+        return {
+            status: response.status,
+            body: (await response.json()) as {
+                message: string;
+                errors: Record<string, string[]>;
+            },
+        };
+    }
+
+    test('a wrong password says the email or password is wrong', async () => {
+        const user = await createUser(app.pool);
+        const result = await attempt({
+            email: user.email,
+            password: user.password + '-salah',
+        });
+        expect(result.status).toBe(422);
+        expect(result.body.errors).toEqual({
+            email: ['Email atau kata sandi salah.'],
+        });
+        expect(result.body.message).toBe('Email atau kata sandi salah.');
+    });
+
+    test('empty fields ask for the email and the password', async () => {
+        const result = await attempt({ email: '', password: '' });
+        expect(result.status).toBe(422);
+        expect(result.body.errors).toEqual({
+            email: ['Isi email.'],
+            password: ['Isi kata sandi.'],
+        });
+    });
+});

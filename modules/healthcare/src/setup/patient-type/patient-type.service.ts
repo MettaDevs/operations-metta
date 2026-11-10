@@ -23,11 +23,11 @@ import {
 } from './patient-type.behaviors.ts';
 
 const rowSql = `select * from (
-                    select t.id, t.kode as code, t.nama as name, coalesce((select json_agg(b.perilaku order by b.perilaku) from kes_tipe_pasien_perilaku b
+                    select t.id, t.kode as code, t.nama as name, coalesce((select json_agg(b.perilaku order by b.perilaku) from sim_m_tipe_pasien_perilaku b
                          where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
                         '[]'::json) as behaviors,
-                           t.aktif as is_active, t.version
-                    from kes_tipe_pasien t where t.tenant_id = $1 and t.deleted_at is null) patient_types
+                           t.aktif as is_active, t.bawaan as is_default, t.version
+                    from sim_m_tipe_pasien t where t.tenant_id = $1 and t.deleted_at is null) patient_types
                 where true`;
 
 function checked(body: unknown) {
@@ -49,6 +49,7 @@ function checked(body: unknown) {
         name,
         behaviors: behaviors.filter(isPatientTypeBehavior),
         is_active: data.is_active ?? true,
+        is_default: data.is_default ?? false,
     };
 }
 
@@ -56,12 +57,21 @@ function codeTaken(error: unknown): void {
     if (
         sqlErrorCode(error) === '23505' &&
         error instanceof Error &&
-        error.message.includes('kes_tipe_pasien_kode_unique')
+        error.message.includes('sim_m_tipe_pasien_kode_unique')
     )
         validation({ code: 'Kode ini sudah dipakai tipe pasien lain.' });
+    if (
+        sqlErrorCode(error) === '23505' &&
+        error instanceof Error &&
+        error.message.includes('sim_m_tipe_pasien_bawaan_unique')
+    )
+        validation({
+            is_default:
+                'Tipe pasien lain baru saja dijadikan bawaan. Muat ulang, lalu coba lagi.',
+        });
 }
 
-// Tipe pasien milik tenant, diisi admin. Perilakunya dibaca dari kes_tipe_pasien_perilaku, tidak dari nama atau id.
+// Tipe pasien milik tenant, diisi admin. Perilakunya dibaca dari sim_m_tipe_pasien_perilaku, tidak dari nama atau id.
 // memakai_penjamin (0001) tetap ditulis sama dengan perilaku requires_guarantor untuk kode rilis sebelumnya.
 export class PatientTypes {
     constructor(
@@ -115,7 +125,8 @@ export class PatientTypes {
         const stamp = nowSql();
         try {
             await this.db.transaction(async () => {
-                await this.db.insert('kes_tipe_pasien', {
+                if (data.is_default) await this.clearDefault(id);
+                await this.db.insert('sim_m_tipe_pasien', {
                     id,
                     tenant_id: this.workspace.tenantId,
                     kode: data.code,
@@ -123,6 +134,7 @@ export class PatientTypes {
                     memakai_penjamin:
                         data.behaviors.includes('requires_guarantor'),
                     aktif: data.is_active,
+                    bawaan: data.is_default,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -143,8 +155,10 @@ export class PatientTypes {
         let updated = 0;
         try {
             await this.db.transaction(async () => {
+                if (data.is_default) await this.clearDefault(current.id);
                 updated = await this.db.execute(
-                    `update kes_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, updated_at = $5
+                    `update sim_m_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, bawaan = $9,
+                     updated_at = $5
                  where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
                     [
                         data.code,
@@ -155,6 +169,7 @@ export class PatientTypes {
                         this.workspace.tenantId,
                         current.id,
                         version,
+                        data.is_default,
                     ],
                 );
                 if (updated)
@@ -174,7 +189,7 @@ export class PatientTypes {
         const current = await this.row(id);
         const stamp = nowSql();
         const deleted = await this.db.execute(
-            'update kes_tipe_pasien set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
+            'update sim_m_tipe_pasien set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
             [
                 stamp,
                 this.workspace.tenantId,
@@ -186,6 +201,15 @@ export class PatientTypes {
         return { status: 204, headers: {}, body: undefined };
     }
 
+    // Tipe bawaan berpindah: tipe lain yang masih bawaan dilepas tandanya di transaksi yang sama. Indeks unik parsial
+    // sim_m_tipe_pasien_bawaan_unique tetap menjaga paling banyak satu bawaan bila dua admin menyimpan bersamaan.
+    private async clearDefault(keepId: string): Promise<void> {
+        await this.db.execute(
+            'update sim_m_tipe_pasien set bawaan = false, updated_at = $1 where tenant_id = $2 and bawaan and id <> $3 and deleted_at is null',
+            [nowSql(), this.workspace.tenantId, keepId],
+        );
+    }
+
     // Perilaku yang dinyalakan tipe ini: yang tidak dipilih lagi diarsipkan, yang baru ditambah.
     private async writeBehaviors(
         typeId: string,
@@ -194,16 +218,16 @@ export class PatientTypes {
         const stamp = nowSql();
         const bindings = [stamp, this.workspace.tenantId, typeId, ...behaviors];
         await this.db.execute(
-            `update kes_tipe_pasien_perilaku set deleted_at = $1, updated_at = $1
+            `update sim_m_tipe_pasien_perilaku set deleted_at = $1, updated_at = $1
              where tenant_id = $2 and tipe_pasien_id = $3 and deleted_at is null
              ${behaviors.length ? `and perilaku not in (${behaviors.map((_, index) => `$${index + 4}`).join(',')})` : ''}`,
             bindings,
         );
         for (const behavior of behaviors)
             await this.db.execute(
-                `insert into kes_tipe_pasien_perilaku (id, tenant_id, tipe_pasien_id, perilaku, created_at, updated_at)
+                `insert into sim_m_tipe_pasien_perilaku (id, tenant_id, tipe_pasien_id, perilaku, created_at, updated_at)
                  select $1::uuid, $2::uuid, $3::uuid, $4::varchar, $5::timestamp, $5::timestamp
-                 where not exists (select 1 from kes_tipe_pasien_perilaku where tenant_id = $2 and tipe_pasien_id = $3
+                 where not exists (select 1 from sim_m_tipe_pasien_perilaku where tenant_id = $2 and tipe_pasien_id = $3
                                    and perilaku = $4::varchar and deleted_at is null)`,
                 [
                     Bun.randomUUIDv7(),

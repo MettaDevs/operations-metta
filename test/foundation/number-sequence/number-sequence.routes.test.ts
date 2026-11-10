@@ -9,7 +9,11 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../support/operations-app.ts';
-import { createMember, createTenant } from '../../support/tenant-fixtures.ts';
+import {
+    createMember,
+    createTenant,
+    entitle,
+} from '../../support/tenant-fixtures.ts';
 
 type Sequence = {
     id: string;
@@ -58,6 +62,7 @@ describe.skipIf(!process.env.DB_HOST)('number sequence screen', () => {
         unitA = await createOperatingUnit(pool, tenantId, 'Puskesmas A');
         unitB = await createOperatingUnit(pool, tenantId, 'Puskesmas B');
         const appId = await createModule(pool);
+        await entitle(pool, tenantId, appId);
         reference = await createReference(pool, appId, 'Nomor rekam medis', [
             'operating_unit',
         ]);

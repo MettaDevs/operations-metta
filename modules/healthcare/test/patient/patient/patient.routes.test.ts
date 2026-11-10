@@ -8,6 +8,7 @@ import {
 import {
     createMember,
     createTenant,
+    entitle,
     grantAllOrganizations,
 } from '../../../../../test/support/tenant-fixtures.ts';
 
@@ -17,7 +18,7 @@ type Patient = {
     party_id: string;
     nrm: string;
     org_unit_id: string;
-    nrm_unit_id: string;
+    nrm_unit_id: string | null;
     legal_entity_id: string;
     name: string;
     nik: { number: string | null; masked: boolean };
@@ -41,9 +42,9 @@ type Row = { id: string; nrm: string; nik: string | null };
 const nik = (suffix: number) => `99000000000${String(suffix).padStart(5, '0')}`;
 const api = '/api/modules/healthcare/v1';
 
-// Master pasien: party + peran pasien + cara bayar dalam satu transaksi, NRM dari sequence unit kepala kelompok
-// berbagi, visibilitas per kelompok, kepemilikan tetap, izin per unit, dan isolasi tenant. Butuh PostgreSQL yang sudah
-// dimigrasi; dilewati bila DB_HOST kosong.
+// Master pasien: party + peran pasien + cara bayar dalam satu transaksi, NRM dari sequence legal entity atau unit
+// kepala kelompok berbagi, visibilitas pola F&O (legal entity, kebijakan berbagi, kelompok), kepemilikan tetap, izin
+// per unit, dan isolasi tenant. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('patient master', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -52,6 +53,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
     let tenantId: string;
     let admin: Browser;
     let company: string;
+    let otherCompany: string;
     const units: Record<string, string> = {};
     let hierarchyVersion: string;
     let umum: string;
@@ -97,10 +99,11 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         return id;
     }
 
-    // Petugas pendaftaran dengan duty pasien, dibatasi ke satu unit kerja lewat kebijakan data pasien.
+    // Petugas pendaftaran dengan duty pasien, dibatasi ke unit kerja di satu legal entity lewat kebijakan data pasien.
     async function clerk(
         unitIds: string[],
         duties = ['healthcare.patient.manage'],
+        legalEntity = company,
     ) {
         const member = await createMember(pool, tenantId, duties);
         for (const unitId of unitIds)
@@ -113,7 +116,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                 [
                     Bun.randomUUIDv7(),
                     tenantId,
-                    company,
+                    legalEntity,
                     unitId,
                     member.membershipId,
                 ],
@@ -186,10 +189,14 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
 
     beforeAll(async () => {
         tenantId = await createTenant(pool, 'Klinik Uji Pasien');
+        // Sequence NRM hanya untuk tenant yang berhak memakai module healthcare.
+        await entitle(pool, tenantId, 'healthcare');
         const owner = await createMember(pool, tenantId, [
             'core.organization.manage',
             'healthcare.patient.manage',
             'healthcare.payment-setup.manage',
+            'healthcare.patient-sharing.manage',
+            'core.number-sequence.inquire',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
         await pool.unsafe(
@@ -207,12 +214,23 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             company_code: `KU${Date.now() % 100000}`,
             country_code: 'ID',
         });
-        // Kelompok 1: Induk dengan Pustu di bawahnya. Kelompok 2: Barat sendiri. Lepas tidak ditempatkan.
+        // Legal entity kedua. Namanya diurutkan sesudah yang pertama, jadi admin bekerja di PT Klinik Uji.
+        otherCompany = await organization({
+            classification: 'legal_entity',
+            name: 'PT Klinik Uji Kedua',
+            company_code: `KD${Date.now() % 100000}`,
+            country_code: 'ID',
+        });
+        // Kelompok 1: Induk dengan Pustu di bawahnya. Kelompok 2: Barat sendiri. Tanpa nomor dan Gagal masing-masing
+        // kelompok sendiri. Lepas dan Timur tidak ditempatkan: keduanya memakai bawaan legal entity. Kedua bekerja
+        // untuk legal entity kedua.
         for (const name of [
             'Induk',
             'Pustu',
             'Barat',
             'Lepas',
+            'Timur',
+            'Kedua',
             'Tanpa nomor',
             'Gagal',
         ])
@@ -232,6 +250,8 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         await place(hierarchyVersion, unitId('Induk'), company);
         await place(hierarchyVersion, unitId('Pustu'), unitId('Induk'));
         await place(hierarchyVersion, unitId('Barat'), company);
+        await place(hierarchyVersion, unitId('Tanpa nomor'), company);
+        await place(hierarchyVersion, unitId('Gagal'), company);
         await json(
             await admin.post(`${versionPath(hierarchyVersion)}/publish`, {
                 version: await rowVersion(hierarchyVersion),
@@ -278,6 +298,12 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         clerks.pustu = await clerk([unitId('Pustu')]);
         clerks.barat = await clerk([unitId('Barat')]);
         clerks.lepas = await clerk([unitId('Lepas')]);
+        clerks.timur = await clerk([unitId('Timur')]);
+        clerks.kedua = await clerk(
+            [unitId('Kedua')],
+            ['healthcare.patient.manage'],
+            otherCompany,
+        );
     }, 60_000);
 
     const sequenceOf = async (unitId: string) =>
@@ -289,15 +315,78 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             [tenantId, unitId],
         );
 
-    test('a new operating unit gets its own medical record number sequence', async () => {
-        const sequences = await sequenceOf(unitId('Induk'));
-        expect(sequences).toHaveLength(1);
-        expect(sequences[0]).toMatchObject({
-            status: 'active',
-            segments: [{ type: 'number', length: 6, mask: '##.##.##' }],
-        });
-        // Setiap unit punya sequence sendiri dengan format yang sama; reference ini unik per unit, jadi tidak ditolak.
+    const legalEntitySequenceOf = async (legalEntityId: string) =>
+        pool.unsafe<{ id: string; status: string; segments: unknown }[]>(
+            `select s.id, s.status, s.segments from tenant_number_sequences s
+             join app_number_sequence_references r on r.id = s.reference_id
+             where s.tenant_id = $1 and r.code = 'healthcare.medical-record-number'
+               and s.scope_type = 'legal_entity' and s.legal_entity_id = $2`,
+            [tenantId, legalEntityId],
+        );
+
+    test('a new legal entity and a new operating unit each get a medical record number sequence', async () => {
+        for (const sequences of [
+            await legalEntitySequenceOf(company),
+            await legalEntitySequenceOf(otherCompany),
+            await sequenceOf(unitId('Induk')),
+        ]) {
+            expect(sequences).toHaveLength(1);
+            expect(sequences[0]).toMatchObject({
+                status: 'active',
+                segments: [{ type: 'number', length: 6, mask: '##.##.##' }],
+            });
+        }
+        // Setiap unit punya sequence sendiri dengan format yang sama; reference ini unik per scope, jadi tidak ditolak.
         expect(await sequenceOf(unitId('Barat'))).toHaveLength(1);
+    }, 30_000);
+
+    test('a tenant without the healthcare entitlement gets no medical record number sequence or reference', async () => {
+        const outsiderTenant = await createTenant(pool, 'Klinik Tanpa Hak');
+        const manager = await createMember(pool, outsiderTenant, [
+            'core.organization.manage',
+            'core.number-sequence.manage',
+        ]);
+        await grantAllOrganizations(pool, outsiderTenant, manager.membershipId);
+        const session = browser();
+        await session.login(manager.email, manager.password);
+        const created = async (body: Record<string, unknown>) =>
+            (
+                await json<{ data: { id: string } }>(
+                    await session.post('/api/v1/organizations', body),
+                    201,
+                )
+            ).data.id;
+        await created({
+            classification: 'legal_entity',
+            name: 'PT Tanpa Hak',
+            company_code: `TH${Date.now() % 100000}`,
+            country_code: 'ID',
+        });
+        await created({
+            classification: 'operating_unit',
+            name: 'Unit tanpa hak',
+            operating_unit_type: 'department',
+            operating_unit_number: `TH-${Date.now() % 100000}`,
+        });
+        const [count] = await pool.unsafe(
+            `select count(*)::int as sequences from tenant_number_sequences s
+             join app_number_sequence_references r on r.id = s.reference_id
+             where s.tenant_id = $1 and r.code = 'healthcare.medical-record-number'`,
+            [outsiderTenant],
+        );
+        expect(count?.sequences).toBe(0);
+        const metadata = await json<{
+            data: { references: { code: string }[] };
+        }>(await session.get('/api/v1/number-sequences/metadata'), 200);
+        expect(metadata.data.references.map((item) => item.code)).not.toContain(
+            'healthcare.medical-record-number',
+        );
+        const entitled = await json<{
+            data: { references: { code: string }[] };
+        }>(await admin.get('/api/v1/number-sequences/metadata'), 200);
+        expect(entitled.data.references.map((item) => item.code)).toContain(
+            'healthcare.medical-record-number',
+        );
     }, 30_000);
 
     test('a patient registered in a branch unit gets the number of the head of its sharing group', async () => {
@@ -356,6 +445,35 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             patientBody({ nik: nik(2) }),
         );
         expect(second.data.nrm).toBe('00.00.02');
+    }, 30_000);
+
+    test('a patient registered in a unit outside any group gets the number of its legal entity', async () => {
+        const first = await created(
+            clerks.lepas!,
+            patientBody({ nik: nik(3) }),
+        );
+        expect(first.data).toMatchObject({
+            nrm: '00.00.01',
+            org_unit_id: unitId('Lepas'),
+            nrm_unit_id: null,
+            legal_entity_id: company,
+        });
+        // Unit lain yang juga tidak ditempatkan memakai sequence legal entity yang sama.
+        const second = await created(
+            clerks.timur!,
+            patientBody({ nik: nik(4) }),
+        );
+        expect(second.data.nrm).toBe('00.00.02');
+        // Legal entity lain punya sequence sendiri.
+        const other = await created(
+            clerks.kedua!,
+            patientBody({ nik: nik(5) }),
+        );
+        expect(other.data).toMatchObject({
+            nrm: '00.00.01',
+            nrm_unit_id: null,
+            legal_entity_id: otherCompany,
+        });
     }, 30_000);
 
     test('a party that already exists by NIK only gains the patient role, once per sharing group', async () => {
@@ -479,7 +597,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'belum diatur untuk unit Tanpa nomor',
         );
         const [count] = await pool.unsafe(
-            'select count(*)::int as patients from kes_pasien where tenant_id = $1 and org_unit_id = $2',
+            'select count(*)::int as patients from sim_m_pasien where tenant_id = $1 and org_unit_id = $2',
             [tenantId, unit],
         );
         expect(count?.patients).toBe(0);
@@ -500,7 +618,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(failed.status).toBe(422);
         const [state] = await pool.unsafe<Record<string, unknown>[]>(
             `select (select count(*)::int from number_sequence_issues i where i.sequence_id = s.id) as issues,
-                    (select count(*)::int from kes_pasien where tenant_id = $1 and org_unit_id = $2) as patients
+                    (select count(*)::int from sim_m_pasien where tenant_id = $1 and org_unit_id = $2) as patients
              from tenant_number_sequences s where s.tenant_id = $1 and s.operating_unit_id = $2`,
             [tenantId, unit],
         );
@@ -678,7 +796,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             (await clerks.barat!.get(`${api}/patients/${data.id}`)).status,
         ).toBe(404);
         const [row] = await pool.unsafe(
-            'select deleted_at is not null as archived from kes_pasien where id = $1',
+            'select deleted_at is not null as archived from sim_m_pasien where id = $1',
             [data.id],
         );
         expect(row?.archived).toBe(true);
@@ -714,6 +832,316 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                 })
             ).status,
         ).toBe(404);
+    }, 30_000);
+
+    const listed = async (as: Browser) =>
+        (
+            await json<{ data: Row[] }>(
+                await as.get(`${api}/patients?per_page=100`),
+                200,
+            )
+        ).data.map((row) => row.id);
+
+    test('by default a patient is shared by every unit of its legal entity outside a group, and groups narrow it', async () => {
+        const lepas = await created(
+            clerks.lepas!,
+            patientBody({ name: 'Pasien Lepas' }),
+        );
+        // Timur juga tidak ditempatkan di kelompok: ia melihat pasien Lepas, termasuk kartunya.
+        expect(await listed(clerks.timur!)).toContain(lepas.data.id);
+        expect(
+            (await clerks.timur!.get(`${api}/patients/${lepas.data.id}`))
+                .status,
+        ).toBe(200);
+        // Unit yang ditempatkan di kelompok hanya berbagi dengan kelompoknya.
+        expect(await listed(clerks.induk!)).not.toContain(lepas.data.id);
+        expect(await listed(clerks.barat!)).not.toContain(lepas.data.id);
+        const pustu = await created(
+            clerks.pustu!,
+            patientBody({ name: 'Pasien Kelompok Induk' }),
+        );
+        expect(await listed(clerks.timur!)).not.toContain(pustu.data.id);
+        // Batas data "seluruh organisasi" melihat semua pasien legal entity aktifnya.
+        expect(await listed(admin)).toEqual(
+            expect.arrayContaining([lepas.data.id, pustu.data.id]),
+        );
+    }, 30_000);
+
+    test('a patient of another legal entity is not visible, not even by NIK', async () => {
+        const lepas = await created(
+            clerks.lepas!,
+            patientBody({ name: 'Pasien Perusahaan Satu', nik: nik(20) }),
+        );
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        expect(
+            (await clerks.kedua!.get(`${api}/patients/${lepas.data.id}`))
+                .status,
+        ).toBe(404);
+        const other = await created(
+            clerks.kedua!,
+            patientBody({ name: 'Pasien Perusahaan Dua' }),
+        );
+        expect(await listed(clerks.lepas!)).not.toContain(other.data.id);
+        expect(await listed(admin)).not.toContain(other.data.id);
+        // NIK yang sudah terdaftar di legal entity lain hanya disebut terdaftar, tanpa nama atau tanggal lahir.
+        const lookup = await json<{ data: Record<string, unknown> | null }>(
+            await clerks.kedua!.post(`${api}/patients/party-lookup`, {
+                nik: nik(20),
+            }),
+            200,
+        );
+        expect(lookup.data).toMatchObject({
+            name: null,
+            gender: null,
+            birth_date: null,
+            birth_place: null,
+            patient: null,
+            registered_elsewhere: true,
+        });
+        // Party tetap dipakai ulang: orang yang sama didaftarkan di legal entity kedua dengan NRM-nya sendiri.
+        const reused = await created(
+            clerks.kedua!,
+            patientBody({ nik: nik(20), name: '' }),
+        );
+        expect(reused.party_reused).toBe(true);
+        expect(reused.data.party_id).toBe(lepas.data.party_id);
+        expect(reused.data.legal_entity_id).toBe(otherCompany);
+        // Kelompok lain di legal entity yang sama juga hanya mendapat "NIK sudah terdaftar".
+        const group = await json<{ data: Record<string, unknown> | null }>(
+            await clerks.barat!.post(`${api}/patients/party-lookup`, {
+                nik: nik(20),
+            }),
+            200,
+        );
+        expect(group.data).toMatchObject({
+            name: null,
+            registered_elsewhere: true,
+        });
+    }, 30_000);
+
+    test('a sharing policy chooses legal entities that see each other, one active policy per legal entity', async () => {
+        const lepas = await created(
+            clerks.lepas!,
+            patientBody({ name: 'Pasien Dibagi' }),
+        );
+        const pustu = await created(
+            clerks.pustu!,
+            patientBody({ name: 'Pasien Kelompok Tetap' }),
+        );
+        const other = await created(
+            clerks.kedua!,
+            patientBody({ name: 'Pasien Kedua Dibagi' }),
+        );
+        const policies = `${api}/sharing-policies`;
+        // Satu legal entity saja tidak cukup untuk berbagi.
+        expect(
+            (
+                await admin.post(policies, {
+                    name: 'Satu saja',
+                    effective_from: '2026-01-01',
+                    legal_entity_ids: [company],
+                })
+            ).status,
+        ).toBe(422);
+        // Kebijakan yang baru berlaku kelak belum membuka apa pun.
+        const future = await json<{ data: { id: string; version: number } }>(
+            await admin.post(policies, {
+                name: 'Grup klinik',
+                effective_from: '2999-01-01',
+                legal_entity_ids: [company, otherCompany],
+            }),
+            201,
+        );
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        // Kebijakan kedua yang aktif untuk legal entity yang sama ditolak.
+        const second = await admin.post(policies, {
+            name: 'Grup lain',
+            effective_from: '2026-01-01',
+            legal_entity_ids: [company, otherCompany],
+        });
+        expect(second.status).toBe(422);
+        expect(
+            (
+                (await second.json()) as {
+                    errors: Record<string, string[]>;
+                }
+            ).errors.legal_entity_ids?.[0],
+        ).toContain('sudah ikut kebijakan aktif "Grup klinik"');
+        const effective = await json<{
+            data: { version: number; legal_entities: { id: string }[] };
+        }>(
+            await admin.patch(`${policies}/${future.data.id}`, {
+                name: 'Grup klinik',
+                effective_from: '2026-01-01',
+                legal_entity_ids: [company, otherCompany],
+                version: future.data.version,
+            }),
+            200,
+        );
+        expect(
+            effective.data.legal_entities.map((entity) => entity.id).sort(),
+        ).toEqual([company, otherCompany].sort());
+        // Kedua legal entity saling melihat pasien unit yang tidak ditempatkan.
+        expect(await listed(clerks.kedua!)).toContain(lepas.data.id);
+        expect(await listed(clerks.lepas!)).toContain(other.data.id);
+        expect(
+            (await clerks.kedua!.get(`${api}/patients/${lepas.data.id}`))
+                .status,
+        ).toBe(200);
+        // Kelompok yang mempersempit tetap berlaku.
+        expect(await listed(clerks.kedua!)).not.toContain(pustu.data.id);
+        // Orang yang sudah terlihat lewat kebijakan tidak didaftarkan kedua kali.
+        const [lepasNik] = await pool.unsafe<{ number: string }[]>(
+            "select number from party_identifications where party_id = $1 and type_code = 'nik'",
+            [lepas.data.party_id],
+        );
+        const duplicate = await register(
+            clerks.kedua!,
+            patientBody({ nik: lepasNik?.number ?? '' }),
+        );
+        expect(duplicate.status).toBe(422);
+        // Kebijakan yang dinonaktifkan menutup lagi, dan perubahannya tercatat.
+        await json(
+            await admin.patch(`${policies}/${future.data.id}`, {
+                name: 'Grup klinik',
+                is_active: false,
+                effective_from: '2026-01-01',
+                legal_entity_ids: [company, otherCompany],
+                version: effective.data.version,
+            }),
+            200,
+        );
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        const [log] = await pool.unsafe(
+            "select count(distinct changed_at)::int as changes from change_log_entries where table_name = 'sim_m_kebijakan_berbagi' and record_id = $1",
+            [future.data.id],
+        );
+        expect(Number(log?.changes)).toBeGreaterThanOrEqual(1);
+        const list = await json<{ data: { id: string }[] }>(
+            await admin.get(`${policies}?status=inactive&q=grup`),
+            200,
+        );
+        expect(list.data.map((policy) => policy.id)).toContain(future.data.id);
+        // Petugas pendaftaran tidak boleh mengubah kebijakan.
+        expect((await clerks.lepas!.get(policies)).status).toBe(403);
+    }, 30_000);
+
+    test('the role scope per unit still applies on top of the sharing rules', async () => {
+        const lepas = await created(
+            clerks.lepas!,
+            patientBody({ name: 'Pasien Batas Role' }),
+        );
+        // Petugas Induk tidak diberi unit yang tidak ditempatkan, jadi pasien bawaan legal entity tidak terlihat
+        // walau aturan berbagi membukanya bagi unit-unit itu.
+        expect(await listed(clerks.induk!)).not.toContain(lepas.data.id);
+        // Diberi Induk dan Timur sekaligus: melihat keduanya.
+        const both = await clerk(
+            [unitId('Induk'), unitId('Timur')],
+            ['healthcare.patient.inquire'],
+        );
+        expect(await listed(both)).toContain(lepas.data.id);
+        // Pengguna tanpa unit apa pun tidak melihat pasien.
+        const none = await clerk([], ['healthcare.patient.inquire']);
+        expect(await listed(none)).toEqual([]);
+    }, 30_000);
+
+    test('a default patient type with its default guarantor is used for a new patient', async () => {
+        const type = await json<{
+            data: { id: string; is_default: boolean; version: number };
+        }>(
+            await admin.post(`${api}/patient-types`, {
+                code: 'BAWAAN',
+                name: 'Tipe bawaan uji',
+                behaviors: ['requires_guarantor'],
+                is_default: true,
+            }),
+            201,
+        );
+        expect(type.data.is_default).toBe(true);
+        const guarantor = await json<{ data: { id: string } }>(
+            await admin.post(`${api}/guarantors`, {
+                name: 'Penjamin bawaan uji',
+                patient_type_id: type.data.id,
+                is_default: true,
+            }),
+            201,
+        );
+        const metadata = await json<{
+            default_payment_method: Record<string, unknown> | null;
+        }>(await clerks.lepas!.get(`${api}/patients/metadata`), 200);
+        expect(metadata.default_payment_method).toMatchObject({
+            patient_type_id: type.data.id,
+            guarantor_id: guarantor.data.id,
+            behaviors: ['requires_guarantor'],
+        });
+        const body = patientBody();
+        delete (body as Record<string, unknown>).payment_methods;
+        const patient = await created(clerks.lepas!, body);
+        expect(patient.data.payment_methods).toEqual([
+            expect.objectContaining({
+                patient_type_id: type.data.id,
+                guarantor_id: guarantor.data.id,
+                is_primary: true,
+            }),
+        ]);
+        // Tipe lain yang dijadikan bawaan memindahkan tandanya; paling banyak satu bawaan per tenant.
+        await json(
+            await admin.patch(`${api}/patient-types/${umum}`, {
+                code: 'UMUM',
+                name: 'Umum',
+                is_default: true,
+                version: (
+                    await json<{ data: { id: string; version: number }[] }>(
+                        await admin.get(`${api}/patient-types?q=UMUM`),
+                        200,
+                    )
+                ).data.find((row) => row.id === umum)?.version,
+            }),
+            200,
+        );
+        const [defaults] = await pool.unsafe(
+            'select count(*)::int as defaults from sim_m_tipe_pasien where tenant_id = $1 and bawaan and deleted_at is null',
+            [tenantId],
+        );
+        expect(defaults?.defaults).toBe(1);
+        let refused = '';
+        try {
+            await pool.unsafe(
+                'update sim_m_tipe_pasien set bawaan = true where id = $1',
+                [type.data.id],
+            );
+        } catch (error) {
+            refused = error instanceof Error ? error.message : String(error);
+        }
+        expect(refused).toContain('sim_m_tipe_pasien_bawaan_unique');
+        await json(
+            await admin.patch(`${api}/patient-types/${umum}`, {
+                code: 'UMUM',
+                name: 'Umum',
+                is_default: false,
+                version: (
+                    await json<{ data: { id: string; version: number }[] }>(
+                        await admin.get(`${api}/patient-types?q=UMUM`),
+                        200,
+                    )
+                ).data.find((row) => row.id === umum)?.version,
+            }),
+            200,
+        );
+    }, 30_000);
+
+    test('the API does not require a guarantor or card number, even for a type that shows them', async () => {
+        const { data } = await created(
+            clerks.lepas!,
+            patientBody({ payment_methods: [{ patient_type_id: bpjs }] }),
+        );
+        expect(data.payment_methods).toEqual([
+            expect.objectContaining({
+                patient_type_id: bpjs,
+                guarantor_id: null,
+                card_number: null,
+            }),
+        ]);
     }, 30_000);
 
     // Terakhir, karena mengubah susunan kelompok yang dipakai test lain.
@@ -753,7 +1181,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             200,
         );
         const [row] = await pool.unsafe<Record<string, unknown>[]>(
-            'select org_unit_id, nrm_unit_id, legal_entity_id, nrm from kes_pasien where id = $1',
+            'select org_unit_id, nrm_unit_id, legal_entity_id, nrm from sim_m_pasien where id = $1',
             [data.id],
         );
         expect(row).toEqual({
@@ -775,7 +1203,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         let refused = '';
         try {
             await pool.unsafe(
-                'update kes_pasien set org_unit_id = $1 where id = $2',
+                'update sim_m_pasien set org_unit_id = $1 where id = $2',
                 [unitId('Barat'), data.id],
             );
         } catch (error) {
@@ -863,7 +1291,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         const [rows] = await pool.unsafe<Record<string, unknown>[]>(
             `select count(*) filter (where deleted_at is null)::int as live,
                     count(*) filter (where deleted_at is not null)::int as archived
-             from kes_tipe_pasien_perilaku where tipe_pasien_id = $1`,
+             from sim_m_tipe_pasien_perilaku where tipe_pasien_id = $1`,
             [created.data.id],
         );
         expect(rows).toEqual({ live: 1, archived: 1 });

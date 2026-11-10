@@ -74,17 +74,22 @@ export function timezoneOptions(): { value: string; label: string }[] {
         .map(({ value, label }) => ({ value, label }));
 }
 
-// Yang harus ikut dibuat saat operating unit lahir, didaftarkan berkas proses (src/main.ts) supaya Platform tidak
-// meng-import Foundation, misalnya number sequence bawaan per unit. Dipanggil di dalam transaksi pembuatan unit, jadi
-// kegagalannya membatalkan unit itu juga.
-export type OperatingUnitCreated = (
+// Yang harus ikut dibuat saat legal entity atau operating unit lahir, didaftarkan berkas proses (src/main.ts) supaya
+// Platform tidak meng-import Foundation, misalnya number sequence bawaan per legal entity dan per unit. Dipanggil di
+// dalam transaksi pembuatan organisasi, jadi kegagalannya membatalkan organisasi itu juga.
+export type OrganizationCreated = (
     db: Database,
-    unit: { tenantId: string; operatingUnitId: string; userId: string },
+    organization: {
+        tenantId: string;
+        organizationId: string;
+        classification: 'legal_entity' | 'operating_unit';
+        userId: string;
+    },
 ) => Promise<void>;
-const operatingUnitCreated: OperatingUnitCreated[] = [];
+const organizationCreated: OrganizationCreated[] = [];
 
-export function onOperatingUnitCreated(listener: OperatingUnitCreated): void {
-    operatingUnitCreated.push(listener);
+export function onOrganizationCreated(listener: OrganizationCreated): void {
+    organizationCreated.push(listener);
 }
 
 function unitNumberInUse(): never {
@@ -237,13 +242,14 @@ export class Organizations {
                         created_at: stamp,
                         updated_at: stamp,
                     });
-                    for (const listener of operatingUnitCreated)
-                        await listener(this.db, {
-                            tenantId,
-                            operatingUnitId: id,
-                            userId: this.workspace.userId,
-                        });
                 }
+                for (const listener of organizationCreated)
+                    await listener(this.db, {
+                        tenantId,
+                        organizationId: id,
+                        classification: data.classification,
+                        userId: this.workspace.userId,
+                    });
                 // Party organisasi dibuat bersama alamat dan kontaknya, dalam transaksi yang sama.
                 if (details.locations.length || details.contacts.length)
                     await addresses.saveDetails(
@@ -301,7 +307,8 @@ export class Organizations {
             ))
         )
             validation({
-                company_code: 'The company code has already been taken.',
+                company_code:
+                    'Kode perusahaan sudah dipakai perusahaan lain dalam bisnis ini.',
             });
         const version = expectedVersion(request, body);
         if (found.tenant_id !== this.workspace.tenantId)
