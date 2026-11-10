@@ -12,6 +12,11 @@ export {
     type ProvisionStep,
 } from './provision.service.ts';
 export {
+    convertEnvironment,
+    convertRequestSchema,
+    type ConvertRequest,
+} from './convert.service.ts';
+export {
     migrateEnvironment,
     migrateRequestSchema,
     type MigrateRequest,

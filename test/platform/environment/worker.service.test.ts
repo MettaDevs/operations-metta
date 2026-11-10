@@ -281,4 +281,121 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             },
         ]);
     });
+
+    test('convert memindah alamat demo ke alamat produksi yang menunjuk database yang sama, dan aman diulang', async () => {
+        const demo = await parameters();
+        demo.environment = { kind: 'demo', name: 'Demo' };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', demo),
+            ),
+        ).toBe('succeeded');
+        const routes = async (slug: string) =>
+            (
+                await runtime.unsafe<
+                    { kind: string; name: string; database_name: string }[]
+                >(
+                    'select kind, name, database_name from environment_routes where tenant_slug = $1 order by kind',
+                    [slug],
+                )
+            ).map((row) => ({ ...row }));
+        const convert = {
+            tenant_slug: demo.tenant.slug,
+            database: demo.database,
+            name: 'Produksi',
+        };
+        const first = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                first.client,
+                claimed('convert', convert),
+            ),
+        ).toBe('succeeded');
+        expect(first.reports).toEqual([
+            { status: 'running', step: 'move-route' },
+            { status: 'succeeded', step: 'done' },
+        ]);
+        expect(await routes(demo.tenant.slug)).toEqual([
+            {
+                kind: 'production',
+                name: 'Produksi',
+                database_name: demo.database,
+            },
+        ]);
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('convert', convert),
+            ),
+        ).toBe('succeeded');
+        expect(await routes(demo.tenant.slug)).toHaveLength(1);
+    }, 120_000);
+
+    test('convert tidak menimpa alamat produksi milik database lain dan menolak parameter yang tidak sah', async () => {
+        const slug = `convert-${crypto.randomUUID().slice(-12)}`;
+        await runtime.unsafe(
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'demo', $2, 'Demo', 'env_demo_a'), ($1, 'production', $2, 'Produksi', 'env_production_b')",
+            [slug, Bun.randomUUIDv7()],
+        );
+        const taken = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                taken.client,
+                claimed('convert', {
+                    tenant_slug: slug,
+                    database: 'env_demo_a',
+                    name: 'Produksi',
+                }),
+            ),
+        ).toBe('failed');
+        expect(taken.reports.at(-1)?.failure_message).toContain(
+            'already points to another environment',
+        );
+        const kinds = await runtime.unsafe<{ database_name: string }[]>(
+            "select database_name from environment_routes where tenant_slug = $1 and kind = 'production'",
+            [slug],
+        );
+        expect(kinds.map((row) => row.database_name)).toEqual([
+            'env_production_b',
+        ]);
+
+        const missing = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                missing.client,
+                claimed('convert', {
+                    tenant_slug: `missing-${crypto.randomUUID().slice(-8)}`,
+                    database: null,
+                    name: 'Produksi',
+                }),
+            ),
+        ).toBe('failed');
+        expect(missing.reports.at(-1)?.failure_message).toContain(
+            'is not recorded',
+        );
+
+        const invalid = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                invalid.client,
+                claimed('convert', { tenant_slug: 'admin', database: null }),
+            ),
+        ).toBe('failed');
+        expect(invalid.reports.at(-1)?.failure_message).toContain(
+            'Parameter convert tidak sah',
+        );
+    });
 });
