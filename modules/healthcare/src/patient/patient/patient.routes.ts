@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { listParametersSchema } from '@core/platform/http/index.ts';
 import {
     base,
     ok,
@@ -45,6 +46,21 @@ export function patientRoutes() {
             async ({ context }) =>
                 ok(await (await patients(context)).metadata()),
         ),
+        healthcarePatientOccupations: base
+            .route({
+                method: 'GET',
+                path: `/api/modules/${moduleId}/v1/occupations`,
+                inputStructure: 'detailed',
+                outputStructure: 'detailed',
+            })
+            .input(typedQuery<z.input<typeof listParametersSchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await patients(context)
+                    ).occupations(new URL(context.request.url).searchParams),
+                ),
+            ),
         healthcarePatientPartyLookup: route('POST', '/party-lookup')
             .input(typedBody<z.input<typeof partyLookupInputSchema>>())
             .handler(async ({ context, input }) =>

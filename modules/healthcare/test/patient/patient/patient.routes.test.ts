@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { z } from 'zod';
+import { pageFiles, readPage } from '../../../../../scripts/generate-client.ts';
 import {
     operationsTestApp,
     type Browser,
@@ -250,7 +252,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                 await admin.post(`${api}/patient-types`, {
                     code: 'BPJS',
                     name: 'BPJS',
-                    uses_guarantor: true,
+                    behaviors: ['requires_guarantor', 'requires_card_number'],
                 }),
                 201,
             )
@@ -782,5 +784,121 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(refused).toBe(
             'Kepemilikan dan nomor rekam medis pasien tidak dapat diubah.',
         );
+    }, 30_000);
+
+    test('the module menu comes from the database, opens existing pages, and follows permissions', async () => {
+        const [app] = await pool.unsafe<{ navigation: unknown }[]>(
+            "select navigation from apps where id = 'healthcare'",
+        );
+        const groups = z
+            .array(
+                z.object({
+                    id: z.string(),
+                    items: z.array(
+                        z.object({ href: z.string(), permission: z.string() }),
+                    ),
+                }),
+            )
+            .parse(app?.navigation);
+        const paths = new Set(pageFiles().map((file) => readPage(file).path));
+        for (const item of groups.flatMap((group) => group.items))
+            expect(paths.has(item.href)).toBe(true);
+        const menu = async (as: Browser) =>
+            (
+                await json<{
+                    navigation: { id: string; items: { href: string }[] }[];
+                }>(await as.get('/api/v1/shell'), 200)
+            ).navigation;
+        const group = groups[0]?.id ?? '';
+        expect(
+            (await menu(clerks.induk!))
+                .find((entry) => entry.id === group)
+                ?.items.map((item) => item.href),
+        ).toEqual(['/healthcare/patients']);
+        const outsider = await clerk(
+            [unitId('Induk')],
+            ['core.organization.inquire'],
+        );
+        expect((await menu(outsider)).map((entry) => entry.id)).not.toContain(
+            group,
+        );
+    }, 30_000);
+
+    test('a patient type turns behaviours from the catalog on and off, without its name deciding anything', async () => {
+        const created = await json<{
+            data: { id: string; behaviors: string[]; version: number };
+        }>(
+            await admin.post(`${api}/patient-types`, {
+                code: 'KHUSUS',
+                name: 'Tipe uji',
+                behaviors: ['requires_card_number'],
+            }),
+            201,
+        );
+        expect(created.data.behaviors).toEqual(['requires_card_number']);
+        const refused = await admin.post(`${api}/patient-types`, {
+            code: 'SALAH',
+            name: 'Tipe salah',
+            behaviors: ['bpjs'],
+        });
+        expect(refused.status).toBe(422);
+        const updated = await json<{
+            data: { behaviors: string[]; is_active: boolean };
+        }>(
+            await admin.patch(`${api}/patient-types/${created.data.id}`, {
+                code: 'KHUSUS',
+                name: 'Tipe uji',
+                behaviors: ['requires_guarantor'],
+                is_active: false,
+                version: created.data.version,
+            }),
+            200,
+        );
+        expect(updated.data).toEqual(
+            expect.objectContaining({
+                behaviors: ['requires_guarantor'],
+                is_active: false,
+            }),
+        );
+        const [rows] = await pool.unsafe<Record<string, unknown>[]>(
+            `select count(*) filter (where deleted_at is null)::int as live,
+                    count(*) filter (where deleted_at is not null)::int as archived
+             from kes_tipe_pasien_perilaku where tipe_pasien_id = $1`,
+            [created.data.id],
+        );
+        expect(rows).toEqual({ live: 1, archived: 1 });
+        const active = await json<{ data: { id: string }[] }>(
+            await admin.get(`${api}/patient-types?active=1&per_page=100`),
+            200,
+        );
+        expect(active.data.map((type) => type.id)).not.toContain(
+            created.data.id,
+        );
+    }, 30_000);
+
+    test('patient types and guarantors are listed in batches with search', async () => {
+        const types = await json<{
+            data: { id: string }[];
+            can_manage: boolean;
+        }>(await admin.get(`${api}/patient-types?q=bpjs&per_page=1`), 200);
+        expect(types.data.map((type) => type.id)).toEqual([bpjs]);
+        expect(types.can_manage).toBe(true);
+        const guarantors = await json<{ data: { id: string }[] }>(
+            await clerks.induk!.get(
+                `${api}/guarantors?patient_type_id=${bpjs}&active=1`,
+            ),
+            200,
+        );
+        expect(guarantors.data.map((row) => row.id)).toEqual([bpjsKesehatan]);
+        expect(
+            (
+                await json<{ data: unknown[] }>(
+                    await clerks.induk!.get(
+                        `${api}/guarantors?patient_type_id=${umum}`,
+                    ),
+                    200,
+                )
+            ).data,
+        ).toEqual([]);
     }, 30_000);
 });

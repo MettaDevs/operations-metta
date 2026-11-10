@@ -1,5 +1,10 @@
+import { z } from 'zod';
 import { base, ok } from '../http/index.ts';
-import { coreNavigation, visibleNavigation } from './navigation.ts';
+import {
+    coreNavigation,
+    navigationGroupSchema,
+    visibleNavigation,
+} from './navigation.ts';
 import { Workspace } from './workspace.ts';
 
 const organization = (item: {
@@ -19,9 +24,26 @@ export function shellRoutes() {
                 outputStructure: 'detailed',
             })
             .handler(async ({ context }) => {
+                // Menu module datang dari apps.navigation yang ditulis migration module-nya, jadi Core tidak menulis
+                // nama atau label module mana pun.
+                const moduleNavigation = (
+                    await context.db.rows(
+                        z.object({ navigation: z.unknown() }),
+                        "select navigation from apps where id <> 'core' and navigation is not null order by id",
+                    )
+                ).flatMap(
+                    (row) =>
+                        z.array(navigationGroupSchema).safeParse(row.navigation)
+                            .data ?? [],
+                );
                 const shell = await Workspace.shell(
                     context.db,
                     context.session,
+                    moduleNavigation.flatMap((group) =>
+                        group.items.flatMap((item) =>
+                            item.permission ? [item.permission] : [],
+                        ),
+                    ),
                 );
                 return ok({
                     auth: {
@@ -44,7 +66,7 @@ export function shellRoutes() {
                         org_units: shell.orgUnits.map(organization),
                     },
                     navigation: visibleNavigation(
-                        coreNavigation,
+                        [...coreNavigation, ...moduleNavigation],
                         shell.permissions,
                     ),
                     environment: context.session.environment

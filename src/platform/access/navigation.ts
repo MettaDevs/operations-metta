@@ -1,19 +1,24 @@
+import { z } from 'zod';
+
 // Menu Core di Shell, sama dengan useShellNavigation CoreERP: kelompok di rail kiri dan halaman di dalamnya. Entri
 // yang membawa permission hanya tampil bagi anggota yang memegangnya, dan kelompok yang semua entrinya tersaring
 // ikut hilang. Ini hanya penyaring tampilan: setiap route tetap memeriksa izinnya sendiri.
 //
 // Hanya halaman yang sudah ada di repo ini yang masuk menu; test memeriksa setiap href punya halaman.
-type NavigationEntry = {
-    id: string;
-    label: string;
-    href: string;
-    permission?: string;
-};
-type NavigationGroupEntry = {
-    id: string;
-    label: string;
-    items: NavigationEntry[];
-};
+// Menu module memakai bentuk yang sama, dibaca dari apps.navigation.
+export const navigationGroupSchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    items: z.array(
+        z.object({
+            id: z.string(),
+            label: z.string(),
+            href: z.string(),
+            permission: z.string().optional(),
+        }),
+    ),
+});
+type NavigationGroupEntry = z.infer<typeof navigationGroupSchema>;
 
 export const coreNavigation: NavigationGroupEntry[] = [
     {

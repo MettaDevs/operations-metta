@@ -3,10 +3,14 @@ import {
     base,
     ok,
     typedBody,
+    typedQuery,
     type Context,
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
-import type { guarantorInputSchema } from './guarantor.schema.ts';
+import type {
+    guarantorInputSchema,
+    guarantorListQuerySchema,
+} from './guarantor.schema.ts';
 import { Guarantors } from './guarantor.service.ts';
 
 type Input = z.input<typeof guarantorInputSchema>;
@@ -30,9 +34,15 @@ export function guarantorRoutes() {
             outputStructure: 'detailed',
         });
     return {
-        healthcareGuarantorList: route('GET').handler(async ({ context }) =>
-            ok(await (await guarantors(context)).list()),
-        ),
+        healthcareGuarantorList: route('GET')
+            .input(typedQuery<z.input<typeof guarantorListQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await guarantors(context)
+                    ).list(new URL(context.request.url).searchParams),
+                ),
+            ),
         healthcareGuarantorCreate: route('POST')
             .input(typedBody<Input>())
             .handler(async ({ context, input }) =>

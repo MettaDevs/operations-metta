@@ -1135,6 +1135,18 @@
             }
         }
     },
+    "healthcarePatientOccupations": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/occupations",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcarePatientPartyLookup": {
         "~orpc": {
             "errorMap": {},

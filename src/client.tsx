@@ -1,6 +1,9 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
+import { page as modulesHealthcareSrcSetupGuarantorGuarantorsPage } from '../modules/healthcare/src/setup/guarantor/guarantors.page.tsx';
+import { page as modulesHealthcareSrcSetupPatientTypePatientTypesPage } from '../modules/healthcare/src/setup/patient-type/patient-types.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -22,6 +25,37 @@ import {
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcPatientPatientPatientsPage.path,
+    component: modulesHealthcareSrcPatientPatientPatientsPage.component,
+    validateSearch:
+        modulesHealthcareSrcPatientPatientPatientsPage.validateSearch,
+    staticData: { title: modulesHealthcareSrcPatientPatientPatientsPage.title },
+});
+
+const modulesHealthcareSrcSetupGuarantorGuarantorsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcSetupGuarantorGuarantorsPage.path,
+    component: modulesHealthcareSrcSetupGuarantorGuarantorsPage.component,
+    validateSearch:
+        modulesHealthcareSrcSetupGuarantorGuarantorsPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcSetupGuarantorGuarantorsPage.title,
+    },
+});
+
+const modulesHealthcareSrcSetupPatientTypePatientTypesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcSetupPatientTypePatientTypesPage.path,
+    component: modulesHealthcareSrcSetupPatientTypePatientTypesPage.component,
+    validateSearch:
+        modulesHealthcareSrcSetupPatientTypePatientTypesPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcSetupPatientTypePatientTypesPage.title,
+    },
+});
 
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -128,6 +162,9 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     appLayoutRoute.addChildren([
+        modulesHealthcareSrcPatientPatientPatientsRoute,
+        modulesHealthcareSrcSetupGuarantorGuarantorsRoute,
+        modulesHealthcareSrcSetupPatientTypePatientTypesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,

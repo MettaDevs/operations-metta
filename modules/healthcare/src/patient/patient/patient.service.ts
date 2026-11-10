@@ -334,31 +334,6 @@ export class Patients {
                 z.object({ code: z.string(), name: z.string() }),
                 'select code, name from country_regions order by name',
             ),
-            occupations: await this.db.rows(
-                z.object({ id: z.string(), name: z.string() }),
-                'select id, name from occupations where tenant_id = $1 and deleted_at is null order by name',
-                [this.workspace.tenantId],
-            ),
-            patient_types: await this.db.rows(
-                z.object({
-                    id: z.string(),
-                    name: z.string(),
-                    uses_guarantor: z.boolean(),
-                }),
-                'select id, nama as name, memakai_penjamin as uses_guarantor from kes_tipe_pasien where tenant_id = $1 and deleted_at is null and aktif order by nama',
-                [this.workspace.tenantId],
-            ),
-            guarantors: await this.db.rows(
-                z.object({
-                    id: z.string(),
-                    name: z.string(),
-                    patient_type_id: z.string(),
-                }),
-                `select g.id, p.name, g.tipe_pasien_id as patient_type_id from kes_penjamin g
-                 join parties p on p.tenant_id = g.tenant_id and p.id = g.party_id
-                 where g.tenant_id = $1 and g.deleted_at is null and g.aktif order by p.name`,
-                [this.workspace.tenantId],
-            ),
             permissions: {
                 create: this.workspace.permissions.has(
                     'healthcare.patient.create',
@@ -380,6 +355,28 @@ export class Patients {
                           [this.workspace.tenantId, this.workspace.orgUnitId],
                       )) ?? null)
                     : null,
+        };
+    }
+
+    // Pilihan pekerjaan untuk isian pekerjaan pasien (master Pekerjaan Core), bertahap. Daftar Core dijaga izin buku
+    // alamat, yang tidak dipegang petugas pendaftaran.
+    async occupations(parameters: URLSearchParams) {
+        this.workspace.guard('patient', 'read');
+        const batch = await incrementalList(this.db, {
+            query: 'select id, name from occupations where tenant_id = $1 and deleted_at is null',
+            bindings: [this.workspace.tenantId],
+            parameters,
+            columns: { name: 'name' },
+            searchColumns: ['name'],
+            numericColumns: [],
+            defaultSort: 'name',
+            defaultDirection: 'asc',
+        });
+        return {
+            data: batch.data.map((row) =>
+                z.object({ id: z.string(), name: z.string() }).parse(row),
+            ),
+            next_cursor: batch.next_cursor,
         };
     }
 
@@ -464,7 +461,10 @@ export class Patients {
             payment_methods: await this.db.rows(
                 paymentMethodSchema,
                 `select c.id, c.tipe_pasien_id as patient_type_id, t.nama as patient_type_name,
-                        t.memakai_penjamin as uses_guarantor, c.penjamin_id as guarantor_id, g.name as guarantor_name,
+                        coalesce((select json_agg(b.perilaku order by b.perilaku) from kes_tipe_pasien_perilaku b
+                         where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
+                        '[]'::json) as behaviors,
+                        c.penjamin_id as guarantor_id, g.name as guarantor_name,
                         c.nomor_kartu as card_number, c.kelas as class, c.utama as is_primary
                  from kes_pasien_cara_bayar c
                  join kes_tipe_pasien t on t.tenant_id = c.tenant_id and t.id = c.tipe_pasien_id
@@ -880,6 +880,7 @@ export class Patients {
                     regency_id: trimmed(value.regency_id),
                     district_id: trimmed(value.district_id),
                     village_id: trimmed(value.village_id),
+                    postal_code_id: trimmed(value.postal_code_id),
                     group_of_houses_id: trimmed(value.group_of_houses_id),
                     group_of_houses: trimmed(value.group_of_houses),
                     street: trimmed(value.street),

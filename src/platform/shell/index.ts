@@ -11,6 +11,7 @@ export {
 export { FormErrorHeader } from './form-error-header.tsx';
 export { definePage } from './page.ts';
 export {
+    AddressRegionFields,
     draftPayload,
     emptyPartyDraft,
     newDraftKey,
@@ -19,6 +20,7 @@ export {
     useLevelNames,
     useRegionOptions,
     type AddressOwner,
+    type AddressRegionValue,
     type DraftOptions,
     type PartyDraft,
     type PartyDraftDetails,
