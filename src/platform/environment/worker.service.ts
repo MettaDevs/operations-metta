@@ -10,8 +10,15 @@ import { expireEnvironment, expireRequestSchema } from './expire.service.ts';
 import { migrateEnvironment, migrateRequestSchema } from './migrate.service.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
+import { restoreEnvironment, restoreRequestSchema } from './restore.service.ts';
 
-const knownOperations = ['provision', 'migrate', 'convert', 'expire'] as const;
+const knownOperations = [
+    'provision',
+    'migrate',
+    'convert',
+    'expire',
+    'restore',
+] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
 function isKnownOperation(value: string): value is KnownOperation {
@@ -93,6 +100,21 @@ export async function runOperation(
                         `Parameter expire tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await expireEnvironment(settings, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'restore': {
+                const request = restoreRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter restore tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await restoreEnvironment(settings, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',
