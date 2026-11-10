@@ -72,6 +72,11 @@ jobs:
       - name: Check boundaries
         run: bun run check:boundaries
 
+      # Pola layar yang di CoreERP dijaga ESLint dan skrip check-*.mjs: pencarian di toolbar, filter di panel kiri,
+      # DataTable SDK, kontrol form SDK, tanpa dialog bawaan browser, dan Core netral sektor.
+      - name: Check UI rules
+        run: bun run check:ui
+
       # Golden run dan conformance hanya bisa berjalan di lab; di sini cukup test pembanding dan pemetaan id harness.
       - name: Test the parity harness
         run: python3 -B -m unittest discover -s parity

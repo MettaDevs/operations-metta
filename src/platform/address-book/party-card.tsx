@@ -12,10 +12,6 @@ import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@operations-metta/ui/native-select';
-import {
     PageDialogBody,
     PageDialogToolbar,
     usePageDialogRecord,
@@ -83,6 +79,10 @@ type PartyForm = {
     language: string;
     memo: string;
 };
+
+// Pilihan kosong pada rujukan opsional. Select SDK menganggap nilai kosong sebagai belum memilih, jadi pilihan ini butuh
+// nilai sendiri.
+const UNSET = 'unset';
 
 function formOf(party: Party | null): PartyForm {
     const text = (value: string | null | undefined) => value ?? '';
@@ -478,23 +478,28 @@ function PartyCardBody({
         label: string,
         category: string,
     ) => (
-        <FormControl key={field} error={error(field)}>
+        <FormControl key={field} error={error(field)} data-error-field={field}>
             {editing ? (
-                <NativeSelect
+                <Select
                     label={label}
-                    data-error-field={field}
-                    value={form[field]}
-                    onChange={(event) => set(field, event.target.value)}
-                >
-                    <NativeSelectOption value="">
-                        Belum diisi
-                    </NativeSelectOption>
-                    {references(category).map((value) => (
-                        <NativeSelectOption key={value.code} value={value.code}>
-                            {value.name}
-                        </NativeSelectOption>
-                    ))}
-                </NativeSelect>
+                    items={[
+                        { value: UNSET, label: 'Belum diisi' },
+                        ...references(category).map((value) => ({
+                            value: value.code,
+                            label: value.name,
+                        })),
+                    ]}
+                    value={form[field] || UNSET}
+                    onValueChange={(value) =>
+                        set(
+                            field,
+                            value === null || value === UNSET ? '' : value,
+                        )
+                    }
+                    searchPlaceholder={`Cari ${label.toLocaleLowerCase()}`}
+                    emptyMessage="Pilihan tidak ditemukan."
+                    portalContainer={portalContainer}
+                />
             ) : (
                 <Input
                     label={label}
@@ -617,33 +622,33 @@ function PartyCardBody({
                             summary={`${typeName(form.type)} · ${form.name || 'Belum bernama'}`}
                         >
                             <FormGrid>
-                                <FormControl error={error('type')}>
+                                <FormControl
+                                    error={error('type')}
+                                    data-error-field="type"
+                                >
                                     {party === null ? (
-                                        <NativeSelect
+                                        <Select
                                             label="Jenis pihak"
                                             required
-                                            data-error-field="type"
-                                            value={form.type}
-                                            onChange={(event) =>
-                                                set('type', event.target.value)
-                                            }
-                                        >
-                                            {metadata.partyTypes
+                                            items={metadata.partyTypes
                                                 .filter((type) =>
                                                     [
                                                         'person',
                                                         'organization',
                                                     ].includes(type.code),
                                                 )
-                                                .map((type) => (
-                                                    <NativeSelectOption
-                                                        key={type.code}
-                                                        value={type.code}
-                                                    >
-                                                        {type.name}
-                                                    </NativeSelectOption>
-                                                ))}
-                                        </NativeSelect>
+                                                .map((type) => ({
+                                                    value: type.code,
+                                                    label: type.name,
+                                                }))}
+                                            value={form.type || null}
+                                            onValueChange={(value) =>
+                                                value && set('type', value)
+                                            }
+                                            searchPlaceholder="Cari jenis"
+                                            emptyMessage="Jenis tidak ditemukan."
+                                            portalContainer={portalContainer}
+                                        />
                                     ) : (
                                         <Input
                                             label="Jenis pihak"

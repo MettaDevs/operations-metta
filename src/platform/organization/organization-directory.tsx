@@ -11,11 +11,8 @@ import {
     EmptyHeader,
     EmptyTitle,
 } from '@operations-metta/ui/empty';
-import {
-    Field,
-    FieldDescription,
-    FieldGroup,
-} from '@operations-metta/ui/field';
+import { FieldDescription } from '@operations-metta/ui/field';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import { MasterDetailLayout } from '@operations-metta/ui/master-detail-layout';
@@ -145,7 +142,7 @@ function LegalEntityTimezoneField({
         timezones.find((zone) => zone.value === value)?.label ?? value;
 
     return (
-        <Field data-error-field="timezone">
+        <FormControl data-error-field="timezone">
             {editing ? (
                 <Select
                     label="Zona waktu"
@@ -163,7 +160,7 @@ function LegalEntityTimezoneField({
                 Dipakai pengguna yang belum memilih zona waktunya sendiri di
                 profil.
             </FieldDescription>
-        </Field>
+        </FormControl>
     );
 }
 
@@ -189,7 +186,7 @@ function OrganizationFields({
 
     return legalEntity ? (
         <>
-            <Field data-error-field="company_code">
+            <FormControl data-error-field="company_code">
                 <Input
                     label="Kode Perusahaan"
                     required
@@ -203,8 +200,8 @@ function OrganizationFields({
                 {editing && (
                     <FieldDescription>2–16 karakter unik.</FieldDescription>
                 )}
-            </Field>
-            <Field data-error-field="country_code">
+            </FormControl>
+            <FormControl data-error-field="country_code">
                 <Input
                     label="Kode Negara (ISO)"
                     required
@@ -216,7 +213,7 @@ function OrganizationFields({
                     maxLength={2}
                     placeholder="ID"
                 />
-            </Field>
+            </FormControl>
             <LegalEntityTimezoneField
                 timezones={props.timezones}
                 portalContainer={portalContainer}
@@ -227,7 +224,7 @@ function OrganizationFields({
         </>
     ) : (
         <>
-            <Field data-error-field="operating_unit_type">
+            <FormControl data-error-field="operating_unit_type">
                 {editing ? (
                     <Select
                         label="Tipe operating unit"
@@ -251,8 +248,8 @@ function OrganizationFields({
                         readOnly
                     />
                 )}
-            </Field>
-            <Field data-error-field="operating_unit_number">
+            </FormControl>
+            <FormControl data-error-field="operating_unit_number">
                 <Input
                     label="Kode unit"
                     required={editing && numbered}
@@ -272,7 +269,7 @@ function OrganizationFields({
                     huruf besar, angka, atau tanda hubung. Kode ini juga dikirim
                     ke Finance.
                 </FieldDescription>
-            </Field>
+            </FormControl>
         </>
     );
 }
@@ -415,8 +412,8 @@ function CreateOrganizationDialog({
                         data-page-dialog-body=""
                         className="min-h-0 flex-1 overflow-y-auto px-6 py-4"
                     >
-                        <FieldGroup>
-                            <Field data-error-field="name">
+                        <FormGrid>
+                            <FormControl data-error-field="name">
                                 <Input
                                     label="Nama Organisasi"
                                     required
@@ -430,18 +427,16 @@ function CreateOrganizationDialog({
                                             : 'Nama operating unit'
                                     }
                                 />
-                            </Field>
-                            <div className="grid gap-4 py-2 md:grid-cols-2">
-                                <OrganizationFields
-                                    data={data}
-                                    setData={setData}
-                                    legalEntity={legalEntity}
-                                    editing
-                                    props={props}
-                                    portalContainer={contentRef}
-                                />
-                            </div>
-                        </FieldGroup>
+                            </FormControl>
+                            <OrganizationFields
+                                data={data}
+                                setData={setData}
+                                legalEntity={legalEntity}
+                                editing
+                                props={props}
+                                portalContainer={contentRef}
+                            />
+                        </FormGrid>
                         {options.data && (
                             <CollapsibleSectionGroup
                                 defaultValue={[]}
@@ -612,8 +607,8 @@ function OrganizationDetail({
                             title="Umum"
                             summary={`${(legalEntity ? organization.legal_entity?.company_code : organization.operating_unit?.number) ?? '-'} - ${organization.name}`}
                         >
-                            <FieldGroup className="grid gap-4 py-2 md:grid-cols-2">
-                                <Field data-error-field="name">
+                            <FormGrid>
+                                <FormControl data-error-field="name">
                                     <Input
                                         label="Nama Organisasi"
                                         required
@@ -623,7 +618,7 @@ function OrganizationDetail({
                                             setData('name', event.target.value)
                                         }
                                     />
-                                </Field>
+                                </FormControl>
                                 <OrganizationFields
                                     data={data}
                                     setData={setData}
@@ -631,7 +626,7 @@ function OrganizationDetail({
                                     editing={editing}
                                     props={props}
                                 />
-                            </FieldGroup>
+                            </FormGrid>
                         </CollapsibleSection>
                         <CollapsibleSection
                             value="addresses"

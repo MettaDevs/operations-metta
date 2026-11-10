@@ -5,19 +5,16 @@ import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@operations-metta/ui/native-select';
-import {
     PageDialog,
     PageDialogBody,
     PageDialogContent,
     PageDialogToolbar,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Select } from '@operations-metta/ui/select';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { Check } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -66,6 +63,7 @@ function IdentificationDialog({
             !taken.includes(type.code) ||
             (editing !== 'new' && editing.type_code === type.code),
     );
+    const contentRef = useRef<HTMLDivElement>(null);
     const [typeCode, setTypeCode] = useState(
         editing === 'new' ? (available[0]?.code ?? '') : editing.type_code,
     );
@@ -104,6 +102,7 @@ function IdentificationDialog({
             }}
         >
             <PageDialogContent
+                ref={contentRef}
                 title="Nomor identitas"
                 recordTitle={typeName}
                 editing
@@ -150,26 +149,26 @@ function IdentificationDialog({
                     />
                     <PageDialogBody className="py-3">
                         <FormGrid>
-                            <FormControl error={errors.type_code?.[0]}>
+                            <FormControl
+                                error={errors.type_code?.[0]}
+                                data-error-field="type_code"
+                            >
                                 {editing === 'new' ? (
-                                    <NativeSelect
+                                    <Select
                                         label="Jenis"
                                         required
-                                        data-error-field="type_code"
-                                        value={typeCode}
-                                        onChange={(event) =>
-                                            setTypeCode(event.target.value)
+                                        items={available.map((type) => ({
+                                            value: type.code,
+                                            label: type.name,
+                                        }))}
+                                        value={typeCode || null}
+                                        onValueChange={(value) =>
+                                            value && setTypeCode(value)
                                         }
-                                    >
-                                        {available.map((type) => (
-                                            <NativeSelectOption
-                                                key={type.code}
-                                                value={type.code}
-                                            >
-                                                {type.name}
-                                            </NativeSelectOption>
-                                        ))}
-                                    </NativeSelect>
+                                        searchPlaceholder="Cari jenis"
+                                        emptyMessage="Jenis tidak ditemukan."
+                                        portalContainer={contentRef}
+                                    />
                                 ) : (
                                     <Input
                                         label="Jenis"

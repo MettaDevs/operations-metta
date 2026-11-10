@@ -5,16 +5,13 @@ import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@operations-metta/ui/native-select';
-import {
     PageDialog,
     PageDialogBody,
     PageDialogContent,
     PageDialogToolbar,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Select } from '@operations-metta/ui/select';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -219,28 +216,23 @@ function RelationshipDialog({
                         <FormGrid>
                             <FormControl
                                 error={errors.relationship_type_code?.[0]}
+                                data-error-field="relationship_type_code"
                             >
-                                <NativeSelect
+                                <Select
                                     label={`${party.name} adalah`}
                                     required
-                                    data-error-field="relationship_type_code"
-                                    value={choice}
-                                    onChange={(event) =>
-                                        setChoice(event.target.value)
+                                    items={choices.map((item) => ({
+                                        value: item.key,
+                                        label: item.label,
+                                    }))}
+                                    value={choice || null}
+                                    onValueChange={(value) =>
+                                        setChoice(value ?? '')
                                     }
-                                >
-                                    <NativeSelectOption value="">
-                                        Pilih hubungan
-                                    </NativeSelectOption>
-                                    {choices.map((item) => (
-                                        <NativeSelectOption
-                                            key={item.key}
-                                            value={item.key}
-                                        >
-                                            {item.label}
-                                        </NativeSelectOption>
-                                    ))}
-                                </NativeSelect>
+                                    searchPlaceholder="Cari hubungan"
+                                    emptyMessage="Hubungan tidak ditemukan."
+                                    portalContainer={contentRef}
+                                />
                             </FormControl>
                             <FormControl error={errors[otherField]?.[0]}>
                                 <InlineLookup
