@@ -6,6 +6,9 @@ import { recordRoute } from './route.service.ts';
 
 // Nama role yang dibuat untuk admin pertama. Pengguna boleh menggantinya; yang menandai pemilik adalah is_owner.
 const ownerRoleName = 'Pemilik';
+export type ProvisionStep =
+    'create-database' | 'migrate' | 'bootstrap-tenant' | 'record-route';
+
 const reservedDatabases = new Set(['postgres', 'template0', 'template1']);
 
 function connect(settings: DatabaseSettings, database: string) {
@@ -110,20 +113,28 @@ export async function provisionEnvironment(
     settings: DatabaseSettings,
     source: MigrationSource,
     request: ProvisionRequest,
+    // Dipanggil sebelum setiap langkah. Worker melaporkannya ke control plane, yang memperpanjang tenggatnya; bila
+    // operasinya tidak lagi dipegang, onStep melempar dan penyiapan berhenti di antara langkah.
+    onStep: (step: ProvisionStep) => Promise<void> = async () => {},
 ): Promise<{ created: boolean }> {
     if (request.database !== null) {
+        await onStep('create-database');
         await createDatabase(settings, request.database);
     }
     const sql = connect(settings, request.database ?? settings.DB_DATABASE);
     let created: boolean;
     try {
-        if (request.database !== null)
+        if (request.database !== null) {
+            await onStep('migrate');
             await migrate(sql, source, { modules: [] });
+        }
+        await onStep('bootstrap-tenant');
         created = await bootstrapTenant(sql, request);
     } finally {
         await sql.end();
     }
     // Alamat dicatat terakhir, sesudah tenant lengkap, supaya alamat tidak pernah menunjuk lingkungan setengah jadi.
+    await onStep('record-route');
     const runtime = connect(settings, settings.DB_DATABASE);
     try {
         await recordRoute(runtime, {
