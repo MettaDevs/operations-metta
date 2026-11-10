@@ -7,6 +7,10 @@
             "name": "Admin Klinik Contoh",
             "email": "admin@klinik-contoh.test",
             "password": "dev-klinik-contoh-saja"
-        }
+        },
+        "environments": [
+            { "kind": "production", "name": "Produksi" },
+            { "kind": "demo", "name": "Demo" }
+        ]
     }
 ]

@@ -4,6 +4,8 @@ import postgres from 'postgres';
 import { z } from 'zod';
 import { databaseSettingsSchema } from '../src/platform/config/index.ts';
 import {
+    environmentHost,
+    findRoute,
     provisionEnvironment,
     provisionRequestSchema,
 } from '../src/platform/environment/index.ts';
@@ -12,9 +14,10 @@ import {
     readMigrationSource,
 } from '../src/platform/migration/index.ts';
 
-// Menyiapkan laptop developer dalam satu perintah: memigrasi database dev, lalu membuat tenant contoh dari
-// dev/tenants.json lewat fungsi yang sama dengan penyiapan di server. Aman diulang: tenant yang slug-nya sudah ada
-// dilewati. Di server, tenant hanya lahir dari admin.erp.
+// Menyiapkan laptop developer dalam satu perintah: memigrasi database runtime dev, lalu membuat setiap lingkungan
+// tenant contoh dari dev/tenants.json, masing-masing dengan database sendiri, lewat fungsi yang sama dengan penyiapan
+// di server. Aman diulang: lingkungan yang alamatnya sudah tercatat dilewati. Di server, tenant hanya lahir dari
+// admin.erp.
 const tenantsSchema = z.array(
     z.object({
         legal_name: z.string(),
@@ -25,6 +28,14 @@ const tenantsSchema = z.array(
             email: z.string(),
             password: z.string().min(12),
         }),
+        environments: z
+            .array(
+                z.object({
+                    kind: z.enum(['production', 'sandbox', 'demo']),
+                    name: z.string(),
+                }),
+            )
+            .min(1),
     }),
 );
 
@@ -33,6 +44,14 @@ const tenants = tenantsSchema.parse(
     JSON.parse(readFileSync(join(root, 'dev', 'tenants.json'), 'utf8')),
 );
 const settings = databaseSettingsSchema.parse(process.env);
+const baseDomain = (process.env.BASE_DOMAIN ?? '').trim().toLowerCase();
+if (!baseDomain) {
+    console.error(
+        'Isi BASE_DOMAIN=localhost di .env: setiap lingkungan dibuka di alamatnya sendiri, misalnya klinik-contoh.localhost:8000.',
+    );
+    process.exit(1);
+}
+const port = process.env.PORT ?? '8000';
 const source = readMigrationSource(root);
 const sql = postgres({
     host: settings.DB_HOST,
@@ -46,45 +65,58 @@ const sql = postgres({
 
 try {
     await migrate(sql, source, { log: console.log });
-    const existing = new Set(
-        (
-            await sql<
-                { slug: string }[]
-            >`select slug from tenants where slug = any(${sql.array(tenants.map((tenant) => tenant.slug))})`
-        ).map((row) => row.slug),
-    );
     for (const tenant of tenants) {
-        if (existing.has(tenant.slug)) {
-            console.log(`${tenant.slug}: sudah ada, dilewati`);
-            continue;
+        // Satu tenant, satu id di semua lingkungannya, sama dengan registri control plane.
+        const ids = {
+            client: Bun.randomUUIDv7(),
+            tenant: Bun.randomUUIDv7(),
+            admin: Bun.randomUUIDv7(),
+        };
+        const passwordHash = await Bun.password.hash(tenant.admin.password, {
+            algorithm: 'bcrypt',
+        });
+        for (const environment of tenant.environments) {
+            const url = `http://${environmentHost(tenant.slug, environment.kind, baseDomain)}:${port}`;
+            const recorded = await findRoute(
+                sql,
+                tenant.slug,
+                environment.kind,
+            );
+            if (recorded) {
+                // Lingkungan tenant yang sama yang ditambahkan belakangan memakai id tenant yang sudah tercatat.
+                ids.tenant = recorded.tenant_id;
+                console.log(`${url}: sudah ada, dilewati`);
+                continue;
+            }
+            await provisionEnvironment(
+                settings,
+                source,
+                provisionRequestSchema.parse({
+                    environment,
+                    database:
+                        `${settings.DB_DATABASE}_${tenant.slug}_${environment.kind}`
+                            .replaceAll('-', '_')
+                            .slice(0, 63),
+                    client: {
+                        id: ids.client,
+                        legal_name: tenant.legal_name,
+                        slug: tenant.slug,
+                    },
+                    tenant: {
+                        id: ids.tenant,
+                        name: tenant.name,
+                        slug: tenant.slug,
+                    },
+                    admin: {
+                        id: ids.admin,
+                        name: tenant.admin.name,
+                        email: tenant.admin.email,
+                        password_hash: passwordHash,
+                    },
+                }),
+            );
+            console.log(`${url}: dibuat, login ${tenant.admin.email}`);
         }
-        await provisionEnvironment(
-            settings,
-            source,
-            provisionRequestSchema.parse({
-                database: null,
-                client: {
-                    id: Bun.randomUUIDv7(),
-                    legal_name: tenant.legal_name,
-                    slug: tenant.slug,
-                },
-                tenant: {
-                    id: Bun.randomUUIDv7(),
-                    name: tenant.name,
-                    slug: tenant.slug,
-                },
-                admin: {
-                    id: Bun.randomUUIDv7(),
-                    name: tenant.admin.name,
-                    email: tenant.admin.email,
-                    password_hash: await Bun.password.hash(
-                        tenant.admin.password,
-                        { algorithm: 'bcrypt' },
-                    ),
-                },
-            }),
-        );
-        console.log(`${tenant.slug}: dibuat, login ${tenant.admin.email}`);
     }
 } catch (error) {
     console.error(error instanceof Error ? error.message : error);

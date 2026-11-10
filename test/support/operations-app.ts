@@ -10,6 +10,8 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
     const config = loadConfig({
         ...process.env,
         SESSION_BACKEND: 'database',
+        // .env laptop mengisi BASE_DOMAIN=localhost untuk dev:setup; test yang tidak memintanya memakai alamat polos.
+        BASE_DOMAIN: '',
         ...environment,
         APP_KEY: 'base64:' + Buffer.alloc(32, 7).toString('base64'),
         SESSION_LOTTERY_HITS: '0',
@@ -20,16 +22,22 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
 
     // Satu browser: cookie dari Set-Cookie disimpan dan dikirim lagi, dan request yang mengubah data membawa
     // header X-XSRF-TOKEN dari cookie XSRF-TOKEN, sama dengan klien axios di layar CoreERP.
-    function browser() {
+    // host memilih lingkungan bila BASE_DOMAIN diisi, misalnya `klinik.uji.test`.
+    function browser(host = 'localhost') {
         const cookies = new Map<string, string>();
         async function request(
             method: string,
             path: string,
-            options: { body?: unknown; headers?: Record<string, string> } = {},
+            options: {
+                body?: unknown;
+                headers?: Record<string, string>;
+                // Mengirim cookie peramban ini ke alamat lain, seperti penyerang yang memutar ulang cookie curian.
+                host?: string;
+            } = {},
         ): Promise<Response> {
             const xsrf = cookies.get('XSRF-TOKEN');
             const response = await application.handle(
-                new Request(`http://localhost${path}`, {
+                new Request(`http://${options.host ?? host}${path}`, {
                     method,
                     headers: {
                         accept: 'application/json',
@@ -66,6 +74,7 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
         }
         return {
             request,
+            cookies,
             get: (path: string) => request('GET', path),
             post: (path: string, body: unknown = {}) =>
                 request('POST', path, { body }),

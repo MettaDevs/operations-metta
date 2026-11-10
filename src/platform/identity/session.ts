@@ -9,6 +9,7 @@ import {
 } from 'node:crypto';
 import { z } from 'zod';
 import type { Config } from '../config/index.ts';
+import type { EnvironmentRoute } from '../environment/index.ts';
 import { Database } from '../database/index.ts';
 import { abort, HttpFailure, idSchema, validation } from '../http/index.ts';
 import { RateLimiter } from './login-limiter.ts';
@@ -134,6 +135,8 @@ export class Session {
         public id: string,
         public data: z.infer<typeof sessionSchema>,
         public user: z.infer<typeof userSchema> | null,
+        // Lingkungan yang ditunjuk alamat request, atau null bila alamat tidak dirutekan.
+        readonly environment: EnvironmentRoute | null,
     ) {}
 
     static async open(
@@ -142,6 +145,7 @@ export class Session {
         request: Request,
         clientAddress: string,
         valkey: ValkeySessions | null,
+        environment: EnvironmentRoute | null = null,
     ) {
         const cipher = new CookieCipher(config.key);
         const cookies = new Map(
@@ -207,6 +211,7 @@ export class Session {
             storedId ?? randomToken(),
             data,
             user ?? null,
+            environment,
         );
     }
 
@@ -395,7 +400,11 @@ export class Session {
             ? await this.valkey.write(this.id, payload, existing)
             : await this.persist(payload, existing);
         if (!saved) return [];
-        const suffix = `; Path=/; Max-Age=${this.config.SESSION_LIFETIME * 60}; SameSite=Lax${this.config.SESSION_SECURE_COOKIE === 'true' ? '; Secure' : ''}`;
+        // Cookie berawalan __Host- hanya diterima peramban bila Secure.
+        const secure =
+            this.config.SESSION_SECURE_COOKIE === 'true' ||
+            this.config.SESSION_COOKIE.startsWith('__Host-');
+        const suffix = `; Path=/; Max-Age=${this.config.SESSION_LIFETIME * 60}; SameSite=Lax${secure ? '; Secure' : ''}`;
         return [
             `XSRF-TOKEN=${encodeURIComponent(this.cipher.encrypt('XSRF-TOKEN', this.data._token))}${suffix}`,
             `${this.config.SESSION_COOKIE}=${encodeURIComponent(this.cipher.encrypt(this.config.SESSION_COOKIE, this.id))}${suffix}; HttpOnly`,
