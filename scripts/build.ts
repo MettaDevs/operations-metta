@@ -164,7 +164,10 @@ export async function buildClient(
 
 export async function buildServer(outdir: string): Promise<void> {
     const result = await Bun.build({
-        entrypoints: [join(root, 'src', 'main.ts')],
+        entrypoints: [
+            join(root, 'src', 'main.ts'),
+            join(root, 'src', 'worker.ts'),
+        ],
         outdir,
         target: 'bun',
         minify: true,
@@ -183,6 +186,6 @@ if (import.meta.main) {
     await buildServer(dist);
     const manifest = await buildClient(join(dist, 'client'));
     console.log(
-        `dist/main.js dan dist/client/ (${manifest.files.length} berkas) selesai dibangun.`,
+        `dist/main.js, dist/worker.js, dan dist/client/ (${manifest.files.length} berkas) selesai dibangun.`,
     );
 }

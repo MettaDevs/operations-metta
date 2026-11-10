@@ -70,6 +70,9 @@ export default tseslint.config(
             'no-console': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
             '@typescript-eslint/no-empty-function': 'off',
+            // Matcher seperti expect.objectContaining() bertipe `any` di tipe Bun.
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
         },
     },
     {

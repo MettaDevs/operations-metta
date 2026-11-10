@@ -5,7 +5,11 @@ import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
 import type { workspaceSelectionSchema } from './platform/access/index.ts';
-import { shellRoutes, Workspace } from './platform/access/index.ts';
+import {
+    accessRoutes,
+    shellRoutes,
+    Workspace,
+} from './platform/access/index.ts';
 import { loadConfig, type Config } from './platform/config/index.ts';
 import {
     flushErrorReporting,
@@ -98,6 +102,7 @@ export const router = {
             );
         }),
     ...shellRoutes(),
+    ...accessRoutes(),
     ...organizationRoutes(),
     ...geographyRoutes(),
     ...addressBookRoutes(),

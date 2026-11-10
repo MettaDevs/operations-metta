@@ -70,6 +70,30 @@ export const coreNavigation: NavigationGroupEntry[] = [
         ],
     },
     {
+        id: 'access',
+        label: 'Akses',
+        items: [
+            {
+                id: 'staff-access',
+                label: 'Staf',
+                href: '/settings/access',
+                permission: 'core.access.read',
+            },
+            {
+                id: 'roles',
+                label: 'Role',
+                href: '/settings/roles',
+                permission: 'core.access.read',
+            },
+            {
+                id: 'security-configuration',
+                label: 'Susun role',
+                href: '/settings/security-configuration',
+                permission: 'core.access.read',
+            },
+        ],
+    },
+    {
         id: 'address-setup',
         label: 'Setup alamat',
         items: [
