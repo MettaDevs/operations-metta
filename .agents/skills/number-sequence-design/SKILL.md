@@ -47,8 +47,10 @@ Map that model to this repository:
 | Module number-sequence references | `app_number_sequence_references` rows for the owning module (declared in the CoreERP manifest; declaration place here not decided) |
 | Generate wizard | Materializing every declared reference for a tenant — not ported |
 | Number sequences page | CoreERP's **Atur nomor** screen — not ported |
-| Reference association | The reference code passed to `NumberIssuer.issue(reference, key)` |
-| Shared, Company, Legal entity, Operating unit | Tenant, legal entity, operating unit (`scope_type`) |
+| Reference association | `NumberIssuer.issue({ reference, key, documentDate, legalEntityId, operatingUnitId })`, called inside the document transaction |
+| Shared, Company/Legal entity, Operating unit, Legal entity + Fiscal calendar period | One `tenant_number_sequences` row per scope value: `scope_type` `tenant`, `legal_entity`, `operating_unit`, `legal_entity_fiscal_period`, with `legal_entity_id`, `operating_unit_id`, `fiscal_period_id`. Operating unit type is not supported |
+| Allow user changes: To a lower number / To a higher number | `allow_lower_number`, `allow_higher_number`; the typed value is passed as `number` |
+| Status list / Manual cleanup | `NumberSequences.statusList` / `NumberSequences.cleanup` (expired reservations) |
 | Constant and alphanumeric segments | Segments `NumberIssuer` supports: `constant`, `number`, `context`, `year`, `scope`, `fiscal_year`, `fiscal_period` |
 
 Keep intentional differences visible:
@@ -57,7 +59,11 @@ Keep intentional differences visible:
 - Continuous numbering together with manual entry is forbidden.
 - Dynamics 365 supports incrementing alphabetic `&` segments; this repository does not. Report the gap instead of emulating it with a prefix.
 - Tenant configuration and counters live in durable rows in the tenant database (`tenant_number_sequences`, `number_sequence_counters`, `number_sequence_allocations`, `number_sequence_issues`); do not copy Dynamics 365's in-memory non-continuous cache design. Several Bun processes and instances serve one tenant, so nothing about a counter may live in process memory.
-- `NumberIssuer.issue` serves non-continuous sequences and replays the same number for the same idempotency key. Continuous sequences need reserve/confirm/cancel, which has not been ported; the issuer refuses them.
+- One reference may have many sequences in one tenant, one per scope value (owner decision, 10 November 2026). The caller sends the document's legal entity, operating unit, and date; the issuer picks the active sequence for that value and refuses with a clear message when none exists. It never falls back to another scope, and it never reads the user's workspace organization.
+- Scope and its value are fixed once a sequence exists (service check and database trigger). Changing policy means creating a new sequence and stopping the old one. Continuous, Manual, In use/Stopped, Smallest/Largest/Next, Reset every, Allow user changes, and Preallocation stay editable; the format is locked after the first number.
+- All active sequences of one reference share one scope type, so a document never matches two sequences.
+- `NumberIssuer.issue` must run inside the document transaction, so a failed save returns the number. It replays the same number for the same idempotency key. Continuous sequences issue from the pool inside that transaction; `reserve`/`confirm`/`cancel` exist for reserving before the save. A reservation expires after `reservationMinutes`; expired reservations are released lazily on the next reservation and by `NumberSequences.cleanup`.
+- The fiscal period comes from the document date, not from today. The `year` segment is still the issue year.
 
 ## Automatic defaults
 

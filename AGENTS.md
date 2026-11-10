@@ -146,7 +146,7 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
 
 Keputusan pemilik produk, 4 November 2026. Di CoreERP hampir setiap master diberi kode otomatis. Mulai sekarang kode hanya ada bila memang dipakai orang.
 
-- Mesin number sequence di `src/foundation/number-sequence/` tetap seperti di CoreERP: scope, reset fiskal, mode continuous dan non-continuous, dan preallocation.
+- Mesin number sequence di `src/foundation/number-sequence/` membawa scope, reset fiskal, mode continuous dan non-continuous, dan preallocation dari CoreERP. Sejak 10 November 2026 ia mengikuti F&O: satu reference boleh punya banyak sequence, satu per nilai scope (tenant, legal entity, operating unit, atau legal entity + periode fiskal), dipilih dari organisasi dan tanggal dokumen, dan nomor diambil di dalam transaksi dokumen. Rinciannya di skill `number-sequence-design`.
 - Nomor otomatis hanya untuk dua hal: dokumen transaksi (penerimaan, mutasi, penjualan, pemusnahan, work order, dan sejenisnya) dan master utama yang dicari orang lewat kodenya, misalnya aset.
 - Master setup kecil, misalnya kondisi aset, tipe lokasi, dan sebab kerusakan, tidak memakai number sequence. Bila orang memang mengetik atau menyaring dengan kode, kodenya pendek dan diketik pengguna, seperti field `Code` di Business Central. Bila tidak, cukup nama dan ID internal.
 - Baris dokumen dan entri ledger tidak punya kode bisnis.
