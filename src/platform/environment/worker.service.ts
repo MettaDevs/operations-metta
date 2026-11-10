@@ -5,11 +5,12 @@ import {
     OperationLost,
 } from '../control-plane/index.ts';
 import type { MigrationSource } from '../migration/index.ts';
+import { convertEnvironment, convertRequestSchema } from './convert.service.ts';
 import { migrateEnvironment, migrateRequestSchema } from './migrate.service.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
 
-const knownOperations = ['provision', 'migrate'] as const;
+const knownOperations = ['provision', 'migrate', 'convert'] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
 function isKnownOperation(value: string): value is KnownOperation {
@@ -61,6 +62,21 @@ export async function runOperation(
                         `Parameter migrate tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await migrateEnvironment(settings, source, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'convert': {
+                const request = convertRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter convert tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await convertEnvironment(settings, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',
