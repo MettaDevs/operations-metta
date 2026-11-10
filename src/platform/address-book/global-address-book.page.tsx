@@ -5,14 +5,11 @@ import { FilterPane } from '@operations-metta/ui/filter-pane';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@operations-metta/ui/native-select';
-import {
     PageDialog,
     PageDialogContent,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Select } from '@operations-metta/ui/select';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { useRecordNavigation } from '@operations-metta/ui/use-record-navigation';
@@ -35,6 +32,11 @@ import {
 // di API.
 
 const route = getRouteApi('/_app/settings/global-address-book');
+// Pilihan "Semua" pada filter. Select SDK menganggap nilai kosong sebagai belum memilih, jadi pilihan ini butuh nilai
+// sendiri.
+const ALL = 'all';
+const chosen = (value: string | null) =>
+    value === null || value === ALL ? undefined : value;
 type Search = z.infer<typeof searchSchema>;
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
@@ -191,100 +193,111 @@ function GlobalAddressBookPage(): ReactNode {
                             <div className="p-4">
                                 <FormGrid columns={1}>
                                     <FormControl>
-                                        <NativeSelect
+                                        <Select
                                             label="Jenis pihak"
-                                            value={search.type ?? ''}
-                                            onChange={(event) =>
+                                            items={[
+                                                {
+                                                    value: ALL,
+                                                    label: 'Semua jenis',
+                                                },
+                                                ...metadata.partyTypes.map(
+                                                    (type) => ({
+                                                        value: type.code,
+                                                        label: type.name,
+                                                    }),
+                                                ),
+                                            ]}
+                                            value={search.type ?? ALL}
+                                            onValueChange={(value) =>
                                                 setSearch({
-                                                    type: event.target.value,
+                                                    type: chosen(value),
                                                 })
                                             }
-                                        >
-                                            <NativeSelectOption value="">
-                                                Semua jenis
-                                            </NativeSelectOption>
-                                            {metadata.partyTypes.map((type) => (
-                                                <NativeSelectOption
-                                                    key={type.code}
-                                                    value={type.code}
-                                                >
-                                                    {type.name}
-                                                </NativeSelectOption>
-                                            ))}
-                                        </NativeSelect>
+                                            searchPlaceholder="Cari jenis"
+                                            emptyMessage="Jenis tidak ditemukan."
+                                        />
                                     </FormControl>
                                     <FormControl>
-                                        <NativeSelect
+                                        <Select
                                             label="Peran"
-                                            value={search.role ?? ''}
-                                            onChange={(event) =>
+                                            items={[
+                                                {
+                                                    value: ALL,
+                                                    label: 'Semua peran',
+                                                },
+                                                ...metadata.roles.map(
+                                                    (role) => ({
+                                                        value: role.code,
+                                                        label: role.name,
+                                                    }),
+                                                ),
+                                            ]}
+                                            value={search.role ?? ALL}
+                                            onValueChange={(value) =>
                                                 setSearch({
-                                                    role: event.target.value,
+                                                    role: chosen(value),
                                                 })
                                             }
-                                        >
-                                            <NativeSelectOption value="">
-                                                Semua peran
-                                            </NativeSelectOption>
-                                            {metadata.roles.map((role) => (
-                                                <NativeSelectOption
-                                                    key={role.code}
-                                                    value={role.code}
-                                                >
-                                                    {role.name}
-                                                </NativeSelectOption>
-                                            ))}
-                                        </NativeSelect>
+                                            searchPlaceholder="Cari peran"
+                                            emptyMessage="Peran tidak ditemukan."
+                                        />
                                     </FormControl>
                                     <FormControl>
-                                        <NativeSelect
+                                        <Select
                                             label="Status"
-                                            value={search.status ?? ''}
-                                            onChange={(event) =>
+                                            items={[
+                                                {
+                                                    value: ALL,
+                                                    label: 'Semua status',
+                                                },
+                                                {
+                                                    value: 'active',
+                                                    label: 'Aktif',
+                                                },
+                                                {
+                                                    value: 'inactive',
+                                                    label: 'Nonaktif',
+                                                },
+                                            ]}
+                                            value={search.status ?? ALL}
+                                            onValueChange={(value) =>
                                                 setSearch({
                                                     status:
-                                                        event.target.value ===
-                                                        ''
-                                                            ? undefined
-                                                            : (event.target
-                                                                  .value as
-                                                                  | 'active'
-                                                                  | 'inactive'),
+                                                        value === 'active' ||
+                                                        value === 'inactive'
+                                                            ? value
+                                                            : undefined,
                                                 })
                                             }
-                                        >
-                                            <NativeSelectOption value="">
-                                                Semua status
-                                            </NativeSelectOption>
-                                            <NativeSelectOption value="active">
-                                                Aktif
-                                            </NativeSelectOption>
-                                            <NativeSelectOption value="inactive">
-                                                Nonaktif
-                                            </NativeSelectOption>
-                                        </NativeSelect>
+                                            searchPlaceholder="Cari status"
+                                            emptyMessage="Status tidak ditemukan."
+                                        />
                                     </FormControl>
                                     <FormControl>
-                                        <NativeSelect
+                                        <Select
                                             label="Tampilkan"
-                                            value={archived ? 'only' : ''}
-                                            onChange={(event) =>
+                                            items={[
+                                                {
+                                                    value: ALL,
+                                                    label: 'Belum dihapus',
+                                                },
+                                                {
+                                                    value: 'only',
+                                                    label: 'Sudah dihapus',
+                                                },
+                                            ]}
+                                            value={archived ? 'only' : ALL}
+                                            onValueChange={(value) =>
                                                 setSearch({
                                                     archived:
-                                                        event.target.value ===
-                                                        'only'
+                                                        value === 'only'
                                                             ? 'only'
                                                             : undefined,
                                                 })
                                             }
-                                        >
-                                            <NativeSelectOption value="">
-                                                Belum dihapus
-                                            </NativeSelectOption>
-                                            <NativeSelectOption value="only">
-                                                Sudah dihapus
-                                            </NativeSelectOption>
-                                        </NativeSelect>
+                                            searchPlaceholder="Cari pilihan"
+                                            emptyMessage="Pilihan tidak ditemukan."
+                                        />
                                     </FormControl>
                                 </FormGrid>
                             </div>

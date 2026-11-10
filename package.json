@@ -17,6 +17,7 @@
         "format": "prettier --write src modules packages scripts test .github package.json tsconfig.json",
         "format:check": "prettier --check src modules packages scripts test .github package.json tsconfig.json",
         "check:boundaries": "bun scripts/check-boundaries.ts",
+        "check:ui": "bun scripts/check-ui.ts",
         "migrate": "bun scripts/migrate.ts",
         "dev:setup": "bun scripts/dev-setup.ts"
     },

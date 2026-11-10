@@ -79,9 +79,8 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 
 ## Search and filters
 
-- **Pencarian daftar halaman ada di toolbar** (`RecordActionBar` `search`), dan isian filter lain di panel filter kiri, mengikuti bagian *Daftar datatable module* di skill `operations-metta-ui`. Jangan menaruh pencarian sebagai `Input` di baris filter atau di atas daftar, termasuk daftar kiri `MasterDetailLayout`. `test/platform/shell/list-search.test.ts` menolak kotak pencarian sendiri pada berkas yang memakai `ListPageLayout`.
+- **Pencarian daftar halaman ada di toolbar** (`RecordActionBar` `search`), dan isian filter lain di panel filter kiri, mengikuti bagian *Daftar datatable module* di skill `operations-metta-ui`. Jangan menaruh pencarian sebagai `Input` di baris filter atau di atas daftar, termasuk daftar kiri `MasterDetailLayout`. `bun run check:ui` menolak kotak pencarian sendiri dan isian filter di slot `filters` pada berkas yang memakai `ListPageLayout`.
 - Pencarian di dialog dan pemilih (`InlineLookup`, pemilih alamat bersama) adalah pencarian lookup, bukan pencarian daftar halaman, dan tetap di tempatnya.
-- Inspect component wrappers. `NativeSelect` owns a `w-full` wrapper, so constrain it with a parent such as `<div className="w-full sm:w-52">` when it sits outside a `FormGrid`; setting width only on the select does not fix stacking.
 - Every control needs a visible label or `aria-label`.
 
 ## Shared master pages

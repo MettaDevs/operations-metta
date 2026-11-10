@@ -21,12 +21,8 @@ import {
     EmptyHeader,
     EmptyTitle,
 } from '@operations-metta/ui/empty';
-import {
-    Field,
-    FieldGroup,
-    FieldLegend,
-    FieldSet,
-} from '@operations-metta/ui/field';
+import { Field, FieldLegend, FieldSet } from '@operations-metta/ui/field';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import { MasterDetailLayout } from '@operations-metta/ui/master-detail-layout';
@@ -219,8 +215,8 @@ function CreateHierarchyDialog({
                         operation="Hierarki belum dibuat"
                     />
                     <PageDialogBody className="space-y-4">
-                        <FieldGroup>
-                            <Field data-error-field="name">
+                        <FormGrid columns={1}>
+                            <FormControl data-error-field="name">
                                 <Input
                                     label="Nama hierarki"
                                     required
@@ -233,7 +229,7 @@ function CreateHierarchyDialog({
                                     }
                                     placeholder="Contoh: Bagan Organisasi Holding Utama"
                                 />
-                            </Field>
+                            </FormControl>
                             <FieldSet data-error-field="purpose_codes">
                                 <FieldLegend hint="Pilih proses bisnis yang akan membaca susunan ini.">
                                     Tujuan hierarki
@@ -261,36 +257,36 @@ function CreateHierarchyDialog({
                                     ))}
                                 </ToggleGroup>
                             </FieldSet>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Field data-error-field="root_organization_id">
-                                    <OrganizationLookup
-                                        label="Organisasi paling atas"
-                                        value={data.root_organization_id}
-                                        onChange={(value) =>
-                                            setData({
-                                                ...data,
-                                                root_organization_id: value,
-                                            })
-                                        }
-                                        portalContainer={contentRef}
-                                    />
-                                </Field>
-                                <Field data-error-field="effective_from">
-                                    <DatePicker
-                                        label="Berlaku mulai"
-                                        required
-                                        value={data.effective_from}
-                                        onValueChange={(value) =>
-                                            setData({
-                                                ...data,
-                                                effective_from: value,
-                                            })
-                                        }
-                                        portalContainer={contentRef}
-                                    />
-                                </Field>
-                            </div>
-                        </FieldGroup>
+                        </FormGrid>
+                        <FormGrid>
+                            <FormControl data-error-field="root_organization_id">
+                                <OrganizationLookup
+                                    label="Organisasi paling atas"
+                                    value={data.root_organization_id}
+                                    onChange={(value) =>
+                                        setData({
+                                            ...data,
+                                            root_organization_id: value,
+                                        })
+                                    }
+                                    portalContainer={contentRef}
+                                />
+                            </FormControl>
+                            <FormControl data-error-field="effective_from">
+                                <DatePicker
+                                    label="Berlaku mulai"
+                                    required
+                                    value={data.effective_from}
+                                    onValueChange={(value) =>
+                                        setData({
+                                            ...data,
+                                            effective_from: value,
+                                        })
+                                    }
+                                    portalContainer={contentRef}
+                                />
+                            </FormControl>
+                        </FormGrid>
                     </PageDialogBody>
                 </form>
             </PageDialogContent>
@@ -760,8 +756,8 @@ function CreateVersionDraftAction({
                         operation="Draft versi baru belum dibuat"
                     />
                     <PageDialogBody className="space-y-4">
-                        <FieldGroup>
-                            <Field data-error-field="effective_from">
+                        <FormGrid columns={1}>
+                            <FormControl data-error-field="effective_from">
                                 <DatePicker
                                     label="Berlaku mulai"
                                     required
@@ -769,8 +765,8 @@ function CreateVersionDraftAction({
                                     onValueChange={setEffectiveFrom}
                                     portalContainer={contentRef}
                                 />
-                            </Field>
-                        </FieldGroup>
+                            </FormControl>
+                        </FormGrid>
                     </PageDialogBody>
                 </form>
             </PageDialogContent>

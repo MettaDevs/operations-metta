@@ -4,9 +4,9 @@ import {
     Field,
     FieldDescription,
     FieldError,
-    FieldGroup,
     FieldLabel,
 } from '@operations-metta/ui/field';
+import { FormGrid } from '@operations-metta/ui/form-control';
 import { Select } from '@operations-metta/ui/select';
 import {
     Sheet,
@@ -142,7 +142,7 @@ export function WorkspaceSwitcher({
                 >
                     <div className="flex-1 overflow-y-auto px-6 py-6">
                         <fieldset disabled={saving}>
-                            <FieldGroup>
+                            <FormGrid columns={1}>
                                 <Field
                                     data-error-field="membership_id"
                                     data-invalid={!!fieldErrors.membership_id}
@@ -278,7 +278,7 @@ export function WorkspaceSwitcher({
                                     Selesaikan isian yang belum disimpan sebelum
                                     berpindah.
                                 </FieldDescription>
-                            </FieldGroup>
+                            </FormGrid>
                         </fieldset>
                     </div>
                     <SheetFooter className="border-t sm:flex-row sm:justify-end">

@@ -14,10 +14,6 @@ import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@operations-metta/ui/native-select';
-import {
     PageDialog,
     PageDialogBody,
     PageDialogContent,
@@ -1413,6 +1409,10 @@ export function PartyAddressesSection({
     );
 }
 
+// Pilihan "Alamat utama": kontak tanpa alamat dicatat pada alamat utama. Select SDK menganggap nilai kosong sebagai
+// belum memilih, jadi pilihan ini butuh nilai sendiri.
+const PRIMARY = 'primary';
+
 const contactTypeLabel: Record<string, string> = {
     phone: 'Telepon',
     whatsapp: 'WhatsApp',
@@ -1557,27 +1557,28 @@ function ContactDialog({
                     />
                     <PageDialogBody className="py-3">
                         <FormGrid>
-                            <FormControl error={first(errors, 'type')}>
-                                <NativeSelect
+                            <FormControl
+                                error={first(errors, 'type')}
+                                data-error-field="type"
+                            >
+                                <Select
                                     label="Jenis"
-                                    data-error-field="type"
-                                    value={form.type}
-                                    onChange={(event) =>
+                                    items={types.map((type) => ({
+                                        value: type,
+                                        label: contactTypeLabel[type] ?? type,
+                                    }))}
+                                    value={form.type || null}
+                                    onValueChange={(value) =>
+                                        value &&
                                         setForm((current) => ({
                                             ...current,
-                                            type: event.target.value,
+                                            type: value,
                                         }))
                                     }
-                                >
-                                    {types.map((type) => (
-                                        <NativeSelectOption
-                                            key={type}
-                                            value={type}
-                                        >
-                                            {contactTypeLabel[type] ?? type}
-                                        </NativeSelectOption>
-                                    ))}
-                                </NativeSelect>
+                                    searchPlaceholder="Cari jenis"
+                                    emptyMessage="Jenis tidak ditemukan."
+                                    portalContainer={contentRef}
+                                />
                             </FormControl>
                             <FormControl error={first(errors, 'value')}>
                                 <Input
@@ -1624,30 +1625,35 @@ function ContactDialog({
                                     first(errors, 'address_key')
                                 }
                                 hint="Kontak menempel pada satu alamat. Tanpa pilihan, kontak dicatat pada alamat utama."
+                                data-error-field="address_id"
                             >
-                                <NativeSelect
+                                <Select
                                     label="Alamat"
-                                    data-error-field="address_id"
-                                    value={form.address_id}
-                                    onChange={(event) =>
+                                    items={[
+                                        {
+                                            value: PRIMARY,
+                                            label: 'Alamat utama',
+                                        },
+                                        ...owned.map((location) => ({
+                                            value: location.id,
+                                            label: location.name,
+                                        })),
+                                    ]}
+                                    value={form.address_id || PRIMARY}
+                                    onValueChange={(value) =>
                                         setForm((current) => ({
                                             ...current,
-                                            address_id: event.target.value,
+                                            address_id:
+                                                value === null ||
+                                                value === PRIMARY
+                                                    ? ''
+                                                    : value,
                                         }))
                                     }
-                                >
-                                    <NativeSelectOption value="">
-                                        Alamat utama
-                                    </NativeSelectOption>
-                                    {owned.map((location) => (
-                                        <NativeSelectOption
-                                            key={location.id}
-                                            value={location.id}
-                                        >
-                                            {location.name}
-                                        </NativeSelectOption>
-                                    ))}
-                                </NativeSelect>
+                                    searchPlaceholder="Cari alamat"
+                                    emptyMessage="Alamat tidak ditemukan."
+                                    portalContainer={contentRef}
+                                />
                             </FormControl>
                         </FormGrid>
                         <Field orientation="horizontal" className="mt-4 w-auto">
