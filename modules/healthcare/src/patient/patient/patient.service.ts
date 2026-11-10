@@ -96,8 +96,9 @@ const patientSchema = z.object({
     legal_entity_name: z.string(),
     org_unit_id: z.string(),
     org_unit_name: z.string(),
-    nrm_unit_id: z.string(),
-    nrm_unit_name: z.string(),
+    // null: NRM dari sequence legal entity, karena unit pendaftar tidak ditempatkan di kelompok berbagi pasien.
+    nrm_unit_id: z.string().nullable(),
+    nrm_unit_name: z.string().nullable(),
     is_active: z.boolean(),
     document_number: z.string().nullable(),
     old_number: z.string().nullable(),
@@ -161,8 +162,8 @@ async function prefixed<T>(
 }
 
 // Master pasien. Pasien adalah peran party milik module ini: identitas, nomor identitas, alamat, dan kontak ada di
-// party Core, sedangkan nomor rekam medis, data tambahan, dan cara bayar ada di tabel module. Pasien terlihat bagi
-// unit yang sekelompok berbagi dengan unit pendaftarnya (PatientSharing).
+// party Core, sedangkan nomor rekam medis, data tambahan, dan cara bayar ada di tabel module. Siapa melihat pasien
+// mana diatur PatientSharing.
 export class Patients {
     private readonly sharing: PatientSharing;
 
@@ -181,12 +182,37 @@ export class Patients {
         ).has('core.party-identification.read');
     }
 
-    // Syarat SQL bahwa pasien `k` terlihat: unit pendaftarnya sekelompok dengan unit yang diberikan kepada pengguna.
-    private async visibility(bind: (value: Bind) => string): Promise<string> {
-        const units = await this.sharing.visibleUnits(this.workspace);
-        if (units === null) return 'true';
-        if (!units.length) return 'false';
-        return `k.org_unit_id in (${units.map((unit) => bind(unit)).join(',')})`;
+    // Syarat SQL bahwa pasien `k` terlihat bagi pengguna (PatientSharing.visible).
+    private visibility(bind: (value: Bind) => string): Promise<string> {
+        return this.sharing.visible(this.workspace, bind);
+    }
+
+    // Tipe pasien bawaan beserta penjamin bawaannya, bila ada dan aktif. Pasien baru memakainya bila cara bayar tidak
+    // diisi, dan kartu pasien baru mengisinya lebih dulu.
+    private async defaultPaymentMethod() {
+        return (
+            (await this.db.one(
+                z.object({
+                    patient_type_id: z.string(),
+                    patient_type_name: z.string(),
+                    behaviors: z.array(z.string()),
+                    guarantor_id: z.string().nullable(),
+                    guarantor_name: z.string().nullable(),
+                }),
+                `select t.id as patient_type_id, t.nama as patient_type_name,
+                        coalesce((select json_agg(b.perilaku order by b.perilaku) from sim_m_tipe_pasien_perilaku b
+                         where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
+                        '[]'::json) as behaviors,
+                        g.id as guarantor_id, gp.name as guarantor_name
+                 from sim_m_tipe_pasien t
+                 left join sim_m_penjamin g on g.tenant_id = t.tenant_id and g.tipe_pasien_id = t.id and g.bawaan
+                      and g.aktif and g.deleted_at is null
+                 left join parties gp on gp.tenant_id = g.tenant_id and gp.id = g.party_id
+                 where t.tenant_id = $1 and t.bawaan and t.aktif and t.deleted_at is null
+                 limit 1`,
+                [this.workspace.tenantId],
+            )) ?? null
+        );
     }
 
     // Pasien tenant ini yang terlihat bagi pengguna. Yang lain dijawab 404, supaya keberadaannya tidak bocor.
@@ -204,7 +230,7 @@ export class Patients {
                       version: z.number(),
                       legal_entity_id: z.string(),
                   }),
-                  `select k.id, k.party_id, k.version, k.legal_entity_id from kes_pasien k
+                  `select k.id, k.party_id, k.version, k.legal_entity_id from sim_m_pasien k
                    where k.tenant_id = $1 and k.id = $2 and k.deleted_at is null and ${await this.visibility(bind)}`,
                   bindings,
               )
@@ -231,7 +257,7 @@ export class Patients {
         const type = lookupId(parameters.get('patient_type_id') ?? '');
         if (type)
             filters.push(
-                `exists (select 1 from kes_pasien_cara_bayar c where c.tenant_id = k.tenant_id and c.pasien_id = k.id and c.deleted_at is null and c.tipe_pasien_id = ${bind(type)})`,
+                `exists (select 1 from sim_m_pasien_cara_bayar c where c.tenant_id = k.tenant_id and c.pasien_id = k.id and c.deleted_at is null and c.tipe_pasien_id = ${bind(type)})`,
             );
         const unit = lookupId(parameters.get('org_unit_id') ?? '');
         if (unit) filters.push(`k.org_unit_id = ${bind(unit)}`);
@@ -247,18 +273,18 @@ export class Patients {
                        to_char(p.birth_date, 'DD-MM-YYYY') as birth_date_dmy,
                        to_char(p.birth_date, 'DDMMYYYY') as birth_date_compact,
                        to_char(p.birth_date, 'YYYYMMDD') as birth_date_iso_compact,
-                       (select string_agg(c.nomor_kartu, ' ') from kes_pasien_cara_bayar c
+                       (select string_agg(c.nomor_kartu, ' ') from sim_m_pasien_cara_bayar c
                         where c.tenant_id = k.tenant_id and c.pasien_id = k.id and c.deleted_at is null) as card_numbers
-                from kes_pasien k
+                from sim_m_pasien k
                 join parties p on p.tenant_id = k.tenant_id and p.id = k.party_id
                 join organizations unit on unit.id = k.org_unit_id
                 left join party_identifications nik on nik.tenant_id = k.tenant_id and nik.party_id = k.party_id
                     and nik.type_code = 'nik' and nik.deleted_at is null
                 left join lateral (
                     select c.nomor_kartu, t.nama as patient_type_name, g.name as guarantor_name
-                    from kes_pasien_cara_bayar c
-                    join kes_tipe_pasien t on t.tenant_id = c.tenant_id and t.id = c.tipe_pasien_id
-                    left join kes_penjamin j on j.tenant_id = c.tenant_id and j.id = c.penjamin_id
+                    from sim_m_pasien_cara_bayar c
+                    join sim_m_tipe_pasien t on t.tenant_id = c.tenant_id and t.id = c.tipe_pasien_id
+                    left join sim_m_penjamin j on j.tenant_id = c.tenant_id and j.id = c.penjamin_id
                     left join parties g on g.tenant_id = j.tenant_id and g.id = j.party_id
                     where c.tenant_id = k.tenant_id and c.pasien_id = k.id and c.deleted_at is null
                     order by c.utama desc, c.urutan limit 1) payment on true
@@ -334,6 +360,7 @@ export class Patients {
                 z.object({ code: z.string(), name: z.string() }),
                 'select code, name from country_regions order by name',
             ),
+            default_payment_method: await this.defaultPaymentMethod(),
             permissions: {
                 create: this.workspace.permissions.has(
                     'healthcare.patient.create',
@@ -397,11 +424,11 @@ export class Patients {
                     p.name, p.nationality_country_code, p.gender, p.birth_date::text as birth_date, p.birth_place,
                     p.religion, p.education, p.marital_status, p.anniversary_date::text as anniversary_date,
                     p.occupation_id, occupation.name as occupation_name
-             from kes_pasien k
+             from sim_m_pasien k
              join parties p on p.tenant_id = k.tenant_id and p.id = k.party_id
              join organizations le on le.id = k.legal_entity_id
              join organizations unit on unit.id = k.org_unit_id
-             join organizations numbering on numbering.id = k.nrm_unit_id
+             left join organizations numbering on numbering.id = k.nrm_unit_id
              left join occupations occupation on occupation.id = p.occupation_id
              where k.tenant_id = $1 and k.id = $2`,
             [this.workspace.tenantId, id],
@@ -461,14 +488,14 @@ export class Patients {
             payment_methods: await this.db.rows(
                 paymentMethodSchema,
                 `select c.id, c.tipe_pasien_id as patient_type_id, t.nama as patient_type_name,
-                        coalesce((select json_agg(b.perilaku order by b.perilaku) from kes_tipe_pasien_perilaku b
+                        coalesce((select json_agg(b.perilaku order by b.perilaku) from sim_m_tipe_pasien_perilaku b
                          where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
                         '[]'::json) as behaviors,
                         c.penjamin_id as guarantor_id, g.name as guarantor_name,
                         c.nomor_kartu as card_number, c.kelas as class, c.utama as is_primary
-                 from kes_pasien_cara_bayar c
-                 join kes_tipe_pasien t on t.tenant_id = c.tenant_id and t.id = c.tipe_pasien_id
-                 left join kes_penjamin j on j.tenant_id = c.tenant_id and j.id = c.penjamin_id
+                 from sim_m_pasien_cara_bayar c
+                 join sim_m_tipe_pasien t on t.tenant_id = c.tenant_id and t.id = c.tipe_pasien_id
+                 left join sim_m_penjamin j on j.tenant_id = c.tenant_id and j.id = c.penjamin_id
                  left join parties g on g.tenant_id = j.tenant_id and g.id = j.party_id
                  where c.tenant_id = $1 and c.pasien_id = $2 and c.deleted_at is null
                  order by c.utama desc, c.urutan, c.id`,
@@ -478,7 +505,9 @@ export class Patients {
     }
 
     // Pencarian party lewat NIK sebelum mendaftarkan pasien baru (POST, supaya NIK tidak masuk URL). Bila party sudah
-    // ada, pendaftaran hanya menambah peran pasien; bila ia sudah pasien di kelompok ini, NRM-nya ikut dikirim.
+    // ada, pendaftaran hanya menambah peran pasien; bila ia sudah pasien yang terlihat bagi pengguna, NRM-nya ikut
+    // dikirim. Bila ia pasien di kelompok atau legal entity lain yang tidak terlihat, jawabannya hanya "NIK sudah
+    // terdaftar" tanpa nama, jenis kelamin, atau tanggal dan tempat lahir (keputusan pemilik produk, 10 November 2026).
     async lookup(body: unknown) {
         this.workspace.guard('patient', 'create');
         const parsed = partyLookupInputSchema.safeParse(body);
@@ -497,11 +526,33 @@ export class Patients {
             'select id, name, gender, birth_date::text as birth_date, birth_place from parties where tenant_id = $1 and id = $2',
             [this.workspace.tenantId, party],
         );
+        if (!summary) return { data: null };
+        const patient = await this.existingPatient(party);
+        if (!patient && (await this.patientElsewhere(party)))
+            return {
+                data: {
+                    id: summary.id,
+                    name: null,
+                    gender: null,
+                    birth_date: null,
+                    birth_place: null,
+                    patient: null,
+                    registered_elsewhere: true,
+                },
+            };
         return {
-            data: summary
-                ? { ...summary, patient: await this.existingPatient(party) }
-                : null,
+            data: { ...summary, patient, registered_elsewhere: false },
         };
+    }
+
+    private async patientElsewhere(partyId: string): Promise<boolean> {
+        return (
+            (await this.db.one(
+                z.object({ found: z.boolean() }),
+                'select true as found from sim_m_pasien where tenant_id = $1 and party_id = $2 and deleted_at is null limit 1',
+                [this.workspace.tenantId, partyId],
+            )) !== undefined
+        );
     }
 
     private async partyByNik(nik: string): Promise<string | null> {
@@ -515,7 +566,7 @@ export class Patients {
         return found?.party_id ?? null;
     }
 
-    // Catatan pasien party ini yang terlihat bagi pengguna (sekelompok dengan unitnya).
+    // Catatan pasien party ini yang terlihat bagi pengguna.
     private async existingPatient(partyId: string) {
         const bindings: Bind[] = [this.workspace.tenantId, partyId];
         const bind = (value: Bind) => {
@@ -525,7 +576,7 @@ export class Patients {
         return (
             (await this.db.one(
                 z.object({ id: z.string(), nrm: z.string() }),
-                `select k.id, k.nrm from kes_pasien k
+                `select k.id, k.nrm from sim_m_pasien k
                  where k.tenant_id = $1 and k.party_id = $2 and k.deleted_at is null and ${await this.visibility(bind)}
                  order by k.created_at limit 1`,
                 bindings,
@@ -607,7 +658,10 @@ export class Patients {
                 add(errors, field, `Paling panjang ${max} karakter.`);
         }
         const methods = input.payment_methods ?? [];
-        if (!methods.length)
+        if (
+            !methods.length &&
+            (!creating || input.payment_methods !== undefined)
+        )
             add(errors, 'payment_methods', 'Pilih tipe pasien.');
         if (methods.filter((method) => method.is_primary).length > 1)
             add(errors, 'payment_methods', 'Pilih satu cara bayar utama.');
@@ -687,7 +741,7 @@ export class Patients {
                 : Bun.randomUUIDv7();
         const replay = await this.db.one(
             z.object({ id: z.string() }),
-            'select id from kes_pasien where tenant_id = $1 and creation_key = $2',
+            'select id from sim_m_pasien where tenant_id = $1 and creation_key = $2',
             [this.workspace.tenantId, key],
         );
         if (replay)
@@ -701,6 +755,18 @@ export class Patients {
             };
         const nik = trimmed(input.nik)?.replace(/\s+/gu, '') ?? null;
         const existingParty = nik ? await this.partyByNik(nik) : null;
+        // Cara bayar yang tidak dikirim memakai tipe pasien bawaan beserta penjamin bawaannya.
+        if (input.payment_methods === undefined) {
+            const fallback = await this.defaultPaymentMethod();
+            if (fallback)
+                input.payment_methods = [
+                    {
+                        patient_type_id: fallback.patient_type_id,
+                        guarantor_id: fallback.guarantor_id,
+                        is_primary: true,
+                    },
+                ];
+        }
         const errors = this.check(input, existingParty === null, true);
         await this.checkReferences(input, errors);
         if (Object.keys(errors).length) validation(errors);
@@ -711,6 +777,7 @@ export class Patients {
             if (existingParty) {
                 const already = await this.patientInGroup(
                     existingParty,
+                    legalEntityId,
                     unitId,
                 );
                 if (already)
@@ -740,13 +807,15 @@ export class Patients {
                     reference: numberReference,
                     key: `patient:${key}`,
                     documentDate: today(),
-                    legalEntityId,
+                    // Tepat satu nilai scope: unit kepala kelompok, atau legal entity bila unit tidak ditempatkan.
+                    legalEntityId:
+                        numberingUnit === null ? legalEntityId : null,
                     operatingUnitId: numberingUnit,
                 }),
             );
             const stamp = nowSql();
             try {
-                await this.db.insert('kes_pasien', {
+                await this.db.insert('sim_m_pasien', {
                     id,
                     tenant_id: this.workspace.tenantId,
                     party_id: partyId,
@@ -763,7 +832,10 @@ export class Patients {
                 if (
                     sqlErrorCode(error) === '23505' &&
                     error instanceof Error &&
-                    error.message.includes('kes_pasien_party_unique')
+                    (error.message.includes('sim_m_pasien_party_unit_unique') ||
+                        error.message.includes(
+                            'sim_m_pasien_party_legal_entity_unique',
+                        ))
                 )
                     validation({
                         nik: 'Orang ini sudah terdaftar sebagai pasien di kelompok ini.',
@@ -789,14 +861,23 @@ export class Patients {
         };
     }
 
-    // NRM pasien party ini yang unit pendaftarnya sekelompok dengan unit yang disebut.
-    private async patientInGroup(partyId: string, unitId: string) {
-        const members = await this.sharing.members([unitId]);
+    // NRM pasien party ini yang sudah terlihat dari legal entity dan unit pendaftar, sehingga orang yang sama tidak
+    // didaftarkan dua kali di data pasien yang dipakai bersama.
+    private async patientInGroup(
+        partyId: string,
+        legalEntityId: string,
+        unitId: string,
+    ) {
+        const bindings: Bind[] = [this.workspace.tenantId, partyId];
+        const bind = (value: Bind) => {
+            bindings.push(value);
+            return `$${bindings.length}`;
+        };
         const found = await this.db.one(
             z.object({ nrm: z.string() }),
-            `select nrm from kes_pasien where tenant_id = $1 and party_id = $2 and deleted_at is null
-               and org_unit_id in (${members.map((_, index) => `$${index + 3}`).join(',')}) limit 1`,
-            [this.workspace.tenantId, partyId, ...members],
+            `select k.nrm from sim_m_pasien k where k.tenant_id = $1 and k.party_id = $2 and k.deleted_at is null
+               and ${await this.sharing.clause(legalEntityId, [unitId], bind)} limit 1`,
+            bindings,
         );
         return found?.nrm ?? null;
     }
@@ -942,7 +1023,7 @@ export class Patients {
         const methods = input.payment_methods ?? [];
         const types = await this.db.rows(
             z.object({ id: z.string() }),
-            'select id from kes_tipe_pasien where tenant_id = $1 and deleted_at is null and aktif',
+            'select id from sim_m_tipe_pasien where tenant_id = $1 and deleted_at is null and aktif',
             [this.workspace.tenantId],
         );
         const typeIds = new Set(types.map((row) => row.id));
@@ -950,7 +1031,7 @@ export class Patients {
             (
                 await this.db.rows(
                     z.object({ id: z.string(), tipe_pasien_id: z.string() }),
-                    'select id, tipe_pasien_id from kes_penjamin where tenant_id = $1 and deleted_at is null and aktif',
+                    'select id, tipe_pasien_id from sim_m_penjamin where tenant_id = $1 and deleted_at is null and aktif',
                     [this.workspace.tenantId],
                 )
             ).map((row) => [row.id, row.tipe_pasien_id]),
@@ -977,7 +1058,7 @@ export class Patients {
         if (Object.keys(errors).length) validation(errors);
         const stamp = nowSql();
         await this.db.execute(
-            'update kes_pasien_cara_bayar set deleted_at = $1, updated_at = $1 where tenant_id = $2 and pasien_id = $3 and deleted_at is null',
+            'update sim_m_pasien_cara_bayar set deleted_at = $1, updated_at = $1 where tenant_id = $2 and pasien_id = $3 and deleted_at is null',
             [stamp, this.workspace.tenantId, patientId],
         );
         const primary = Math.max(
@@ -985,7 +1066,7 @@ export class Patients {
             0,
         );
         for (const [index, method] of methods.entries())
-            await this.db.insert('kes_pasien_cara_bayar', {
+            await this.db.insert('sim_m_pasien_cara_bayar', {
                 id: Bun.randomUUIDv7(),
                 tenant_id: this.workspace.tenantId,
                 pasien_id: patientId,
@@ -1010,7 +1091,7 @@ export class Patients {
         if (Object.keys(errors).length) validation(errors);
         await this.db.transaction(async () => {
             const claimed = await this.db.execute(
-                'update kes_pasien set version = $1 where tenant_id = $2 and id = $3 and version = $1 and deleted_at is null',
+                'update sim_m_pasien set version = $1 where tenant_id = $2 and id = $3 and version = $1 and deleted_at is null',
                 [version, this.workspace.tenantId, found.id],
             );
             if (!claimed) coded(409, 'stale_version', staleMessage);
@@ -1023,7 +1104,7 @@ export class Patients {
             const names = Object.keys(columns);
             if (names.length)
                 await this.db.execute(
-                    `update kes_pasien set ${names.map((name, index) => `${name} = $${index + 1}`).join(', ')},
+                    `update sim_m_pasien set ${names.map((name, index) => `${name} = $${index + 1}`).join(', ')},
                      updated_at = $${names.length + 1}
                  where tenant_id = $${names.length + 2} and id = $${names.length + 3}`,
                     [
@@ -1049,7 +1130,7 @@ export class Patients {
         const found = await this.require(id);
         const stamp = nowSql();
         const deleted = await this.db.execute(
-            'update kes_pasien set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
+            'update sim_m_pasien set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
             [
                 stamp,
                 this.workspace.tenantId,

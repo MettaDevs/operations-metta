@@ -4,6 +4,7 @@ import { createRoute, createRouter } from '@tanstack/react-router';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcSetupGuarantorGuarantorsPage } from '../modules/healthcare/src/setup/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcSetupPatientTypePatientTypesPage } from '../modules/healthcare/src/setup/patient-type/patient-types.page.tsx';
+import { page as modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage } from '../modules/healthcare/src/setup/sharing-policy/sharing-policies.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -54,6 +55,18 @@ const modulesHealthcareSrcSetupPatientTypePatientTypesRoute = createRoute({
         modulesHealthcareSrcSetupPatientTypePatientTypesPage.validateSearch,
     staticData: {
         title: modulesHealthcareSrcSetupPatientTypePatientTypesPage.title,
+    },
+});
+
+const modulesHealthcareSrcSetupSharingPolicySharingPoliciesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.path,
+    component:
+        modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.component,
+    validateSearch:
+        modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.title,
     },
 });
 
@@ -165,6 +178,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcSetupGuarantorGuarantorsRoute,
         modulesHealthcareSrcSetupPatientTypePatientTypesRoute,
+        modulesHealthcareSrcSetupSharingPolicySharingPoliciesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,

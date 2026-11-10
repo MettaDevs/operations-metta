@@ -23,13 +23,14 @@ export type Rule =
     | { kind: 'required'; when?: boolean; message?: string }
     | { kind: 'prohibited'; when: boolean; message: string }
     | { kind: 'string' }
-    | { kind: 'max'; length: number }
-    | { kind: 'size'; length: number }
+    | { kind: 'max'; length: number; message?: string }
+    | { kind: 'size'; length: number; message?: string }
     | { kind: 'regex'; pattern: RegExp; message?: string }
     | { kind: 'in'; values: readonly string[]; message?: string };
 
-// Pesan galat satu field dengan urutan dan bunyi validator Laravel. Aturan wajib dan larangan yang gagal
-// menghentikan pemeriksaan field itu; aturan lain dilewati selama nilainya kosong.
+// Pesan galat satu field dengan urutan validator Laravel. Aturan wajib dan larangan yang gagal menghentikan
+// pemeriksaan field itu; aturan lain dilewati selama nilainya kosong. Bunyi bawaan berbahasa Inggris hanya untuk
+// kiriman yang tidak mungkin datang dari layar; field yang bisa salah diisi pengguna memberi `message` sendiri.
 export function fieldErrors(
     field: string,
     value: unknown,
@@ -61,7 +62,8 @@ export function fieldErrors(
                     [...value].length > rule.length
                 )
                     errors.push(
-                        `The ${attribute} field must not be greater than ${rule.length} characters.`,
+                        rule.message ??
+                            `The ${attribute} field must not be greater than ${rule.length} characters.`,
                     );
                 break;
             case 'size':
@@ -72,7 +74,8 @@ export function fieldErrors(
                     [...value].length !== rule.length
                 )
                     errors.push(
-                        `The ${attribute} field must be ${rule.length} characters.`,
+                        rule.message ??
+                            `The ${attribute} field must be ${rule.length} characters.`,
                     );
                 break;
             case 'regex':

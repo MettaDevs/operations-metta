@@ -10,6 +10,8 @@ export const guarantorRowSchema = z.object({
     patient_type_id: z.string(),
     patient_type_name: z.string(),
     is_active: z.boolean(),
+    // Penjamin bawaan tipe pasiennya. Paling banyak satu per tipe pasien (sim_m_penjamin_bawaan_unique).
+    is_default: z.boolean(),
     version: z.number(),
 });
 
@@ -24,5 +26,6 @@ export const guarantorInputSchema = z.object({
     name: z.string().nullable().optional(),
     patient_type_id: z.string(),
     is_active: z.boolean().optional(),
+    is_default: z.boolean().optional(),
     version: z.number().optional(),
 });

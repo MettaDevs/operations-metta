@@ -5,6 +5,7 @@ import {
     type NumberRequest,
     NumberSequences,
 } from '../../../src/foundation/number-sequence/index.ts';
+import { NumberSequenceDirectory } from '../../../src/foundation/number-sequence/number-sequence.service.ts';
 import { loadConfig } from '../../../src/platform/config/index.ts';
 import { Database, createPool } from '../../../src/platform/database/index.ts';
 import { HttpFailure } from '../../../src/platform/http/index.ts';
@@ -16,7 +17,7 @@ import {
     createReference,
     createSequence,
 } from '../../support/number-sequence-fixtures.ts';
-import { createTenant } from '../../support/tenant-fixtures.ts';
+import { createTenant, entitle } from '../../support/tenant-fixtures.ts';
 
 const settings = {
     status: 'active',
@@ -50,6 +51,13 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     afterAll(async () => {
         await pool.end();
     });
+
+    // Tenant yang berhak memakai module uji, supaya reference module itu tersedia baginya.
+    async function entitledTenant(): Promise<string> {
+        const tenantId = await createTenant(pool);
+        await entitle(pool, tenantId, appId);
+        return tenantId;
+    }
 
     async function withDb<T>(work: (db: Database) => Promise<T>): Promise<T> {
         const connection = await pool.reserve();
@@ -99,7 +107,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     }
 
     test('preallocated tenant sequence issues numbers in order from one block', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(
             pool,
@@ -138,7 +146,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('the same idempotency key replays the same number', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(
             pool,
@@ -160,7 +168,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('without preallocation a returned number is reused before the counter moves', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(pool, tenantId, reference.id, {
             preallocation_enabled: false,
@@ -189,7 +197,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a number already recorded as issued is skipped', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(
             pool,
@@ -207,7 +215,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('the maximum stops issuing', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         await createSequence(pool, tenantId, reference.id, {
             minimum_number: 1,
@@ -224,7 +232,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('issuing outside the document transaction is a programming error', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         await createSequence(pool, tenantId, reference.id, {});
         expect(
@@ -241,7 +249,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('two units in one tenant each have their own sequence and format for one reference', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const company = await createLegalEntity(pool, tenantId, 'PTA');
         const unitA = await createOperatingUnit(pool, tenantId, 'Puskesmas A');
         const unitB = await createOperatingUnit(pool, tenantId, 'Puskesmas B');
@@ -285,7 +293,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('the organization segment of a unit sequence prints the unit number, never its id', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const company = await createLegalEntity(pool, tenantId, 'PTA');
         const numbered = await createOperatingUnit(
             pool,
@@ -356,7 +364,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('the scope comes from the document and a missing scope is refused, not redirected', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const companyA = await createLegalEntity(pool, tenantId, 'PTA');
         const companyB = await createLegalEntity(pool, tenantId, 'PTB');
         const reference = await createReference(pool, appId, 'Dokumen uji', [
@@ -395,7 +403,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('the fiscal period comes from the document date, not from today', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const calendar = await createFiscalCalendar(
             pool,
             tenantId,
@@ -438,7 +446,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a legal entity and fiscal period scope picks the sequence of the document date', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const calendar = await createFiscalCalendar(pool, tenantId, [2026]);
         const company = await createLegalEntity(
             pool,
@@ -485,7 +493,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a number is not issued when the document fails to save', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(
             pool,
@@ -521,7 +529,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('parallel documents on separate connections never share a number', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         await createSequence(pool, tenantId, reference.id, {
             preallocation_quantity: 3,
@@ -562,7 +570,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a continuous number from a failed document returns to the pool', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Faktur');
         await createSequence(pool, tenantId, reference.id, {
             is_continuous: true,
@@ -593,7 +601,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('scope and its value cannot change after creation, Continuous can', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const companyA = await createLegalEntity(pool, tenantId, 'PTA');
         const companyB = await createLegalEntity(pool, tenantId, 'PTB');
         const reference = await createReference(pool, appId, 'Dokumen uji', [
@@ -685,7 +693,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('one active sequence per scope value, one scope type per reference', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const company = await createLegalEntity(pool, tenantId, 'PTA');
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const create = (changes: Record<string, unknown>) =>
@@ -737,7 +745,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('identical formats that would collide inside one company are refused', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const companyA = await createLegalEntity(pool, tenantId, 'PTA');
         const companyB = await createLegalEntity(pool, tenantId, 'PTB');
         const unitA = await createOperatingUnit(pool, tenantId, 'Unit A');
@@ -791,7 +799,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('allow user changes accepts a lower or higher number only when allowed', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Dokumen uji');
         const sequenceId = await createSequence(pool, tenantId, reference.id, {
             preallocation_enabled: false,
@@ -836,7 +844,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('an abandoned continuous reservation expires, shows in the status list, and is cleaned up', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Faktur');
         const sequenceId = await createSequence(pool, tenantId, reference.id, {
             is_continuous: true,
@@ -886,7 +894,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('an expired reservation is released lazily before the next reservation', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Faktur');
         await createSequence(pool, tenantId, reference.id, {
             is_continuous: true,
@@ -920,7 +928,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a number mask groups the digits like an F&O alphanumeric segment', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Nomor bermask');
         const sequenceId = await createSequence(pool, tenantId, reference.id, {
             segments: [{ type: 'number', length: 6, mask: '##.##.##' }],
@@ -972,7 +980,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
     });
 
     test('a reference unique per scope accepts the same format in every unit, and units get it by default', async () => {
-        const tenantId = await createTenant(pool);
+        const tenantId = await entitledTenant();
         const reference = await createReference(pool, appId, 'Nomor per unit', [
             'operating_unit',
         ]);
@@ -1005,6 +1013,112 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
             ).toBe('0001');
         await rows(
             'update app_number_sequence_references set default_per_operating_unit=false where id=$1',
+            [reference.id],
+        );
+    });
+
+    test('defaults per legal entity and per unit coexist for a reference unique per scope, only for entitled tenants', async () => {
+        const reference = await createReference(
+            pool,
+            appId,
+            'Nomor per perusahaan atau unit',
+            ['legal_entity', 'operating_unit'],
+        );
+        await rows(
+            `update app_number_sequence_references set default_per_operating_unit=true, default_per_legal_entity=true,
+                 numbers_unique_per_scope=true, default_settings='{"maximum_number":9999,"segments":[{"type":"number","length":4}]}'
+             where id=$1`,
+            [reference.id],
+        );
+        const tenantId = await entitledTenant();
+        const company = await createLegalEntity(pool, tenantId, 'NPU');
+        const unit = await createOperatingUnit(pool, tenantId, 'Unit kelompok');
+        await withDb(async (db) => {
+            const service = new NumberSequences(db, tenantId, null);
+            await service.createLegalEntityDefaults(company);
+            await service.createUnitDefaults(unit);
+            // Dipanggil ulang tidak membuat sequence kedua.
+            await service.createLegalEntityDefaults(company);
+        });
+        const scopes = await rows(
+            "select scope_type from tenant_number_sequences where reference_id=$1 and tenant_id=$2 and status='active' order by scope_type",
+            [reference.id, tenantId],
+        );
+        expect(scopes.map((row) => row.scope_type)).toEqual([
+            'legal_entity',
+            'operating_unit',
+        ]);
+        // Pemanggil menyebut tepat satu nilai scope; keduanya punya penghitung sendiri.
+        expect(
+            await issue(tenantId, {
+                reference: reference.code,
+                key: 'perusahaan',
+                legalEntityId: company,
+            }),
+        ).toBe('0001');
+        expect(
+            await issue(tenantId, {
+                reference: reference.code,
+                key: 'unit',
+                operatingUnitId: unit,
+            }),
+        ).toBe('0001');
+        // Dokumen yang menyebut keduanya cocok dengan dua sequence dan ditolak, tidak dipilih diam-diam.
+        expect(
+            await failure(
+                issue(tenantId, {
+                    reference: reference.code,
+                    key: 'keduanya',
+                    legalEntityId: company,
+                    operatingUnitId: unit,
+                }),
+            ),
+        ).toContain('lebih dari satu pengaturan nomor');
+
+        // Tenant tanpa entitlement module tidak mendapat sequence bawaannya, dan reference-nya tidak ditawarkan.
+        const outsider = await createTenant(pool);
+        const otherCompany = await createLegalEntity(pool, outsider, 'NPX');
+        const otherUnit = await createOperatingUnit(pool, outsider, 'Unit X');
+        await withDb(async (db) => {
+            const service = new NumberSequences(db, outsider, null);
+            await service.createLegalEntityDefaults(otherCompany);
+            await service.createUnitDefaults(otherUnit);
+            expect(
+                await failure(
+                    service.create({
+                        reference_id: reference.id,
+                        scope_type: 'legal_entity',
+                        legal_entity_id: otherCompany,
+                        status: 'active',
+                        is_continuous: false,
+                        allow_automatic: true,
+                        allow_manual: false,
+                        allow_lower_number: false,
+                        allow_higher_number: false,
+                        reset_period: 'never',
+                        preallocation_enabled: false,
+                        preallocation_quantity: 1,
+                        minimum_number: 1,
+                        maximum_number: 9999,
+                        segments: [{ type: 'number', length: 4 }],
+                    }),
+                ),
+            ).toContain('Pilih jenis nomor yang tersedia.');
+            const { references } = await new NumberSequenceDirectory(
+                db,
+                outsider,
+            ).metadata(true);
+            expect(references.map((item) => item.id)).not.toContain(
+                reference.id,
+            );
+        });
+        const [none] = await rows(
+            'select count(*)::int as count from tenant_number_sequences where reference_id=$1 and tenant_id=$2',
+            [reference.id, outsider],
+        );
+        expect(none?.count).toBe(0);
+        await rows(
+            'update app_number_sequence_references set default_per_operating_unit=false, default_per_legal_entity=false where id=$1',
             [reference.id],
         );
     });

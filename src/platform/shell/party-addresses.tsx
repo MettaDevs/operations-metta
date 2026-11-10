@@ -499,6 +499,7 @@ function RegionFields({
     errors,
     portalContainer,
     required = false,
+    showPostalCode = true,
 }: {
     form: LocationForm;
     setForm: (update: (current: LocationForm) => LocationForm) => void;
@@ -506,6 +507,8 @@ function RegionFields({
     portalContainer: React.RefObject<HTMLElement | null>;
     // Provinsi sampai kelurahan/desa wajib, misalnya alamat KTP pasien.
     required?: boolean;
+    // Form yang tidak memuat kode pos, misalnya kartu pasien yang mengikuti form lamanya, menyembunyikan isiannya.
+    showPostalCode?: boolean;
 }) {
     const levels = useLevelNames(form.country_region_code);
     const indonesia = form.country_region_code === 'ID';
@@ -521,7 +524,14 @@ function RegionFields({
     };
     const children: [RegionId, RegionText][] = [
         ...regionFields.map(([id, text]): [RegionId, RegionText] => [id, text]),
-        ['postal_code_id', 'postal_code'],
+        ...(showPostalCode
+            ? [
+                  ['postal_code_id', 'postal_code'] satisfies [
+                      RegionId,
+                      RegionText,
+                  ],
+              ]
+            : []),
     ];
     const choose = (index: number, value: string | null) => {
         const child = children[index];
@@ -575,19 +585,21 @@ function RegionFields({
                         />
                     </FormControl>
                 ))}
-                <FormControl error={first(errors, 'postal_code')}>
-                    <Input
-                        label="Kode pos"
-                        value={form.postal_code}
-                        data-error-field="postal_code"
-                        onChange={(event) =>
-                            setForm((current) => ({
-                                ...current,
-                                postal_code: event.target.value,
-                            }))
-                        }
-                    />
-                </FormControl>
+                {showPostalCode && (
+                    <FormControl error={first(errors, 'postal_code')}>
+                        <Input
+                            label="Kode pos"
+                            value={form.postal_code}
+                            data-error-field="postal_code"
+                            onChange={(event) =>
+                                setForm((current) => ({
+                                    ...current,
+                                    postal_code: event.target.value,
+                                }))
+                            }
+                        />
+                    </FormControl>
+                )}
             </>
         );
 
@@ -692,12 +704,14 @@ export function AddressRegionFields({
     errors,
     portalContainer,
     required = false,
+    showPostalCode = true,
 }: {
     value: AddressRegionValue;
     onChange: (value: AddressRegionValue) => void;
     errors: Errors;
     portalContainer: React.RefObject<HTMLElement | null>;
     required?: boolean;
+    showPostalCode?: boolean;
 }): ReactNode {
     const form: LocationForm = {
         ...blankLocation(value.country_region_code),
@@ -727,6 +741,7 @@ export function AddressRegionFields({
             errors={errors}
             portalContainer={portalContainer}
             required={required}
+            showPostalCode={showPostalCode}
         />
     );
 }

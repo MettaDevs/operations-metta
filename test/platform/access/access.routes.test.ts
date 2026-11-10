@@ -170,7 +170,9 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
                 }),
             ),
         ).toEqual({
-            duty_codes: ['The duty codes field must have at least 1 items.'],
+            duty_codes: [
+                'Pilih sedikitnya satu tanggung jawab untuk role ini.',
+            ],
         });
         expect(
             await errors(

@@ -89,3 +89,16 @@ export async function grantAllOrganizations(
         [Bun.randomUUIDv7(), tenantId, membershipId],
     );
 }
+
+// Tenant berhak memakai app itu (entitlement aktif), misalnya module healthcare. Reference nomor dan sequence bawaan
+// module hanya tersedia bagi tenant yang berhak.
+export async function entitle(
+    sql: postgres.Sql,
+    tenantId: string,
+    appId: string,
+) {
+    await sql.unsafe(
+        "insert into tenant_app_entitlements (tenant_id, app_id, status, starts_at, created_at, updated_at) values ($1, $2, 'active', now() - interval '1 day', now(), now())",
+        [tenantId, appId],
+    );
+}

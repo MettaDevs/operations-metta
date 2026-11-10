@@ -9,6 +9,8 @@ export const patientTypeRowSchema = z.object({
     // Kode perilaku dari katalog (patient-type.behaviors.ts) yang dinyalakan tipe ini.
     behaviors: z.array(z.string()),
     is_active: z.boolean(),
+    // Tipe bawaan pasien baru. Paling banyak satu per tenant (sim_m_tipe_pasien_bawaan_unique).
+    is_default: z.boolean(),
     version: z.number(),
 });
 
@@ -21,5 +23,6 @@ export const patientTypeInputSchema = z.object({
     name: z.string(),
     behaviors: z.array(z.string()).optional(),
     is_active: z.boolean().optional(),
+    is_default: z.boolean().optional(),
     version: z.number().optional(),
 });

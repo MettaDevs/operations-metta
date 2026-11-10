@@ -20,8 +20,10 @@ export type RoleInput = {
 const stringArray = (
     value: unknown,
     field: string,
-    required: boolean,
+    // Pesan saat daftar wajib dikirim kosong; diisi null untuk daftar yang boleh kosong.
+    emptyMessage: string | null,
 ): { items: string[]; errors: Record<string, string[]> } => {
+    const required = emptyMessage !== null;
     if (value === null || value === undefined)
         return {
             items: [],
@@ -43,10 +45,7 @@ const stringArray = (
             },
         };
     const errors: Record<string, string[]> = {};
-    if (required && value.length === 0)
-        errors[field] = [
-            `The ${field.replaceAll('_', ' ')} field must have at least 1 items.`,
-        ];
+    if (required && value.length === 0) errors[field] = [emptyMessage];
     value.forEach((item, index) => {
         if (typeof item !== 'string' || item === '')
             errors[`${field}.${index}`] = [
@@ -61,13 +60,21 @@ const stringArray = (
 
 export function parseRoleInput(body: unknown): RoleInput {
     const input = laravelBody.parse(body);
-    const duties = stringArray(input.duty_codes, 'duty_codes', true);
-    const children = stringArray(input.child_role_ids, 'child_role_ids', false);
+    const duties = stringArray(
+        input.duty_codes,
+        'duty_codes',
+        'Pilih sedikitnya satu tanggung jawab untuk role ini.',
+    );
+    const children = stringArray(input.child_role_ids, 'child_role_ids', null);
     failOn({
         name: fieldErrors('name', input.name, [
-            { kind: 'required' },
+            { kind: 'required', message: 'Isi nama role.' },
             { kind: 'string' },
-            { kind: 'max', length: 100 },
+            {
+                kind: 'max',
+                length: 100,
+                message: 'Nama role paling banyak 100 karakter.',
+            },
         ]),
         ...duties.errors,
         ...children.errors,

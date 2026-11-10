@@ -11,6 +11,102 @@
         "environments": [
             { "kind": "production", "name": "Produksi" },
             { "kind": "demo", "name": "Demo" }
-        ]
+        ],
+        "modules": ["healthcare"],
+        "sample": {
+            "legal_entities": [
+                {
+                    "name": "PT Klinik Contoh Sehat",
+                    "company_code": "KCS",
+                    "units": [
+                        { "name": "Klinik Sehat Pusat", "number": "KCS-01" },
+                        { "name": "Klinik Sehat Cabang", "number": "KCS-02" }
+                    ]
+                },
+                {
+                    "name": "PT Klinik Contoh Dua",
+                    "company_code": "KCD",
+                    "units": [
+                        { "name": "Klinik Dua Utara", "number": "KCD-01" },
+                        { "name": "Klinik Dua Selatan", "number": "KCD-02" }
+                    ]
+                }
+            ],
+            "roles": [
+                {
+                    "name": "Admin layanan kesehatan (contoh)",
+                    "duties": [
+                        "healthcare.patient.manage",
+                        "healthcare.payment-setup.manage",
+                        "healthcare.patient-sharing.manage"
+                    ]
+                },
+                {
+                    "name": "Petugas pendaftaran (contoh)",
+                    "duties": [
+                        "healthcare.patient.manage",
+                        "healthcare.payment-setup.inquire"
+                    ]
+                }
+            ],
+            "admin": {
+                "role": "Admin layanan kesehatan (contoh)",
+                "unrestricted": ["healthcare.patient-unit"]
+            },
+            "staff": [
+                {
+                    "name": "Petugas Sehat Pusat",
+                    "email": "petugas.pusat@klinik-contoh.test",
+                    "password": "dev-petugas-contoh-saja",
+                    "role": "Petugas pendaftaran (contoh)",
+                    "unit": "KCS-01",
+                    "policy": "healthcare.patient-unit"
+                },
+                {
+                    "name": "Petugas Sehat Cabang",
+                    "email": "petugas.cabang@klinik-contoh.test",
+                    "password": "dev-petugas-contoh-saja",
+                    "role": "Petugas pendaftaran (contoh)",
+                    "unit": "KCS-02",
+                    "policy": "healthcare.patient-unit"
+                },
+                {
+                    "name": "Petugas Dua Utara",
+                    "email": "petugas.utara@klinik-contoh.test",
+                    "password": "dev-petugas-contoh-saja",
+                    "role": "Petugas pendaftaran (contoh)",
+                    "unit": "KCD-01",
+                    "policy": "healthcare.patient-unit"
+                },
+                {
+                    "name": "Petugas Dua Selatan",
+                    "email": "petugas.selatan@klinik-contoh.test",
+                    "password": "dev-petugas-contoh-saja",
+                    "role": "Petugas pendaftaran (contoh)",
+                    "unit": "KCD-02",
+                    "policy": "healthcare.patient-unit"
+                }
+            ],
+            "healthcare": {
+                "patient_types": [
+                    { "code": "UMUM", "name": "Umum", "default": true },
+                    {
+                        "code": "ASR",
+                        "name": "Asuransi",
+                        "behaviors": [
+                            "requires_guarantor",
+                            "requires_card_number"
+                        ]
+                    }
+                ],
+                "guarantors": [
+                    {
+                        "name": "Asuransi Contoh",
+                        "patient_type": "ASR",
+                        "default": true
+                    }
+                ]
+            }
+        }
     }
 ]

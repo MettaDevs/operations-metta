@@ -418,12 +418,12 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
             ((await invalid.json()) as { errors: Record<string, string[]> })
                 .errors,
         ).toEqual({
-            name: ['The name field is required.'],
+            name: ['Isi nama hierarki.'],
             'purpose_codes.1': ['The selected purpose codes.1 is invalid.'],
-            root_organization_id: [
-                'The root organization id field is required.',
+            root_organization_id: ['Pilih organisasi paling atas.'],
+            effective_from: [
+                'Isi tanggal berlaku mulai dengan format dd/mm/yyyy.',
             ],
-            effective_from: ['The effective from field must be a valid date.'],
         });
 
         const foreignRoot = await owner.post(

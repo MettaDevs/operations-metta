@@ -136,7 +136,26 @@ const blankPayment = (): Payment => ({
     is_primary: true,
 });
 
-function paymentsOf(patient: Patient | null) {
+type DefaultPayment = PatientMetadata['default_payment_method'];
+
+// Kartu pasien baru memakai tipe pasien bawaan beserta penjamin bawaannya, bila tenant menandainya.
+function defaultPayment(fallback: DefaultPayment): Payment {
+    if (!fallback) return blankPayment();
+    return {
+        ...blankPayment(),
+        patient_type: {
+            id: fallback.patient_type_id,
+            name: fallback.patient_type_name,
+            behaviors: fallback.behaviors,
+        },
+        guarantor:
+            fallback.guarantor_id && fallback.guarantor_name
+                ? { id: fallback.guarantor_id, name: fallback.guarantor_name }
+                : null,
+    };
+}
+
+function paymentsOf(patient: Patient | null, fallback: DefaultPayment) {
     const methods = (patient?.payment_methods ?? []).map((method): Payment => ({
         key: method.id,
         patient_type: {
@@ -155,12 +174,13 @@ function paymentsOf(patient: Patient | null) {
     const primary =
         methods.find((method) => method.is_primary) ?? methods[0] ?? null;
     return {
-        payment: primary ?? blankPayment(),
+        payment:
+            primary ?? (patient ? blankPayment() : defaultPayment(fallback)),
         otherPayments: methods.filter((method) => method !== primary),
     };
 }
 
-function formOf(patient: Patient | null): Form {
+function formOf(patient: Patient | null, fallback: DefaultPayment): Form {
     return {
         name: text(patient?.name),
         nationality_country_code: patient
@@ -201,7 +221,7 @@ function formOf(patient: Patient | null): Form {
                 ? { value: '', masked: patient.mother_nik }
                 : { value: text(patient.mother_nik), masked: null }
             : { value: '', masked: null },
-        ...paymentsOf(patient),
+        ...paymentsOf(patient, fallback),
     };
 }
 
@@ -365,6 +385,7 @@ function PatientTypeLookup({
                               ...value,
                               code: '',
                               is_active: true,
+                              is_default: false,
                               version: 0,
                           }
                         : null
@@ -432,6 +453,7 @@ function GuarantorLookup({
                               patient_type_id: patientTypeId,
                               patient_type_name: '',
                               is_active: true,
+                              is_default: false,
                               version: 0,
                           }
                         : null
@@ -620,7 +642,8 @@ function PatientCardBody({
 }): ReactNode {
     const permissions = metadata.permissions;
     const [editing, setEditing] = useState(patient === null);
-    const [form, setForm] = useState(() => formOf(patient));
+    const fallback = metadata.default_payment_method;
+    const [form, setForm] = useState(() => formOf(patient, fallback));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -630,7 +653,8 @@ function PatientCardBody({
     // NIK milik party yang sudah ada: isian identitas, alamat, dan kontak tidak dipakai, jadi tidak diwajibkan.
     const partyRequired = !(patient === null && existing !== null);
     const dirty =
-        editing && JSON.stringify(form) !== JSON.stringify(formOf(patient));
+        editing &&
+        JSON.stringify(form) !== JSON.stringify(formOf(patient, fallback));
     useEffect(() => {
         onDirtyChange(dirty);
     }, [dirty, onDirtyChange]);
@@ -683,7 +707,7 @@ function PatientCardBody({
             onCancelNew();
             return;
         }
-        setForm(formOf(patient));
+        setForm(formOf(patient, fallback));
         setErrors({});
         setMessage(null);
         setEditing(false);
@@ -951,6 +975,7 @@ function PatientCardBody({
                         errors={sectionErrors}
                         portalContainer={portalContainer}
                         required={partyRequired && domestic}
+                        showPostalCode={false}
                     />
                 ) : (
                     <>
@@ -960,7 +985,6 @@ function PatientCardBody({
                                 ['city', 'Kabupaten/kota'],
                                 ['district', 'Kecamatan'],
                                 ['village', 'Kelurahan/desa'],
-                                ['postal_code', 'Kode pos'],
                                 ['group_of_houses', 'Dusun/banjar'],
                             ] as const
                         ).map(([key, label]) => (
@@ -1114,6 +1138,11 @@ function PatientCardBody({
                                             Buka pasien itu
                                         </Button>
                                     </span>
+                                ) : existing.registered_elsewhere ||
+                                  existing.name === null ? (
+                                    // Pasien di kelompok atau perusahaan lain: nama dan tanggal lahirnya tidak
+                                    // ditampilkan.
+                                    'NIK sudah terdaftar. Simpan akan mendaftarkan orang itu sebagai pasien di sini; isian identitas, alamat, dan kontak di bawah tidak dipakai.'
                                 ) : (
                                     `NIK ini sudah tercatat atas nama ${existing.name}${existing.birth_date ? `, lahir ${displayDate(existing.birth_date)}` : ''}. Simpan akan mendaftarkan orang itu sebagai pasien; isian identitas, alamat, dan kontak di bawah tidak dipakai.`
                                 )}
@@ -1128,8 +1157,8 @@ function PatientCardBody({
                                 <FormControl
                                     hint={
                                         patient
-                                            ? `Dari pengaturan nomor ${patient.nrm_unit_name}. Pasien didaftarkan di ${patient.org_unit_name}.`
-                                            : 'Diisi otomatis saat disimpan, dari pengaturan nomor unit pemilik kelompok berbagi pasien.'
+                                            ? `Dari pengaturan nomor ${patient.nrm_unit_name ?? patient.legal_entity_name}. Pasien didaftarkan di ${patient.org_unit_name}.`
+                                            : 'Diisi otomatis saat disimpan, dari pengaturan nomor perusahaan, atau unit pemilik kelompok berbagi pasien bila unit Anda ditempatkan di kelompok.'
                                     }
                                 >
                                     <Input
