@@ -92,7 +92,7 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
 
 ### Menjalankan layar di laptop
 
-Server butuh database yang sudah dimigrasi dan `APP_KEY` (32 byte, `base64:...`), sama dengan test. Isi `DB_*`, `APP_KEY`, dan `BASE_DOMAIN=localhost` di `.env` atau env shell, lalu:
+Server butuh database yang sudah dimigrasi dan `APP_KEY` (32 byte, `base64:...`), sama dengan test. Salin `.env.example` ke `.env` dan isi `APP_KEY` (cara membuatnya ada di berkas itu), lalu:
 
 ```bash
 bun run dev:setup  # migration, lalu lingkungan contoh dari dev/tenants.json
