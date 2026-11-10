@@ -10,6 +10,7 @@ import { expireEnvironment, expireRequestSchema } from './expire.service.ts';
 import { migrateEnvironment, migrateRequestSchema } from './migrate.service.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
+import { purgeEnvironment, purgeRequestSchema } from './purge.service.ts';
 import { restoreEnvironment, restoreRequestSchema } from './restore.service.ts';
 
 const knownOperations = [
@@ -18,6 +19,7 @@ const knownOperations = [
     'convert',
     'expire',
     'restore',
+    'purge',
 ] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
@@ -115,6 +117,21 @@ export async function runOperation(
                         `Parameter restore tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await restoreEnvironment(settings, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'purge': {
+                const request = purgeRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter purge tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await purgeEnvironment(settings, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',

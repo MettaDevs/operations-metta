@@ -27,6 +27,11 @@ export {
     type RestoreRequest,
 } from './restore.service.ts';
 export {
+    purgeEnvironment,
+    purgeRequestSchema,
+    type PurgeRequest,
+} from './purge.service.ts';
+export {
     migrateEnvironment,
     migrateRequestSchema,
     type MigrateRequest,

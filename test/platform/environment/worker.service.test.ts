@@ -588,4 +588,139 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             'is not recorded',
         );
     });
+
+    test('purge membuang database demo yang alamatnya sudah nonaktif, dan aman diulang', async () => {
+        const demo = await parameters();
+        demo.environment = { kind: 'demo', name: 'Demo' };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', demo),
+            ),
+        ).toBe('succeeded');
+        const target = {
+            tenant_slug: demo.tenant.slug,
+            database: demo.database,
+        };
+        const purge = { ...target, kind: 'demo' };
+        const exists = async () =>
+            (
+                await runtime.unsafe<{ count: number }[]>(
+                    'select count(*)::int as count from pg_database where datname = $1',
+                    [demo.database],
+                )
+            )[0]?.count;
+
+        // Alamatnya masih aktif: tidak dibuang.
+        const active = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                active.client,
+                claimed('purge', purge),
+            ),
+        ).toBe('failed');
+        expect(active.reports.at(-1)?.failure_message).toContain(
+            'is still active',
+        );
+        expect(await exists()).toBe(1);
+
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('expire', target),
+            ),
+        ).toBe('succeeded');
+        const first = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                first.client,
+                claimed('purge', purge),
+            ),
+        ).toBe('succeeded');
+        expect(first.reports).toEqual([
+            { status: 'running', step: 'check-route' },
+            { status: 'running', step: 'drop-database' },
+            { status: 'succeeded', step: 'done' },
+        ]);
+        expect(await exists()).toBe(0);
+        const [tombstone] = await runtime.unsafe(
+            "select count(*)::int as count from environment_routes where tenant_slug = $1 and kind = 'demo' and disabled_at is not null",
+            [demo.tenant.slug],
+        );
+        expect(tombstone?.count).toBe(1);
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('purge', purge),
+            ),
+        ).toBe('succeeded');
+    }, 120_000);
+
+    test('purge menolak produksi, database runtime, dan database yang ditunjuk alamat aktif lain', async () => {
+        const production = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                production.client,
+                claimed('purge', {
+                    tenant_slug: `purge-${crypto.randomUUID().slice(-8)}`,
+                    kind: 'production',
+                    database: 'env_apa_saja',
+                }),
+            ),
+        ).toBe('failed');
+        expect(production.reports.at(-1)?.failure_message).toContain(
+            'Parameter purge tidak sah',
+        );
+
+        const runtimeDatabase = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                runtimeDatabase.client,
+                claimed('purge', {
+                    tenant_slug: `purge-${crypto.randomUUID().slice(-8)}`,
+                    kind: 'demo',
+                    database: settings.DB_DATABASE,
+                }),
+            ),
+        ).toBe('failed');
+        expect(runtimeDatabase.reports.at(-1)?.failure_message).toContain(
+            'runtime or a system database',
+        );
+
+        const slug = `purge-${crypto.randomUUID().slice(-12)}`;
+        await runtime.unsafe(
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'production', $2, 'Produksi', 'env_dipakai_produksi')",
+            [slug, Bun.randomUUIDv7()],
+        );
+        const shared = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                shared.client,
+                claimed('purge', {
+                    tenant_slug: `other-${crypto.randomUUID().slice(-8)}`,
+                    kind: 'demo',
+                    database: 'env_dipakai_produksi',
+                }),
+            ),
+        ).toBe('failed');
+        expect(shared.reports.at(-1)?.failure_message).toContain(
+            `Address ${slug} (production) is still active`,
+        );
+    });
 });
