@@ -498,11 +498,14 @@ function RegionFields({
     setForm,
     errors,
     portalContainer,
+    required = false,
 }: {
     form: LocationForm;
     setForm: (update: (current: LocationForm) => LocationForm) => void;
     errors: Errors;
     portalContainer: React.RefObject<HTMLElement | null>;
+    // Provinsi sampai kelurahan/desa wajib, misalnya alamat KTP pasien.
+    required?: boolean;
 }) {
     const levels = useLevelNames(form.country_region_code);
     const indonesia = form.country_region_code === 'ID';
@@ -621,6 +624,7 @@ function RegionFields({
                         >
                             <Select
                                 label={label}
+                                required={required && level !== undefined}
                                 portalContainer={portalContainer}
                                 items={items}
                                 value={form[field] || null}
@@ -660,6 +664,70 @@ function RegionFields({
                 </FormControl>
             )}
         </>
+    );
+}
+
+// Wilayah satu alamat (negara sampai kode pos, dan dusun/banjar) untuk form yang menyimpan alamatnya sendiri, misalnya
+// alamat KTP dan domisili di kartu pasien. Pilihan bertingkat dan label tingkatnya sama dengan form alamat party.
+export type AddressRegionValue = Pick<
+    LocationForm,
+    | 'country_region_code'
+    | 'province_id'
+    | 'regency_id'
+    | 'district_id'
+    | 'village_id'
+    | 'postal_code_id'
+    | 'group_of_houses_id'
+    | 'province'
+    | 'city'
+    | 'district'
+    | 'village'
+    | 'group_of_houses'
+    | 'postal_code'
+>;
+
+export function AddressRegionFields({
+    value,
+    onChange,
+    errors,
+    portalContainer,
+    required = false,
+}: {
+    value: AddressRegionValue;
+    onChange: (value: AddressRegionValue) => void;
+    errors: Errors;
+    portalContainer: React.RefObject<HTMLElement | null>;
+    required?: boolean;
+}): ReactNode {
+    const form: LocationForm = {
+        ...blankLocation(value.country_region_code),
+        ...value,
+    };
+    return (
+        <RegionFields
+            form={form}
+            setForm={(update) => {
+                const next = update(form);
+                onChange({
+                    country_region_code: next.country_region_code,
+                    province_id: next.province_id,
+                    regency_id: next.regency_id,
+                    district_id: next.district_id,
+                    village_id: next.village_id,
+                    postal_code_id: next.postal_code_id,
+                    group_of_houses_id: next.group_of_houses_id,
+                    province: next.province,
+                    city: next.city,
+                    district: next.district,
+                    village: next.village,
+                    group_of_houses: next.group_of_houses,
+                    postal_code: next.postal_code,
+                });
+            }}
+            errors={errors}
+            portalContainer={portalContainer}
+            required={required}
+        />
     );
 }
 

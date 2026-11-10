@@ -363,7 +363,9 @@ export class Workspace {
 
     // Data Shell: keanggotaan aktif beserta pilihannya, organisasi yang terjangkau, dan izin Core untuk menyaring
     // menu. Seperti HandleInertiaRequests CoreERP, pengguna tanpa keanggotaan tetap dijawab, dengan membership null.
-    static async shell(db: Database, session: Session) {
+    // `codes`: permission di luar Core yang menjaga menu module (apps.navigation); yang dipegang ikut dikembalikan
+    // supaya menu module tersaring dengan cara yang sama dengan menu Core.
+    static async shell(db: Database, session: Session, codes: string[] = []) {
         const user = session.requireUser();
         const memberships = await this.memberships(db, session);
         const membership =
@@ -384,6 +386,15 @@ export class Workspace {
             };
         }
         const permissions = await this.permissions(db, membership, 'core');
+        const unique = [...new Set(codes)];
+        if (unique.length)
+            for (const code of await this.permissionsWhere(
+                db,
+                membership,
+                `p.code in (${unique.map((_, index) => `$${index + 1}`).join(',')})`,
+                unique,
+            ))
+                permissions.add(code);
         const policies = await this.policies(db, membership);
         const organizations = await this.organizations(
             db,

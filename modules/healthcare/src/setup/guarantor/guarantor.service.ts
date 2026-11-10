@@ -13,6 +13,7 @@ import {
     abort,
     coded,
     expectedVersion,
+    incrementalList,
     lookupId,
     staleMessage,
     validation,
@@ -52,19 +53,35 @@ export class Guarantors {
         private readonly workspace: Workspace,
     ) {}
 
-    // Daftar dipakai juga form pasien, jadi pemegang izin lihat pasien ikut boleh membacanya.
-    async list() {
+    // Daftar bertahap, dipakai juga pilihan penjamin di form pasien, jadi pemegang izin lihat pasien ikut boleh
+    // membacanya. `patient_type_id` menyaring penjamin satu tipe pasien, dan `active=1` hanya yang aktif.
+    async list(parameters: URLSearchParams) {
         if (
             !this.workspace.permissions.has('healthcare.guarantor.read') &&
             !this.workspace.permissions.has('healthcare.patient.read')
         )
             abort(403, 'Tidak diizinkan.');
+        const bindings: (string | null)[] = [this.workspace.tenantId];
+        const filters: string[] = [];
+        const type = lookupId(parameters.get('patient_type_id') ?? '');
+        if (type) {
+            bindings.push(type);
+            filters.push(`g.tipe_pasien_id = $${bindings.length}`);
+        }
+        if (parameters.get('active') === '1') filters.push('g.aktif');
+        const batch = await incrementalList(this.db, {
+            query: `select * from (${rowSql}${filters.map((filter) => ` and ${filter}`).join('')}) guarantors`,
+            bindings,
+            parameters,
+            columns: { name: 'name', patient_type_name: 'patient_type_name' },
+            searchColumns: ['name', 'patient_type_name'],
+            numericColumns: [],
+            defaultSort: 'name',
+            defaultDirection: 'asc',
+        });
         return {
-            data: await this.db.rows(
-                guarantorRowSchema,
-                `${rowSql} order by p.name, t.nama, g.id`,
-                [this.workspace.tenantId],
-            ),
+            data: batch.data.map((row) => guarantorRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
             can_manage: this.workspace.permissions.has(
                 'healthcare.guarantor.update',
             ),

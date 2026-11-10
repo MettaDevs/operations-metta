@@ -3,10 +3,14 @@ import {
     base,
     ok,
     typedBody,
+    typedQuery,
     type Context,
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
-import type { patientTypeInputSchema } from './patient-type.schema.ts';
+import type {
+    patientTypeInputSchema,
+    patientTypeListQuerySchema,
+} from './patient-type.schema.ts';
 import { PatientTypes } from './patient-type.service.ts';
 
 type Input = z.input<typeof patientTypeInputSchema>;
@@ -30,9 +34,15 @@ export function patientTypeRoutes() {
             outputStructure: 'detailed',
         });
     return {
-        healthcarePatientTypeList: route('GET').handler(async ({ context }) =>
-            ok(await (await patientTypes(context)).list()),
-        ),
+        healthcarePatientTypeList: route('GET')
+            .input(typedQuery<z.input<typeof patientTypeListQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await patientTypes(context)
+                    ).list(new URL(context.request.url).searchParams),
+                ),
+            ),
         healthcarePatientTypeCreate: route('POST')
             .input(typedBody<Input>())
             .handler(async ({ context, input }) =>

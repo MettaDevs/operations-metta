@@ -133,10 +133,14 @@ function render(
     switch (segment.type) {
         case 'constant':
             return segment.value;
-        case 'number':
-            return number === null
-                ? '#'.repeat(segment.length)
-                : String(number).padStart(segment.length, '0');
+        case 'number': {
+            // Mask seperti segmen Alphanumeric F&O: setiap # satu digit, karakter lain dicetak apa adanya.
+            const mask = segment.mask ?? '#'.repeat(segment.length);
+            if (number === null) return mask;
+            const digits = String(number).padStart(segment.length, '0');
+            let position = 0;
+            return mask.replace(/#/g, () => digits.charAt(position++));
+        }
         case 'year':
             return String(new Date().getFullYear());
         case 'scope':
@@ -170,6 +174,7 @@ function lengthOf(segment: Segment, scopeCode: string | null): number | null {
         case 'constant':
             return segment.value.length;
         case 'number':
+            return segment.mask?.length ?? segment.length;
         case 'context':
             return segment.length;
         case 'fiscal_period':
@@ -376,6 +381,26 @@ function SegmentValue({
                 />
             </FormControl>
         );
+    // Nilai segmen nomor adalah mask-nya, misalnya ###### atau ##.##.##: jumlah # menjadi panjang nomor.
+    if (segment.type === 'number' && editable)
+        return (
+            <FormControl hint="Setiap # diisi satu digit nomor. Titik, garis miring, garis bawah, atau strip di antaranya ikut dicetak, misalnya ##.##.## menjadi 00.00.01.">
+                <Input
+                    label="Nilai"
+                    value={segment.mask ?? '#'.repeat(segment.length)}
+                    maxLength={40}
+                    onChange={(event) => {
+                        const mask = event.target.value;
+                        const length = mask.replace(/[^#]/g, '').length;
+                        onChange(
+                            /^#*$/.test(mask)
+                                ? { type: 'number', length }
+                                : { type: 'number', length, mask },
+                        );
+                    }}
+                />
+            </FormControl>
+        );
     if (segment.type === 'context' && editable)
         return (
             <FormControl>
@@ -422,7 +447,8 @@ function SegmentLength({
 }): ReactNode {
     if (
         editable &&
-        (segment.type === 'number' || segment.type === 'fiscal_period')
+        ((segment.type === 'number' && segment.mask === undefined) ||
+            segment.type === 'fiscal_period')
     )
         return (
             <FormControl>

@@ -73,6 +73,23 @@ Reference NRM menyalakan `default_per_operating_unit` dan `numbers_unique_per_sc
 
 Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien dan penjamin master tenant, tidak dibatasi unit; daftar keduanya juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module.
 
+## Tipe pasien dan perilakunya
+
+Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di layar **Tipe pasien**. Kode tidak pernah mencocokkan nama atau id tipe pasien; yang dibaca adalah perilaku yang dinyalakan tipe itu.
+
+- Katalog perilaku ada di kode (`src/setup/patient-type/patient-type.behaviors.ts`), dan setiap perilaku diimplementasikan sekali. Isinya sekarang hanya yang dipakai form pasien sistem lama:
+    - `requires_guarantor`: isian Perusahaan (penjamin);
+    - `requires_card_number`: isian No. asuransi.
+- Tipe pasien menyalakan perilaku lewat satu baris per perilaku di `kes_tipe_pasien_perilaku`. Perilaku baru kelak (cek kepesertaan, mode tagihan, wajib rujukan) cukup menjadi kode baru di katalog; tabel dan data pasien tidak berubah.
+- `kes_tipe_pasien.memakai_penjamin` dari `0001` masih ditulis sama dengan `requires_guarantor` untuk kode rilis sebelumnya, dan dibuang di rilis sesudahnya.
+
+## Layar
+
+- **Pasien** (`/healthcare/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili).
+- Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
+- **Tipe pasien** (`/healthcare/patient-types`) dan **Penjamin** (`/healthcare/guarantors`).
+- Menu module ditulis `0002_navigation.sql` ke `apps.navigation` dan disaring Shell dengan permission tiap entri.
+
 ## Penjamin
 
 Penjamin adalah party organisasi berperan `healthcare.guarantor`, dicatat untuk satu tipe pasien di `kes_penjamin`. `POST .../guarantors` memakai organisasi yang sudah ada di buku alamat (`party_id`) atau membuat party organisasi baru (`name`). Nama penjamin diubah di buku alamat.

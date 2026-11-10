@@ -1,4 +1,3 @@
-import type { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
     nowSql,
@@ -9,6 +8,7 @@ import {
     abort,
     coded,
     expectedVersion,
+    incrementalList,
     lookupId,
     staleMessage,
     validation,
@@ -17,9 +17,18 @@ import {
     patientTypeInputSchema,
     patientTypeRowSchema,
 } from './patient-type.schema.ts';
+import {
+    isPatientTypeBehavior,
+    type PatientTypeBehavior,
+} from './patient-type.behaviors.ts';
 
-const rowSql = `select id, kode as code, nama as name, memakai_penjamin as uses_guarantor, aktif as is_active, version
-                from kes_tipe_pasien where tenant_id = $1 and deleted_at is null`;
+const rowSql = `select * from (
+                    select t.id, t.kode as code, t.nama as name, coalesce((select json_agg(b.perilaku order by b.perilaku) from kes_tipe_pasien_perilaku b
+                         where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
+                        '[]'::json) as behaviors,
+                           t.aktif as is_active, t.version
+                    from kes_tipe_pasien t where t.tenant_id = $1 and t.deleted_at is null) patient_types
+                where true`;
 
 function checked(body: unknown) {
     const parsed = patientTypeInputSchema.safeParse(body);
@@ -31,11 +40,14 @@ function checked(body: unknown) {
     else if (code.length > 20) errors.code = 'Paling panjang 20 karakter.';
     if (!name) errors.name = 'Isi nama tipe pasien.';
     else if (name.length > 100) errors.name = 'Paling panjang 100 karakter.';
+    const behaviors = [...new Set(data?.behaviors ?? [])];
+    if (!behaviors.every(isPatientTypeBehavior))
+        errors.behaviors = 'Pilih perilaku dari daftar.';
     if (Object.keys(errors).length || !data) validation(errors);
     return {
         code,
         name,
-        uses_guarantor: data.uses_guarantor ?? false,
+        behaviors: behaviors.filter(isPatientTypeBehavior),
         is_active: data.is_active ?? true,
     };
 }
@@ -49,26 +61,35 @@ function codeTaken(error: unknown): void {
         validation({ code: 'Kode ini sudah dipakai tipe pasien lain.' });
 }
 
-// Tipe pasien milik tenant: Umum, BPJS, Asuransi, Perusahaan, dan seterusnya, diisi admin.
+// Tipe pasien milik tenant, diisi admin. Perilakunya dibaca dari kes_tipe_pasien_perilaku, tidak dari nama atau id.
+// memakai_penjamin (0001) tetap ditulis sama dengan perilaku requires_guarantor untuk kode rilis sebelumnya.
 export class PatientTypes {
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {}
 
-    // Daftar dipakai juga form pasien, jadi pemegang izin lihat pasien ikut boleh membacanya.
-    async list() {
+    // Daftar bertahap, dipakai juga pilihan tipe pasien di form pasien, jadi pemegang izin lihat pasien ikut boleh
+    // membacanya. `active=1` hanya tipe yang aktif.
+    async list(parameters: URLSearchParams) {
         if (
             !this.workspace.permissions.has('healthcare.patient-type.read') &&
             !this.workspace.permissions.has('healthcare.patient.read')
         )
             abort(403, 'Tidak diizinkan.');
+        const batch = await incrementalList(this.db, {
+            query: `${rowSql}${parameters.get('active') === '1' ? ' and is_active' : ''}`,
+            bindings: [this.workspace.tenantId],
+            parameters,
+            columns: { name: 'name', code: 'code' },
+            searchColumns: ['code', 'name'],
+            numericColumns: [],
+            defaultSort: 'name',
+            defaultDirection: 'asc',
+        });
         return {
-            data: await this.db.rows(
-                patientTypeRowSchema,
-                `${rowSql} order by nama, id`,
-                [this.workspace.tenantId],
-            ),
+            data: batch.data.map((row) => patientTypeRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
             can_manage: this.workspace.permissions.has(
                 'healthcare.patient-type.update',
             ),
@@ -77,10 +98,11 @@ export class PatientTypes {
 
     private async row(id: string) {
         const found = lookupId(id)
-            ? await this.db.one(patientTypeRowSchema, `${rowSql} and id = $2`, [
-                  this.workspace.tenantId,
-                  id,
-              ])
+            ? await this.db.one(
+                  patientTypeRowSchema,
+                  `${rowSql} and patient_types.id = $2`,
+                  [this.workspace.tenantId, id],
+              )
             : undefined;
         if (!found) abort(404, 'Not Found');
         return found;
@@ -92,15 +114,19 @@ export class PatientTypes {
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
-            await this.db.insert('kes_tipe_pasien', {
-                id,
-                tenant_id: this.workspace.tenantId,
-                kode: data.code,
-                nama: data.name,
-                memakai_penjamin: data.uses_guarantor,
-                aktif: data.is_active,
-                created_at: stamp,
-                updated_at: stamp,
+            await this.db.transaction(async () => {
+                await this.db.insert('kes_tipe_pasien', {
+                    id,
+                    tenant_id: this.workspace.tenantId,
+                    kode: data.code,
+                    nama: data.name,
+                    memakai_penjamin:
+                        data.behaviors.includes('requires_guarantor'),
+                    aktif: data.is_active,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+                await this.writeBehaviors(id, data.behaviors);
             });
         } catch (error) {
             codeTaken(error);
@@ -114,22 +140,26 @@ export class PatientTypes {
         const current = await this.row(id);
         const data = checked(body);
         const version = expectedVersion(request, body);
-        let updated: number;
+        let updated = 0;
         try {
-            updated = await this.db.execute(
-                `update kes_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, updated_at = $5
+            await this.db.transaction(async () => {
+                updated = await this.db.execute(
+                    `update kes_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, updated_at = $5
                  where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
-                [
-                    data.code,
-                    data.name,
-                    data.uses_guarantor,
-                    data.is_active,
-                    nowSql(),
-                    this.workspace.tenantId,
-                    current.id,
-                    version,
-                ],
-            );
+                    [
+                        data.code,
+                        data.name,
+                        data.behaviors.includes('requires_guarantor'),
+                        data.is_active,
+                        nowSql(),
+                        this.workspace.tenantId,
+                        current.id,
+                        version,
+                    ],
+                );
+                if (updated)
+                    await this.writeBehaviors(current.id, data.behaviors);
+            });
         } catch (error) {
             codeTaken(error);
             throw error;
@@ -156,15 +186,32 @@ export class PatientTypes {
         return { status: 204, headers: {}, body: undefined };
     }
 
-    // Tipe pasien aktif milik tenant, untuk memeriksa cara bayar.
-    async active(ids: string[]) {
-        if (!ids.length)
-            return new Map<string, z.infer<typeof patientTypeRowSchema>>();
-        const rows = await this.db.rows(
-            patientTypeRowSchema,
-            `${rowSql} and aktif and id in (${ids.map((_, index) => `$${index + 2}`).join(',')})`,
-            [this.workspace.tenantId, ...ids],
+    // Perilaku yang dinyalakan tipe ini: yang tidak dipilih lagi diarsipkan, yang baru ditambah.
+    private async writeBehaviors(
+        typeId: string,
+        behaviors: PatientTypeBehavior[],
+    ): Promise<void> {
+        const stamp = nowSql();
+        const bindings = [stamp, this.workspace.tenantId, typeId, ...behaviors];
+        await this.db.execute(
+            `update kes_tipe_pasien_perilaku set deleted_at = $1, updated_at = $1
+             where tenant_id = $2 and tipe_pasien_id = $3 and deleted_at is null
+             ${behaviors.length ? `and perilaku not in (${behaviors.map((_, index) => `$${index + 4}`).join(',')})` : ''}`,
+            bindings,
         );
-        return new Map(rows.map((row) => [row.id, row]));
+        for (const behavior of behaviors)
+            await this.db.execute(
+                `insert into kes_tipe_pasien_perilaku (id, tenant_id, tipe_pasien_id, perilaku, created_at, updated_at)
+                 select $1::uuid, $2::uuid, $3::uuid, $4::varchar, $5::timestamp, $5::timestamp
+                 where not exists (select 1 from kes_tipe_pasien_perilaku where tenant_id = $2 and tipe_pasien_id = $3
+                                   and perilaku = $4::varchar and deleted_at is null)`,
+                [
+                    Bun.randomUUIDv7(),
+                    this.workspace.tenantId,
+                    typeId,
+                    behavior,
+                    stamp,
+                ],
+            );
     }
 }
