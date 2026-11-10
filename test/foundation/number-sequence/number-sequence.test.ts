@@ -918,4 +918,94 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
         );
         expect(issued?.count).toBe(1);
     });
+
+    test('a number mask groups the digits like an F&O alphanumeric segment', async () => {
+        const tenantId = await createTenant(pool);
+        const reference = await createReference(pool, appId, 'Nomor bermask');
+        const sequenceId = await createSequence(pool, tenantId, reference.id, {
+            segments: [{ type: 'number', length: 6, mask: '##.##.##' }],
+            maximum_number: 999999,
+            preallocation_enabled: false,
+        });
+        expect(
+            await issue(tenantId, { reference: reference.code, key: 'a' }),
+        ).toBe('00.00.01');
+        expect(
+            await issue(tenantId, { reference: reference.code, key: 'b' }),
+        ).toBe('00.00.02');
+        await rows(
+            'update tenant_number_sequences set allow_higher_number=true where id=$1',
+            [sequenceId],
+        );
+        expect(
+            await issue(tenantId, {
+                reference: reference.code,
+                key: 'c',
+                number: '12.36.65',
+            }),
+        ).toBe('12.36.65');
+        expect(
+            await failure(
+                issue(tenantId, {
+                    reference: reference.code,
+                    key: 'd',
+                    number: '123665',
+                }),
+            ),
+        ).toContain('tidak mengikuti format ##.##.##');
+        const invalid = (mask: string) =>
+            failure(
+                withDb((db) =>
+                    new NumberSequences(db, tenantId, null).create({
+                        ...settings,
+                        reference_id: reference.id,
+                        scope_type: 'tenant',
+                        status: 'draft',
+                        segments: [{ type: 'number', length: 6, mask }],
+                    }),
+                ),
+            );
+        expect(await invalid('##.##.#')).toContain(
+            'jumlah # sama dengan panjang nomor',
+        );
+        expect(await invalid('##A##B##')).toContain('Mask nomor hanya berisi');
+    });
+
+    test('a reference unique per scope accepts the same format in every unit, and units get it by default', async () => {
+        const tenantId = await createTenant(pool);
+        const reference = await createReference(pool, appId, 'Nomor per unit', [
+            'operating_unit',
+        ]);
+        await rows(
+            `update app_number_sequence_references set default_per_operating_unit=true, numbers_unique_per_scope=true,
+                 default_settings='{"maximum_number":9999,"segments":[{"type":"number","length":4}]}' where id=$1`,
+            [reference.id],
+        );
+        const first = await createOperatingUnit(pool, tenantId, 'Unit satu');
+        const second = await createOperatingUnit(pool, tenantId, 'Unit dua');
+        await withDb(async (db) => {
+            const service = new NumberSequences(db, tenantId, null);
+            await service.createUnitDefaults(first);
+            await service.createUnitDefaults(second);
+            // Dipanggil ulang tidak membuat sequence kedua.
+            await service.createUnitDefaults(first);
+        });
+        const [created] = await rows(
+            'select count(*)::int as count, min(maximum_number)::int as maximum from tenant_number_sequences where reference_id=$1 and tenant_id=$2',
+            [reference.id, tenantId],
+        );
+        expect(created).toEqual({ count: 2, maximum: 9999 });
+        for (const unit of [first, second])
+            expect(
+                await issue(tenantId, {
+                    reference: reference.code,
+                    key: unit,
+                    operatingUnitId: unit,
+                }),
+            ).toBe('0001');
+        await rows(
+            'update app_number_sequence_references set default_per_operating_unit=false where id=$1',
+            [reference.id],
+        );
+    });
 });

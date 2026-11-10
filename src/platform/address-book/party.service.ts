@@ -535,6 +535,63 @@ export class Parties {
         };
     }
 
+    // Pintu untuk fitur pemilik peran, misalnya pendaftaran pasien di module: party dibuat di transaksi pemanggil
+    // dengan pemeriksaan isian yang sama dengan buku alamat. Nomor identitas, alamat, dan kontaknya ditulis pemanggil
+    // lewat PartyIdentifications dan PartyAddresses. Pemanggil sudah memeriksa izinnya sendiri, jadi izin buku alamat
+    // tidak diminta di sini.
+    async createForRole(input: Fields, creationKey: string): Promise<string> {
+        if (!this.db.inTransaction)
+            throw new Error('createForRole must run inside a transaction.');
+        (await this.check(input, null)).fail();
+        const { id } = await createParty(
+            this.db,
+            this.workspace.tenantId,
+            this.columns(input, null),
+            creationKey,
+        );
+        await refreshSearchStrings(this.db, this.workspace.tenantId, id);
+        return id;
+    }
+
+    // Mengubah isian identitas party orang dari fitur pemilik peran, di transaksi pemanggil. Versi baris dijaga
+    // pemanggil pada dokumennya sendiri. Isian yang tidak dikirim tidak diubah.
+    async updateForRole(partyId: string, input: Fields): Promise<void> {
+        const current = await this.db.one(
+            z.object({
+                type: z.string(),
+                status: z.string(),
+                name: z.string(),
+                search_name: z.string(),
+            }),
+            'select type, status, name, search_name from parties where tenant_id = $1 and id = $2 and deleted_at is null for update',
+            [this.workspace.tenantId, partyId],
+        );
+        if (!current) abort(404, 'Not Found');
+        (
+            await this.check(
+                { ...input, type: current.type, status: current.status },
+                current,
+            )
+        ).fail();
+        const data = this.columns(
+            { ...input, type: current.type, status: current.status },
+            current,
+        );
+        const columns = Object.keys(data);
+        await this.db.execute(
+            `update parties set ${columns.map((column, index) => `${column} = $${index + 1}`).join(', ')},
+                 updated_at = $${columns.length + 1}
+             where tenant_id = $${columns.length + 2} and id = $${columns.length + 3}`,
+            [
+                ...Object.values(data),
+                nowSql(),
+                this.workspace.tenantId,
+                partyId,
+            ],
+        );
+        await refreshSearchStrings(this.db, this.workspace.tenantId, partyId);
+    }
+
     async update(request: Request, partyId: string, body: unknown) {
         this.workspace.guard('organization', 'update');
         await this.require(partyId);

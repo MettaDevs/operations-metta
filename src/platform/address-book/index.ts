@@ -2,9 +2,19 @@ import { occupationRoutes } from './occupation.routes.ts';
 import { partyAddressRoutes } from './party-address.routes.ts';
 import { partyRoutes } from './party.routes.ts';
 
-export { checkDetails, type PartyDetails } from './party-address.schema.ts';
+export {
+    checkContact,
+    checkDetails,
+    checkLocation,
+    type PartyDetails,
+} from './party-address.schema.ts';
 export { PartyAddresses } from './party-address.service.ts';
+export {
+    maskNumber,
+    PartyIdentifications,
+} from './party-identification.service.ts';
 export { registerPartyRole } from './party-role.service.ts';
+export { Parties } from './party.service.ts';
 
 // Buku alamat global: party (orang dan organisasi), alamat, kontak, nomor identitas, hubungan, peran, dan cek data
 // ganda. Route pengguna tenant di bawah `/api/v1/parties`, `/api/v1/organizations/{id}/...`, dan

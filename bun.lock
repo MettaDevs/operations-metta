@@ -43,6 +43,9 @@
     "modules/asset-management": {
       "name": "@operations-metta/asset-management",
     },
+    "modules/healthcare": {
+      "name": "@operations-metta/healthcare",
+    },
     "packages/ui": {
       "name": "@operations-metta/ui",
       "dependencies": {
@@ -200,6 +203,8 @@
     "@opentelemetry/api": ["@opentelemetry/api@1.10.0", "", {}, "sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ=="],
 
     "@operations-metta/asset-management": ["@operations-metta/asset-management@workspace:modules/asset-management"],
+
+    "@operations-metta/healthcare": ["@operations-metta/healthcare@workspace:modules/healthcare"],
 
     "@operations-metta/ui": ["@operations-metta/ui@workspace:packages/ui"],
 

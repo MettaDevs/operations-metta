@@ -188,10 +188,11 @@ for (const file of checked) {
                 `${found}; ${ownAudience} files must not import ${targetAudience} files.`,
             );
     }
+    // Awalan tabel setiap module: aset_ milik asset-management, kes_ milik healthcare.
     if (inCore)
-        for (const match of text.matchAll(/aset_/g))
+        for (const match of text.matchAll(/aset_|(?<![a-z])kes_/g))
             violations.push(
-                `${name}:${lineOf(match.index)} contains "aset_"; module tables belong under modules/.`,
+                `${name}:${lineOf(match.index)} contains "${match[0]}"; module tables belong under modules/.`,
             );
 }
 

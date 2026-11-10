@@ -18,8 +18,26 @@ import {
     sequenceSchema,
     sequenceStatuses,
     type Settings,
+    settingsSchema,
     updateSchema,
 } from './number-sequence.schema.ts';
+
+// Setelan bawaan skill number-sequence-design. Reference yang meminta sequence per unit menimpanya lewat
+// default_settings.
+const unitDefaults: Settings = {
+    status: 'active',
+    is_continuous: false,
+    allow_automatic: true,
+    allow_manual: false,
+    allow_lower_number: false,
+    allow_higher_number: false,
+    reset_period: 'never',
+    preallocation_enabled: true,
+    preallocation_quantity: 20,
+    minimum_number: 1,
+    maximum_number: 19999,
+    segments: [{ type: 'number', length: 5 }],
+};
 
 // Segmen yang membedakan periode reset, supaya nomor tidak berulang setelah penghitung direset.
 const periodDiscriminators: Record<string, Segment['type'][]> = {
@@ -38,6 +56,7 @@ const referenceSchema = z.object({
     id: z.string(),
     name: z.string(),
     allowed_scopes: z.array(z.string()),
+    numbers_unique_per_scope: z.boolean(),
     default_settings: z
         .object({ segments: z.array(z.record(z.string(), z.unknown())) })
         .partial()
@@ -88,7 +107,7 @@ export class NumberSequences {
     private async reference(id: string) {
         const reference = await this.db.one(
             referenceSchema,
-            'select id,name,allowed_scopes,default_settings from app_number_sequence_references where id=$1 limit 1',
+            'select id,name,allowed_scopes,numbers_unique_per_scope,default_settings from app_number_sequence_references where id=$1 limit 1',
             [id],
         );
         if (!reference)
@@ -271,7 +290,16 @@ export class NumberSequences {
                 case 'number':
                     if (segment.length < 1 || segment.length > 18)
                         fail('Panjang segmen nomor harus 1 sampai 18.');
-                    length += segment.length;
+                    if (
+                        segment.mask !== undefined &&
+                        (!/^[#._/-]+$/.test(segment.mask) ||
+                            segment.mask.replace(/[^#]/g, '').length !==
+                                segment.length)
+                    )
+                        fail(
+                            'Mask nomor hanya berisi # dan titik, garis miring, garis bawah, atau strip, dengan jumlah # sama dengan panjang nomor.',
+                        );
+                    length += segment.mask?.length ?? segment.length;
                     break;
                 case 'context':
                     if (
@@ -345,21 +373,31 @@ export class NumberSequences {
     // ditolak di sini: format yang sama, tanpa segmen pembeda, dengan rentang yang beririsan.
     private async checkOverlap(
         id: string | null,
-        referenceId: string,
+        reference: z.infer<typeof referenceSchema>,
         scope: {
             scope_type: ScopeType;
             legal_entity_id: string | null;
+            operating_unit_id: string | null;
         },
         settings: Settings,
     ): Promise<void> {
         const others = await this.db.rows(
             sequenceSchema,
             'select * from tenant_number_sequences where tenant_id=$1 and reference_id=$2 and ($3::uuid is null or id<>$3)',
-            [this.tenantId, referenceId, id],
+            [this.tenantId, reference.id, id],
         );
         const types = settings.segments.map((segment) => segment.type);
         for (const other of others) {
             if (canonical(other.segments) !== canonical(settings.segments))
+                continue;
+            // Indeks dokumen reference ini memuat nilai scope-nya (misalnya nomor master yang unik per unit), jadi format
+            // yang sama di unit lain tidak membuat nomor kembar.
+            if (
+                reference.numbers_unique_per_scope &&
+                (other.scope_type !== scope.scope_type ||
+                    other.legal_entity_id !== scope.legal_entity_id ||
+                    other.operating_unit_id !== scope.operating_unit_id)
+            )
                 continue;
             const companies =
                 scope.legal_entity_id !== null &&
@@ -441,7 +479,7 @@ export class NumberSequences {
         await this.checkUnitNumber(data.operating_unit_id, data);
         const id = Bun.randomUUIDv7();
         return this.save(async () => {
-            await this.checkOverlap(null, reference.id, data, data);
+            await this.checkOverlap(null, reference, data, data);
             if (data.status === 'active')
                 await this.checkActiveScopeType(
                     null,
@@ -490,6 +528,33 @@ export class NumberSequences {
         });
     }
 
+    // Sequence bawaan untuk unit yang baru dibuat: satu per reference yang meminta sequence per operating unit
+    // (`default_per_operating_unit`), dengan setelan dari default_settings reference itu. Reference yang sudah punya
+    // sequence untuk unit ini dilewati, jadi aman dipanggil ulang. Core tidak tahu module mana yang meminta.
+    async createUnitDefaults(operatingUnitId: string): Promise<void> {
+        const references = await this.db.rows(
+            z.object({ id: z.string(), default_settings: z.unknown() }),
+            `select r.id, r.default_settings from app_number_sequence_references r
+             where r.default_per_operating_unit
+               and not exists (select 1 from tenant_number_sequences s where s.tenant_id=$1 and s.reference_id=r.id
+                               and s.scope_type='operating_unit' and s.operating_unit_id=$2)
+             order by r.code`,
+            [this.tenantId, operatingUnitId],
+        );
+        for (const reference of references) {
+            const declared = settingsSchema
+                .partial()
+                .parse(reference.default_settings ?? {});
+            await this.create({
+                ...unitDefaults,
+                ...declared,
+                reference_id: reference.id,
+                scope_type: 'operating_unit',
+                operating_unit_id: operatingUnitId,
+            });
+        }
+    }
+
     // Scope dan nilainya tetap. Continuous, Manual, In use/Stopped, Smallest/Largest, Reset every, Allow user
     // changes, dan Preallocation boleh diubah kapan saja, seperti di F&O. Format terkunci begitu nomor pertama terbit.
     async update(id: string, input: unknown): Promise<Sequence> {
@@ -524,7 +589,7 @@ export class NumberSequences {
                     segments:
                         'Format tidak dapat diubah setelah nomor diterbitkan. Buat pengaturan baru, lalu hentikan yang lama.',
                 });
-            await this.checkOverlap(id, current.reference_id, current, data);
+            await this.checkOverlap(id, reference, current, data);
             if (data.status === 'active')
                 await this.checkActiveScopeType(
                     id,
