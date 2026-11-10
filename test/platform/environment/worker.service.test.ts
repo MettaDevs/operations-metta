@@ -7,8 +7,15 @@ import {
     OperationLost,
     type StepReport,
 } from '../../../src/platform/control-plane/index.ts';
-import { runOperation } from '../../../src/platform/environment/index.ts';
-import { readMigrationSource } from '../../../src/platform/migration/index.ts';
+import {
+    provisionEnvironment,
+    provisionRequestSchema,
+    runOperation,
+} from '../../../src/platform/environment/index.ts';
+import {
+    migrate,
+    readMigrationSource,
+} from '../../../src/platform/migration/index.ts';
 
 describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     if (!process.env.DB_HOST) return;
@@ -157,5 +164,121 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             ),
         ).toBe('failed');
         expect(unknown.reports[0]?.failure_message).toContain('purge');
+    });
+
+    test('migrate memasang migration Core yang tertinggal dan migration module yang sudah terpasang saja', async () => {
+        const request = await parameters();
+        const asset = source.modules.get('asset-management') ?? [];
+        expect(asset.length).toBeGreaterThan(1);
+        // Lingkungan yang disiapkan versi kode sebelumnya: migration Core terakhir belum ada.
+        const older = { core: source.core.slice(0, -1), modules: new Map() };
+        await provisionEnvironment(
+            settings,
+            older,
+            provisionRequestSchema.parse(request),
+        );
+        const environment = postgres({
+            host: settings.DB_HOST,
+            port: settings.DB_PORT,
+            database: request.database,
+            username: settings.DB_USERNAME,
+            password: settings.DB_PASSWORD,
+            max: 1,
+            onnotice: () => {},
+        });
+        const applied = async () =>
+            (
+                await environment.unsafe<{ key: string }[]>(
+                    "select owner || '/' || name as key from schema_migrations order by owner, name",
+                )
+            ).map((row) => row.key);
+        try {
+            const last = `core/${source.core.at(-1)!.name}`;
+            expect(await applied()).not.toContain(last);
+
+            const first = recorder();
+            expect(
+                await runOperation(
+                    settings,
+                    source,
+                    first.client,
+                    claimed('migrate', { database: request.database }),
+                ),
+            ).toBe('succeeded');
+            expect(first.reports).toEqual([
+                { status: 'running', step: 'migrate' },
+                { status: 'succeeded', step: 'done' },
+            ]);
+            expect(await applied()).toContain(last);
+            expect(
+                (await applied()).filter((key) => !key.startsWith('core/')),
+            ).toEqual([]);
+
+            // Module yang terpasang di versi sebelumnya ikut dibawa ke migration terakhirnya.
+            await migrate(environment, {
+                core: source.core,
+                modules: new Map([['asset-management', asset.slice(0, -1)]]),
+            });
+            const second = recorder();
+            expect(
+                await runOperation(
+                    settings,
+                    source,
+                    second.client,
+                    claimed('migrate', { database: request.database }),
+                ),
+            ).toBe('succeeded');
+            expect(
+                (await applied()).filter((key) =>
+                    key.startsWith('asset-management/'),
+                ),
+            ).toEqual(asset.map((file) => `asset-management/${file.name}`));
+        } finally {
+            await environment.end();
+        }
+    }, 180_000);
+
+    test('migrate menolak database yang belum disiapkan dan parameter yang tidak sah', async () => {
+        const missing = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                missing.client,
+                claimed('migrate', {
+                    database: `${settings.DB_DATABASE.slice(0, 40)}_none_${crypto.randomUUID().slice(-6)}`,
+                }),
+            ),
+        ).toBe('failed');
+        expect(missing.reports.at(-1)?.failure_message).toContain(
+            'has not been provisioned',
+        );
+        const runtimeDatabase = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                runtimeDatabase.client,
+                claimed('migrate', { database: settings.DB_DATABASE }),
+            ),
+        ).toBe('failed');
+        const extra = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                extra.client,
+                claimed('migrate', { database: 'env_x', admin: {} }),
+            ),
+        ).toBe('failed');
+        expect(extra.reports).toEqual([
+            {
+                status: 'failed',
+                step: 'failed',
+                failure_message: expect.stringContaining(
+                    'Parameter migrate tidak sah',
+                ),
+            },
+        ]);
     });
 });

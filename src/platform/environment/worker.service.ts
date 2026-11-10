@@ -5,10 +5,11 @@ import {
     OperationLost,
 } from '../control-plane/index.ts';
 import type { MigrationSource } from '../migration/index.ts';
+import { migrateEnvironment, migrateRequestSchema } from './migrate.service.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
 
-const knownOperations = ['provision'] as const;
+const knownOperations = ['provision', 'migrate'] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
 function isKnownOperation(value: string): value is KnownOperation {
@@ -31,8 +32,6 @@ export async function runOperation(
         if (!isKnownOperation(operation))
             throw new Error(`Worker ini tidak mengenal operasi ${operation}.`);
         switch (operation) {
-            // KnownOperation baru punya satu anggota, jadi bagi aturan ini perbandingannya selalu benar.
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             case 'provision': {
                 const request = provisionRequestSchema.safeParse(
                     claimed.parameters,
@@ -47,6 +46,21 @@ export async function runOperation(
                     request.data,
                     step,
                 );
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'migrate': {
+                const request = migrateRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter migrate tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await migrateEnvironment(settings, source, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',
