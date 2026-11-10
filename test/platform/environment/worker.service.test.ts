@@ -8,6 +8,7 @@ import {
     type StepReport,
 } from '../../../src/platform/control-plane/index.ts';
 import {
+    findRoute,
     provisionEnvironment,
     provisionRequestSchema,
     runOperation,
@@ -396,6 +397,104 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
         ).toBe('failed');
         expect(invalid.reports.at(-1)?.failure_message).toContain(
             'Parameter convert tidak sah',
+        );
+    });
+
+    test('expire menonaktifkan alamat demo tanpa menyentuh databasenya, dan aman diulang', async () => {
+        const demo = await parameters();
+        demo.environment = { kind: 'demo', name: 'Demo' };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', demo),
+            ),
+        ).toBe('succeeded');
+        expect(
+            await findRoute(runtime, demo.tenant.slug, 'demo'),
+        ).not.toBeNull();
+        const expire = {
+            tenant_slug: demo.tenant.slug,
+            database: demo.database,
+        };
+        const first = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                first.client,
+                claimed('expire', expire),
+            ),
+        ).toBe('succeeded');
+        expect(first.reports).toEqual([
+            { status: 'running', step: 'disable-route' },
+            { status: 'succeeded', step: 'done' },
+        ]);
+        expect(await findRoute(runtime, demo.tenant.slug, 'demo')).toBeNull();
+        const [kept] = await runtime.unsafe(
+            "select count(*)::int as routes, (select count(*)::int from pg_database where datname = $2) as databases from environment_routes where tenant_slug = $1 and kind = 'demo' and disabled_at is not null",
+            [demo.tenant.slug, demo.database],
+        );
+        expect(kept?.routes).toBe(1);
+        expect(kept?.databases).toBe(1);
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('expire', expire),
+            ),
+        ).toBe('succeeded');
+    }, 120_000);
+
+    test('expire tidak menonaktifkan alamat demo milik database lain dan menolak parameter yang tidak sah', async () => {
+        const slug = `expire-${crypto.randomUUID().slice(-12)}`;
+        await runtime.unsafe(
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'demo', $2, 'Demo', 'env_demo_lain')",
+            [slug, Bun.randomUUIDv7()],
+        );
+        const other = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                other.client,
+                claimed('expire', {
+                    tenant_slug: slug,
+                    database: 'env_demo_ini',
+                }),
+            ),
+        ).toBe('failed');
+        expect(other.reports.at(-1)?.failure_message).toContain(
+            'points to database env_demo_lain',
+        );
+        expect(await findRoute(runtime, slug, 'demo')).not.toBeNull();
+
+        const missing = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                missing.client,
+                claimed('expire', {
+                    tenant_slug: `missing-${crypto.randomUUID().slice(-8)}`,
+                    database: null,
+                }),
+            ),
+        ).toBe('succeeded');
+
+        const invalid = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                invalid.client,
+                claimed('expire', { tenant_slug: slug }),
+            ),
+        ).toBe('failed');
+        expect(invalid.reports.at(-1)?.failure_message).toContain(
+            'Parameter expire tidak sah',
         );
     });
 });
