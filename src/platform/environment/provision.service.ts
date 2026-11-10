@@ -12,7 +12,7 @@ export type ProvisionStep =
 
 const reservedDatabases = new Set(['postgres', 'template0', 'template1']);
 
-function connect(settings: DatabaseSettings, database: string) {
+export function connect(settings: DatabaseSettings, database: string) {
     return postgres({
         host: settings.DB_HOST,
         port: settings.DB_PORT,
@@ -26,14 +26,22 @@ function connect(settings: DatabaseSettings, database: string) {
     });
 }
 
-async function createDatabase(
+// Database lingkungan tidak pernah database runtime atau database sistem PostgreSQL.
+export function assertEnvironmentDatabase(
     settings: DatabaseSettings,
     database: string,
-): Promise<void> {
+): void {
     if (database === settings.DB_DATABASE || reservedDatabases.has(database))
         throw new Error(
             `Database ${database} is the runtime or a system database, not an environment database.`,
         );
+}
+
+async function createDatabase(
+    settings: DatabaseSettings,
+    database: string,
+): Promise<void> {
+    assertEnvironmentDatabase(settings, database);
     const sql = connect(settings, settings.DB_DATABASE);
     try {
         // Nama sudah lolos pola huruf kecil, angka, dan garis bawah di schema, jadi aman ditulis sebagai identifier.

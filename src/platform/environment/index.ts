@@ -11,5 +11,10 @@ export {
     provisionEnvironment,
     type ProvisionStep,
 } from './provision.service.ts';
+export {
+    migrateEnvironment,
+    migrateRequestSchema,
+    type MigrateRequest,
+} from './migrate.service.ts';
 export { findRoute, type EnvironmentRoute } from './route.service.ts';
 export { runOperation } from './worker.service.ts';
