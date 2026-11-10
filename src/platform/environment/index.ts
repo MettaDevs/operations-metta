@@ -17,6 +17,11 @@ export {
     type ConvertRequest,
 } from './convert.service.ts';
 export {
+    expireEnvironment,
+    expireRequestSchema,
+    type ExpireRequest,
+} from './expire.service.ts';
+export {
     migrateEnvironment,
     migrateRequestSchema,
     type MigrateRequest,

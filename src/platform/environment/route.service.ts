@@ -11,13 +11,14 @@ const routeSchema = z.object({
 });
 export type EnvironmentRoute = z.infer<typeof routeSchema>;
 
+// Alamat yang dinonaktifkan (lingkungan dihapus lunak) tidak pernah ditemukan, jadi runtime menjawabnya 404.
 export async function findRoute(
     runtime: postgres.Sql,
     tenantSlug: string,
     kind: EnvironmentKind,
 ): Promise<EnvironmentRoute | null> {
     const rows = await runtime.unsafe(
-        'select tenant_id, tenant_slug, kind, name, database_name from environment_routes where tenant_slug = $1 and kind = $2',
+        'select tenant_id, tenant_slug, kind, name, database_name from environment_routes where tenant_slug = $1 and kind = $2 and disabled_at is null',
         [tenantSlug, kind],
         { prepare: true },
     );
