@@ -25,6 +25,7 @@ const rowSchema = z.object({
     updated_at: z.string().nullable(),
     version: z.number(),
 });
+const listRowSchema = rowSchema.pick({ id: true, name: true, version: true });
 const rowSql = `select id, name, ${isoSql('created_at')} as created_at, ${isoSql('updated_at')} as updated_at, version
                 from occupations`;
 const taken = 'Pekerjaan dengan nama ini sudah ada.';
@@ -39,7 +40,7 @@ export class Occupations {
 
     async list(parameters: URLSearchParams) {
         this.workspace.guard('organization', 'read');
-        return incrementalList(this.db, {
+        const batch = await incrementalList(this.db, {
             query: 'select id, name, version from occupations where tenant_id = $1 and deleted_at is null',
             bindings: [this.workspace.tenantId],
             parameters,
@@ -49,6 +50,10 @@ export class Occupations {
             defaultSort: 'name',
             defaultDirection: 'asc',
         });
+        return {
+            data: batch.data.map((row) => listRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
+        };
     }
 
     private name(body: unknown): string {

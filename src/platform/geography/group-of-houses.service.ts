@@ -59,7 +59,7 @@ export class GroupsOfHouses {
             bindings.push(lookupId(village));
             filters.push(`g.village_id = $${bindings.length}`);
         }
-        return incrementalList(this.db, {
+        const batch = await incrementalList(this.db, {
             query: `${rowSql} where ${filters.join(' and ')}`,
             bindings,
             parameters,
@@ -69,6 +69,10 @@ export class GroupsOfHouses {
             defaultSort: 'name',
             defaultDirection: 'asc',
         });
+        return {
+            data: batch.data.map((row) => groupOfHousesRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
+        };
     }
 
     async create(body: unknown) {

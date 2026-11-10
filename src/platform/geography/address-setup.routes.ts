@@ -14,7 +14,7 @@ async function addressSetup(context: Context) {
     return new AddressSetup(context.db, await coreWorkspace(context));
 }
 const query = (context: Context) => new URL(context.request.url).searchParams;
-const read = (route: `/${string}`) =>
+const read = (route: `/${string}` | '') =>
     base.route({
         method: 'GET',
         path: `${path}${route}`,
@@ -26,6 +26,10 @@ const read = (route: `/${string}`) =>
 // karena alamat lain milik layar.
 export function addressSetupRoutes() {
     return {
+        // Props layar Setup alamat, dijaga izin Lihat data referensi seperti layar CoreERP.
+        addressSetupPage: read('').handler(async ({ context }) =>
+            ok((await addressSetup(context)).page()),
+        ),
         // Pemilih wilayah di form alamat; cukup anggota aktif tenant, sama dengan CoreERP yang hanya meminta login.
         regionLookup: read('/lookup/top-down')
             .input(typedQuery<z.input<typeof regionLookupQuerySchema>>())

@@ -50,7 +50,8 @@ export function parseDateInput(text: string): string | undefined {
     return parseDate(iso) ? iso : undefined;
 }
 
-function displayDate(value: string): string {
+/** Tanggal ISO sebagai dd/mm/yyyy, bentuk yang sama dengan isian DatePicker; teks lain dikembalikan apa adanya. */
+export function displayDate(value: string): string {
     return parseDate(value) ? value.split('-').reverse().join('/') : value;
 }
 

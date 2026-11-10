@@ -64,7 +64,7 @@ export class AddressSetup {
     // AddressSetupController::lookupTopDown CoreERP: pilihan bertingkat untuk form alamat. parent_type memilih
     // tingkat di bawah induk yang disebut; province_id, regency_id, dan district_id sekaligus memberi semua tingkat
     // yang induknya diisi.
-    async topDown(parameters: URLSearchParams): Promise<object> {
+    async topDown(parameters: URLSearchParams) {
         const get = (name: string) => parameters.get(name);
         const countryCode = filled(get('country_code'))
             ? get('country_code')
@@ -185,6 +185,17 @@ export class AddressSetup {
             // Negara berkunci kode ISO, bukan uuid.
             idType: filters.section === 'countries' ? 'text' : 'uuid',
         });
+    }
+
+    // Props layar Setup alamat: layar menampilkan aksi ubah hanya bagi pemegang duty Kelola data referensi, sama
+    // dengan izin yang diperiksa route tulisnya.
+    page() {
+        this.workspace.guard('reference-data', 'read');
+        return {
+            canManage: this.workspace.permissions.has(
+                'core.reference-data.update',
+            ),
+        };
     }
 
     // Nama tiap tingkat wilayah satu negara, misalnya Provinsi sampai Dusun/Banjar untuk Indonesia. Layar membaca

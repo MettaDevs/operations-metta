@@ -41,7 +41,7 @@ export function useRecordNavigation<T>({
             pending.current = null;
         } else if (index >= 0 && index + 1 < items.length) {
             pending.current = null;
-            onNavigate(getId(items[index + 1]));
+            onNavigate(getId(items[index + 1]!));
         } else if (!loading) {
             pending.current = null;
         }
@@ -65,7 +65,7 @@ export function useRecordNavigation<T>({
             (index + 1 >= items.length && !(hasMore && loadMore)),
         previous: () => {
             if (!disabled && !loading && !pending.current && index > 0) {
-                onNavigate(getId(items[index - 1]));
+                onNavigate(getId(items[index - 1]!));
             }
         },
         next: () => {
@@ -74,7 +74,7 @@ export function useRecordNavigation<T>({
             }
 
             if (index + 1 < items.length) {
-                onNavigate(getId(items[index + 1]));
+                onNavigate(getId(items[index + 1]!));
             } else if (hasMore && loadMore && currentId) {
                 pending.current = { id: currentId, scope: scopeKey };
 

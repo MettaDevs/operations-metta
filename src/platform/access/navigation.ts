@@ -45,6 +45,42 @@ export const coreNavigation: NavigationGroupEntry[] = [
             },
         ],
     },
+    {
+        id: 'address-book',
+        label: 'Buku alamat',
+        items: [
+            {
+                id: 'parties',
+                label: 'Pihak',
+                href: '/settings/global-address-book',
+                permission: 'core.organization.read',
+            },
+            {
+                id: 'occupations',
+                label: 'Pekerjaan',
+                href: '/settings/occupations',
+                permission: 'core.organization.read',
+            },
+            {
+                id: 'party-duplicate-check',
+                label: 'Cek data ganda',
+                href: '/settings/party-duplicate-check',
+                permission: 'core.organization.read',
+            },
+        ],
+    },
+    {
+        id: 'address-setup',
+        label: 'Setup alamat',
+        items: [
+            {
+                id: 'address-setup',
+                label: 'Pengaturan',
+                href: '/settings/address-setup',
+                permission: 'core.reference-data.read',
+            },
+        ],
+    },
 ];
 
 export type NavigationItem = { id: string; label: string; href: string };

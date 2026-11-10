@@ -1,6 +1,10 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as platformAddressBookDuplicateSettingsPage } from './platform/address-book/duplicate-settings.page.tsx';
+import { page as platformAddressBookGlobalAddressBookPage } from './platform/address-book/global-address-book.page.tsx';
+import { page as platformAddressBookOccupationsPage } from './platform/address-book/occupations.page.tsx';
+import { page as platformGeographyAddressSetupPage } from './platform/geography/address-setup.page.tsx';
 import { page as platformOrganizationHierarchiesPage } from './platform/organization/hierarchies.page.tsx';
 import { page as platformOrganizationLegalEntitiesPage } from './platform/organization/legal-entities.page.tsx';
 import { page as platformOrganizationOperatingUnitsPage } from './platform/organization/operating-units.page.tsx';
@@ -14,6 +18,37 @@ import {
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const platformAddressBookDuplicateSettingsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAddressBookDuplicateSettingsPage.path,
+    component: platformAddressBookDuplicateSettingsPage.component,
+    staticData: { title: platformAddressBookDuplicateSettingsPage.title },
+});
+
+const platformAddressBookGlobalAddressBookRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAddressBookGlobalAddressBookPage.path,
+    component: platformAddressBookGlobalAddressBookPage.component,
+    validateSearch: platformAddressBookGlobalAddressBookPage.validateSearch,
+    staticData: { title: platformAddressBookGlobalAddressBookPage.title },
+});
+
+const platformAddressBookOccupationsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformAddressBookOccupationsPage.path,
+    component: platformAddressBookOccupationsPage.component,
+    validateSearch: platformAddressBookOccupationsPage.validateSearch,
+    staticData: { title: platformAddressBookOccupationsPage.title },
+});
+
+const platformGeographyAddressSetupRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformGeographyAddressSetupPage.path,
+    component: platformGeographyAddressSetupPage.component,
+    validateSearch: platformGeographyAddressSetupPage.validateSearch,
+    staticData: { title: platformGeographyAddressSetupPage.title },
+});
 
 const platformOrganizationHierarchiesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -57,6 +92,10 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     appLayoutRoute.addChildren([
+        platformAddressBookDuplicateSettingsRoute,
+        platformAddressBookGlobalAddressBookRoute,
+        platformAddressBookOccupationsRoute,
+        platformGeographyAddressSetupRoute,
         platformOrganizationHierarchiesRoute,
         platformOrganizationLegalEntitiesRoute,
         platformOrganizationOperatingUnitsRoute,

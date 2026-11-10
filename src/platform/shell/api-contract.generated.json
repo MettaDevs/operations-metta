@@ -177,6 +177,18 @@
             }
         }
     },
+    "addressSetupPage": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/settings/address-setup",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "regionLookup": {
         "~orpc": {
             "errorMap": {},

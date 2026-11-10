@@ -33,20 +33,27 @@ import type {
     ListLoader,
     ListRequest,
 } from '@operations-metta/ui/use-incremental-list';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    draftPayload,
+    emptyPartyDraft,
     errorText,
     FormErrorHeader,
+    orpc,
+    PartyAddressesSection,
+    PartyContactsSection,
     type ApiBody,
+    type PartyDraft,
 } from '../shell/index.ts';
 
 // Layar Perusahaan dan Operating unit, dipindah dari organization-directory CoreERP. Bagian yang bergantung pada fitur
-// yang belum dipindah tidak ditampilkan: alamat dan kontak (buku alamat), identitas cetak, posting finance, dan
-// penanda kode unit yang menahan posting finance.
+// yang belum dipindah tidak ditampilkan: identitas cetak, posting finance, dan penanda kode unit yang menahan posting
+// finance. Alamat dan kontak dibaca dari party organisasi di buku alamat.
 
 export type Organization = ApiBody<'organizationList'>['data'][number];
 type Classification = Organization['classification'];
@@ -292,6 +299,14 @@ function CreateOrganizationDialog({
     };
     const [open, setOpen] = useState(false);
     const [data, setFormData] = useState(blank);
+    const [details, setDetails] = useState<PartyDraft>(emptyPartyDraft);
+    // Pilihan form alamat dan kontak organisasi baru; alamat dan kontaknya disimpan bersama organisasi.
+    const options = useQuery({
+        ...orpc.partyMetadata.queryOptions({
+            select: (response) => response.body.data,
+        }),
+        enabled: open,
+    });
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -300,6 +315,7 @@ function CreateOrganizationDialog({
         setFormData((current) => ({ ...current, [field]: value }));
     const reset = () => {
         setFormData(blank);
+        setDetails(emptyPartyDraft);
         setErrors({});
         setMessage(null);
     };
@@ -314,6 +330,7 @@ function CreateOrganizationDialog({
                     classification,
                     name: data.name,
                     ...organizationFields(data, legalEntity),
+                    party_details: draftPayload(details),
                 },
             });
             // Jawaban pembuatan tidak membawa versi baris; record lengkap diambil dari daftar yang sama.
@@ -425,6 +442,43 @@ function CreateOrganizationDialog({
                                 />
                             </div>
                         </FieldGroup>
+                        {options.data && (
+                            <CollapsibleSectionGroup
+                                defaultValue={[]}
+                                className="mt-4 space-y-3"
+                            >
+                                <CollapsibleSection
+                                    value="addresses"
+                                    title="Alamat"
+                                    summary={`${details.locations.length} alamat`}
+                                >
+                                    <PartyAddressesSection
+                                        owner={null}
+                                        canManage
+                                        draft={{
+                                            value: details,
+                                            onChange: setDetails,
+                                            options: options.data,
+                                        }}
+                                    />
+                                </CollapsibleSection>
+                                <CollapsibleSection
+                                    value="contacts"
+                                    title="Informasi kontak"
+                                    summary={`${details.contacts.length} kontak`}
+                                >
+                                    <PartyContactsSection
+                                        owner={null}
+                                        canManage
+                                        draft={{
+                                            value: details,
+                                            onChange: setDetails,
+                                            options: options.data,
+                                        }}
+                                    />
+                                </CollapsibleSection>
+                            </CollapsibleSectionGroup>
+                        )}
                     </div>
                 </form>
             </PageDialogContent>
@@ -578,6 +632,32 @@ function OrganizationDetail({
                                     props={props}
                                 />
                             </FieldGroup>
+                        </CollapsibleSection>
+                        <CollapsibleSection
+                            value="addresses"
+                            title="Alamat"
+                            summary="Alamat organisasi"
+                        >
+                            <PartyAddressesSection
+                                owner={{
+                                    kind: 'organization',
+                                    id: organization.id,
+                                }}
+                                canManage={canManage}
+                            />
+                        </CollapsibleSection>
+                        <CollapsibleSection
+                            value="contacts"
+                            title="Informasi kontak"
+                            summary="Telepon, email, dan kontak lain"
+                        >
+                            <PartyContactsSection
+                                owner={{
+                                    kind: 'organization',
+                                    id: organization.id,
+                                }}
+                                canManage={canManage}
+                            />
                         </CollapsibleSection>
                     </CollapsibleSectionGroup>
                 </form>
