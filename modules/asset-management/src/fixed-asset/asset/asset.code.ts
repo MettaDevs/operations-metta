@@ -13,15 +13,30 @@ type AssetCodeRequest = {
     acquiredOn: string;
 };
 
+// Organisasi dan tanggal dokumen yang melahirkan aset. Sequence nomor aset dipilih dari nilai ini, bukan dari
+// workspace pengguna.
+type AssetCodeDocument = {
+    legalEntityId: string;
+    operatingUnitId: string | null;
+    documentDate: string;
+};
+
 export function assetCodes(
     db: Database,
     numbers: NumberIssuer,
     workspace: Workspace,
+    document: AssetCodeDocument,
     requests: AssetCodeRequest[],
 ): Promise<Map<string, string>> {
     return db.transaction(async () => {
         const reference = workspace.moduleId + '.asset-code';
-        const fields = await numbers.contextFields(reference);
+        const scope = {
+            reference,
+            documentDate: document.documentDate,
+            legalEntityId: document.legalEntityId,
+            operatingUnitId: document.operatingUnitId,
+        };
+        const fields = await numbers.contextFields(scope);
         const contexts = new Map<string, Record<string, string>>();
         const prepared: {
             key: string;
@@ -89,11 +104,11 @@ export function assetCodes(
         );
         const codes = new Map<string, string>();
         for (const request of prepared) {
-            const code = await numbers.issue(
-                reference,
-                request.key,
-                request.values,
-            );
+            const code = await numbers.issue({
+                ...scope,
+                key: request.key,
+                values: request.values,
+            });
             if (code.length > 50)
                 failSequence(
                     'Format kode aset melebihi 50 karakter. Pendekkan bagian kode pada pengaturan nomor.',

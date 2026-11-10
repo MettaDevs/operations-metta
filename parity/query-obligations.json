@@ -67,6 +67,71 @@
             },
             "reason": "Migration 0002 (id ULID menjadi uuid) menulis ulang trigger aset_capture_book_ledger: source_id tetap varchar sedangkan NEW.id kini uuid, jadi NEW.id menjadi NEW.id::text dan baris komentar 0002 ikut masuk teks statement. Statement lain, jumlah panggilan (3), dan tabel yang ditulis sama. Bila teks trigger berubah lagi, entri ini berhenti cocok dan gate kembali merah.",
             "evidence": "Golden 9 November 2026 di lab (seed uuid hasil migration 0002, image dari branch code/uuid): oracle SQL 44 pemeriksaan bersih termasuk ledger_matches_asset (tepat satu baris ledger acquisition per aset, source_id = id receipt, acquisition_delta = nilai aset); total panggilan nested 196 = 196."
+        },
+        {
+            "operations": [
+                "receipt-create"
+            ],
+            "kind": "transaction-begin",
+            "match": {
+                "expected": 2,
+                "actual": 1
+            },
+            "reason": "Keputusan pemilik produk 10 November 2026: nomor diambil di dalam transaksi dokumen. CoreERP (PenerimaanAsetController::store) menerbitkan nomor penerimaan dalam transaksinya sendiri sebelum transaksi dokumen, sehingga penerimaan yang gagal disimpan tetap menghabiskan satu nomor. Kandidat menerbitkannya sebagai savepoint di dalam transaksi dokumen: satu BEGIN/COMMIT, bukan dua. Penulisan baris, kunci counter dan blok, serta catatan terbit dan audit tetap sama.",
+            "evidence": "Perilaku: test/foundation/number-sequence/number-sequence.test.ts 'a number is not issued when the document fails to save' (CI, PostgreSQL). Golden run lab belum dijalankan untuk perubahan ini."
+        },
+        {
+            "operations": [
+                "receipt-create"
+            ],
+            "kind": "transaction-commit",
+            "match": {
+                "expected": 2,
+                "actual": 1
+            },
+            "reason": "Keputusan pemilik produk 10 November 2026: nomor diambil di dalam transaksi dokumen. CoreERP (PenerimaanAsetController::store) menerbitkan nomor penerimaan dalam transaksinya sendiri sebelum transaksi dokumen, sehingga penerimaan yang gagal disimpan tetap menghabiskan satu nomor. Kandidat menerbitkannya sebagai savepoint di dalam transaksi dokumen: satu BEGIN/COMMIT, bukan dua. Penulisan baris, kunci counter dan blok, serta catatan terbit dan audit tetap sama.",
+            "evidence": "Perilaku: test/foundation/number-sequence/number-sequence.test.ts 'a number is not issued when the document fails to save' (CI, PostgreSQL). Golden run lab belum dijalankan untuk perubahan ini."
+        },
+        {
+            "operations": [
+                "receipt-create"
+            ],
+            "kind": "transaction-savepoint:savepoint",
+            "reason": "Keputusan pemilik produk 10 November 2026: nomor diambil di dalam transaksi dokumen. CoreERP (PenerimaanAsetController::store) menerbitkan nomor penerimaan dalam transaksinya sendiri sebelum transaksi dokumen, sehingga penerimaan yang gagal disimpan tetap menghabiskan satu nomor. Kandidat menerbitkannya sebagai savepoint di dalam transaksi dokumen: satu BEGIN/COMMIT, bukan dua. Penulisan baris, kunci counter dan blok, serta catatan terbit dan audit tetap sama.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "receipt-create"
+            ],
+            "kind": "transaction-savepoint:release",
+            "reason": "Keputusan pemilik produk 10 November 2026: nomor diambil di dalam transaksi dokumen. CoreERP (PenerimaanAsetController::store) menerbitkan nomor penerimaan dalam transaksinya sendiri sebelum transaksi dokumen, sehingga penerimaan yang gagal disimpan tetap menghabiskan satu nomor. Kandidat menerbitkannya sebagai savepoint di dalam transaksi dokumen: satu BEGIN/COMMIT, bukan dua. Penulisan baris, kunci counter dan blok, serta catatan terbit dan audit tetap sama. Laravel juga tidak mengirim RELEASE untuk savepoint bersarang.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "receipt-create",
+                "receipt-complete"
+            ],
+            "kind": "read-extra",
+            "match": "fiscal_periods",
+            "reason": "Satu reference boleh punya banyak sequence (keputusan pemilik produk 10 November 2026). Query pemilihan sequence mencocokkan scope legal entity + periode fiskal lewat fiscal_periods dengan tanggal dokumen. Untuk sequence berscope lain bagian itu tidak memilih baris apa pun.",
+            "evidence": ""
+        },
+        {
+            "operations": [
+                "receipt-create",
+                "receipt-complete"
+            ],
+            "kind": "lock-extra",
+            "match": [
+                [
+                    "fiscal_periods",
+                    "share"
+                ]
+            ],
+            "reason": "Query pemilihan sequence yang sama tetap FOR SHARE seperti CoreERP; fiscal_periods hanya muncul di subquery EXISTS-nya, jadi pemeriksa menghitungnya sebagai tabel terkunci. PostgreSQL hanya mengunci baris tenant_number_sequences (FOR SHARE tanpa OF berlaku untuk tabel di FROM, bukan subquery).",
+            "evidence": ""
         }
     ]
 }

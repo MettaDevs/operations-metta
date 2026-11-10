@@ -628,10 +628,6 @@ export class Receipts {
                 body: { data: replay },
             };
         const data = await this.validate(input);
-        const code = await this.numbers.issue(
-            this.workspace.moduleId + '.penerimaan-aset',
-            'penerimaan-aset:' + key,
-        );
         const id = Bun.randomUUIDv7();
         try {
             await this.db.transaction(async () => {
@@ -642,6 +638,15 @@ export class Receipts {
                     data.cara_perolehan,
                     true,
                 );
+                // Nomor diambil di dalam transaksi dokumen, dari perusahaan dan unit penerimaan ini: penerimaan
+                // yang gagal tersimpan tidak menghabiskan nomor.
+                const code = await this.numbers.issue({
+                    reference: this.workspace.moduleId + '.penerimaan-aset',
+                    key: 'penerimaan-aset:' + key,
+                    documentDate: data.tanggal.slice(0, 10),
+                    legalEntityId: data.legal_entity_id,
+                    operatingUnitId: data.responsible_org_unit_id,
+                });
                 await this.db.insert(headerTable, {
                     ...this.header(data),
                     id,
@@ -886,6 +891,11 @@ export class Receipts {
                 this.db,
                 this.numbers,
                 this.workspace,
+                {
+                    legalEntityId: receipt.legal_entity_id,
+                    operatingUnitId: receipt.responsible_org_unit_id,
+                    documentDate: receipt.tanggal.slice(0, 10),
+                },
                 units.map((unit) => ({
                     key: 'aset:' + unit.key,
                     groupId: unit.line.group_aset_id,
