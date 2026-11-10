@@ -35,6 +35,9 @@ export function maskNumber(number: string): string {
 }
 
 const nikTaken = 'NIK ini sudah tercatat pada pihak lain.';
+// NIK pengganti dari form pasien aplikasi lama: diisi untuk warga negara asing dan boleh dipakai banyak orang, sehingga
+// tidak ikut aturan satu NIK satu orang (indeks party_identifications_nik_unique, Core 0015).
+export const placeholderNik = '9999999999999999';
 const typeTaken =
     'Pihak ini sudah punya nomor jenis ini. Ubah nomor yang sudah ada.';
 
@@ -132,7 +135,7 @@ export class PartyIdentifications {
                 : [this.workspace.tenantId, partyId, typeCode],
         );
         if (sameType) validation({ [`${field}type_code`]: typeTaken });
-        if (typeCode !== 'nik') return;
+        if (typeCode !== 'nik' || number === placeholderNik) return;
         const used = await this.db.one(
             z.object({ found: z.boolean() }),
             `select true as found from party_identifications

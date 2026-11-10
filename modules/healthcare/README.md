@@ -28,7 +28,7 @@ Nama orang tua dan NIK ibu tetap teks seperti form lama, bukan relasi party. `Kl
 `POST /api/modules/healthcare/v1/patients`, dalam satu transaksi:
 
 1. Unit pendaftar adalah unit aktif di tempat kerja, dan unit itu harus termasuk batas data pasien pengguna di perusahaan aktif. Perusahaan aktif menjadi perusahaan pasien.
-2. Party dicari lewat NIK. Bila ada, hanya peran pasien yang ditambahkan; isian identitas form diabaikan. Bila orang itu sudah pasien yang terlihat dari perusahaan dan unit pendaftar, pendaftaran ditolak dengan NRM-nya.
+2. Party dicari lewat NIK (lihat bagian NIK). Bila ada, hanya peran pasien yang ditambahkan; isian identitas form diabaikan.
 3. Bila tidak ada, party orang dibuat beserta nomor identitas, alamat, dan kontaknya.
 4. NRM diambil dari `NumberIssuer` (reference `healthcare.medical-record-number`), lihat bagian NRM.
 5. Baris pasien dan cara bayarnya ditulis, lalu peran party didaftarkan. Kegagalan di langkah mana pun membatalkan semuanya, termasuk nomornya.
@@ -38,7 +38,7 @@ Kunci `Idempotency-Key` yang sama mengembalikan pasien yang sama.
 Aturan wajib mengikuti form pasien sistem lama (`common/patients/form.php`, `Patient_m::rules`, `Patient_model::rules`), tanpa aturan baru:
 
 - nama, jenis kelamin, dan nomor HP wajib;
-- warga negara Indonesia: NIK dan alamat KTP sampai kelurahan/desa beserta alamatnya wajib; alamat domisili yang diisi wajib lengkap;
+- warga negara Indonesia: NIK ("No Identitas harus diisi!") dan alamat KTP sampai kelurahan/desa beserta alamatnya wajib; alamat domisili yang diisi wajib lengkap;
 - warga negara asing: nomor paspor dan alamat domisili wajib;
 - minimal satu tipe pasien; bila cara bayar tidak dikirim saat mendaftar, tipe pasien bawaan beserta penjamin bawaannya dipakai;
 - penjamin harus terdaftar untuk tipe pasien cara bayarnya, seperti pilihan Perusahaan form lama yang disaring per tipe pasien.
@@ -47,13 +47,17 @@ API tidak mewajibkan Perusahaan (penjamin) dan No. asuransi, juga untuk tipe pas
 
 Umur tidak disimpan; ia dihitung dari tanggal lahir saat ditampilkan.
 
-### NIK yang sudah terdaftar
+### NIK
 
-`POST .../patients/party-lookup` memberi layar hasil pencarian NIK lebih dulu:
+Mengikuti validasi form pasien aplikasi lama (keputusan pemilik produk, 10 November 2026: "satu NIK satu orang, pokoknya ikuti validasi aplikasi lama"). Sumbernya `common/views/patients/form.php` dan `common/controllers/Patients.php` aplikasi puskesmas lama.
 
-- pasien yang terlihat bagi pengguna: NRM-nya, dengan tautan untuk membukanya;
-- pasien di kelompok atau perusahaan lain yang tidak terlihat: hanya "NIK sudah terdaftar", tanpa nama, jenis kelamin, atau tanggal dan tempat lahir. Party tetap dipakai ulang saat disimpan;
-- party di buku alamat yang belum menjadi pasien di mana pun: nama dan tanggal lahirnya, seperti #48.
+- NIK hanya angka, tanpa batas panjang, seperti input angka form lama. Isian pengganti seperti `00000000` untuk bayi diterima. Pola ini milik Core (`party_identification_types`, Core `0015`), jadi berlaku juga di Buku alamat.
+- NIK wajib untuk warga negara Indonesia. Warga negara asing tanpa NIK mendapat NIK pengganti `9999999999999999`, seperti form lama.
+- Satu NIK satu orang (indeks unik Core), kecuali NIK pengganti `9999999999999999`, yang boleh dipakai banyak orang dan tidak pernah dipakai untuk mencari party.
+- NIK yang sudah dipakai pasien yang terlihat dari unit pendaftar (cakupan berbagi pasien, bagian Siapa melihat pasien mana) menolak pendaftaran dengan pesan form lama persis: "NIK sudah terdaftar! dengan NRM: {NRM} dan Nama: {nama}". Di aplikasi lama satu database satu klinik; padanannya di sini cakupan berbagi pasien.
+- NIK yang hanya dipakai pasien di luar cakupan itu, atau party buku alamat yang belum menjadi pasien, tidak ditolak dan tidak disebut: party yang sama dipakai ulang dan pasien baru mendapat NRM sendiri.
+- Tidak ada pencarian NIK saat mengetik, karena form lama tidak punya. Mengubah NIK pasien ke NIK pihak lain ditolak Core ("NIK ini sudah tercatat pada pihak lain.").
+- Kunci pasien adalah NRM.
 
 Perilaku sistem lama "ketik NIK lalu ambil data dari PCare untuk pasien BPJS" kelak menjadi perilaku di katalog tipe pasien yang dijalankan module BPJS. Belum dibangun.
 
@@ -66,7 +70,7 @@ Mengikuti pola F&O (keputusan pemilik produk, 10 November 2026). Di F&O operatin
 - **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok berbagi pasien** (`healthcare.patient-sharing`) hanya berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
 - **Kepemilikan tetap.** `sim_m_pasien` menyimpan party, legal entity, unit pendaftar (`org_unit_id`), unit pemilik nomor (`nrm_unit_id`), dan NRM sekali saat didaftarkan. Trigger `pemilik_tetap` menolak perubahannya, juga lewat SQL di luar module. Kelompok dan kebijakan dihitung saat data dibaca, tidak ditulis ke catatan pasien.
 
-Urutan penerapan setiap daftar, detail, ubah, hapus, dan pencarian NIK (`PatientSharing.visible`):
+Urutan penerapan setiap daftar, detail, ubah, hapus, dan pemeriksaan NIK saat mendaftar (`PatientSharing.visible`):
 
 1. tenant dari konteks tepercaya;
 2. permission duty pasien (`healthcare.patient.read` dan seterusnya);
@@ -131,7 +135,6 @@ Semua di bawah `/api/modules/healthcare/v1`.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                     |
 | `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                     |
-| `POST /patients/party-lookup`                                                                                                                                                         | `patient.create`                   |
 | `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                     |
 | `POST /patients`                                                                                                                                                                      | `patient.create`                   |
 | `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                   |

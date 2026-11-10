@@ -542,7 +542,6 @@ export function PatientCard({
     onUpdated,
     onDeleted,
     onCancelNew,
-    onOpenPatient,
     onBusyChange,
     onDirtyChange,
 }: {
@@ -553,7 +552,6 @@ export function PatientCard({
     onUpdated: () => void;
     onDeleted: () => void;
     onCancelNew: () => void;
-    onOpenPatient: (id: string) => void;
     onBusyChange: (busy: boolean) => void;
     onDirtyChange: (dirty: boolean) => void;
 }): ReactNode {
@@ -608,14 +606,11 @@ export function PatientCard({
             }}
             onDeleted={onDeleted}
             onCancelNew={onCancelNew}
-            onOpenPatient={onOpenPatient}
             onBusyChange={onBusyChange}
             onDirtyChange={onDirtyChange}
         />
     );
 }
-
-type ExistingParty = ApiBody<'healthcarePatientPartyLookup'>['data'];
 
 function PatientCardBody({
     patient,
@@ -625,7 +620,6 @@ function PatientCardBody({
     onUpdated,
     onDeleted,
     onCancelNew,
-    onOpenPatient,
     onBusyChange,
     onDirtyChange,
 }: {
@@ -636,7 +630,6 @@ function PatientCardBody({
     onUpdated: () => void;
     onDeleted: () => void;
     onCancelNew: () => void;
-    onOpenPatient: (id: string) => void;
     onBusyChange: (busy: boolean) => void;
     onDirtyChange: (dirty: boolean) => void;
 }): ReactNode {
@@ -647,11 +640,8 @@ function PatientCardBody({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
-    const [existing, setExisting] = useState<ExistingParty>(null);
     const { confirm, confirmation } = useConfirmation();
     const domestic = form.nationality_country_code === INDONESIA;
-    // NIK milik party yang sudah ada: isian identitas, alamat, dan kontak tidak dipakai, jadi tidak diwajibkan.
-    const partyRequired = !(patient === null && existing !== null);
     const dirty =
         editing &&
         JSON.stringify(form) !== JSON.stringify(formOf(patient, fallback));
@@ -668,28 +658,6 @@ function PatientCardBody({
         },
         [onDirtyChange, onBusyChange],
     );
-
-    // Pendaftaran baru mencari party lewat NIK begitu NIK lengkap diketik.
-    const nik = form.nik.value.replace(/\s+/g, '');
-    useEffect(() => {
-        if (patient !== null || !permissions.create) return;
-        if (!/^[0-9]{16}$/.test(nik)) {
-            setExisting(null);
-            return;
-        }
-        let current = true;
-        void api
-            .healthcarePatientPartyLookup({ body: { nik } })
-            .then(({ body }) => {
-                if (current) setExisting(body.data);
-            })
-            .catch(() => {
-                if (current) setExisting(null);
-            });
-        return () => {
-            current = false;
-        };
-    }, [nik, patient, permissions.create]);
 
     const set = <K extends keyof Form>(field: K, value: Form[K]) =>
         setForm((current) => ({ ...current, [field]: value }));
@@ -974,7 +942,7 @@ function PatientCardBody({
                         onChange={(value) => update(value)}
                         errors={sectionErrors}
                         portalContainer={portalContainer}
-                        required={partyRequired && domestic}
+                        required={domestic}
                         showPostalCode={false}
                     />
                 ) : (
@@ -1001,7 +969,7 @@ function PatientCardBody({
                 <FormControl error={sectionErrors.street?.[0] ?? error(prefix)}>
                     <Textarea
                         label="Alamat"
-                        required={partyRequired}
+                        required
                         data-error-field={`${prefix}.street`}
                         placeholder="Jalan, gang, nomor rumah, gedung, kompleks, atau kampung"
                         maxLength={250}
@@ -1067,8 +1035,7 @@ function PatientCardBody({
                             disabled={
                                 busy ||
                                 (patient === null &&
-                                    (metadata.registering_unit === null ||
-                                        existing?.patient != null))
+                                    metadata.registering_unit === null)
                             }
                             pending={busy}
                         />
@@ -1114,38 +1081,6 @@ function PatientCardBody({
                             <AlertDescription>
                                 Pilih unit kerja di tempat kerja yang termasuk
                                 akses Anda sebelum mendaftarkan pasien.
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                    {patient === null && existing && (
-                        <Alert>
-                            <AlertDescription>
-                                {existing.patient ? (
-                                    <span>
-                                        NIK ini sudah terdaftar sebagai pasien
-                                        dengan NRM {existing.patient.nrm}.{' '}
-                                        <Button
-                                            type="button"
-                                            variant="link"
-                                            className="h-auto p-0"
-                                            onClick={() => {
-                                                if (existing.patient)
-                                                    onOpenPatient(
-                                                        existing.patient.id,
-                                                    );
-                                            }}
-                                        >
-                                            Buka pasien itu
-                                        </Button>
-                                    </span>
-                                ) : existing.registered_elsewhere ||
-                                  existing.name === null ? (
-                                    // Pasien di kelompok atau perusahaan lain: nama dan tanggal lahirnya tidak
-                                    // ditampilkan.
-                                    'NIK sudah terdaftar. Simpan akan mendaftarkan orang itu sebagai pasien di sini; isian identitas, alamat, dan kontak di bawah tidak dipakai.'
-                                ) : (
-                                    `NIK ini sudah tercatat atas nama ${existing.name}${existing.birth_date ? `, lahir ${displayDate(existing.birth_date)}` : ''}. Simpan akan mendaftarkan orang itu sebagai pasien; isian identitas, alamat, dan kontak di bawah tidak dipakai.`
-                                )}
                             </AlertDescription>
                         </Alert>
                     )}
@@ -1217,13 +1152,13 @@ function PatientCardBody({
                                     )}
                                 </FormControl>
                                 {input('name', 'Nama', {
-                                    required: partyRequired,
+                                    required: true,
                                     maxLength: 200,
                                 })}
                                 {domestic
                                     ? numberInput('nik', 'NIK', true)
                                     : input('passport_number', 'No. paspor', {
-                                          required: partyRequired,
+                                          required: true,
                                           maxLength: 20,
                                       })}
                                 {numberInput('family_card_number', 'No. KK')}
@@ -1321,7 +1256,7 @@ function PatientCardBody({
                                 {form.family_status === CHILD &&
                                     numberInput('mother_nik', 'NIK ibu')}
                                 {select('gender', 'Jenis kelamin', {
-                                    required: partyRequired,
+                                    required: true,
                                 })}
                                 {date('birth_date', 'Tanggal lahir')}
                                 <FormControl>
@@ -1371,7 +1306,7 @@ function PatientCardBody({
                                     inputMode: 'email',
                                 })}
                                 {input('phone', 'No. HP', {
-                                    required: partyRequired,
+                                    required: true,
                                     maxLength: 30,
                                     inputMode: 'tel',
                                 })}

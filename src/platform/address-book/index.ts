@@ -12,6 +12,7 @@ export { PartyAddresses } from './party-address.service.ts';
 export {
     maskNumber,
     PartyIdentifications,
+    placeholderNik,
 } from './party-identification.service.ts';
 export { registerPartyRole } from './party-role.service.ts';
 export { Parties } from './party.service.ts';
