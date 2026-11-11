@@ -5,6 +5,9 @@ import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
+import { page as modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeAPage } from '../modules/healthcare/src/registration/prototype/registration-prototype-a.page.tsx';
+import { page as modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBPage } from '../modules/healthcare/src/registration/prototype/registration-prototype-b.page.tsx';
+import { page as modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListPage } from '../modules/healthcare/src/registration/prototype/registration-prototype-list.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -67,6 +70,39 @@ const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
         modulesHealthcareSrcPatientPatientPatientsPage.validateSearch,
     staticData: { title: modulesHealthcareSrcPatientPatientPatientsPage.title },
 });
+
+const modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeARoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeAPage.path,
+        component:
+            modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeAPage.component,
+        staticData: {
+            title: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeAPage.title,
+        },
+    });
+
+const modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBPage.path,
+        component:
+            modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBPage.component,
+        staticData: {
+            title: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBPage.title,
+        },
+    });
+
+const modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListPage.path,
+        component:
+            modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListPage.component,
+        staticData: {
+            title: modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListPage.title,
+        },
+    });
 
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -191,6 +227,9 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
+        modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeARoute,
+        modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeBRoute,
+        modulesHealthcareSrcRegistrationPrototypeRegistrationPrototypeListRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
