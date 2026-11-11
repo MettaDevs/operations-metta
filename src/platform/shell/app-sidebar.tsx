@@ -19,9 +19,11 @@ type NavigationItem = NavigationGroup['items'][number];
 // `/api/v1/shell`, sudah disaring izin anggota ini.
 export function AppSidebar({
     navigation,
+    uninstalledApps,
     style,
 }: {
     navigation: ShellData['navigation'];
+    uninstalledApps: ShellData['uninstalled_apps'];
     // Lebar rail dan submenu. Di layar sempit Sidebar dirender sebagai Sheet di luar SidebarProvider, jadi variabel
     // lebarnya harus ikut sampai ke sana; tanpa itu rail melebar mengikuti labelnya dan submenu terpotong.
     style: CSSProperties;
@@ -84,6 +86,7 @@ export function AppSidebar({
                     <div className="flex h-12 w-full shrink-0 items-center justify-center border-b border-sidebar-border">
                         <ProductLauncher
                             navigation={navigation}
+                            uninstalledApps={uninstalledApps}
                             activeId={activeProduct?.id}
                             onLaunch={closeMobile}
                         />
@@ -97,7 +100,7 @@ export function AppSidebar({
                         className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-y-auto px-0.5 py-2 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-sidebar-foreground/40 [&::-webkit-scrollbar-thumb]:bg-clip-content"
                     >
                         {groups.map((group) => {
-                            const Icon = navigationIcon(group.id);
+                            const Icon = navigationIcon(group.icon);
                             const selected = selectedGroup?.id === group.id;
                             const previewed =
                                 previewId === group.id && !selected;

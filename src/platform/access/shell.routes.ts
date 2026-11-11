@@ -31,13 +31,15 @@ export function shellRoutes() {
                         z.object({
                             id: z.string(),
                             name: z.string(),
+                            icon: z.string().nullable(),
                             navigation: z.unknown(),
                         }),
-                        "select id, name, navigation from apps where id <> 'core' and navigation is not null order by id",
+                        "select id, name, icon, navigation from apps where id <> 'core' and navigation is not null order by id",
                     )
                 ).map((row) => ({
                     id: row.id,
                     label: row.name,
+                    icon: row.icon,
                     groups:
                         z.array(navigationGroupSchema).safeParse(row.navigation)
                             .data ?? [],
@@ -70,6 +72,27 @@ export function shellRoutes() {
                           ).map((row) => row.module_id)
                         : [],
                 );
+                // Module yang sudah dibeli tenant tetapi belum terpasang tampil nonaktif di katalog, seperti CoreERP,
+                // supaya orang tahu ia ada tetapi belum bisa dibuka. Tidak disaring izin: duty module baru ada setelah
+                // ia terpasang. Module yang tidak dibeli tidak tampil sama sekali.
+                const uninstalledApps = shell.membership
+                    ? await context.db.rows(
+                          z.object({
+                              id: z.string(),
+                              label: z.string(),
+                              icon: z.string().nullable(),
+                          }),
+                          `select a.id, a.name as label, a.icon from apps a
+                               where a.id <> 'core'
+                                 and exists (select 1 from tenant_app_entitlements e
+                                             where e.tenant_id = $1 and e.app_id = a.id and e.status = 'active'
+                                               and (e.ends_at is null or e.ends_at > current_timestamp))
+                                 and not exists (select 1 from core_module_installations i
+                                                 where i.tenant_id = $1 and i.module_id = a.id and i.status = 'installed')
+                               order by a.id`,
+                          [shell.membership.tenant_id],
+                      )
+                    : [];
                 return ok({
                     auth: {
                         user: {
@@ -99,6 +122,7 @@ export function shellRoutes() {
                         ],
                         shell.permissions,
                     ),
+                    uninstalled_apps: uninstalledApps,
                     environment: context.session.environment
                         ? {
                               kind: context.session.environment.kind,

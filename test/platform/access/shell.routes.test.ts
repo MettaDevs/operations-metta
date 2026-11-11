@@ -30,13 +30,16 @@ type Shell = {
     navigation: {
         id: string;
         label: string;
+        icon: string | null;
         href: string;
         groups: {
             id: string;
             label: string;
+            icon: string | null;
             items: { id: string; label: string; href: string }[];
         }[];
     }[];
+    uninstalled_apps: { id: string; label: string; icon: string | null }[];
     environment: null;
 };
 
@@ -103,6 +106,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
             'auth',
             'workspace',
             'navigation',
+            'uninstalled_apps',
             'environment',
         ]);
         expect(data.auth).toEqual({
@@ -161,11 +165,13 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
             {
                 id: 'sysadmin',
                 label: 'Sys Admin',
+                icon: 'settings',
                 href: '/sysadmin/dashboard',
                 groups: [
                     {
                         id: 'dashboard',
                         label: 'Dashboard',
+                        icon: 'layout-dashboard',
                         items: [
                             {
                                 id: 'dashboard',
@@ -177,6 +183,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                     {
                         id: 'organization',
                         label: 'Organisasi',
+                        icon: 'building-2',
                         items: [
                             {
                                 id: 'legal-entities',
@@ -198,6 +205,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                     {
                         id: 'address-book',
                         label: 'Buku alamat',
+                        icon: 'contact',
                         items: [
                             {
                                 id: 'parties',
@@ -220,6 +228,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
             },
         ]);
         expect(data.environment).toBeNull();
+        expect(data.uninstalled_apps).toEqual([]);
 
         const switched = await owner.put('/api/v1/workspace-context', {
             membership_id: member.membershipId,

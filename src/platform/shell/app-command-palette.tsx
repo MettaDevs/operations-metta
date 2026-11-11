@@ -29,7 +29,7 @@ export function AppCommandPalette({
                 group.items.map((item) => ({
                     ...item,
                     section: `${area.label} · ${group.label}`,
-                    icon: productIcon(area.id),
+                    icon: productIcon(area.icon),
                 })),
             ),
         )
