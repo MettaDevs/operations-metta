@@ -14,9 +14,15 @@ import { z } from 'zod';
 //
 // Hanya halaman yang sudah ada di repo ini yang masuk menu; test memeriksa setiap href punya halaman. Kelompok menu
 // module memakai bentuk yang sama, dibaca dari apps.navigation yang ditulis migration module-nya.
+//
+// Ikon area dan grup adalah nama ikon lucide (`heart-pulse`). Ikon area module datang dari `apps.icon`, ikon grupnya
+// dari `icon` di setiap grup apps.navigation; keduanya ditulis migration module. Server meneruskan namanya apa adanya,
+// dan Shell yang menerjemahkannya ke ikon dari daftar yang ia kenal, dengan ikon bawaan bila tidak dikenal
+// (src/platform/shell/navigation-icons.ts).
 export const navigationGroupSchema = z.object({
     id: z.string(),
     label: z.string(),
+    icon: z.string().optional(),
     items: z.array(
         z.object({
             id: z.string(),
@@ -30,6 +36,7 @@ type NavigationGroupEntry = z.infer<typeof navigationGroupSchema>;
 type NavigationAreaEntry = {
     id: string;
     label: string;
+    icon: string | null;
     groups: NavigationGroupEntry[];
 };
 
@@ -37,10 +44,12 @@ type NavigationAreaEntry = {
 export const sysAdminArea: NavigationAreaEntry = {
     id: 'sysadmin',
     label: 'Sys Admin',
+    icon: 'settings',
     groups: [
         {
             id: 'dashboard',
             label: 'Dashboard',
+            icon: 'layout-dashboard',
             items: [
                 {
                     id: 'dashboard',
@@ -52,6 +61,7 @@ export const sysAdminArea: NavigationAreaEntry = {
         {
             id: 'organization',
             label: 'Organisasi',
+            icon: 'building-2',
             items: [
                 {
                     id: 'legal-entities',
@@ -76,6 +86,7 @@ export const sysAdminArea: NavigationAreaEntry = {
         {
             id: 'address-book',
             label: 'Buku alamat',
+            icon: 'contact',
             items: [
                 {
                     id: 'parties',
@@ -100,6 +111,7 @@ export const sysAdminArea: NavigationAreaEntry = {
         {
             id: 'access',
             label: 'Akses',
+            icon: 'shield-check',
             items: [
                 {
                     id: 'staff',
@@ -124,6 +136,7 @@ export const sysAdminArea: NavigationAreaEntry = {
         {
             id: 'geography',
             label: 'Wilayah',
+            icon: 'map',
             items: [
                 {
                     id: 'address-setup',
@@ -136,6 +149,7 @@ export const sysAdminArea: NavigationAreaEntry = {
         {
             id: 'number-sequence',
             label: 'Nomor dokumen',
+            icon: 'hash',
             items: [
                 {
                     id: 'number-sequences',
@@ -152,9 +166,13 @@ export type NavigationItem = { id: string; label: string; href: string };
 export type NavigationGroup = {
     id: string;
     label: string;
+    icon: string | null;
     items: NavigationItem[];
 };
-export type NavigationArea = NavigationItem & { groups: NavigationGroup[] };
+export type NavigationArea = NavigationItem & {
+    icon: string | null;
+    groups: NavigationGroup[];
+};
 
 // Tautan area menuju halaman pertama yang tersisa, yaitu dashboard area, supaya tidak pernah menunjuk halaman yang
 // tersaring. Tautan itu juga halaman awal pengguna bila area ini yang dipilih (src/platform/shell/home.ts).
@@ -180,12 +198,27 @@ export function visibleNavigation(
                 )
                 .map(({ id, label, href }) => ({ id, label, href }));
             return items.length
-                ? [{ id: group.id, label: group.label, items }]
+                ? [
+                      {
+                          id: group.id,
+                          label: group.label,
+                          icon: group.icon ?? null,
+                          items,
+                      },
+                  ]
                 : [];
         });
         const first = groups[0]?.items[0];
         return first
-            ? [{ id: area.id, label: area.label, href: first.href, groups }]
+            ? [
+                  {
+                      id: area.id,
+                      label: area.label,
+                      icon: area.icon,
+                      href: first.href,
+                      groups,
+                  },
+              ]
             : [];
     });
 }

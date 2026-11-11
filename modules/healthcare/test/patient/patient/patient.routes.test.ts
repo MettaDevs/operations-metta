@@ -241,7 +241,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             savedHierarchy: { versions: { id: string }[] };
         }>(
             await admin.post('/api/v1/settings/organization/hierarchies', {
-                name: 'Kelompok berbagi pasien uji',
+                name: 'Kelompok sharing pasien uji',
                 purpose_codes: ['healthcare.patient-sharing'],
                 root_organization_id: company,
                 effective_from: '2026-01-01',
@@ -1245,15 +1245,17 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
 
     test('the module is one rail area named in the database, grouped by its feature folders, and follows permissions', async () => {
         const [app] = await pool.unsafe<
-            { name: string; navigation: unknown }[]
-        >("select name, navigation from apps where id = 'healthcare'");
+            { name: string; icon: string | null; navigation: unknown }[]
+        >("select name, icon, navigation from apps where id = 'healthcare'");
         const groups = z
             .array(
                 z.object({
                     id: z.string(),
                     label: z.string(),
+                    icon: z.string().optional(),
                     items: z.array(
                         z.object({
+                            label: z.string(),
                             href: z.string(),
                             permission: z.string().optional(),
                         }),
@@ -1261,6 +1263,36 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                 }),
             )
             .parse(app?.navigation);
+        // Ikon module dan ikon grupnya ditulis migration module, bukan kode Core.
+        expect(app?.icon).toBe('heart-pulse');
+        expect(groups.map((group) => [group.id, group.icon])).toEqual([
+            ['dashboard', 'layout-dashboard'],
+            ['patient', 'users'],
+            ['coverage', 'shield-plus'],
+        ]);
+        expect(
+            groups
+                .find((group) => group.id === 'patient')
+                ?.items.map((item) => item.label),
+        ).toEqual(['Pasien', 'Sharing master pasien']);
+        // Teks layar fitur ini memakai "sharing", bukan "berbagi": tujuan hierarki dan katalog izin di layar role.
+        const [purpose] = await pool.unsafe<{ name: string }[]>(
+            "select name from hierarchy_purposes where code = 'healthcare.patient-sharing'",
+        );
+        expect(purpose?.name).toBe('Kelompok sharing pasien');
+        const labels = await pool.unsafe<{ name: string }[]>(
+            `select name from security_duties where code like 'healthcare.patient-sharing.%'
+             union all select name from security_privileges where code like 'healthcare.patient-sharing.%'
+             union all select name from permissions where code like 'healthcare.patient-sharing.%'
+             union all select name from app_entry_points where code like 'healthcare.patient-sharing.%'
+             union all select table_caption from change_log_setup_tables
+                       where tenant_id is null and table_name like 'sim_m_kebijakan_berbagi%'`,
+        );
+        expect(labels.length).toBe(9);
+        for (const label of labels) {
+            expect(label.name).toContain('sharing');
+            expect(label.name).not.toContain('berbagi');
+        }
         // Kelompok sidebar sama dengan folder area di src/ module, dan URL halamannya berawalan folder itu.
         expect(groups.map((group) => [group.id, group.label])).toEqual([
             ['dashboard', 'Dashboard'],
@@ -1278,17 +1310,26 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                     true,
                 );
             }
-        const menu = async (as: Browser) =>
-            (
-                await json<{
-                    navigation: {
+        const shell = async (as: Browser) =>
+            json<{
+                navigation: {
+                    id: string;
+                    label: string;
+                    icon: string | null;
+                    href: string;
+                    groups: {
                         id: string;
-                        label: string;
-                        href: string;
-                        groups: { id: string; items: { href: string }[] }[];
+                        icon: string | null;
+                        items: { href: string }[];
                     }[];
-                }>(await as.get('/api/v1/shell'), 200)
-            ).navigation;
+                }[];
+                uninstalled_apps: {
+                    id: string;
+                    label: string;
+                    icon: string | null;
+                }[];
+            }>(await as.get('/api/v1/shell'), 200);
+        const menu = async (as: Browser) => (await shell(as)).navigation;
         // Petugas pendaftaran tidak melihat Sys Admin, dan halaman awalnya dashboard area module ini.
         const clerkMenu = await menu(clerks.induk!);
         expect(clerkMenu.map((area) => [area.id, area.label])).toEqual([
@@ -1316,16 +1357,52 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'patient',
             'coverage',
         ]);
-        // Berhak tetapi belum terpasang: module tidak ada di katalog, walau izinnya dipegang.
+        // Shell meneruskan ikon area dan grup dari data module.
+        expect(adminMenu[1]?.icon).toBe('heart-pulse');
+        expect(adminMenu[1]?.groups.map((group) => group.icon)).toEqual([
+            'layout-dashboard',
+            'users',
+            'shield-plus',
+        ]);
+        expect((await shell(admin)).uninstalled_apps).toEqual([]);
+        // Dibeli tetapi belum terpasang: module tidak bisa dibuka, tetapi tetap tampil di katalog sebagai aplikasi
+        // nonaktif, dengan nama dan ikonnya, bagi setiap anggota tenant.
         await pool.unsafe(
             "update core_module_installations set status = 'uninstalled' where tenant_id = $1 and module_id = 'healthcare'",
             [tenantId],
         );
         try {
-            expect((await menu(admin)).map((area) => area.id)).toEqual([
+            const pending = await shell(admin);
+            expect(pending.navigation.map((area) => area.id)).toEqual([
                 'sysadmin',
             ]);
+            expect(pending.uninstalled_apps).toEqual([
+                {
+                    id: 'healthcare',
+                    label: String(app?.name),
+                    icon: 'heart-pulse',
+                },
+            ]);
+            expect(
+                (await shell(clerks.induk!)).uninstalled_apps.map(
+                    (item) => item.id,
+                ),
+            ).toEqual(['healthcare']);
+            // Tidak dibeli (entitlement tidak aktif): module tidak tampil sama sekali.
+            await pool.unsafe(
+                "update tenant_app_entitlements set status = 'inactive' where tenant_id = $1 and app_id = 'healthcare'",
+                [tenantId],
+            );
+            const notBought = await shell(admin);
+            expect(notBought.navigation.map((area) => area.id)).toEqual([
+                'sysadmin',
+            ]);
+            expect(notBought.uninstalled_apps).toEqual([]);
         } finally {
+            await pool.unsafe(
+                "update tenant_app_entitlements set status = 'active' where tenant_id = $1 and app_id = 'healthcare'",
+                [tenantId],
+            );
             await pool.unsafe(
                 "update core_module_installations set status = 'installed' where tenant_id = $1 and module_id = 'healthcare'",
                 [tenantId],

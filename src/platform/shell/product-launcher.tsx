@@ -23,21 +23,27 @@ import { ShellLink } from './shell-link.tsx';
  * pengguna ini, sudah disaring server (`/api/v1/shell`): Sys Admin bila ia boleh membuka salah satu halaman Core, dan
  * setiap module yang dihak tenant, terpasang, dan boleh ia buka. Memilih aplikasi membuka dashboard-nya.
  *
- * Yang belum dipindah dari CoreERP: produk yang sudah dibeli tetapi belum terpasang tidak tampil sebagai tombol mati,
- * dan tidak ada produk yang dibuka di alamat lain; semua module berjalan di runtime ini.
+ * Module yang sudah dibeli tenant tetapi belum terpasang tampil sesudahnya sebagai tombol mati berketerangan "Belum
+ * dipasang", seperti CoreERP. Yang belum dipindah dari CoreERP: tidak ada produk yang dibuka di alamat lain; semua
+ * module berjalan di runtime ini.
  */
 export function ProductLauncher({
     navigation,
+    uninstalledApps,
     activeId,
     onLaunch,
 }: {
     navigation: ShellData['navigation'];
+    uninstalledApps: ShellData['uninstalled_apps'];
     activeId: string | undefined;
     onLaunch: () => void;
 }): ReactNode {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const products = navigation.filter((product) =>
+        matchesRecordSearch(search, product.label),
+    );
+    const unavailable = uninstalledApps.filter((product) =>
         matchesRecordSearch(search, product.label),
     );
 
@@ -77,7 +83,7 @@ export function ProductLauncher({
                 <ScrollArea className="max-h-96">
                     <div className="grid grid-cols-2 items-stretch gap-2 py-3 sm:grid-cols-3">
                         {products.map((product) => {
-                            const Icon = productIcon(product.id);
+                            const Icon = productIcon(product.icon);
                             return (
                                 <Button
                                     key={product.id}
@@ -113,8 +119,29 @@ export function ProductLauncher({
                                 </Button>
                             );
                         })}
+                        {unavailable.map((product) => {
+                            const Icon = productIcon(product.icon);
+                            return (
+                                <Button
+                                    key={product.id}
+                                    variant="ghost"
+                                    className="h-auto min-w-0 flex-col justify-start gap-2 px-2 py-3 text-center font-normal whitespace-normal"
+                                    disabled
+                                >
+                                    <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
+                                        <Icon />
+                                    </span>
+                                    <span className="w-full text-sm leading-snug break-words">
+                                        {product.label}
+                                    </span>
+                                    <span className="w-full text-xs leading-snug text-muted-foreground">
+                                        Belum dipasang
+                                    </span>
+                                </Button>
+                            );
+                        })}
                     </div>
-                    {products.length === 0 && (
+                    {products.length + unavailable.length === 0 && (
                         <p className="py-6 text-center text-sm text-muted-foreground">
                             Tidak ada aplikasi yang cocok.
                         </p>

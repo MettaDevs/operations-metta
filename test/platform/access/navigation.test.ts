@@ -9,10 +9,12 @@ const areas = [
     {
         id: 'sysadmin',
         label: 'Sys Admin',
+        icon: 'settings',
         groups: [
             {
                 id: 'organization',
                 label: 'Organisasi',
+                icon: 'building-2',
                 items: [
                     {
                         id: 'legal-entities',
@@ -45,6 +47,7 @@ const areas = [
     {
         id: 'clinic',
         label: 'Area module',
+        icon: null,
         groups: [
             {
                 id: 'dashboard',
@@ -80,11 +83,13 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
         {
             id: 'sysadmin',
             label: 'Sys Admin',
+            icon: 'settings',
             href: '/sysadmin/organization/legal-entities',
             groups: [
                 {
                     id: 'organization',
                     label: 'Organisasi',
+                    icon: 'building-2',
                     items: [
                         {
                             id: 'legal-entities',
@@ -104,6 +109,13 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
         ),
     ).toEqual([['clinic', '/clinic/dashboard']]);
     expect(visibleNavigation(areas, new Set())).toEqual([]);
+    // Ikon area dan grup diteruskan dari datanya; grup tanpa ikon mendapat null, dan Shell memakai ikon bawaan.
+    const clinic = visibleNavigation(
+        areas,
+        new Set(['clinic.patient.read']),
+    )[0];
+    expect(clinic?.icon).toBeNull();
+    expect(clinic?.groups.map((group) => group.icon)).toEqual([null, null]);
     // Tautan area menuju halaman pertama yang masih tampil, juga bila kelompok pertamanya tersaring habis.
     expect(
         visibleNavigation(areas, new Set(['core.access.read']))[0]?.href,

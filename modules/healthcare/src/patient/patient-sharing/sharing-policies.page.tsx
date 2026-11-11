@@ -86,7 +86,7 @@ function SharingPolicyCard({
         }),
     );
     usePageDialogRecord({
-        recordTitle: policy?.name ?? 'Kebijakan berbagi baru',
+        recordTitle: policy?.name ?? 'Kebijakan sharing baru',
         editing,
     });
 
@@ -103,8 +103,8 @@ function SharingPolicyCard({
                 : await api.healthcareSharingPolicyCreate({ body: form });
             toast.success(
                 policy
-                    ? 'Kebijakan berbagi diperbarui.'
-                    : 'Kebijakan berbagi dibuat.',
+                    ? 'Kebijakan sharing diperbarui.'
+                    : 'Kebijakan sharing dibuat.',
             );
             setEditing(false);
             onSaved(body.data);
@@ -113,7 +113,7 @@ function SharingPolicyCard({
                 setErrors(caught.errors);
             else
                 setMessage(
-                    errorText(caught, 'Kebijakan berbagi belum disimpan.'),
+                    errorText(caught, 'Kebijakan sharing belum disimpan.'),
                 );
         } finally {
             setBusy(false);
@@ -137,10 +137,10 @@ function SharingPolicyCard({
                 params: { id: policy.id },
                 body: { version: policy.version },
             });
-            toast.success('Kebijakan berbagi dihapus.');
+            toast.success('Kebijakan sharing dihapus.');
             onClose();
         } catch (caught) {
-            setMessage(errorText(caught, 'Kebijakan berbagi belum dihapus.'));
+            setMessage(errorText(caught, 'Kebijakan sharing belum dihapus.'));
         } finally {
             setBusy(false);
         }
@@ -211,7 +211,7 @@ function SharingPolicyCard({
             <FormErrorHeader
                 errors={errors}
                 message={message}
-                operation="Kebijakan berbagi belum disimpan"
+                operation="Kebijakan sharing belum disimpan"
             />
             <PageDialogBody className="py-3">
                 <FormGrid>
@@ -274,7 +274,7 @@ function SharingPolicyCard({
                     ) : (
                         <TransferList
                             remainingTitle="Perusahaan lain"
-                            selectedTitle="Saling berbagi pasien"
+                            selectedTitle="Saling sharing pasien"
                             remaining={entities
                                 .filter((entity) => !chosen.has(entity.id))
                                 .map(item)}
@@ -363,11 +363,11 @@ function SharingPoliciesPage(): ReactNode {
             <ListPageLayout
                 header={
                     <RecordActionBar
-                        title="Berbagi pasien antar perusahaan"
+                        title="Sharing master pasien"
                         search={{
                             value: search.q ?? '',
                             onValueChange: (q) => setSearch({ q }),
-                            label: 'Cari kebijakan berbagi',
+                            label: 'Cari kebijakan sharing',
                             placeholder: 'Cari nama kebijakan...',
                         }}
                         filter={{
@@ -452,7 +452,7 @@ function SharingPoliciesPage(): ReactNode {
                     incremental={list}
                     emptyMessage={
                         canManage
-                            ? 'Belum ada kebijakan. Setiap perusahaan hanya melihat pasiennya sendiri. Pilih Baru untuk memilih perusahaan yang saling berbagi pasien.'
+                            ? 'Belum ada kebijakan. Setiap perusahaan hanya melihat pasiennya sendiri. Pilih Baru untuk memilih perusahaan yang saling sharing pasien.'
                             : 'Belum ada kebijakan. Setiap perusahaan hanya melihat pasiennya sendiri.'
                     }
                     columns={[
@@ -516,7 +516,7 @@ function SharingPoliciesPage(): ReactNode {
                 >
                     <PageDialogContent
                         ref={contentRef}
-                        title="Kebijakan berbagi pasien"
+                        title="Kebijakan sharing pasien"
                     >
                         <SharingPolicyCard
                             key={open === 'new' ? 'new' : open.id}
@@ -543,7 +543,7 @@ export const page = definePage({
     path: '/healthcare/patient/sharing-policies',
     previousPaths: ['/healthcare/sharing-policies'],
     layout: 'app',
-    title: 'Berbagi pasien antar perusahaan',
+    title: 'Sharing master pasien',
     validateSearch: searchSchema,
     component: SharingPoliciesPage,
 });

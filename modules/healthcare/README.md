@@ -66,8 +66,8 @@ Perilaku sistem lama "ketik NIK lalu ambil data dari PCare untuk pasien BPJS" ke
 Mengikuti pola F&O (keputusan pemilik produk, 10 November 2026). Di F&O operating unit tidak memisahkan data dalam satu company, sedangkan antar-company data terpisah kecuali ada kebijakan [cross-company data sharing](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/sysadmin/cross-company-data-sharing).
 
 - **Bawaan:** pasien terlihat di semua operating unit yang bekerja untuk legal entity pendaftarnya. Antar legal entity tidak terlihat.
-- **Kebijakan berbagi antar legal entity:** sysadmin membuat kebijakan di layar **Berbagi pasien antar perusahaan** dan memilih legal entity yang saling melihat pasien. Kebijakan berlaku selama aktif, sejak tanggal berlaku mulai. Satu legal entity hanya boleh ikut satu kebijakan aktif, seperti aturan F&O "a company and table can only be in one enabled policy". Perubahannya tercatat di change log (`change_log_setup_tables` disalakan untuk kedua tabelnya oleh `0004`), dan legal entity yang dilepas diarsipkan.
-- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok berbagi pasien** (`healthcare.patient-sharing`) hanya berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
+- **Kebijakan berbagi antar legal entity:** sysadmin membuat kebijakan di layar **Sharing master pasien** dan memilih legal entity yang saling melihat pasien. Kebijakan berlaku selama aktif, sejak tanggal berlaku mulai. Satu legal entity hanya boleh ikut satu kebijakan aktif, seperti aturan F&O "a company and table can only be in one enabled policy". Perubahannya tercatat di change log (`change_log_setup_tables` disalakan untuk kedua tabelnya oleh `0004`), dan legal entity yang dilepas diarsipkan.
+- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok sharing pasien** (`healthcare.patient-sharing`) hanya berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
 - **Kepemilikan tetap.** `sim_m_pasien` menyimpan party, legal entity, unit pendaftar (`org_unit_id`), unit pemilik nomor (`nrm_unit_id`), dan NRM sekali saat didaftarkan. Trigger `pemilik_tetap` menolak perubahannya, juga lewat SQL di luar module. Kelompok dan kebijakan dihitung saat data dibaca, tidak ditulis ke catatan pasien.
 
 Urutan penerapan setiap daftar, detail, ubah, hapus, dan pemeriksaan NIK saat mendaftar (`PatientSharing.visible`):
@@ -117,12 +117,12 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 
 ## Layar
 
-Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `apps.name`, bila tenant berhak dan module terpasang. Grup menu di rail sama dengan folder di `src/`, dan URL halaman berawalan folder itu:
+Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `apps.name`, bila tenant berhak dan module terpasang. Bila tenant berhak tetapi module belum terpasang, ia tampil nonaktif dengan keterangan "Belum dipasang". Grup menu di rail sama dengan folder di `src/`, dan URL halaman berawalan folder itu:
 
 | Kelompok sidebar | Folder           | Halaman                                                                                                                       |
 | ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard        | `src/dashboard/` | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
-| Pasien           | `src/patient/`   | Pasien (`patient/`), Berbagi pasien antar perusahaan (`patient-sharing/`)                                                     |
+| Pasien           | `src/patient/`   | Pasien (`patient/`), Sharing master pasien (`patient-sharing/`)                                                               |
 | Penjaminan       | `src/coverage/`  | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
 
 URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`, `/healthcare/sharing-policies`) dialihkan ke alamat barunya.
@@ -130,8 +130,9 @@ URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types
 - **Pasien** (`/healthcare/patient/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
 - Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
 - **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
-- **Berbagi pasien antar perusahaan** (`/healthcare/patient/sharing-policies`): daftar kebijakan dengan pencarian di toolbar dan filter status di panel kiri; kartu dengan nama, tanggal berlaku mulai, status, dan pilihan perusahaan.
-- Menu module ditulis migration ke `apps.navigation` (terakhir `0006_navigation_areas.sql`) dan disaring Shell dengan permission tiap entri.
+- **Sharing master pasien** (`/healthcare/patient/sharing-policies`): daftar kebijakan dengan pencarian di toolbar dan filter status di panel kiri; kartu dengan nama, tanggal berlaku mulai, status, dan pilihan perusahaan.
+- Menu module ditulis migration ke `apps.navigation` (terakhir `0007_icons_and_sharing_label.sql`) dan disaring Shell dengan permission tiap entri.
+- Ikon module di katalog aplikasi ditulis ke `apps.icon` (`heart-pulse`), dan ikon setiap grup rail ke `icon` di grup `apps.navigation`: Dashboard `layout-dashboard`, Pasien `users`, Penjaminan `shield-plus`. Isinya nama ikon lucide; nama yang tidak dikenal Shell (`src/platform/shell/navigation-icons.ts`) memakai ikon bawaan.
 
 ## Penjamin
 

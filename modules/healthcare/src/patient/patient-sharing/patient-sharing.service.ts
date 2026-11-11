@@ -82,7 +82,7 @@ export class PatientSharing {
         if (heads.length > 1)
             validation({
                 org_unit_id:
-                    'Unit kerja ini masuk lebih dari satu kelompok berbagi pasien. Minta admin merapikan susunan kelompoknya di Hierarki organisasi.',
+                    'Unit kerja ini masuk lebih dari satu kelompok sharing pasien. Minta admin merapikan susunan kelompoknya di Hierarki organisasi.',
             });
         return heads[0] ?? null;
     }

@@ -107,7 +107,7 @@ export class SharingPolicies {
                   [this.workspace.tenantId, id],
               )
             : undefined;
-        if (!found) abort(404, 'Kebijakan berbagi tidak ditemukan.');
+        if (!found) abort(404, 'Kebijakan sharing tidak ditemukan.');
         return found;
     }
 
@@ -128,7 +128,7 @@ export class SharingPolicies {
         const ids = [...new Set(data?.legal_entity_ids ?? [])];
         if (ids.length < 2)
             errors.legal_entity_ids =
-                'Pilih sedikitnya dua perusahaan yang saling berbagi pasien.';
+                'Pilih sedikitnya dua perusahaan yang saling sharing pasien.';
         else if (!ids.every((id) => lookupId(id)))
             errors.legal_entity_ids = 'Pilih perusahaan dari daftar.';
         if (Object.keys(errors).length || !data) validation(errors);
