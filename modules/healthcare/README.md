@@ -1,10 +1,10 @@
 # healthcare
 
-Module layanan kesehatan: master pasien, tipe pasien, penjamin, dan cara bayar. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
+Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, dan tenaga kesehatan. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
 
 ## Nama tabel
 
-Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, dan `sim_m_penjamin`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
+Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, dan `sim_m_nakes`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
 
 ## Pasien adalah peran party
 
@@ -99,6 +99,8 @@ Reference NRM boleh berscope legal entity atau operating unit, menyalakan `defau
 | `healthcare.patient.manage` Kelola pasien                                                                | `patient.register`, `patient.maintain`, `patient.retire` | `patient.read`, `.create`, `.update`, `.delete`             |
 | `healthcare.payment-setup.inquire` Lihat tipe pasien dan penjamin                                        | `patient-type.view`, `guarantor.view`                    | `patient-type.read`, `guarantor.read`                       |
 | `healthcare.payment-setup.manage` Kelola tipe pasien dan penjamin                                        | `patient-type.maintain`, `guarantor.maintain`            | `patient-type.read`, `.update`, `guarantor.read`, `.update` |
+| `healthcare.practitioner.inquire` Lihat tenaga kesehatan                                                 | `practitioner.view`                                      | `practitioner.read`                                         |
+| `healthcare.practitioner.manage` Kelola tenaga kesehatan                                                 | `practitioner.maintain`                                  | `practitioner.read`, `.update`                              |
 | `healthcare.patient-sharing.inquire` Lihat kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.view`                                   | `patient-sharing.read`                                      |
 | `healthcare.patient-sharing.manage` Kelola kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.maintain`                               | `patient-sharing.read`, `.update`                           |
 
@@ -119,23 +121,42 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 
 Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `apps.name`, bila tenant berhak dan module terpasang. Bila tenant berhak tetapi module belum terpasang, ia tampil nonaktif dengan keterangan "Belum dipasang". Grup menu di rail sama dengan folder di `src/`, dan URL halaman berawalan folder itu:
 
-| Kelompok sidebar | Folder           | Halaman                                                                                                                       |
-| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard        | `src/dashboard/` | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
-| Pasien           | `src/patient/`   | Pasien (`patient/`); aturan siapa melihat pasien di `patient-sharing/` tanpa halaman                                          |
-| Penjaminan       | `src/coverage/`  | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
+| Kelompok sidebar | Folder              | Halaman                                                                                                                       |
+| ---------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard        | `src/dashboard/`    | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
+| Pasien           | `src/patient/`      | Pasien (`patient/`); aturan siapa melihat pasien di `patient-sharing/` tanpa halaman                                          |
+| Penjaminan       | `src/coverage/`     | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
+| Tenaga kesehatan | `src/practitioner/` | Nakes (`practitioner/`)                                                                                                       |
 
 URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`) dialihkan ke alamat barunya. `/healthcare/sharing-policies` dan `/healthcare/patient/sharing-policies` dialihkan ke `/sysadmin/data-sharing`.
 
 - **Pasien** (`/healthcare/patient/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
 - Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
 - **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
-- Menu module ditulis migration ke `apps.navigation` (terakhir `0008_data_sharing_to_core.sql`) dan disaring Shell dengan permission tiap entri.
+- **Nakes** (`/healthcare/practitioner/practitioners`), di rail Setup bagian "Tenaga kesehatan": daftar dengan pencarian nama dan no. SIP di toolbar, filter profesi dan status di panel kiri, dan kartu nakes.
+- Menu module ditulis migration ke `apps.navigation` (terakhir `0012_practitioner.sql`) dan disaring Shell dengan permission tiap entri.
 - Ikon module di katalog aplikasi ditulis ke `apps.icon` (`heart-pulse`), dan ikon setiap grup rail ke `icon` di grup `apps.navigation`: Dashboard `layout-dashboard`, Pasien `users`, Penjaminan `shield-plus`. Isinya nama ikon lucide; nama yang tidak dikenal Shell (`src/platform/shell/navigation-icons.ts`) memakai ikon bawaan.
 
 ## Penjamin
 
 Penjamin adalah party organisasi berperan `healthcare.guarantor`, dicatat untuk satu tipe pasien di `sim_m_penjamin`. `POST .../guarantors` memakai organisasi yang sudah ada di buku alamat (`party_id`) atau membuat party organisasi baru (`name`). Nama penjamin diubah di buku alamat.
+
+## Tenaga kesehatan
+
+Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti pola pasien: party orang berperan `healthcare.practitioner` ("Tenaga kesehatan"), didaftarkan untuk legal entity aktif, dan dicatat di `sim_m_nakes` satu baris per orang per tenant (`sim_m_nakes_party_unique`). Ditambahkan `0012_practitioner.sql` (keputusan pemilik produk, 11 November 2026). Pendaftaran kunjungan kelak memilih nakes dari yang punya jadwal praktik; jadwal belum dibangun.
+
+| Data                                               | Tempat                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| Nama, jenis kelamin, NIK, nomor HP                 | party, nomor identitas, dan kontak party Core                             |
+| Profesi, spesialisasi, no. SIP, SIP berlaku sampai | `sim_m_nakes` (`profesi`, `spesialisasi`, `no_sip`, `sip_berlaku_sampai`) |
+| Kode dokter BPJS, akun login, status aktif         | `sim_m_nakes` (`kode_dokter_bpjs`, `user_id`, `aktif`)                    |
+
+- Profesi adalah kode dari katalog di kode (`src/practitioner/practitioner/practitioner.professions.ts`): `dokter`, `dokter_gigi`, `bidan`, `perawat`, `apoteker`, `analis`, `lainnya`.
+- `POST .../practitioners` memakai orang yang sudah ada di buku alamat (`party_id`) atau membuat orang baru dari nama, NIK, jenis kelamin, dan nomor HP. Hanya nama yang wajib. Memilih dari buku alamat ditawarkan di layar bagi pemegang izin buku alamat (`core.organization.read`), karena daftarnya daftar party Core.
+- Sesudah dibuat, nama dan identitas diubah di Buku alamat; kartu nakes mengubah profesi, SIP, kode dokter BPJS, akun login, dan status.
+- Masa berlaku SIP hanya dicatat. Tidak ada aturan yang menolak nakes dengan SIP habis (keputusan pemilik produk: tidak menambah aturan bisnis sendiri).
+- Akun login opsional, dipilih dari anggota aktif tenant.
+- Menu ditambahkan sebagai satu entri di rail Setup, tanpa menulis ulang `apps.navigation`.
 
 ## Endpoint
 
@@ -151,6 +172,8 @@ Semua di bawah `/api/modules/healthcare/v1`.
 | `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                |
 | `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update` |
 | `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`    |
+| `GET /practitioners` (cari: nama, no. SIP; saring profesi, status), `GET /practitioners/metadata`                                                                                     | `practitioner.read`             |
+| `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                          | `practitioner.update`           |
 
 ## Dicatat untuk nanti
 
