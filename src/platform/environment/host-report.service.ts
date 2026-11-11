@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { z } from 'zod';
 import type { DatabaseSettings } from '../config/index.ts';
 import { connect } from './provision.service.ts';
+import type { CatalogModule } from './sync-entitlements.service.ts';
 
 export type HostReportEnvironment = {
     tenant_slug: string;
@@ -14,6 +15,7 @@ export type HostReportEnvironment = {
 };
 export type HostReport = {
     release: string;
+    modules: CatalogModule[];
     environments: HostReportEnvironment[];
 };
 
@@ -99,11 +101,12 @@ async function inspect(
     }
 }
 
-// Laporan host untuk control plane: rilis yang dijalankan image ini, dan keadaan setiap lingkungan yang alamatnya aktif
-// di database runtime. Alamat yang dinonaktifkan (lingkungan dihapus lunak) tidak dilaporkan.
+// Laporan host untuk control plane: rilis yang dijalankan image ini, module yang dibawanya, dan keadaan setiap lingkungan
+// yang alamatnya aktif di database runtime. Alamat yang dinonaktifkan (lingkungan dihapus lunak) tidak dilaporkan.
 export async function gatherHostReport(
     settings: DatabaseSettings,
     release: string,
+    modules: CatalogModule[],
 ): Promise<HostReport> {
     const runtime = connect(settings, settings.DB_DATABASE);
     let routes: z.infer<typeof routeSchema>[];
@@ -121,5 +124,5 @@ export async function gatherHostReport(
     const environments: HostReportEnvironment[] = [];
     for (const route of routes)
         environments.push(await inspect(settings, route));
-    return { release, environments };
+    return { release, modules, environments };
 }

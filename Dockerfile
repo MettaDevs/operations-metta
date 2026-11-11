@@ -9,13 +9,15 @@ COPY src ./src
 # src/client.tsx dan kontrak API sudah di-commit dan diperiksa CI, jadi di sini hanya build server dan peramban.
 RUN bun scripts/build.ts
 # Worker menjalankan migration Core di database lingkungan baru, jadi image membawa berkas migration dengan susunan
-# folder yang sama dengan repo: database/migrations dan modules/<module>/database/migrations.
+# folder yang sama dengan repo: database/migrations dan modules/<module>/database/migrations, ditambah
+# modules/<module>/module.json yang dilaporkan ke control plane sebagai katalog module.
 COPY database ./database
 RUN mkdir -p /migrations/modules && cp -r database /migrations/ \
     && for module in modules/*/; do \
         if [ -d "$module/database/migrations" ]; then \
             mkdir -p "/migrations/$module/database" && cp -r "$module/database/migrations" "/migrations/$module/database/"; \
         fi; \
+        if [ -f "$module/module.json" ]; then mkdir -p "/migrations/$module" && cp "$module/module.json" "/migrations/$module"; fi; \
     done
 
 FROM oven/bun:1.4.4-slim

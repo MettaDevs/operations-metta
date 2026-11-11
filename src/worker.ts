@@ -4,8 +4,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
+// Pendaftaran onOrganizationCreated di main.ts (data bawaan per organisasi milik module) wajib ada saat module dipasang.
+import './main.ts';
 import {
     gatherHostReport,
+    readModuleCatalog,
     runOperation,
 } from './platform/environment/index.ts';
 import {
@@ -33,7 +36,9 @@ const client = controlPlaneClient({
     privateKey: readFileSync(config.WORKER_PRIVATE_KEY_PATH, 'utf8'),
 });
 // src/worker.ts di laptop dan dist/worker.js di image sama-sama satu folder di bawah akar yang memuat migration.
-const source = readMigrationSource(resolve(import.meta.dir, '..'));
+const root = resolve(import.meta.dir, '..');
+const source = readMigrationSource(root);
+const modules = readModuleCatalog(root, source);
 const log = (event: Record<string, unknown>) =>
     process.stderr.write(JSON.stringify(event) + '\n');
 
@@ -59,7 +64,7 @@ async function reportHost(): Promise<void> {
     nextReportAt = Date.now() + config.WORKER_REPORT_SECONDS * 1000;
     try {
         const result = await client.reportHost(
-            await gatherHostReport(config, config.OPERATIONS_RELEASE),
+            await gatherHostReport(config, config.OPERATIONS_RELEASE, modules),
         );
         log({ event: 'host-reported', ...result });
     } catch (error) {

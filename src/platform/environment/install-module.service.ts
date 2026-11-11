@@ -36,7 +36,7 @@ export type InstallModuleRequest = z.infer<typeof installModuleRequestSchema>;
 //
 // Role pemilik tenant lalu mendapat semua duty module itu, sama dengan duty Core yang diberikan saat penyiapan.
 // Aman diulang: entitlement aktif, migration yang sudah tercatat, catatan pemasangan, dan duty yang sudah ada dilewati.
-// Pemanggilnya sekarang `bun run dev:setup`; operasi control plane untuk memasang module belum ada.
+// Pemanggilnya `bun run dev:setup` dan operasi sync_entitlements dari control plane (sync-entitlements.service.ts).
 export async function installModule(
     settings: DatabaseSettings,
     source: MigrationSource,
