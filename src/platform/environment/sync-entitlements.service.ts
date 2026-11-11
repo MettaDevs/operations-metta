@@ -32,7 +32,9 @@ export type SyncEntitlementsRequest = z.infer<
 // dipasang lewat installModule (migration, catatan pemasangan, duty role pemilik, data bawaan organisasi). Tanggal
 // berakhir menjadi awal hari sesudah ends_on, karena Shell menganggap hak berlaku selama ends_at > waktu sekarang.
 // Hak module yang tidak ada di daftar dicabut (status revoked); tabel dan isinya tidak disentuh, jadi hak yang
-// diberikan lagi menampilkan data lamanya. Aman diulang.
+// diberikan lagi menampilkan data lamanya. Satu tenant punya paling banyak satu baris per module
+// (tenant_app_entitlements_tenant_id_app_id_unique), jadi hak yang diberikan lagi mengaktifkan baris lamanya. Aman
+// diulang.
 export async function syncEntitlements(
     settings: DatabaseSettings,
     source: MigrationSource,
@@ -49,22 +51,25 @@ export async function syncEntitlements(
             `Module ${unknown.join(', ')} tidak dibawa rilis host ini, jadi tidak bisa dipasang.`,
         );
     const sql = connect(settings, request.database ?? settings.DB_DATABASE);
-    const setEndsAt = (moduleId: string, endsOn: string | null) =>
-        sql`update tenant_app_entitlements
-            set ends_at = ${endsOn}::date + 1, updated_at = now() at time zone 'utc'
-            where tenant_id = ${request.tenant_id} and app_id = ${moduleId} and status = 'active'`;
+    const activate = (moduleId: string, endsOn: string | null) =>
+        sql<{ effective: boolean }[]>`update tenant_app_entitlements
+            set status = 'active', ends_at = ${endsOn}::date + 1, updated_at = now() at time zone 'utc'
+            where tenant_id = ${request.tenant_id} and app_id = ${moduleId}
+            returning ends_at is null or ends_at > current_timestamp as effective`;
     try {
         for (const module of request.modules) {
             await step(`pasang ${module.module_id}`.slice(0, 60));
-            // Sebelum dipasang juga: hak aktif yang tanggalnya sudah lewat tetapi diperpanjang control plane tidak
-            // boleh membuat installModule menulis hak aktif kedua.
-            await setEndsAt(module.module_id, module.ends_on);
-            await installModule(settings, source, {
-                database: request.database,
-                tenant_id: request.tenant_id,
-                module_id: module.module_id,
-            });
-            await setEndsAt(module.module_id, module.ends_on);
+            const [existing] = await activate(module.module_id, module.ends_on);
+            // installModule menulis hak baru bila tidak ada yang berlaku. Baris yang sudah ada tetapi tanggalnya lewat
+            // akan bentrok dengan indeks unik, jadi module yang haknya sudah berakhir tidak dipasang ulang.
+            if (!existing || existing.effective) {
+                await installModule(settings, source, {
+                    database: request.database,
+                    tenant_id: request.tenant_id,
+                    module_id: module.module_id,
+                });
+                if (!existing) await activate(module.module_id, module.ends_on);
+            }
         }
         await step('cabut hak lain');
         const kept = request.modules.map((module) => module.module_id);

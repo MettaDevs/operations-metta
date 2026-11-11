@@ -902,14 +902,32 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
                     ends_at: '2100-01-01 00:00',
                 },
             ]);
-            // Diberikan lagi: hak aktif baru, pemasangan tetap satu.
+            // Diberikan lagi: baris yang sama aktif kembali, karena satu tenant punya satu baris per module.
             expect(
                 await sync([{ module_id: 'healthcare', ends_on: null }]),
             ).toBe('succeeded');
-            expect((await entitlements()).map((row) => row.status)).toEqual([
-                'revoked',
-                'active',
+            expect(await entitlements()).toEqual([
+                { app_id: 'healthcare', status: 'active', ends_at: null },
             ]);
+            // Hak yang tanggalnya sudah lewat tetap tercatat berakhir, tanpa bentrok dengan baris yang ada.
+            expect(
+                await sync([
+                    { module_id: 'healthcare', ends_on: '2000-01-01' },
+                ]),
+            ).toBe('succeeded');
+            expect(await entitlements()).toEqual([
+                {
+                    app_id: 'healthcare',
+                    status: 'active',
+                    ends_at: '2000-01-02 00:00',
+                },
+            ]);
+            const [installations] = await environment.unsafe(
+                `select count(*)::int as count from core_module_installations
+                 where tenant_id = $1 and module_id = 'healthcare'`,
+                [request.tenant.id],
+            );
+            expect(installations?.count).toBe(1);
         } finally {
             await environment.end();
         }
