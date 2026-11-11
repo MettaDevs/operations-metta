@@ -14,3 +14,4 @@ export {
 } from './number-sequence.schema.ts';
 export { NumberSequences } from './number-sequence.service.ts';
 export { numberSequenceRoutes } from './number-sequence.routes.ts';
+export { registerOrganizationDefaults } from './organization-defaults.ts';
