@@ -12,12 +12,6 @@ export {
     type ProvisionStep,
 } from './provision.service.ts';
 export {
-    copyEnvironment,
-    copyRequestSchema,
-    type CopyRequest,
-    type CopyStep,
-} from './copy.service.ts';
-export {
     convertEnvironment,
     convertRequestSchema,
     type ConvertRequest,
