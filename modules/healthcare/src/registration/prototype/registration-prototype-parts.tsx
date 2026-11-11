@@ -43,7 +43,6 @@ export type Draft = {
     weight: string;
     visitKind: VisitKind | null;
     conditions: string[];
-    ckg: boolean;
     triage: string[];
     installation: Installation;
     sectionId: string | null;
@@ -67,7 +66,6 @@ const emptyDraft: Draft = {
     weight: '',
     visitKind: 'sick',
     conditions: [],
-    ckg: false,
     triage: [],
     installation: 'outpatient',
     sectionId: null,
@@ -353,6 +351,7 @@ export function PatientHistory({
     const last = history[0];
     return (
         <CollapsibleSectionGroup
+            className="[&_.text-lg]:text-sm"
             defaultValue={history.length ? ['history'] : []}
         >
             <CollapsibleSection
@@ -372,25 +371,25 @@ export function PatientHistory({
                         {
                             id: 'date',
                             header: 'Tanggal',
-                            width: 100,
+                            width: 92,
                             cell: (row) => displayDate(row.date),
                         },
                         {
                             id: 'inst',
                             header: 'Instalasi',
-                            width: 120,
+                            width: 100,
                             cell: (row) => row.installation,
                         },
                         {
                             id: 'section',
                             header: 'Poli/Ruangan',
-                            width: 130,
+                            width: 100,
                             cell: (row) => row.section,
                         },
                         {
                             id: 'triage',
                             header: 'Skrining',
-                            width: 90,
+                            width: 80,
                             cell: (row) => (
                                 <DataTableText>
                                     <span className="inline-flex items-center gap-1.5">
@@ -615,16 +614,6 @@ export function VisitFields({
                     ))}
                 </div>
             </fieldset>
-            <div className="flex items-center gap-2">
-                <Checkbox
-                    id="ckg"
-                    checked={draft.ckg}
-                    onCheckedChange={(checked) => set('ckg', checked === true)}
-                />
-                <Label htmlFor="ckg">
-                    Tandai sebagai pasien Cek Kesehatan Gratis (CKG)
-                </Label>
-            </div>
         </div>
     );
 }
@@ -887,7 +876,7 @@ export function SavedNotice({
     onList: () => void;
 }): ReactNode {
     return (
-        <div className="rounded-md border border-green-600/40 bg-green-50 p-4 dark:bg-green-950/30">
+        <div className="rounded-md border bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <CheckCircle2
                     aria-hidden="true"

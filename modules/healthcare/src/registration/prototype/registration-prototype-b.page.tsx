@@ -2,29 +2,32 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import {
     Card,
+    CardAction,
     CardContent,
     CardHeader,
     CardTitle,
 } from '@operations-metta/ui/card';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useNavigate } from '@tanstack/react-router';
-import { Save } from 'lucide-react';
+import { Save, UserPlus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { definePage } from '@core/platform/shell/index.ts';
 import {
+    PatientPanel,
+    TriagePanel,
+    TriageResult,
+    VisitPanel,
+} from './registration-prototype-b-parts.tsx';
+import {
     DestinationFields,
-    PatientFacts,
     PatientHistory,
-    PatientPicker,
     SavedNotice,
-    TriageFields,
     VariantSwitcher,
-    VisitFields,
     useRegistrationDraft,
 } from './registration-prototype-parts.tsx';
 
-// Varian B: satu halaman penuh dua kolom seperti aplikasi lama. Kiri data dan riwayat pasien, kanan isian kunjungan,
-// skrining, dan tujuan, dengan Simpan besar di akhir alur selain Simpan di bar perintah.
+// Varian B (dipilih pemilik): satu halaman penuh dua kolom seperti aplikasi lama. Kiri data dan riwayat pasien
+// sebagai baris label : nilai, kanan isian kunjungan, skrining, dan tujuan.
 
 function RegistrationPrototypeB(): ReactNode {
     const navigate = useNavigate();
@@ -65,15 +68,24 @@ function RegistrationPrototypeB(): ReactNode {
                             onList={toList}
                         />
                     )}
-                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(320px,5fr)_7fr]">
+                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(360px,1fr)_2fr]">
                         <div className="min-w-0 space-y-4">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Data pasien</CardTitle>
+                                    <CardAction align="end">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            <UserPlus aria-hidden="true" />
+                                            Buat pasien baru
+                                        </Button>
+                                    </CardAction>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <PatientPicker state={state} />
-                                    <PatientFacts patient={draft.patient} />
+                                <CardContent>
+                                    <PatientPanel state={state} />
                                 </CardContent>
                             </Card>
                             <Card className="py-0">
@@ -89,15 +101,18 @@ function RegistrationPrototypeB(): ReactNode {
                                     <CardTitle>Data kunjungan</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <VisitFields state={state} />
+                                    <VisitPanel state={state} />
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Skrining visual</CardTitle>
+                                    <CardAction align="end">
+                                        <TriageResult state={state} />
+                                    </CardAction>
                                 </CardHeader>
                                 <CardContent>
-                                    <TriageFields state={state} />
+                                    <TriagePanel state={state} />
                                 </CardContent>
                             </Card>
                             <Card>

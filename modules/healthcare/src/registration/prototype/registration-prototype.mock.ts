@@ -373,7 +373,7 @@ export function age(birthDate: string, today = new Date('2026-11-11')): string {
         years -= 1;
         months += 12;
     }
-    return `${String(years)} thn ${String(months)} bln ${String(days)} hr`;
+    return `${String(years)} tahun, ${String(months)} bulan, ${String(days)} hari`;
 }
 
 export function findPatients(query: string): MockPatient[] {
