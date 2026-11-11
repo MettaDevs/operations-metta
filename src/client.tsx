@@ -5,6 +5,8 @@ import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
+import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
+import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -66,6 +68,22 @@ const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
     validateSearch:
         modulesHealthcareSrcPatientPatientPatientsPage.validateSearch,
     staticData: { title: modulesHealthcareSrcPatientPatientPatientsPage.title },
+});
+
+const foundationCalendarCalendarsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCalendarCalendarsPage.path,
+    component: foundationCalendarCalendarsPage.component,
+    validateSearch: foundationCalendarCalendarsPage.validateSearch,
+    staticData: { title: foundationCalendarCalendarsPage.title },
+});
+
+const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCalendarWorkingTimeTemplatesPage.path,
+    component: foundationCalendarWorkingTimeTemplatesPage.component,
+    validateSearch: foundationCalendarWorkingTimeTemplatesPage.validateSearch,
+    staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
 });
 
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
@@ -191,6 +209,8 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
+        foundationCalendarCalendarsRoute,
+        foundationCalendarWorkingTimeTemplatesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
