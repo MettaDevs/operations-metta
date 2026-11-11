@@ -1,10 +1,10 @@
 # healthcare
 
-Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, dan kebijakan berbagi pasien. Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
+Module layanan kesehatan: master pasien, tipe pasien, penjamin, dan cara bayar. Kebijakan sharing pasien antar perusahaan ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
 
 ## Nama tabel
 
-Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, `sim_m_kebijakan_berbagi`, dan `sim_m_kebijakan_berbagi_perusahaan`. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
+Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, dan `sim_m_penjamin`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
 
 ## Pasien adalah peran party
 
@@ -54,7 +54,7 @@ Mengikuti validasi form pasien aplikasi lama (keputusan pemilik produk, 10 Novem
 - NIK hanya angka, tanpa batas panjang, seperti input angka form lama. Isian pengganti seperti `00000000` untuk bayi diterima. Pola ini milik Core (`party_identification_types`, Core `0015`), jadi berlaku juga di Buku alamat.
 - NIK wajib untuk warga negara Indonesia. Warga negara asing tanpa NIK mendapat NIK pengganti `9999999999999999`, seperti form lama.
 - Satu NIK satu orang (indeks unik Core), kecuali NIK pengganti `9999999999999999`, yang boleh dipakai banyak orang dan tidak pernah dipakai untuk mencari party.
-- NIK yang sudah dipakai pasien yang terlihat dari unit pendaftar (cakupan berbagi pasien, bagian Siapa melihat pasien mana) menolak pendaftaran dengan pesan form lama persis: "NIK sudah terdaftar! dengan NRM: {NRM} dan Nama: {nama}". Di aplikasi lama satu database satu klinik; padanannya di sini cakupan berbagi pasien.
+- NIK yang sudah dipakai pasien yang terlihat dari unit pendaftar (cakupan sharing pasien, bagian Siapa melihat pasien mana) menolak pendaftaran dengan pesan form lama persis: "NIK sudah terdaftar! dengan NRM: {NRM} dan Nama: {nama}". Di aplikasi lama satu database satu klinik; padanannya di sini cakupan sharing pasien.
 - NIK yang hanya dipakai pasien di luar cakupan itu, atau party buku alamat yang belum menjadi pasien, tidak ditolak dan tidak disebut: party yang sama dipakai ulang dan pasien baru mendapat NRM sendiri.
 - Tidak ada pencarian NIK saat mengetik, karena form lama tidak punya. Mengubah NIK pasien ke NIK pihak lain ditolak Core ("NIK ini sudah tercatat pada pihak lain.").
 - Kunci pasien adalah NRM.
@@ -66,15 +66,15 @@ Perilaku sistem lama "ketik NIK lalu ambil data dari PCare untuk pasien BPJS" ke
 Mengikuti pola F&O (keputusan pemilik produk, 10 November 2026). Di F&O operating unit tidak memisahkan data dalam satu company, sedangkan antar-company data terpisah kecuali ada kebijakan [cross-company data sharing](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/sysadmin/cross-company-data-sharing).
 
 - **Bawaan:** pasien terlihat di semua operating unit yang bekerja untuk legal entity pendaftarnya. Antar legal entity tidak terlihat.
-- **Kebijakan berbagi antar legal entity:** sysadmin membuat kebijakan di layar **Sharing master pasien** dan memilih legal entity yang saling melihat pasien. Kebijakan berlaku selama aktif, sejak tanggal berlaku mulai. Satu legal entity hanya boleh ikut satu kebijakan aktif, seperti aturan F&O "a company and table can only be in one enabled policy". Perubahannya tercatat di change log (`change_log_setup_tables` disalakan untuk kedua tabelnya oleh `0004`), dan legal entity yang dilepas diarsipkan.
-- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok sharing pasien** (`healthcare.patient-sharing`) hanya berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
+- **Sharing antar legal entity:** sysadmin membuat kebijakan di Core, layar **Sys Admin → Data sharing** (`/sysadmin/data-sharing`, izin `core.data-sharing.*`), memilih data **Master pasien** (`healthcare.patient`, didaftarkan `0008` di `data_sharing_types`), lalu legal entity yang saling melihat pasien. Kebijakan berlaku selama aktif, sejak tanggal berlaku mulai. Satu legal entity hanya boleh ikut satu kebijakan aktif per jenis data, seperti aturan F&O "a company and table can only be in one enabled policy"; kebijakan untuk jenis data lain tidak memengaruhi pasien. Module membacanya lewat `sharedLegalEntities` dari `@core/platform/data-sharing`. Kebijakan lama di tabel module dipindah `0008` dengan id yang sama, dan role yang memegang duty `healthcare.patient-sharing.*` mendapat duty `core.data-sharing.*` yang setara. Duty lama tetap di katalog tanpa menjaga route apa pun.
+- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok sharing pasien** (`healthcare.patient-sharing`) hanya sharing dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia sharing dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
 - **Kepemilikan tetap.** `sim_m_pasien` menyimpan party, legal entity, unit pendaftar (`org_unit_id`), unit pemilik nomor (`nrm_unit_id`), dan NRM sekali saat didaftarkan. Trigger `pemilik_tetap` menolak perubahannya, juga lewat SQL di luar module. Kelompok dan kebijakan dihitung saat data dibaca, tidak ditulis ke catatan pasien.
 
 Urutan penerapan setiap daftar, detail, ubah, hapus, dan pemeriksaan NIK saat mendaftar (`PatientSharing.visible`):
 
 1. tenant dari konteks tepercaya;
 2. permission duty pasien (`healthcare.patient.read` dan seterusnya);
-3. legal entity: legal entity pasien sama dengan legal entity aktif pengguna, atau sekebijakan aktif dan sudah berlaku dengannya;
+3. legal entity: legal entity pasien sama dengan legal entity aktif pengguna, atau sekebijakan Data sharing Master pasien yang aktif dan sudah berlaku dengannya;
 4. kelompok dan lingkup role: unit pendaftar pasien sekelompok dengan salah satu unit yang diberikan kepada pengguna lewat kebijakan data `healthcare.patient-unit` di legal entity aktif (keduanya di kelompok yang sama, atau keduanya tidak ditempatkan). Batas "seluruh organisasi" tidak membatasi unit, jadi hanya langkah 3 yang berlaku. Pengguna tanpa unit tidak melihat pasien.
 
 Unit yang masuk dua kelompok sekaligus (dua hierarchy aktif) ditolak saat mendaftarkan pasien, dengan pesan untuk merapikan susunannya.
@@ -93,16 +93,16 @@ Reference NRM boleh berscope legal entity atau operating unit, menyalakan `defau
 
 ## Izin
 
-| Duty                                                                | Privilege                                                | Permission                                                  |
-| ------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
-| `healthcare.patient.inquire` Lihat pasien                           | `patient.view`                                           | `patient.read`                                              |
-| `healthcare.patient.manage` Kelola pasien                           | `patient.register`, `patient.maintain`, `patient.retire` | `patient.read`, `.create`, `.update`, `.delete`             |
-| `healthcare.payment-setup.inquire` Lihat tipe pasien dan penjamin   | `patient-type.view`, `guarantor.view`                    | `patient-type.read`, `guarantor.read`                       |
-| `healthcare.payment-setup.manage` Kelola tipe pasien dan penjamin   | `patient-type.maintain`, `guarantor.maintain`            | `patient-type.read`, `.update`, `guarantor.read`, `.update` |
-| `healthcare.patient-sharing.inquire` Lihat kebijakan berbagi pasien | `patient-sharing.view`                                   | `patient-sharing.read`                                      |
-| `healthcare.patient-sharing.manage` Kelola kebijakan berbagi pasien | `patient-sharing.maintain`                               | `patient-sharing.read`, `.update`                           |
+| Duty                                                                                                     | Privilege                                                | Permission                                                  |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
+| `healthcare.patient.inquire` Lihat pasien                                                                | `patient.view`                                           | `patient.read`                                              |
+| `healthcare.patient.manage` Kelola pasien                                                                | `patient.register`, `patient.maintain`, `patient.retire` | `patient.read`, `.create`, `.update`, `.delete`             |
+| `healthcare.payment-setup.inquire` Lihat tipe pasien dan penjamin                                        | `patient-type.view`, `guarantor.view`                    | `patient-type.read`, `guarantor.read`                       |
+| `healthcare.payment-setup.manage` Kelola tipe pasien dan penjamin                                        | `patient-type.maintain`, `guarantor.maintain`            | `patient-type.read`, `.update`, `guarantor.read`, `.update` |
+| `healthcare.patient-sharing.inquire` Lihat kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.view`                                   | `patient-sharing.read`                                      |
+| `healthcare.patient-sharing.manage` Kelola kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.maintain`                               | `patient-sharing.read`, `.update`                           |
 
-Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien, penjamin, dan kebijakan berbagi adalah master tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
+Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien dan penjamin adalah master tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
 
 ## Tipe pasien dan perilakunya
 
@@ -122,16 +122,15 @@ Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `app
 | Kelompok sidebar | Folder           | Halaman                                                                                                                       |
 | ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard        | `src/dashboard/` | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
-| Pasien           | `src/patient/`   | Pasien (`patient/`), Sharing master pasien (`patient-sharing/`)                                                               |
+| Pasien           | `src/patient/`   | Pasien (`patient/`); aturan siapa melihat pasien di `patient-sharing/` tanpa halaman                                          |
 | Penjaminan       | `src/coverage/`  | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
 
-URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`, `/healthcare/sharing-policies`) dialihkan ke alamat barunya.
+URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`) dialihkan ke alamat barunya. `/healthcare/sharing-policies` dan `/healthcare/patient/sharing-policies` dialihkan ke `/sysadmin/data-sharing`.
 
 - **Pasien** (`/healthcare/patient/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
 - Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
 - **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
-- **Sharing master pasien** (`/healthcare/patient/sharing-policies`): daftar kebijakan dengan pencarian di toolbar dan filter status di panel kiri; kartu dengan nama, tanggal berlaku mulai, status, dan pilihan perusahaan.
-- Menu module ditulis migration ke `apps.navigation` (terakhir `0007_icons_and_sharing_label.sql`) dan disaring Shell dengan permission tiap entri.
+- Menu module ditulis migration ke `apps.navigation` (terakhir `0008_data_sharing_to_core.sql`) dan disaring Shell dengan permission tiap entri.
 - Ikon module di katalog aplikasi ditulis ke `apps.icon` (`heart-pulse`), dan ikon setiap grup rail ke `icon` di grup `apps.navigation`: Dashboard `layout-dashboard`, Pasien `users`, Penjaminan `shield-plus`. Isinya nama ikon lucide; nama yang tidak dikenal Shell (`src/platform/shell/navigation-icons.ts`) memakai ikon bawaan.
 
 ## Penjamin
@@ -142,17 +141,16 @@ Penjamin adalah party organisasi berperan `healthcare.guarantor`, dicatat untuk 
 
 Semua di bawah `/api/modules/healthcare/v1`.
 
-| Endpoint                                                                                                                                                                              | Izin                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                     |
-| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                     |
-| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                     |
-| `POST /patients`                                                                                                                                                                      | `patient.create`                   |
-| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                   |
-| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                   |
-| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update`    |
-| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`       |
-| `GET /sharing-policies`, `GET /sharing-policies/legal-entities`, `POST /sharing-policies`, `PATCH, DELETE /sharing-policies/{id}`                                                     | `patient-sharing.read` / `.update` |
+| Endpoint                                                                                                                                                                              | Izin                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                  |
+| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                  |
+| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                  |
+| `POST /patients`                                                                                                                                                                      | `patient.create`                |
+| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                |
+| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                |
+| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update` |
+| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`    |
 
 ## Dicatat untuk nanti
 

@@ -1,34 +1,35 @@
 import { z } from 'zod';
+import { coreWorkspace } from '../access/index.ts';
 import {
     base,
     ok,
     typedBody,
     typedQuery,
     type Context,
-} from '@core/platform/http/index.ts';
-import { moduleId, moduleWorkspace } from '../../module.ts';
+} from '../http/index.ts';
 import type {
-    sharingPolicyInputSchema,
-    sharingPolicyListQuerySchema,
-} from './sharing-policy.schema.ts';
-import { SharingPolicies } from './sharing-policy.service.ts';
+    dataSharingPolicyInputSchema,
+    dataSharingPolicyListQuerySchema,
+} from './data-sharing.schema.ts';
+import { DataSharingPolicies } from './data-sharing.service.ts';
 
-type Input = z.input<typeof sharingPolicyInputSchema>;
+type Input = z.input<typeof dataSharingPolicyInputSchema>;
 const recordBody = z.object({
     params: z.object({ id: z.string() }),
     body: z.custom<Input>(),
 });
 
 async function policies(context: Context, body?: unknown) {
-    return new SharingPolicies(
+    return new DataSharingPolicies(
         context.db,
-        await moduleWorkspace(context, body),
+        await coreWorkspace(context, body),
     );
 }
 
-// Kebijakan berbagi pasien antar legal entity: dibaca dengan izin lihat, diubah dengan izin ubah kebijakan berbagi.
-export function sharingPolicyRoutes() {
-    const path: `/${string}` = `/api/modules/${moduleId}/v1/sharing-policies`;
+// Kebijakan data sharing antar perusahaan (Sys Admin → Data sharing): dibaca dengan core.data-sharing.read, diubah
+// dengan core.data-sharing.update.
+export function dataSharingRoutes() {
+    const path = '/api/v1/data-sharing-policies';
     const route = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', suffix = '') =>
         base.route({
             method,
@@ -37,8 +38,10 @@ export function sharingPolicyRoutes() {
             outputStructure: 'detailed',
         });
     return {
-        healthcareSharingPolicyList: route('GET')
-            .input(typedQuery<z.input<typeof sharingPolicyListQuerySchema>>())
+        dataSharingPolicyList: route('GET')
+            .input(
+                typedQuery<z.input<typeof dataSharingPolicyListQuerySchema>>(),
+            )
             .handler(async ({ context }) =>
                 ok(
                     await (
@@ -46,18 +49,28 @@ export function sharingPolicyRoutes() {
                     ).list(new URL(context.request.url).searchParams),
                 ),
             ),
-        healthcareSharingPolicyLegalEntities: route(
-            'GET',
-            '/legal-entities',
-        ).handler(async ({ context }) =>
-            ok(await (await policies(context)).legalEntities()),
+        dataSharingTypes: route('GET', '/data-types').handler(
+            async ({ context }) => ok(await (await policies(context)).types()),
         ),
-        healthcareSharingPolicyCreate: route('POST')
+        dataSharingLegalEntities: route('GET', '/legal-entities')
+            .input(typedQuery<{ data_type?: string }>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await policies(context)
+                    ).legalEntities(
+                        new URL(context.request.url).searchParams.get(
+                            'data_type',
+                        ),
+                    ),
+                ),
+            ),
+        dataSharingPolicyCreate: route('POST')
             .input(typedBody<Input>())
             .handler(async ({ context, input }) =>
                 (await policies(context, input.body)).create(input.body),
             ),
-        healthcareSharingPolicyUpdate: route('PATCH', '/{id}')
+        dataSharingPolicyUpdate: route('PATCH', '/{id}')
             .input(recordBody)
             .handler(async ({ context, input }) =>
                 (await policies(context, input.body)).update(
@@ -66,7 +79,7 @@ export function sharingPolicyRoutes() {
                     input.body,
                 ),
             ),
-        healthcareSharingPolicyDelete: route('DELETE', '/{id}')
+        dataSharingPolicyDelete: route('DELETE', '/{id}')
             .input(
                 z.object({
                     params: z.object({ id: z.string() }),

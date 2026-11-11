@@ -94,7 +94,8 @@ const movedScreens: [string, string][] = [
     ['/settings/address-setup', '/sysadmin/geography/address-setup'],
     ['/settings/number-sequences', '/sysadmin/number-sequences'],
     ['/healthcare/patients', '/healthcare/patient/patients'],
-    ['/healthcare/sharing-policies', '/healthcare/patient/sharing-policies'],
+    ['/healthcare/sharing-policies', '/sysadmin/data-sharing'],
+    ['/healthcare/patient/sharing-policies', '/sysadmin/data-sharing'],
     ['/healthcare/patient-types', '/healthcare/coverage/patient-types'],
     ['/healthcare/guarantors', '/healthcare/coverage/guarantors'],
 ];

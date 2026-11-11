@@ -197,7 +197,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'core.organization.manage',
             'healthcare.patient.manage',
             'healthcare.payment-setup.manage',
-            'healthcare.patient-sharing.manage',
+            'core.data-sharing.manage',
             'core.number-sequence.inquire',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
@@ -941,7 +941,11 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(group.data.party_id).toBe(lepas.data.party_id);
     }, 30_000);
 
-    test('a sharing policy chooses legal entities that see each other, one active policy per legal entity', async () => {
+    // Kebijakan sharing ada di Core (Sys Admin → Data sharing); module ini mendaftarkan "Master pasien" dan membaca
+    // kebijakannya lewat layanan Core saat menyaring pasien.
+    const policies = '/api/v1/data-sharing-policies';
+
+    test('a data sharing policy for the patient master lets companies see each other, one active policy per company', async () => {
         const lepas = await created(
             clerks.lepas!,
             patientBody({ name: 'Pasien Dibagi' }),
@@ -954,12 +958,36 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             clerks.kedua!,
             patientBody({ name: 'Pasien Kedua Dibagi' }),
         );
-        const policies = `${api}/sharing-policies`;
-        // Satu legal entity saja tidak cukup untuk berbagi.
+        // Master pasien terdaftar sebagai data yang boleh di-share, karena module terpasang.
+        const types = await json<{
+            data: { code: string; name: string; description: string | null }[];
+        }>(await admin.get(`${policies}/data-types`), 200);
+        expect(types.data).toContainEqual({
+            code: 'healthcare.patient',
+            name: 'Master pasien',
+            description: expect.any(String),
+        });
+        // Kebijakan untuk jenis data lain tidak membuka pasien, walau perusahaannya sama.
+        await pool.unsafe(
+            `insert into data_sharing_types (code, app_id, name, created_at, updated_at)
+             values ('test.other', 'core', 'Data uji lain', now(), now()) on conflict (code) do nothing`,
+        );
+        await json(
+            await admin.post(policies, {
+                name: 'Data lain',
+                data_type_code: 'test.other',
+                effective_from: '2026-01-01',
+                legal_entity_ids: [company, otherCompany],
+            }),
+            201,
+        );
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        // Satu perusahaan saja tidak cukup untuk sharing.
         expect(
             (
                 await admin.post(policies, {
                     name: 'Satu saja',
+                    data_type_code: 'healthcare.patient',
                     effective_from: '2026-01-01',
                     legal_entity_ids: [company],
                 })
@@ -969,15 +997,17 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         const future = await json<{ data: { id: string; version: number } }>(
             await admin.post(policies, {
                 name: 'Grup klinik',
+                data_type_code: 'healthcare.patient',
                 effective_from: '2999-01-01',
                 legal_entity_ids: [company, otherCompany],
             }),
             201,
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
-        // Kebijakan kedua yang aktif untuk legal entity yang sama ditolak.
+        // Kebijakan kedua yang aktif untuk perusahaan dan data yang sama ditolak.
         const second = await admin.post(policies, {
             name: 'Grup lain',
+            data_type_code: 'healthcare.patient',
             effective_from: '2026-01-01',
             legal_entity_ids: [company, otherCompany],
         });
@@ -994,6 +1024,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         }>(
             await admin.patch(`${policies}/${future.data.id}`, {
                 name: 'Grup klinik',
+                data_type_code: 'healthcare.patient',
                 effective_from: '2026-01-01',
                 legal_entity_ids: [company, otherCompany],
                 version: future.data.version,
@@ -1003,7 +1034,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(
             effective.data.legal_entities.map((entity) => entity.id).sort(),
         ).toEqual([company, otherCompany].sort());
-        // Kedua legal entity saling melihat pasien unit yang tidak ditempatkan.
+        // Kedua perusahaan saling melihat pasien unit yang tidak ditempatkan.
         expect(await listed(clerks.kedua!)).toContain(lepas.data.id);
         expect(await listed(clerks.lepas!)).toContain(other.data.id);
         expect(
@@ -1033,6 +1064,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         await json(
             await admin.patch(`${policies}/${future.data.id}`, {
                 name: 'Grup klinik',
+                data_type_code: 'healthcare.patient',
                 is_active: false,
                 effective_from: '2026-01-01',
                 legal_entity_ids: [company, otherCompany],
@@ -1042,17 +1074,113 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
         const [log] = await pool.unsafe(
-            "select count(distinct changed_at)::int as changes from change_log_entries where table_name = 'sim_m_kebijakan_berbagi' and record_id = $1",
+            "select count(distinct changed_at)::int as changes from change_log_entries where table_name = 'data_sharing_policies' and record_id = $1",
             [future.data.id],
         );
         expect(Number(log?.changes)).toBeGreaterThanOrEqual(1);
         const list = await json<{ data: { id: string }[] }>(
-            await admin.get(`${policies}?status=inactive&q=grup`),
+            await admin.get(
+                `${policies}?status=inactive&data_type=healthcare.patient&q=grup`,
+            ),
             200,
         );
         expect(list.data.map((policy) => policy.id)).toContain(future.data.id);
-        // Petugas pendaftaran tidak boleh mengubah kebijakan.
+        // Petugas pendaftaran tidak boleh membuka Data sharing: izinnya milik Core, bukan izin pasien.
         expect((await clerks.lepas!.get(policies)).status).toBe(403);
+    }, 30_000);
+
+    test('the module migration moves the old patient sharing policies to Core, with their roles', async () => {
+        const migration = await Bun.file(
+            new URL(
+                '../../../database/migrations/0008_data_sharing_to_core.sql',
+                import.meta.url,
+            ),
+        ).text();
+        // Kebijakan lama yang masih tersimpan di tabel module sebelum pemindahan: satu aktif, satu sudah diarsipkan.
+        const active = Bun.randomUUIDv7();
+        const archived = Bun.randomUUIDv7();
+        await pool.unsafe(
+            `insert into sim_m_kebijakan_berbagi (id, tenant_id, nama, aktif, berlaku_mulai, created_at, updated_at, deleted_at)
+             values ($1, $3, 'Kebijakan lama', true, '2026-01-01', now(), now(), null),
+                    ($2, $3, 'Kebijakan lama diarsipkan', true, '2026-01-01', now(), now(), now())`,
+            [active, archived, tenantId],
+        );
+        await pool.unsafe(
+            `insert into sim_m_kebijakan_berbagi_perusahaan (id, tenant_id, kebijakan_id, legal_entity_id, created_at, updated_at)
+             values ($1, $4, $3, $5, now(), now()), ($2, $4, $3, $6, now(), now())`,
+            [
+                Bun.randomUUIDv7(),
+                Bun.randomUUIDv7(),
+                active,
+                tenantId,
+                company,
+                otherCompany,
+            ],
+        );
+        // Role yang dulu hanya boleh melihat kebijakan lama.
+        const viewer = await clerk(
+            [unitId('Induk')],
+            ['healthcare.patient-sharing.inquire'],
+        );
+        expect((await viewer.get(policies)).status).toBe(403);
+        const lepas = await created(
+            clerks.lepas!,
+            patientBody({ name: 'Pasien Kebijakan Lama' }),
+        );
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        try {
+            // Dijalankan dua kali: pemindahan aman diulang.
+            await pool.unsafe(migration);
+            await pool.unsafe(migration);
+            const moved = await pool.unsafe<
+                {
+                    id: string;
+                    name: string;
+                    data_type_code: string;
+                    archived: boolean;
+                    companies: number;
+                }[]
+            >(
+                `select p.id, p.name, p.data_type_code, p.deleted_at is not null as archived,
+                        (select count(*)::int from data_sharing_policy_companies m
+                         where m.policy_id = p.id and m.deleted_at is null) as companies
+                 from data_sharing_policies p where p.id in ($1, $2) order by p.name`,
+                [active, archived],
+            );
+            expect([...moved]).toEqual([
+                {
+                    id: active,
+                    name: 'Kebijakan lama',
+                    data_type_code: 'healthcare.patient',
+                    archived: false,
+                    companies: 2,
+                },
+                {
+                    id: archived,
+                    name: 'Kebijakan lama diarsipkan',
+                    data_type_code: 'healthcare.patient',
+                    archived: true,
+                    companies: 0,
+                },
+            ]);
+            // Kebijakan yang dipindah langsung berlaku untuk pasien, dan role lama mendapat duty Core yang setara.
+            expect(await listed(clerks.kedua!)).toContain(lepas.data.id);
+            expect((await viewer.get(policies)).status).toBe(200);
+            const [orphan] = await pool.unsafe<{ note: string | null }[]>(
+                "select obj_description('public.sim_m_kebijakan_berbagi'::regclass, 'pg_class') as note",
+            );
+            expect(orphan?.note).toContain('Yatim');
+        } finally {
+            await pool.unsafe(
+                'update data_sharing_policy_companies set deleted_at = now() where policy_id = $1 and deleted_at is null',
+                [active],
+            );
+            await pool.unsafe(
+                'update data_sharing_policies set deleted_at = now() where id = $1',
+                [active],
+            );
+        }
+        expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
     }, 30_000);
 
     test('the role scope per unit still applies on top of the sharing rules', async () => {
@@ -1274,7 +1402,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             groups
                 .find((group) => group.id === 'patient')
                 ?.items.map((item) => item.label),
-        ).toEqual(['Pasien', 'Sharing master pasien']);
+        ).toEqual(['Pasien']);
         // Teks layar fitur ini memakai "sharing", bukan "berbagi": tujuan hierarki dan katalog izin di layar role.
         const [purpose] = await pool.unsafe<{ name: string }[]>(
             "select name from hierarchy_purposes where code = 'healthcare.patient-sharing'",

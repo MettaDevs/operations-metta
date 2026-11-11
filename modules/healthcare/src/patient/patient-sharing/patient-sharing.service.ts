@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import type { Bind, Database } from '@core/platform/database/index.ts';
+import { sharedLegalEntities } from '@core/platform/data-sharing/index.ts';
 import { validation } from '@core/platform/http/index.ts';
+import { patientDataSharing } from '../../module.ts';
 
 // Tujuan hierarchy yang dipasang migration module ini. Sysadmin menyusun kelompok di layar Hierarki organisasi.
 export const sharingPurpose = 'healthcare.patient-sharing';
@@ -13,8 +15,9 @@ const ids = (start: number, count: number) =>
 //
 // - Bawaan: pasien terlihat di semua operating unit yang bekerja untuk legal entity pendaftarnya. Operating unit tidak
 //   memisahkan data dalam satu legal entity, sama dengan F&O.
-// - Antar legal entity pasien tidak terlihat, kecuali kedua legal entity ikut satu kebijakan berbagi yang aktif dan
-//   sudah berlaku (cross-company data sharing F&O). Satu legal entity hanya ikut satu kebijakan aktif.
+// - Antar legal entity pasien tidak terlihat, kecuali kedua legal entity ikut satu kebijakan aktif dan sudah berlaku
+//   untuk Master pasien di Sys Admin → Data sharing (cross-company data sharing F&O, milik Core). Satu legal entity
+//   hanya ikut satu kebijakan aktif per jenis data.
 // - Mempersempit dalam legal entity: unit yang ditempatkan sysadmin di hierarchy "kelompok berbagi pasien" hanya
 //   berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada
 //   versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang
@@ -87,26 +90,15 @@ export class PatientSharing {
         return heads[0] ?? null;
     }
 
-    // Legal entity yang pasiennya terlihat dari legal entity ini: dirinya sendiri, ditambah anggota kebijakan berbagi
-    // yang aktif dan sudah berlaku yang ia ikuti.
-    async sharedLegalEntities(legalEntityId: string): Promise<string[]> {
-        const rows = await this.db.rows(
-            z.object({ legal_entity_id: z.string() }),
-            `select distinct other.legal_entity_id
-             from sim_m_kebijakan_berbagi_perusahaan own
-             join sim_m_kebijakan_berbagi policy on policy.tenant_id = own.tenant_id and policy.id = own.kebijakan_id
-                  and policy.aktif and policy.deleted_at is null and policy.berlaku_mulai <= current_date
-             join sim_m_kebijakan_berbagi_perusahaan other on other.tenant_id = policy.tenant_id
-                  and other.kebijakan_id = policy.id and other.deleted_at is null
-             where own.tenant_id = $1 and own.legal_entity_id = $2 and own.deleted_at is null`,
-            [this.tenantId, legalEntityId],
+    // Legal entity yang pasiennya terlihat dari legal entity ini: dirinya sendiri, ditambah anggota kebijakan aktif dan
+    // sudah berlaku untuk Master pasien di Sys Admin → Data sharing, dibaca lewat layanan Core.
+    sharedLegalEntities(legalEntityId: string): Promise<string[]> {
+        return sharedLegalEntities(
+            this.db,
+            this.tenantId,
+            patientDataSharing,
+            legalEntityId,
         );
-        return [
-            ...new Set([
-                legalEntityId,
-                ...rows.map((row) => row.legal_entity_id),
-            ]),
-        ];
     }
 
     // Syarat SQL bahwa pasien `k` terlihat dari legal entity ini dan dari salah satu unit yang disebut. units null

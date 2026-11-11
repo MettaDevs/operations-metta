@@ -1005,6 +1005,78 @@
             }
         }
     },
+    "dataSharingPolicyList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/data-sharing-policies",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "dataSharingTypes": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/data-sharing-policies/data-types",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "dataSharingLegalEntities": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/data-sharing-policies/legal-entities",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "dataSharingPolicyCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/data-sharing-policies",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "dataSharingPolicyUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/v1/data-sharing-policies/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "dataSharingPolicyDelete": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "DELETE",
+                "path": "/api/v1/data-sharing-policies/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "receiptList": {
         "~orpc": {
             "errorMap": {},
@@ -1286,66 +1358,6 @@
             "route": {
                 "method": "DELETE",
                 "path": "/api/modules/healthcare/v1/guarantors/{id}",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "healthcareSharingPolicyList": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "GET",
-                "path": "/api/modules/healthcare/v1/sharing-policies",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "healthcareSharingPolicyLegalEntities": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "GET",
-                "path": "/api/modules/healthcare/v1/sharing-policies/legal-entities",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "healthcareSharingPolicyCreate": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "POST",
-                "path": "/api/modules/healthcare/v1/sharing-policies",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "healthcareSharingPolicyUpdate": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "PATCH",
-                "path": "/api/modules/healthcare/v1/sharing-policies/{id}",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "healthcareSharingPolicyDelete": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "DELETE",
-                "path": "/api/modules/healthcare/v1/sharing-policies/{id}",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }

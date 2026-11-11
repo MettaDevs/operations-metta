@@ -4,7 +4,6 @@ import { createRoute, createRouter } from '@tanstack/react-router';
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
-import { page as modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage } from '../modules/healthcare/src/patient/patient-sharing/sharing-policies.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
@@ -14,6 +13,7 @@ import { page as platformAddressBookDuplicateSettingsPage } from './platform/add
 import { page as platformAddressBookGlobalAddressBookPage } from './platform/address-book/global-address-book.page.tsx';
 import { page as platformAddressBookOccupationsPage } from './platform/address-book/occupations.page.tsx';
 import { page as platformDashboardDashboardPage } from './platform/dashboard/dashboard.page.tsx';
+import { page as platformDataSharingDataSharingPage } from './platform/data-sharing/data-sharing.page.tsx';
 import { page as platformGeographyAddressSetupPage } from './platform/geography/address-setup.page.tsx';
 import { page as platformOrganizationHierarchiesPage } from './platform/organization/hierarchies.page.tsx';
 import { page as platformOrganizationLegalEntitiesPage } from './platform/organization/legal-entities.page.tsx';
@@ -58,19 +58,6 @@ const modulesHealthcareSrcDashboardDashboardRoute = createRoute({
     component: modulesHealthcareSrcDashboardDashboardPage.component,
     staticData: { title: modulesHealthcareSrcDashboardDashboardPage.title },
 });
-
-const modulesHealthcareSrcPatientPatientSharingSharingPoliciesRoute =
-    createRoute({
-        getParentRoute: () => appLayoutRoute,
-        path: modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.path,
-        component:
-            modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.component,
-        validateSearch:
-            modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.validateSearch,
-        staticData: {
-            title: modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.title,
-        },
-    });
 
 const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -143,6 +130,14 @@ const platformDashboardDashboardRoute = createRoute({
     staticData: { title: platformDashboardDashboardPage.title },
 });
 
+const platformDataSharingDataSharingRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformDataSharingDataSharingPage.path,
+    component: platformDataSharingDataSharingPage.component,
+    validateSearch: platformDataSharingDataSharingPage.validateSearch,
+    staticData: { title: platformDataSharingDataSharingPage.title },
+});
+
 const platformGeographyAddressSetupRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: platformGeographyAddressSetupPage.path,
@@ -195,7 +190,6 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
-        modulesHealthcareSrcPatientPatientSharingSharingPoliciesRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
@@ -205,6 +199,7 @@ const routeTree = rootRoute.addChildren([
         platformAddressBookGlobalAddressBookRoute,
         platformAddressBookOccupationsRoute,
         platformDashboardDashboardRoute,
+        platformDataSharingDataSharingRoute,
         platformGeographyAddressSetupRoute,
         platformOrganizationHierarchiesRoute,
         platformOrganizationLegalEntitiesRoute,
@@ -219,10 +214,6 @@ const routeTree = rootRoute.addChildren([
     previousPathRoute(
         '/healthcare/patient-types',
         modulesHealthcareSrcCoveragePatientTypePatientTypesPage.path,
-    ),
-    previousPathRoute(
-        '/healthcare/sharing-policies',
-        modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.path,
     ),
     previousPathRoute(
         '/healthcare/patients',
@@ -249,6 +240,14 @@ const routeTree = rootRoute.addChildren([
     previousPathRoute(
         '/settings/occupations',
         platformAddressBookOccupationsPage.path,
+    ),
+    previousPathRoute(
+        '/healthcare/sharing-policies',
+        platformDataSharingDataSharingPage.path,
+    ),
+    previousPathRoute(
+        '/healthcare/patient/sharing-policies',
+        platformDataSharingDataSharingPage.path,
     ),
     previousPathRoute(
         '/settings/address-setup',
