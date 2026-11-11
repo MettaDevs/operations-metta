@@ -19,6 +19,10 @@ RUN mkdir -p /migrations/modules && cp -r database /migrations/ \
     done
 
 FROM oven/bun:1.4.4-slim
+# Worker menyalin produksi menjadi sandbox dengan pg_dump dan pg_restore sebagai klien lewat jaringan, sehingga produksi
+# tidak dihentikan. Versinya mengikuti server PostgreSQL 17; Debian trixie membawanya tanpa repo tambahan.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client-17 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /migrations ./

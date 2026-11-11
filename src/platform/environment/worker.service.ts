@@ -6,6 +6,7 @@ import {
 } from '../control-plane/index.ts';
 import type { MigrationSource } from '../migration/index.ts';
 import { convertEnvironment, convertRequestSchema } from './convert.service.ts';
+import { copyEnvironment, copyRequestSchema } from './copy.service.ts';
 import { expireEnvironment, expireRequestSchema } from './expire.service.ts';
 import { migrateEnvironment, migrateRequestSchema } from './migrate.service.ts';
 import { provisionRequestSchema } from './provision.schema.ts';
@@ -20,6 +21,7 @@ const knownOperations = [
     'expire',
     'restore',
     'purge',
+    'copy',
 ] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
@@ -132,6 +134,19 @@ export async function runOperation(
                         `Parameter purge tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await purgeEnvironment(settings, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'copy': {
+                const request = copyRequestSchema.safeParse(claimed.parameters);
+                if (!request.success)
+                    throw new Error(
+                        `Parameter copy tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await copyEnvironment(settings, source, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',

@@ -37,7 +37,7 @@ export function assertEnvironmentDatabase(
         );
 }
 
-async function createDatabase(
+export async function createDatabase(
     settings: DatabaseSettings,
     database: string,
 ): Promise<void> {
