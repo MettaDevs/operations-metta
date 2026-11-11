@@ -2,7 +2,6 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { RecordEditBoundary } from '@operations-metta/ui/record-edit-boundary';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -30,7 +29,8 @@ function DuplicateSettingsPage(): ReactNode {
             select: (response) => response.body.data,
         }),
     );
-    const [editing, setEditing] = useState(false);
+    // Setelan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = metadata.canManage;
     const [percent, setPercent] = useState(String(settings.search_hit_percent));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -39,7 +39,6 @@ function DuplicateSettingsPage(): ReactNode {
         setPercent(String(settings.search_hit_percent));
         setErrors({});
         setMessage(null);
-        setEditing(false);
     };
 
     const submit = async () => {
@@ -57,7 +56,6 @@ function DuplicateSettingsPage(): ReactNode {
             });
             toast.success('Setelan cek data ganda disimpan.');
             setPercent(String(body.data.search_hit_percent));
-            setEditing(false);
             await refetch();
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
@@ -69,36 +67,24 @@ function DuplicateSettingsPage(): ReactNode {
     };
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={metadata.canManage}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
-        >
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
             <RecordActionBar title="Cek data ganda">
-                {metadata.canManage &&
-                    (!editing ? (
+                {editing && (
+                    <>
                         <ActionButton
-                            action="edit"
-                            onClick={() => setEditing(true)}
+                            action="save"
+                            type="submit"
+                            form="duplicate-settings"
+                            disabled={busy}
+                            pending={busy}
                         />
-                    ) : (
-                        <>
-                            <ActionButton
-                                action="save"
-                                type="submit"
-                                form="duplicate-settings"
-                                disabled={busy}
-                                pending={busy}
-                            />
-                            <ActionButton
-                                action="cancel"
-                                disabled={busy}
-                                onClick={reset}
-                            />
-                        </>
-                    ))}
+                        <ActionButton
+                            action="cancel"
+                            disabled={busy}
+                            onClick={reset}
+                        />
+                    </>
+                )}
             </RecordActionBar>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <form
@@ -135,7 +121,7 @@ function DuplicateSettingsPage(): ReactNode {
                     </FormGrid>
                 </form>
             </div>
-        </RecordEditBoundary>
+        </div>
     );
 }
 

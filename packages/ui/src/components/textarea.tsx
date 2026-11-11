@@ -5,11 +5,9 @@ import {
 } from '../document-line-context';
 
 import { cn } from '../utils';
-import { useRecordEditActivation } from './record-edit-boundary';
 
 type TextareaProps = React.ComponentProps<'textarea'> & {
     label?: string;
-    editActivation?: boolean;
 };
 
 function Textarea({
@@ -18,21 +16,12 @@ function Textarea({
     label: providedLabel,
     placeholder,
     required,
-    editActivation = true,
-    onClick,
-    onKeyDown,
     ...props
 }: TextareaProps) {
     const cell = useDocumentLineCell();
     const label = cell && cell.compact !== false ? undefined : providedLabel;
     const generatedId = React.useId();
     const textareaId = id ?? (label ? generatedId : undefined);
-    const activation = useRecordEditActivation();
-    const canActivate =
-        editActivation &&
-        props.readOnly &&
-        !props.disabled &&
-        activation?.canActivate;
 
     const textarea = (
         <textarea
@@ -56,26 +45,6 @@ function Textarea({
             aria-label={
                 props['aria-label'] ?? documentLineLabel(cell, providedLabel)
             }
-            onClick={(event) => {
-                onClick?.(event);
-
-                if (!event.defaultPrevented && canActivate) {
-                    activation.activate(event.currentTarget, true);
-                }
-            }}
-            onKeyDown={(event) => {
-                onKeyDown?.(event);
-
-                if (
-                    !event.defaultPrevented &&
-                    canActivate &&
-                    !event.nativeEvent.isComposing &&
-                    (event.key === 'Enter' || event.key === ' ') &&
-                    activation.activate(event.currentTarget, true)
-                ) {
-                    event.preventDefault();
-                }
-            }}
         />
     );
 

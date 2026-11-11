@@ -5,14 +5,11 @@ import {
 } from '../document-line-context';
 
 import { cn } from '../utils';
-import { useRecordEditActivation } from './record-edit-boundary';
 
 type InputProps = React.ComponentProps<'input'> & {
     label?: string;
     /** Petunjuk format pada field berlabel muncul hanya saat fokus agar tidak menimpa label. */
     focusedPlaceholder?: string;
-    /** Field hasil perhitungan/identitas yang selalu baca saja dapat menolak pemicu edit. */
-    editActivation?: boolean;
 };
 
 function Input({
@@ -23,21 +20,12 @@ function Input({
     placeholder,
     focusedPlaceholder,
     required,
-    editActivation = true,
-    onClick,
-    onKeyDown,
     ...props
 }: InputProps) {
     const cell = useDocumentLineCell();
     const label = cell && cell.compact !== false ? undefined : providedLabel;
     const generatedId = React.useId();
     const inputId = id ?? (label ? generatedId : undefined);
-    const activation = useRecordEditActivation();
-    const canActivate =
-        editActivation &&
-        props.readOnly &&
-        !props.disabled &&
-        activation?.canActivate;
 
     const input = (
         <input
@@ -68,26 +56,6 @@ function Input({
             aria-label={
                 props['aria-label'] ?? documentLineLabel(cell, providedLabel)
             }
-            onClick={(event) => {
-                onClick?.(event);
-
-                if (!event.defaultPrevented && canActivate) {
-                    activation.activate(event.currentTarget, true);
-                }
-            }}
-            onKeyDown={(event) => {
-                onKeyDown?.(event);
-
-                if (
-                    !event.defaultPrevented &&
-                    canActivate &&
-                    !event.nativeEvent.isComposing &&
-                    (event.key === 'Enter' || event.key === ' ') &&
-                    activation.activate(event.currentTarget, true)
-                ) {
-                    event.preventDefault();
-                }
-            }}
         />
     );
 

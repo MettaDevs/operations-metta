@@ -20,10 +20,6 @@ import {
     PageDialogToolbar,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import {
-    RecordEditBoundary,
-    RecordEditControl,
-} from '@operations-metta/ui/record-edit-boundary';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
@@ -181,13 +177,11 @@ function GroupFields({
     form,
     setForm,
     editing,
-    canManage = true,
     errors,
 }: {
     form: Form;
     setForm: (update: (current: Form) => Form) => void;
     editing: boolean;
-    canManage?: boolean;
     errors: Errors;
 }) {
     return (
@@ -223,24 +217,22 @@ function GroupFields({
                     }
                 />
             </FormControl>
-            <RecordEditControl label="Kode pos berbeda dari desanya">
-                <Field orientation="horizontal" className="w-auto">
-                    <Switch
-                        id="group-postal-override"
-                        checked={form.override_postal_code}
-                        disabled={!editing && !canManage}
-                        onCheckedChange={(checked) =>
-                            setForm((current) => ({
-                                ...current,
-                                override_postal_code: checked,
-                            }))
-                        }
-                    />
-                    <FieldLabel htmlFor="group-postal-override">
-                        Kode pos berbeda dari desanya
-                    </FieldLabel>
-                </Field>
-            </RecordEditControl>
+            <Field orientation="horizontal" className="w-auto">
+                <Switch
+                    id="group-postal-override"
+                    checked={form.override_postal_code}
+                    disabled={!editing}
+                    onCheckedChange={(checked) =>
+                        setForm((current) => ({
+                            ...current,
+                            override_postal_code: checked,
+                        }))
+                    }
+                />
+                <FieldLabel htmlFor="group-postal-override">
+                    Kode pos berbeda dari desanya
+                </FieldLabel>
+            </Field>
             {form.override_postal_code && (
                 <FormControl error={errors.postal_code?.[0]}>
                     <Input
@@ -260,22 +252,20 @@ function GroupFields({
                     />
                 </FormControl>
             )}
-            <RecordEditControl label="Aktif">
-                <Field orientation="horizontal" className="w-auto">
-                    <Switch
-                        id="group-active"
-                        checked={form.active}
-                        disabled={!editing && !canManage}
-                        onCheckedChange={(checked) =>
-                            setForm((current) => ({
-                                ...current,
-                                active: checked,
-                            }))
-                        }
-                    />
-                    <FieldLabel htmlFor="group-active">Aktif</FieldLabel>
-                </Field>
-            </RecordEditControl>
+            <Field orientation="horizontal" className="w-auto">
+                <Switch
+                    id="group-active"
+                    checked={form.active}
+                    disabled={!editing}
+                    onCheckedChange={(checked) =>
+                        setForm((current) => ({
+                            ...current,
+                            active: checked,
+                        }))
+                    }
+                />
+                <FieldLabel htmlFor="group-active">Aktif</FieldLabel>
+            </Field>
         </>
     );
 }
@@ -425,7 +415,8 @@ function Detail({
     onSaved: (row: Row) => void;
     onDeleted: () => void;
 }) {
-    const [editing, setEditing] = useState(false);
+    // Record tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = canManage;
     const [form, setForm] = useState(() => formOf(row));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -443,7 +434,6 @@ function Detail({
                 body: { ...bodyOf(form, row.village_id), version: row.version },
             });
             toast.success(`${levelName} disimpan.`);
-            setEditing(false);
             onSaved(body.data);
         } catch (caught) {
             const failed = failure(caught, 'Perubahan belum disimpan.');
@@ -480,13 +470,7 @@ function Detail({
     };
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={canManage}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground"
-        >
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground">
             <RecordActionBar
                 title={row.name}
                 trailing={
@@ -495,40 +479,31 @@ function Detail({
                     </Badge>
                 }
             >
-                {canManage &&
-                    (!editing ? (
-                        <>
-                            <ActionButton
-                                action="edit"
-                                onClick={() => setEditing(true)}
-                            />
-                            <ActionButton
-                                action="delete"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <ActionButton
-                                action="save"
-                                type="submit"
-                                form={formId}
-                                disabled={busy}
-                                pending={busy}
-                            />
-                            <ActionButton
-                                action="cancel"
-                                disabled={busy}
-                                onClick={() => {
-                                    setForm(formOf(row));
-                                    setErrors({});
-                                    setMessage(null);
-                                    setEditing(false);
-                                }}
-                            />
-                        </>
-                    ))}
+                {editing && (
+                    <>
+                        <ActionButton
+                            action="save"
+                            type="submit"
+                            form={formId}
+                            disabled={busy}
+                            pending={busy}
+                        />
+                        <ActionButton
+                            action="cancel"
+                            disabled={busy}
+                            onClick={() => {
+                                setForm(formOf(row));
+                                setErrors({});
+                                setMessage(null);
+                            }}
+                        />
+                        <ActionButton
+                            action="delete"
+                            disabled={busy}
+                            onClick={() => void remove()}
+                        />
+                    </>
+                )}
             </RecordActionBar>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <form
@@ -555,7 +530,6 @@ function Detail({
                                     row.province_name,
                                 ].join(', ')}
                                 readOnly
-                                editActivation={false}
                             />
                         </FormControl>
                         <FormControl>
@@ -563,21 +537,19 @@ function Detail({
                                 label="Kode pos berlaku"
                                 value={row.postal_code ?? ''}
                                 readOnly
-                                editActivation={false}
                             />
                         </FormControl>
                         <GroupFields
                             form={form}
                             setForm={setForm}
                             editing={editing}
-                            canManage={canManage}
                             errors={errors}
                         />
                     </FormGrid>
                 </form>
             </div>
             {confirmation}
-        </RecordEditBoundary>
+        </div>
     );
 }
 

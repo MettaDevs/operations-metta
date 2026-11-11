@@ -7,7 +7,6 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from './accordion';
-import { useRecordEditActivation } from './record-edit-boundary';
 
 /**
  * A titled section that collapses, and keeps a summary of its contents readable while
@@ -89,7 +88,6 @@ function CollapsibleSection({
     }
 
     const preserveContent = keepMounted && hasOpened;
-    const activation = useRecordEditActivation();
 
     return (
         <AccordionItem
@@ -97,14 +95,7 @@ function CollapsibleSection({
             data-slot="collapsible-section"
             className={cn('w-full min-w-0 border-b last:border-b', className)}
         >
-            <AccordionTrigger
-                className="min-h-8 w-full min-w-0 items-center rounded-none px-3 py-1 hover:no-underline"
-                onClick={(event) => {
-                    if (!event.defaultPrevented) {
-                        activation?.activate(event.currentTarget);
-                    }
-                }}
-            >
+            <AccordionTrigger className="min-h-8 w-full min-w-0 items-center rounded-none px-3 py-1 hover:no-underline">
                 <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
                     <span className="max-w-full min-w-0 text-lg leading-6 font-semibold [overflow-wrap:anywhere]">
                         {title}

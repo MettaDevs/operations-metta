@@ -23,7 +23,6 @@ import {
     PageDialogTrigger,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { RecordEditBoundary } from '@operations-metta/ui/record-edit-boundary';
 import { Select } from '@operations-metta/ui/select';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type {
@@ -495,17 +494,16 @@ function formOf(organization: Organization): OrganizationForm {
 function OrganizationDetail({
     organization,
     props,
-    initialEditing = false,
     onUpdated,
 }: {
     organization: Organization;
     props: DirectoryProps;
-    initialEditing?: boolean;
     onUpdated: (organization: Organization) => void;
 }) {
     const legalEntity = organization.classification === 'legal_entity';
     const canManage = props.canManage;
-    const [editing, setEditing] = useState(initialEditing);
+    // Organisasi tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = canManage;
     const [data, setFormData] = useState(() => formOf(organization));
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -528,7 +526,6 @@ function OrganizationDetail({
                 },
             });
             toast.success('Organisasi diperbarui.');
-            setEditing(false);
             onUpdated(body.data);
         } catch (caught) {
             const failure = saveFailure(caught, 'Perubahan belum disimpan.');
@@ -540,13 +537,7 @@ function OrganizationDetail({
     };
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={canManage}
-            disabled={processing}
-            onEdit={() => setEditing(true)}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground"
-        >
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground">
             <RecordActionBar
                 title={organization.name}
                 trailing={
@@ -557,32 +548,25 @@ function OrganizationDetail({
                     </Badge>
                 }
             >
-                {canManage &&
-                    (!editing ? (
+                {editing && (
+                    <>
                         <ActionButton
-                            action="edit"
-                            onClick={() => setEditing(true)}
+                            action="save"
+                            type="submit"
+                            form={formId}
+                            disabled={processing}
                         />
-                    ) : (
-                        <>
-                            <ActionButton
-                                action="save"
-                                type="submit"
-                                form={formId}
-                                disabled={processing}
-                            />
-                            <ActionButton
-                                action="cancel"
-                                onClick={() => {
-                                    setFormData(formOf(organization));
-                                    setErrors({});
-                                    setMessage(null);
-                                    setEditing(false);
-                                }}
-                                disabled={processing}
-                            />
-                        </>
-                    ))}
+                        <ActionButton
+                            action="cancel"
+                            onClick={() => {
+                                setFormData(formOf(organization));
+                                setErrors({});
+                                setMessage(null);
+                            }}
+                            disabled={processing}
+                        />
+                    </>
+                )}
             </RecordActionBar>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
                 <form
@@ -657,7 +641,7 @@ function OrganizationDetail({
                     </CollapsibleSectionGroup>
                 </form>
             </div>
-        </RecordEditBoundary>
+        </div>
     );
 }
 
@@ -676,7 +660,6 @@ export function OrganizationDirectory({
 }): ReactNode {
     const [selected, setSelected] = useState<Organization | null>(null);
     const [showDetail, setShowDetail] = useState(false);
-    const [createdId, setCreatedId] = useState<string | null>(null);
     const loader = useCallback<ListLoader<Organization>>(
         async ({ query, cursor, sort, signal }: ListRequest) => {
             const batch = await directoryBatch(
@@ -725,7 +708,6 @@ export function OrganizationDirectory({
                             props={props}
                             onCreated={(organization) => {
                                 saved(organization);
-                                setCreatedId(organization.id);
                                 onSearchChange('');
                             }}
                         />
@@ -768,10 +750,8 @@ export function OrganizationDirectory({
                             rowActivation="single-click"
                             onRowClick={(organization) => {
                                 setShowDetail(true);
-                                if (organization.id !== selected?.id) {
-                                    setCreatedId(null);
+                                if (organization.id !== selected?.id)
                                     setSelected(organization);
-                                }
                             }}
                             sort={list.sort}
                             onSortChange={list.onSortChange}
@@ -788,11 +768,7 @@ export function OrganizationDirectory({
                             key={`${selected.id}:${selected.version}`}
                             organization={selected}
                             props={props}
-                            initialEditing={createdId === selected.id}
-                            onUpdated={(organization) => {
-                                setCreatedId(null);
-                                saved(organization);
-                            }}
+                            onUpdated={saved}
                         />
                     ) : (
                         <Empty>

@@ -34,6 +34,19 @@ Entitas kompleks, misalnya aset dengan banyak field dan relasi, memakai DataTabl
 - Props and responses are what the server actually sends. Do not add optional fields to a props or response type speculatively — a reader takes `avatar_url?: string | null` as evidence the backend provides it. Either send it from the procedure in the same change, or leave it out. In this repository the screen reads its data through the oRPC client (`api` and `orpc` from `src/platform/shell/index.ts`), whose input and output types come from the router in `src/main.ts`; use those types instead of writing a twin `interface`.
 - Read the procedure (`.routes.ts`) and its service before trusting a field. If it is absent there, the fallback you wrote is the only branch that will ever run.
 
+## Membuka record tersimpan
+
+Keputusan pemilik produk, 11 November 2026: membuka record tersimpan, baik kartu, dialog, detail di samping daftar, maupun halaman setup satu record, langsung masuk mode Ubah bila pengguna berhak mengubah record itu. Tidak ada mode baca yang harus dilewati dengan tombol Ubah lebih dulu.
+
+- Mode edit diturunkan dari izin, bukan disimpan di state: `const editing = record === null || canUpdate`. Izinnya izin ubah record itu sendiri, termasuk batas record seperti role Pemilik yang tidak boleh diubah. `bun run check:ui` menolak state `editing` boolean dari `useState`.
+- Pengguna tanpa izin ubah tetap melihat record baca saja, tanpa Simpan dan Batal.
+- Toolbar record tersimpan berisi Simpan, Batal, lalu Delete bila pengguna boleh menghapus. Tidak ada tombol Ubah.
+- Batal pada record tersimpan membuang perubahan yang belum disimpan dan mengembalikan isian ke nilai tersimpan; record tetap dalam mode Ubah. Batal pada record baru menutup kartu seperti sebelumnya.
+- Setelah Simpan berhasil, record tetap dalam mode Ubah dengan nilai hasil simpan. Pasang ulang form dari respons, misalnya dengan `key` berisi id dan `version`, supaya Simpan berikutnya memakai versi terbaru dan isian sama dengan yang disimpan server.
+- Field yang terkunci oleh aturan bisnis tetap baca saja walau record dalam mode Ubah, misalnya cakupan pengaturan nomor setelah dibuat, nomor yang diisi otomatis, atau nama organisasi yang diubah di buku alamat.
+- Aksi yang berpindah ke record lain dari dalam kartu, misalnya membuka pengaturan nomor lain, hanya ditawarkan selama belum ada perubahan yang belum disimpan, kecuali halaman memasang guard perubahan.
+- Popup baris rincian (alamat, kontak, identitas, relasi) memang hanya dibuka untuk mengisi atau mengubah baris, jadi state `editing` di sana berisi baris yang sedang dibuka, bukan saklar baca/ubah.
+
 ## Draft dan bagian kosong
 
 Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**. Semua bagian yang boleh diisi tersedia sejak kartu dibuka, sesuai izin dan pilihan pada form. Draft berarti isian sementara pada kartu yang sedang terbuka; belum menjadi record tersimpan dan tidak dijanjikan pulih setelah refresh browser.
@@ -61,7 +74,7 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 - Respons `POST`/`PATCH` yang berhasil harus mengembalikan record lengkap yang baru disimpan, sekurangnya `id`, `kode`, `nama`, dan status. Teruskan record itu ke state halaman; jangan hanya meneruskan `id` lalu berharap pemuatan ulang daftar mengisi form.
 - Masukkan atau perbarui record hasil respons di state daftar sebelum memulai refresh. Jika panel detail bisa terpasang ketika data daftar masih kosong, ia dapat menginisialisasi state form dari `null`: kode akhirnya terlihat dari props, tetapi nama tetap kosong karena state lokal sudah terlanjur dibuat.
 - Setelah membuat record baru, pilih record hasil respons dan ikuti tujuan alur halaman: tampilkan kartu tersimpan atau kembali ke daftar dengan record tersebut terpilih. Rincian biasa sudah dapat diisi dalam draft sebelum Simpan; jangan memaksa pengguna masuk edit lagi untuk melengkapi alamat, kontak, nilai checklist, model, atau baris rincian. Data yang bergantung pada proses bisnis berikutnya mengikuti lifecycle proses tersebut.
-- Setelah `PATCH` pada record yang sedang diedit, pertahankan perilaku halaman yang sudah disepakati (biasanya kembali ke baca). Jangan menampilkan kartu `Belum disimpan` setelah respons sukses; kartu itu hanya untuk draft sebelum `POST` berhasil.
+- Setelah `PATCH` berhasil, record tetap dalam mode Ubah dengan nilai hasil simpan, sesuai bagian [Membuka record tersimpan](#membuka-record-tersimpan). Jangan menampilkan kartu `Belum disimpan` setelah respons sukses; kartu itu hanya untuk draft sebelum `POST` berhasil.
 
 ## Cards and actions
 
