@@ -19,6 +19,9 @@ RUN mkdir -p /migrations/modules && cp -r database /migrations/ \
     done
 
 FROM oven/bun:1.4.4-slim
+# Rilis yang dilaporkan worker ke control plane. Alur rilis mengisinya; build lokal tetap `unreleased`.
+ARG RELEASE=unreleased
+ENV OPERATIONS_RELEASE=$RELEASE
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /migrations ./

@@ -89,3 +89,21 @@ test('operasi yang diambil dibaca, dan 409 berarti operasi hilang', async () => 
         client.report(operation.id, { status: 'running', step: 'migrate' }),
     ).rejects.toBeInstanceOf(OperationLost);
 });
+
+test('laporan host ditandatangani dan jawabannya dibaca', async () => {
+    answer = () => Response.json({ matched: 2, unknown: 1 });
+    const report = { release: '0.3.0', environments: [] };
+    expect(await client.reportHost(report)).toEqual({ matched: 2, unknown: 1 });
+    expect(seen.at(-1)).toEqual({
+        path: '/api/worker/v1/report',
+        body: report,
+        verified: true,
+    });
+    answer = () => Response.json({ error: 'report_invalid' }, { status: 422 });
+    expect(
+        await client.reportHost(report).then(
+            () => 'tidak gagal',
+            (error: unknown) => String(error),
+        ),
+    ).toContain('422');
+});
