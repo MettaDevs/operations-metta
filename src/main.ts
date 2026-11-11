@@ -40,6 +40,7 @@ import { dataSharingRoutes } from './platform/data-sharing/index.ts';
 import {
     findRoute,
     parseAddress,
+    UNKNOWN_ADDRESS_MESSAGE,
     type EnvironmentRoute,
 } from './platform/environment/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
@@ -206,9 +207,11 @@ export function createApplication(config: Config) {
             let environment: EnvironmentRoute | null;
             try {
                 const resolved = await resolve(request);
+                // Pesan ini sampai ke layar "Ruang kerja belum dapat dibuka"; ia menyebut penyebab yang paling sering,
+                // yaitu alamat tanpa nama tenant di depannya, tanpa membocorkan tenant mana yang ada.
                 if (resolved === 'not-found')
                     return Response.json(
-                        { message: 'Not Found' },
+                        { message: UNKNOWN_ADDRESS_MESSAGE },
                         {
                             status: 404,
                             headers: { 'Cache-Control': 'no-cache, private' },
