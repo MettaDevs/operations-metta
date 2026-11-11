@@ -26,6 +26,8 @@ export type StepReport = {
 export type ControlPlaneClient = {
     claim(): Promise<ClaimedOperation | null>;
     report(operationId: string, step: StepReport): Promise<void>;
+    // Laporan berkala host; mengembalikan berapa lingkungan yang dikenali registri control plane.
+    reportHost(report: unknown): Promise<{ matched: number; unknown: number }>;
 };
 
 export function controlPlaneClient(settings: {
@@ -69,6 +71,16 @@ export function controlPlaneClient(settings: {
                     `Claim answered ${response.status}: ${await response.text()}`,
                 );
             return claimedSchema.parse(await response.json()).operation;
+        },
+        async reportHost(report) {
+            const response = await post('/api/worker/v1/report', report);
+            if (response.status !== 200)
+                throw new Error(
+                    `Host report answered ${response.status}: ${await response.text()}`,
+                );
+            return z
+                .object({ matched: z.number(), unknown: z.number() })
+                .parse(await response.json());
         },
         async report(operationId, step) {
             const response = await post(

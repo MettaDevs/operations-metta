@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
-import { runOperation } from './platform/environment/index.ts';
+import {
+    gatherHostReport,
+    runOperation,
+} from './platform/environment/index.ts';
 import {
     flushErrorReporting,
     reportError,
@@ -42,10 +45,35 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
         wake?.();
     });
 
-log({ event: 'worker-started', host_id: config.WORKER_HOST_ID });
+log({
+    event: 'worker-started',
+    host_id: config.WORKER_HOST_ID,
+    release: config.OPERATIONS_RELEASE,
+});
+
+// Laporan host dikirim saat mulai lalu setiap WORKER_REPORT_SECONDS, di sela operasi. Kegagalannya hanya dicatat:
+// laporan berikutnya akan membawa keadaan terbaru.
+let nextReportAt = 0;
+async function reportHost(): Promise<void> {
+    if (Date.now() < nextReportAt) return;
+    nextReportAt = Date.now() + config.WORKER_REPORT_SECONDS * 1000;
+    try {
+        const result = await client.reportHost(
+            await gatherHostReport(config, config.OPERATIONS_RELEASE),
+        );
+        log({ event: 'host-reported', ...result });
+    } catch (error) {
+        log({
+            event: 'host-report-error',
+            message: error instanceof Error ? error.message : String(error),
+        });
+        reportError(error);
+    }
+}
 // Handler sinyal di atas yang mengubah stopping; TypeScript tidak melihat penulisan itu.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 while (!stopping) {
+    await reportHost();
     try {
         const claimed = await client.claim();
         if (claimed) {

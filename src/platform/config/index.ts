@@ -46,6 +46,15 @@ const environmentSchema = z.object({
     WORKER_HOST_ID: z.uuid().optional(),
     WORKER_PRIVATE_KEY_PATH: z.string().min(1).optional(),
     WORKER_POLL_SECONDS: z.coerce.number().int().min(1).max(3600).default(10),
+    // Seberapa sering worker melaporkan rilis dan keadaan lingkungan host ini ke control plane.
+    WORKER_REPORT_SECONDS: z.coerce
+        .number()
+        .int()
+        .min(30)
+        .max(86400)
+        .default(300),
+    // Rilis yang dijalankan image ini; diisi saat image dibangun (build arg RELEASE).
+    OPERATIONS_RELEASE: z.string().min(1).max(80).default('unreleased'),
     // Pelaporan kesalahan ke Sentry. Kosong berarti mati, dan itu bawaannya.
     SENTRY_DSN: z.url().optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),

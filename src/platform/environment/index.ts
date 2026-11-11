@@ -41,5 +41,10 @@ export {
     installModuleRequestSchema,
     type InstallModuleRequest,
 } from './install-module.service.ts';
+export {
+    gatherHostReport,
+    type HostReport,
+    type HostReportEnvironment,
+} from './host-report.service.ts';
 export { findRoute, type EnvironmentRoute } from './route.service.ts';
 export { runOperation } from './worker.service.ts';

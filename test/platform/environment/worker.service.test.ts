@@ -9,6 +9,7 @@ import {
 } from '../../../src/platform/control-plane/index.ts';
 import {
     findRoute,
+    gatherHostReport,
     provisionEnvironment,
     provisionRequestSchema,
     runOperation,
@@ -73,6 +74,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
         const reports: StepReport[] = [];
         const client: ControlPlaneClient = {
             claim: () => Promise.resolve(null),
+            reportHost: () => Promise.resolve({ matched: 0, unknown: 0 }),
             report: (_id, step) => {
                 if (step.step === loseAt)
                     return Promise.reject(new OperationLost('diambil alih'));
@@ -723,4 +725,71 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             `Address ${slug} (production) is still active`,
         );
     });
+
+    test('laporan host memuat lingkungan yang alamatnya aktif, dengan skema, ukuran, dan sebab bila tidak sehat', async () => {
+        const healthy = await parameters();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', healthy),
+            ),
+        ).toBe('succeeded');
+        const expired = await parameters();
+        expired.environment = { kind: 'demo', name: 'Demo' };
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', expired),
+            ),
+        ).toBe('succeeded');
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('expire', {
+                    tenant_slug: expired.tenant.slug,
+                    database: expired.database,
+                }),
+            ),
+        ).toBe('succeeded');
+        const missingSlug = `lapor-${crypto.randomUUID().slice(-12)}`;
+        await runtime.unsafe(
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'production', $2, 'Produksi', $3)",
+            [
+                missingSlug,
+                Bun.randomUUIDv7(),
+                `${settings.DB_DATABASE.slice(0, 40)}_hilang`,
+            ],
+        );
+
+        const report = await gatherHostReport(settings, '0.3.0');
+        expect(report.release).toBe('0.3.0');
+        const bySlug = (slug: string) =>
+            report.environments.find(
+                (environment) => environment.tenant_slug === slug,
+            );
+        const latestCore = source.core.at(-1)!.name;
+        expect(bySlug(healthy.tenant.slug)).toMatchObject({
+            kind: 'production',
+            database: healthy.database,
+            healthy: true,
+            problem: null,
+            migrations: { core: latestCore },
+        });
+        expect(bySlug(healthy.tenant.slug)?.size_bytes).toBeGreaterThan(0);
+        expect(bySlug(expired.tenant.slug)).toBeUndefined();
+        expect(bySlug(missingSlug)).toMatchObject({
+            healthy: false,
+            size_bytes: null,
+            migrations: {},
+        });
+        expect(bySlug(missingSlug)?.problem).toContain(
+            'Database lingkungan tidak bisa dibaca',
+        );
+    }, 180_000);
 });
