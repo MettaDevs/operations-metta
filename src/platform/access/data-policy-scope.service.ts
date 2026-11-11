@@ -76,7 +76,7 @@ export async function resolveScope(
     )
         validation({
             organization_id:
-                'Node badan hukum harus sama dengan badan hukum pada batas akses.',
+                'Node legal entity harus sama dengan legal entity pada batas akses.',
         });
     if (data.include_descendants && !policy.allows_descendants)
         validation({
@@ -171,7 +171,7 @@ async function legalEntity(
     if (id === null) {
         if (required)
             validation({
-                legal_entity_id: 'Pilih badan hukum untuk batas akses ini.',
+                legal_entity_id: 'Pilih legal entity untuk batas akses ini.',
             });
         return null;
     }
@@ -184,7 +184,7 @@ async function legalEntity(
         : undefined;
     if (!found)
         validation({
-            legal_entity_id: 'Badan hukum tidak tersedia pada bisnis aktif.',
+            legal_entity_id: 'Legal entity tidak tersedia pada bisnis aktif.',
         });
     return found.id;
 }
@@ -217,7 +217,7 @@ async function organizationFor(
     if (requiresOperatingUnit && found.classification !== 'operating_unit')
         validation({
             organization_id:
-                'Pilih unit kerja, bukan badan hukum, untuk batas akses ini.',
+                'Pilih unit kerja, bukan legal entity, untuk batas akses ini.',
         });
     return found;
 }

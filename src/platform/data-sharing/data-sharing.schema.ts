@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../http/index.ts';
 
-// Kebijakan data sharing antar perusahaan (legal entity), pola cross-company data sharing F&O: perusahaan yang dipilih
+// Kebijakan data sharing antar legal entity, pola cross-company data sharing F&O: legal entity yang dipilih
 // saling melihat satu jenis data, sejak tanggal berlaku dan selama kebijakan aktif.
 export const dataSharingPolicyRowSchema = z.object({
     id: z.string(),

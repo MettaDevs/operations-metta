@@ -184,7 +184,7 @@ function AccessPage(): ReactNode {
                                     </FormControl>
                                     <FormControl>
                                         <Select
-                                            label="Perusahaan atau unit kerja"
+                                            label="Legal entity atau unit kerja"
                                             items={[
                                                 { value: ALL, label: 'Semua' },
                                                 ...page.organizations.map(

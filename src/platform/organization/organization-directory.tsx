@@ -48,7 +48,7 @@ import {
     type PartyDraft,
 } from '../shell/index.ts';
 
-// Layar Perusahaan dan Operating unit, dipindah dari organization-directory CoreERP. Bagian yang bergantung pada fitur
+// Layar Legal entity dan Operating unit, dipindah dari organization-directory CoreERP. Bagian yang bergantung pada fitur
 // yang belum dipindah tidak ditampilkan: identitas cetak, posting finance, dan penanda kode unit yang menahan posting
 // finance. Alamat dan kontak dibaca dari party organisasi di buku alamat.
 
@@ -122,7 +122,7 @@ function organizationFields(data: OrganizationForm, legalEntity: boolean) {
 }
 
 /**
- * Zona waktu entitas legal: bawaan bagi pengguna yang belum memilih zonanya sendiri di profil.
+ * Zona waktu legal entity: bawaan bagi pengguna yang belum memilih zonanya sendiri di profil.
  * Saat form belum dalam mode ubah, nilainya tampil sebagai teks baca saja.
  */
 function LegalEntityTimezoneField({
@@ -188,7 +188,7 @@ function OrganizationFields({
         <>
             <FormControl data-error-field="company_code">
                 <Input
-                    label="Kode Perusahaan"
+                    label="Kode legal entity"
                     required
                     value={data.company_code}
                     readOnly={!editing}
@@ -363,7 +363,7 @@ function CreateOrganizationDialog({
             </PageDialogTrigger>
             <PageDialogContent
                 ref={contentRef}
-                title={legalEntity ? 'Perusahaan' : 'Operating unit'}
+                title={legalEntity ? 'Legal entity' : 'Operating unit'}
                 recordTitle={
                     [
                         legalEntity
@@ -373,7 +373,7 @@ function CreateOrganizationDialog({
                     ]
                         .filter(Boolean)
                         .join(' · ') ||
-                    (legalEntity ? 'Perusahaan baru' : 'Operating unit baru')
+                    (legalEntity ? 'Legal entity baru' : 'Operating unit baru')
                 }
                 editing
                 busy={processing}
@@ -423,7 +423,7 @@ function CreateOrganizationDialog({
                                     }
                                     placeholder={
                                         legalEntity
-                                            ? 'Nama perusahaan'
+                                            ? 'Nama legal entity'
                                             : 'Nama operating unit'
                                     }
                                 />

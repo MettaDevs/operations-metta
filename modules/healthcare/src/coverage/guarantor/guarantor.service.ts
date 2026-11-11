@@ -130,7 +130,7 @@ export class Guarantors {
         if (!legalEntityId)
             validation({
                 legal_entity_id:
-                    'Pilih perusahaan di tempat kerja sebelum melanjutkan.',
+                    'Pilih legal entity di tempat kerja sebelum melanjutkan.',
             });
         const patientTypeId = await this.patientType(data?.patient_type_id);
         const name = data?.name?.trim() ?? '';

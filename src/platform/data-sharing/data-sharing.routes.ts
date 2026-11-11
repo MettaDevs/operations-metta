@@ -26,7 +26,7 @@ async function policies(context: Context, body?: unknown) {
     );
 }
 
-// Kebijakan data sharing antar perusahaan (Sys Admin → Data sharing): dibaca dengan core.data-sharing.read, diubah
+// Kebijakan data sharing antar legal entity (Sys Admin → Data sharing): dibaca dengan core.data-sharing.read, diubah
 // dengan core.data-sharing.update.
 export function dataSharingRoutes() {
     const path = '/api/v1/data-sharing-policies';

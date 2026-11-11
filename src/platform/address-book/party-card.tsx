@@ -673,7 +673,7 @@ function PartyCardBody({
                                         maxLength: 200,
                                         readOnly: internalOrganization,
                                         hint: internalOrganization
-                                            ? 'Nama organisasi diubah dari halaman Perusahaan atau Operating unit.'
+                                            ? 'Nama organisasi diubah dari halaman Legal entity atau Operating unit.'
                                             : undefined,
                                         onChange: (name) =>
                                             setForm((current) => ({
@@ -976,7 +976,7 @@ function PartyCardBody({
                                             },
                                             {
                                                 id: 'company',
-                                                header: 'Perusahaan',
+                                                header: 'Legal entity',
                                                 width: 240,
                                                 cell: (role) => (
                                                     <DataTableText>

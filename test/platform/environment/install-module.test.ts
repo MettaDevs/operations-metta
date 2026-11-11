@@ -10,8 +10,8 @@ import {
 import { readMigrationSource } from '../../../src/platform/migration/index.ts';
 import { operationsTestApp } from '../../support/operations-app.ts';
 
-// Module yang dipasang setelah perusahaan dibuat: sequence bawaan module itu (NRM per legal entity) tetap sampai ke
-// perusahaan yang sudah ada, lewat pembuat sequence bawaan yang sama dengan saat perusahaan lahir.
+// Module yang dipasang setelah legal entity dibuat: sequence bawaan module itu (NRM per legal entity) tetap sampai ke
+// legal entity yang sudah ada, lewat pembuat sequence bawaan yang sama dengan saat legal entity lahir.
 describe.skipIf(!process.env.DB_HOST)('installModule', () => {
     if (!process.env.DB_HOST) return;
     const settings = databaseSettingsSchema.parse(process.env);
@@ -76,7 +76,7 @@ describe.skipIf(!process.env.DB_HOST)('installModule', () => {
                     [id],
                 )
             ).map((row) => row.legal_entity_id);
-        // Module belum dipasang: perusahaan lahir tanpa NRM.
+        // Module belum dipasang: legal entity lahir tanpa NRM.
         expect(await sequences()).toEqual([]);
 
         const install = {

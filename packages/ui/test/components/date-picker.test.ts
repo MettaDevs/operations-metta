@@ -111,7 +111,7 @@ test('DatePicker calendar dates, typed input, native form values, required and r
     const regularInput = renderToStaticMarkup(
         React.createElement(Input, {
             label: 'Nama',
-            placeholder: 'Nama perusahaan',
+            placeholder: 'Nama legal entity',
         }),
     );
     assert.match(

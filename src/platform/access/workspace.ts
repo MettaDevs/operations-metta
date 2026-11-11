@@ -333,7 +333,7 @@ export class Workspace {
         );
     }
 
-    // Perusahaan dan unit aktif: pilihan di sesi bila masih terjangkau, selain itu yang pertama. Hasilnya ditulis
+    // Legal entity dan unit aktif: pilihan di sesi bila masih terjangkau, selain itu yang pertama. Hasilnya ditulis
     // balik ke sesi.
     private static activate(
         session: Session,
@@ -461,12 +461,12 @@ export class Workspace {
         if (!this.legalEntityId)
             validation({
                 legal_entity_id:
-                    'Pilih perusahaan di tempat kerja sebelum melanjutkan.',
+                    'Pilih legal entity di tempat kerja sebelum melanjutkan.',
             });
         if (legalEntityId !== this.legalEntityId)
             validation({
                 legal_entity_id:
-                    'Perusahaan transaksi harus sama dengan perusahaan aktif. Ganti tempat kerja terlebih dahulu.',
+                    'Legal entity transaksi harus sama dengan legal entity aktif. Ganti tempat kerja terlebih dahulu.',
             });
         if (!this.allows(legalEntityId, orgUnitId))
             abort(

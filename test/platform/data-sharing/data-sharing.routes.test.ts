@@ -119,7 +119,7 @@ describe.skipIf(!process.env.DB_HOST)('data sharing policies', () => {
         expect(
             created.legal_entities.map((entity) => entity.id).sort(),
         ).toEqual([first, second].sort());
-        // Perusahaan yang sama untuk jenis data yang sama ditolak selama kebijakan pertama aktif.
+        // Legal entity yang sama untuk jenis data yang sama ditolak selama kebijakan pertama aktif.
         const clash = await admin.post(path, {
             name: 'Grup A lain',
             data_type_code: 'test.alpha',
@@ -131,7 +131,7 @@ describe.skipIf(!process.env.DB_HOST)('data sharing policies', () => {
             ((await clash.json()) as { errors: Record<string, string[]> })
                 .errors.legal_entity_ids?.[0],
         ).toContain('PT Dua Sharing sudah ikut kebijakan aktif "Grup A"');
-        // Jenis data lain bebas memakai perusahaan yang sama.
+        // Jenis data lain bebas memakai legal entity yang sama.
         expect(
             (
                 await admin.post(path, {
@@ -151,7 +151,7 @@ describe.skipIf(!process.env.DB_HOST)('data sharing policies', () => {
             legal_entity_ids: [second, third],
         });
         expect(inactive.status).toBe(201);
-        // Pilihan perusahaan memberi tahu kebijakan aktif yang sudah diikuti, per jenis data.
+        // Pilihan legal entity memberi tahu kebijakan aktif yang sudah diikuti, per jenis data.
         const entities = (
             (await (
                 await admin.get(`${path}/legal-entities?data_type=test.alpha`)

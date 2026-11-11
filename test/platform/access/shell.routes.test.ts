@@ -187,7 +187,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                         items: [
                             {
                                 id: 'legal-entities',
-                                label: 'Perusahaan',
+                                label: 'Legal entity',
                                 href: '/sysadmin/organization/legal-entities',
                             },
                             {

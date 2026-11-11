@@ -25,7 +25,7 @@ import {
     type ApiBody,
 } from '../shell/index.ts';
 
-// Kartu akses satu staf: role yang dipegangnya beserta perusahaan dan unit kerja tempat role itu berlaku. Bentuknya
+// Kartu akses satu staf: role yang dipegangnya beserta legal entity dan unit kerja tempat role itu berlaku. Bentuknya
 // mengikuti kartu pengguna Business Central (User Card dengan permission set per company): satu baris per role per
 // unit. Duty dan privilege tidak tampil di sini; keduanya milik layar Susun role.
 
@@ -145,7 +145,7 @@ function AddRole({
         }
         if (policies.length && !everywhere) {
             if (needsCompany && !company) {
-                setError('Pilih perusahaan tempat role ini berlaku.');
+                setError('Pilih legal entity tempat role ini berlaku.');
                 return;
             }
             if (needsUnit && !unit) {
@@ -154,7 +154,7 @@ function AddRole({
             }
             if (!company && !unit) {
                 setError(
-                    'Pilih perusahaan atau unit kerja, atau berlakukan di seluruh organisasi.',
+                    'Pilih legal entity atau unit kerja, atau berlakukan di seluruh organisasi.',
                 );
                 return;
             }
@@ -213,7 +213,7 @@ function AddRole({
                     <>
                         <FormControl>
                             <InlineLookup
-                                label="Perusahaan"
+                                label="Legal entity"
                                 required={needsCompany}
                                 items={companies}
                                 value={company}

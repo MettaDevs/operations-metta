@@ -23,7 +23,7 @@ function LegalEntitiesPage(): ReactNode {
     return (
         <OrganizationDirectory
             classification="legal_entity"
-            title="Perusahaan"
+            title="Legal entity"
             props={props}
             search={q}
             onSearchChange={(next) =>
@@ -40,7 +40,7 @@ export const page = definePage({
     path: '/sysadmin/organization/legal-entities',
     previousPaths: ['/settings/legal-entities'],
     layout: 'app',
-    title: 'Perusahaan',
+    title: 'Legal entity',
     validateSearch: z.object({ q: z.string().max(200).optional() }),
     component: LegalEntitiesPage,
 });

@@ -394,12 +394,12 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
                     legalEntityId: companyB,
                 }),
             ),
-        ).toContain('belum diatur untuk Perusahaan PTB');
+        ).toContain('belum diatur untuk Legal entity PTB');
         expect(
             await failure(
                 issue(tenantId, { reference: reference.code, key: 'c' }),
             ),
-        ).toContain('belum menyebut perusahaannya');
+        ).toContain('belum menyebut legal entity-nya');
     });
 
     test('the fiscal period comes from the document date, not from today', async () => {
@@ -762,7 +762,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
         ];
         await withDb(async (db) => {
             const service = new NumberSequences(db, tenantId, null);
-            // F&O: SO-0029 boleh ada di setiap company, karena dokumen dijaga per perusahaan.
+            // F&O: SO-0029 boleh ada di setiap company, karena dokumen dijaga per legal entity.
             for (const company of [companyA, companyB])
                 await service.create({
                     ...settings,
@@ -1021,7 +1021,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
         const reference = await createReference(
             pool,
             appId,
-            'Nomor per perusahaan atau unit',
+            'Nomor per legal entity atau unit',
             ['legal_entity', 'operating_unit'],
         );
         await rows(
@@ -1052,7 +1052,7 @@ describe.skipIf(!process.env.DB_HOST)('number issuer', () => {
         expect(
             await issue(tenantId, {
                 reference: reference.code,
-                key: 'perusahaan',
+                key: 'legal-entity',
                 legalEntityId: company,
             }),
         ).toBe('0001');

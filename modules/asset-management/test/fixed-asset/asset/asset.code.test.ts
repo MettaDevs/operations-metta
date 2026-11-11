@@ -4,9 +4,9 @@ import { loadConfig } from '@core/platform/config/index.ts';
 import { createPool } from '@core/platform/database/index.ts';
 
 // Nomor aset dan nomor penerimaan sekarang bisa datang dari beberapa sequence untuk satu reference: satu per
-// perusahaan atau per unit. Sequence per perusahaan boleh menghasilkan nomor terformat yang sama di dua perusahaan
-// (F&O: SO-0029 di setiap company), jadi indeks unik dokumen wajib menyertakan perusahaan. Kembaran di dalam satu
-// perusahaan ditolak pengaturan nomor dan, bila tetap terjadi, ditolak indeks ini. Butuh PostgreSQL yang sudah
+// legal entity atau per unit. Sequence per legal entity boleh menghasilkan nomor terformat yang sama di dua legal entity
+// (F&O: SO-0029 di setiap company), jadi indeks unik dokumen wajib menyertakan legal entity. Kembaran di dalam satu
+// legal entity ditolak pengaturan nomor dan, bila tetap terjadi, ditolak indeks ini. Butuh PostgreSQL yang sudah
 // dimigrasi.
 describe.skipIf(!process.env.DB_HOST)('asset number uniqueness', () => {
     let pool: postgres.Sql;

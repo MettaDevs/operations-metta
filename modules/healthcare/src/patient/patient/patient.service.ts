@@ -96,7 +96,7 @@ const patientSchema = z.object({
     legal_entity_name: z.string(),
     org_unit_id: z.string(),
     org_unit_name: z.string(),
-    // null: NRM dari sequence legal entity, karena unit pendaftar tidak ditempatkan di kelompok berbagi pasien.
+    // null: NRM dari sequence legal entity, karena unit pendaftar tidak ditempatkan di hierarki Tidak sharing master pasien.
     nrm_unit_id: z.string().nullable(),
     nrm_unit_name: z.string().nullable(),
     is_active: z.boolean(),
@@ -664,7 +664,7 @@ export class Patients {
         if (!legalEntityId || !unitId)
             validation({
                 org_unit_id:
-                    'Pilih perusahaan dan unit kerja di tempat kerja sebelum mendaftarkan pasien.',
+                    'Pilih legal entity dan unit kerja di tempat kerja sebelum mendaftarkan pasien.',
             });
         if (!grantsUnit(this.workspace, unitId))
             abort(403, 'Unit kerja ini di luar unit yang dapat Anda akses.');

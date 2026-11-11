@@ -171,7 +171,7 @@ try {
         const [open, setOpen] = React.useState(false);
         const toolbar = h(RecordActionBar, {
             title: 'Vendor',
-            titleHint: 'Akun vendor per perusahaan.',
+            titleHint: 'Akun vendor per legal entity.',
             search: {
                 value: '',
                 onValueChange: () => {},
@@ -259,7 +259,7 @@ try {
     await click(titleButton);
     assert.match(
         document.querySelector('[role="tooltip"]')!.textContent,
-        /Akun vendor per perusahaan/,
+        /Akun vendor per legal entity/,
     );
     await click(titleButton);
     assert.equal(

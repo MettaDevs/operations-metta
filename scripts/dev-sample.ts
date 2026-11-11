@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { createApplication } from '../src/main.ts';
 import type { Config } from '../src/platform/config/index.ts';
 
-// Data contoh laptop developer untuk satu lingkungan: perusahaan dan unit, role, petugas dengan batas datanya, dan
+// Data contoh laptop developer untuk satu lingkungan: legal entity dan unit, role, petugas dengan batas datanya, dan
 // master layanan kesehatan yang dibutuhkan untuk mencoba layar. Semuanya sintetis dan hanya untuk laptop; ini bukan
 // data awal produk.
 //
 // Organisasi, role, penugasan, tipe pasien, dan penjamin dibuat lewat API yang sama dengan layar, dengan admin pertama
-// yang login, sehingga hook dan aturan bisnisnya ikut berjalan (misalnya sequence NRM bawaan per perusahaan dan unit).
+// yang login, sehingga hook dan aturan bisnisnya ikut berjalan (misalnya sequence NRM bawaan per legal entity dan unit).
 // Hanya pengguna dan keanggotaannya yang ditulis lewat SQL, sama dengan admin pertama di provisionEnvironment, karena
 // identitas pengguna milik control plane dan repo ini tidak punya API untuk membuatnya.
 export const sampleSchema = z.object({
@@ -28,7 +28,7 @@ export const sampleSchema = z.object({
             email: z.string(),
             password: z.string().min(12),
             role: z.string(),
-            // Nomor unit tempat petugas bekerja; batas datanya unit itu di perusahaan pemiliknya.
+            // Nomor unit tempat petugas bekerja; batas datanya unit itu di legal entity pemiliknya.
             unit: z.string(),
             policy: z.string(),
         }),
@@ -57,7 +57,7 @@ export type Sample = z.infer<typeof sampleSchema>;
 
 const idBody = z.object({ data: z.object({ id: z.string() }) });
 
-// Mengisi data contoh bila lingkungan itu belum punya perusahaan. Lingkungan yang sudah berisi dilewati, jadi aman
+// Mengisi data contoh bila lingkungan itu belum punya legal entity. Lingkungan yang sudah berisi dilewati, jadi aman
 // diulang.
 export async function seedSample(
     config: Config,

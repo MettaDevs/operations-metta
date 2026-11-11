@@ -33,7 +33,7 @@ const segmentTypes: SegmentType[] = [
 
 // Nama segmen organisasi mengikuti scope, seperti F&O yang menamai segmennya Legal entity atau Operating unit.
 export function scopeSegmentLabel(scope: ScopeType): string {
-    return scope === 'operating_unit' ? 'Operating unit' : 'Perusahaan';
+    return scope === 'operating_unit' ? 'Operating unit' : 'Legal entity';
 }
 
 function segmentLabel(type: SegmentType, scope: ScopeType): string {

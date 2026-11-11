@@ -467,7 +467,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
             ).data.id;
         const company = await make({
             classification: 'legal_entity',
-            name: 'Perusahaan',
+            name: 'Legal entity',
             company_code: 'CO',
             country_code: 'ID',
         });

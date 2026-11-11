@@ -37,8 +37,8 @@ import {
     type ApiBody,
 } from '../shell/index.ts';
 
-// Data sharing antar perusahaan (legal entity), pola "Configure cross-company data sharing" F&O. Bawaannya setiap
-// perusahaan hanya melihat datanya sendiri; perusahaan yang dipilih dalam satu kebijakan aktif saling melihat satu
+// Data sharing antar legal entity, pola "Configure cross-company data sharing" F&O. Bawaannya setiap
+// legal entity hanya melihat datanya sendiri; legal entity yang dipilih dalam satu kebijakan aktif saling melihat satu
 // jenis data sejak tanggal berlakunya. Jenis datanya didaftarkan module pemiliknya, misalnya Master pasien.
 
 const route = getRouteApi('/_app/sysadmin/data-sharing');
@@ -134,7 +134,7 @@ function DataSharingPolicyCard({
             !(await confirm({
                 title: `Delete kebijakan ${policy.name}?`,
                 description:
-                    'Perusahaan di kebijakan ini kembali hanya melihat datanya sendiri. Datanya tidak berubah.',
+                    'Legal entity di kebijakan ini kembali hanya melihat datanya sendiri. Datanya tidak berubah.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -161,7 +161,7 @@ function DataSharingPolicyCard({
         label: entity.company_code
             ? `${entity.name} (${entity.company_code})`
             : entity.name,
-        // Perusahaan yang sudah ikut kebijakan aktif lain diberi tahu sebelum dipilih.
+        // Legal entity yang sudah ikut kebijakan aktif lain diberi tahu sebelum dipilih.
         ...(entity.policy_id && entity.policy_id !== policy?.id
             ? { description: `Sudah ikut kebijakan "${entity.policy_name}"` }
             : {}),
@@ -277,7 +277,7 @@ function DataSharingPolicyCard({
                     </FormControl>
                     <FormControl
                         error={errors.effective_from?.[0]}
-                        hint="Sejak tanggal ini perusahaan yang dipilih saling melihat data itu."
+                        hint="Sejak tanggal ini legal entity yang dipilih saling melihat data itu."
                     >
                         <DatePicker
                             label="Berlaku mulai"
@@ -308,19 +308,19 @@ function DataSharingPolicyCard({
                 <div className="mt-4" data-error-field="legal_entity_ids">
                     {legalEntities.isError ? (
                         <p role="alert" className="text-sm text-destructive">
-                            Daftar perusahaan belum berhasil dimuat. Tutup kartu
-                            ini lalu buka lagi.
+                            Daftar legal entity belum berhasil dimuat. Tutup
+                            kartu ini lalu buka lagi.
                         </p>
                     ) : legalEntities.isPending ? (
                         <p
                             role="status"
                             className="text-sm text-muted-foreground"
                         >
-                            Memuat daftar perusahaan…
+                            Memuat daftar legal entity…
                         </p>
                     ) : (
                         <TransferList
-                            remainingTitle="Perusahaan lain"
+                            remainingTitle="Legal entity lain"
                             selectedTitle="Saling sharing data ini"
                             remaining={entities
                                 .filter((entity) => !chosen.has(entity.id))
@@ -337,8 +337,8 @@ function DataSharingPolicyCard({
                                 })
                             }
                             disabled={!editing || busy}
-                            remainingEmptyLabel="Tidak ada perusahaan lain."
-                            selectedEmptyLabel="Belum ada perusahaan. Pindahkan sedikitnya dua dari daftar kiri."
+                            remainingEmptyLabel="Tidak ada legal entity lain."
+                            selectedEmptyLabel="Belum ada legal entity. Pindahkan sedikitnya dua dari daftar kiri."
                         />
                     )}
                     {errors.legal_entity_ids?.map((text) => (
@@ -534,8 +534,8 @@ function DataSharingPage(): ReactNode {
                     incremental={list}
                     emptyMessage={
                         canManage
-                            ? 'Belum ada kebijakan. Setiap perusahaan hanya melihat datanya sendiri. Pilih Baru untuk memilih data dan perusahaan yang saling sharing.'
-                            : 'Belum ada kebijakan. Setiap perusahaan hanya melihat datanya sendiri.'
+                            ? 'Belum ada kebijakan. Setiap legal entity hanya melihat datanya sendiri. Pilih Baru untuk memilih data dan legal entity yang saling sharing.'
+                            : 'Belum ada kebijakan. Setiap legal entity hanya melihat datanya sendiri.'
                     }
                     columns={[
                         {
@@ -560,7 +560,7 @@ function DataSharingPage(): ReactNode {
                         },
                         {
                             id: 'legal_entities',
-                            header: 'Perusahaan',
+                            header: 'Legal entity',
                             width: 320,
                             cell: (policy) => (
                                 <DataTableText>

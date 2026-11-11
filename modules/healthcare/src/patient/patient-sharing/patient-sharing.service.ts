@@ -18,7 +18,7 @@ const ids = (start: number, count: number) =>
 // - Antar legal entity pasien tidak terlihat, kecuali kedua legal entity ikut satu kebijakan aktif dan sudah berlaku
 //   untuk Master pasien di Sys Admin → Data sharing (cross-company data sharing F&O, milik Core). Satu legal entity
 //   hanya ikut satu kebijakan aktif per jenis data.
-// - Mempersempit dalam legal entity: unit yang ditempatkan sysadmin di hierarchy "kelompok berbagi pasien" hanya
+// - Mempersempit dalam legal entity: unit yang ditempatkan sysadmin di hierarchy bertujuan "Tidak sharing master pasien" hanya
 //   berbagi dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada
 //   versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang
 //   tidak ditempatkan memakai bawaan legal entity: ia berbagi dengan semua unit lain yang juga tidak ditempatkan.
@@ -85,7 +85,7 @@ export class PatientSharing {
         if (heads.length > 1)
             validation({
                 org_unit_id:
-                    'Unit kerja ini masuk lebih dari satu kelompok sharing pasien. Minta admin merapikan susunan kelompoknya di Hierarki organisasi.',
+                    'Unit kerja ini masuk lebih dari satu kelompok di hierarki Tidak sharing master pasien. Minta admin merapikan susunannya di Hierarki organisasi.',
             });
         return heads[0] ?? null;
     }

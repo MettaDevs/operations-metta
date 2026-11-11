@@ -382,7 +382,7 @@ export class FinancePostings {
             )
                 issue(
                     'ACCOUNT_OTHER_LEGAL_ENTITY',
-                    `Akun ${account.code} ${account.name} khusus entitas legal lain.`,
+                    `Akun ${account.code} ${account.name} khusus legal entity lain.`,
                     accountObject,
                     fix,
                 );

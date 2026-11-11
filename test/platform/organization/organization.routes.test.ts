@@ -65,7 +65,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             country_code: 'id',
         };
         expect(await errors(await create(base))).toEqual({
-            company_code: ['Isi kode perusahaan.'],
+            company_code: ['Isi kode legal entity.'],
         });
 
         const created = await create({ ...base, company_code: 'asset-01' });
@@ -112,7 +112,9 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
         expect(
             await errors(await create({ ...base, company_code: 'ASSET-01' })),
         ).toEqual({
-            company_code: ['Kode perusahaan sudah digunakan pada tenant ini.'],
+            company_code: [
+                'Kode legal entity sudah digunakan pada tenant ini.',
+            ],
         });
         expect(
             (
@@ -280,7 +282,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
                     timezone: 'Asia/Jakarta',
                 }),
             ),
-        ).toEqual({ timezone: ['Zona waktu hanya untuk entitas legal.'] });
+        ).toEqual({ timezone: ['Zona waktu hanya untuk legal entity.'] });
         expect(
             await errors(
                 await create({
@@ -516,7 +518,7 @@ describe.skipIf(!process.env.DB_HOST)('organization directory', () => {
             ),
         ).toEqual({
             company_code: [
-                'Kode perusahaan sudah dipakai perusahaan lain dalam bisnis ini.',
+                'Kode legal entity sudah dipakai legal entity lain dalam bisnis ini.',
             ],
         });
         const updated = await owner.patch(`/api/v1/organizations/${one.id}`, {

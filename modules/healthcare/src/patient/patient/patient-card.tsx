@@ -1093,7 +1093,7 @@ function PatientCardBody({
                                     hint={
                                         patient
                                             ? `Dari pengaturan nomor ${patient.nrm_unit_name ?? patient.legal_entity_name}. Pasien didaftarkan di ${patient.org_unit_name}.`
-                                            : 'Diisi otomatis saat disimpan, dari pengaturan nomor perusahaan, atau unit pemilik kelompok sharing pasien bila unit Anda ditempatkan di kelompok.'
+                                            : 'Diisi otomatis saat disimpan, dari pengaturan nomor legal entity, atau unit teratas kelompok Anda bila unit Anda ditempatkan di hierarki Tidak sharing master pasien.'
                                     }
                                 >
                                     <Input
