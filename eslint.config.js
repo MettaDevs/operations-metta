@@ -83,8 +83,8 @@ export default tseslint.config(
         },
     },
     {
-        // Skrip berjalan di terminal, jadi console adalah keluarannya.
-        files: ['scripts/**'],
+        // Skrip dan src/migrate.ts berjalan di terminal, jadi console adalah keluarannya.
+        files: ['scripts/**', 'src/migrate.ts'],
         rules: { 'no-console': 'off' },
     },
 );

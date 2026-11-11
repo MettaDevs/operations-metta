@@ -25,5 +25,6 @@ COPY --from=build /migrations ./
 USER bun
 ENV HOST=0.0.0.0 PORT=8000
 EXPOSE 8000
-# Worker lingkungan dari image yang sama: bun dist/worker.js
+# Dari image yang sama: worker lingkungan `bun dist/worker.js`, dan migration database runtime `bun dist/migrate.js` yang
+# dijalankan sekali sebelum proses HTTP dan worker versi baru dinyalakan.
 CMD ["bun", "dist/main.js"]

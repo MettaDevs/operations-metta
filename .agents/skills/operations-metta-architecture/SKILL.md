@@ -87,7 +87,7 @@ The `internal/v1` REST surface called by control-plane-metta is owned by this re
 Never derive a later state from an earlier state:
 
 - Entitlement is not installation.
-- A catalog entry is not proof that the module is installed for a tenant. A module in the Core runtime has no container and no database of its own; what must exist is the migration record (`schema_migrations`, written by `scripts/migrate.ts` per owner) and the installation row for that tenant.
+- A catalog entry is not proof that the module is installed for a tenant. A module in the Core runtime has no container and no database of its own; what must exist is the migration record (`schema_migrations`, written by `src/migrate.ts` per owner) and the installation row for that tenant.
 - `active` or `trial` entitlement cannot drive UI labelled "installed".
 
 No code in this repository reads or writes `core_module_installations` yet; the table comes from the baseline. A module runs in this process: if Core is up and the module is installed, the module is up. There is no separate "ready" state.
@@ -230,7 +230,7 @@ If the required source of truth does not exist, stop and report the missing regi
 
 ### Schema change and rollback gate
 
-Apply before writing or reviewing any migration in `database/migrations/` or `modules/<module>/database/migrations/`. Migrations are plain SQL files applied in order by `bun run migrate` (`scripts/migrate.ts`), Core first, then modules, each recorded per owner in `schema_migrations`. The canonical rule is CoreERP's [`docs/dev/03-release-and-on-prem.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/03-release-and-on-prem.md), section "Perubahan skema dan mundur". Improving CoreERP's schema is allowed under the conditions in `AGENTS.md`, section Database; this gate decides how such a change ships, not whether it may.
+Apply before writing or reviewing any migration in `database/migrations/` or `modules/<module>/database/migrations/`. Migrations are plain SQL files applied in order by `bun run migrate` (`src/migrate.ts`), Core first, then modules, each recorded per owner in `schema_migrations`. The canonical rule is CoreERP's [`docs/dev/03-release-and-on-prem.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/03-release-and-on-prem.md), section "Perubahan skema dan mundur". Improving CoreERP's schema is allowed under the conditions in `AGENTS.md`, section Database; this gate decides how such a change ships, not whether it may.
 
 **A bad release is rolled back by running the previous image, never by rolling back the database.** Migrations here have no down step. Restoring a backup discards every transaction written after the update, which on a clinic server means medical records and receipts.
 
