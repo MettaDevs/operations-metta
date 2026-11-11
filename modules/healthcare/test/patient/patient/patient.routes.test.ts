@@ -1437,6 +1437,8 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ['patient', 'Pasien'],
             ['setup', 'Setup'],
         ]);
+        // Judul bagian yang sudah diketahui wajib menunjuk foldernya. Bagian yang ditambah migration lain cukup konsisten:
+        // semua item satu judul bagian berada di satu folder.
         const sectionFolders = new Map([
             ['Penjaminan', 'coverage'],
             ['Pelayanan', 'service'],
@@ -1446,10 +1448,15 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         );
         for (const group of groups)
             for (const item of group.items) {
-                const folder =
-                    group.id === 'setup'
-                        ? sectionFolders.get(item.section ?? '')
-                        : group.id;
+                let folder: string | undefined = group.id;
+                if (group.id === 'setup') {
+                    expect(item.section).toBeDefined();
+                    const section = item.section ?? '';
+                    folder =
+                        sectionFolders.get(section) ?? item.href.split('/')[2];
+                    if (folder && !sectionFolders.has(section))
+                        sectionFolders.set(section, folder);
+                }
                 expect(folder).toBeDefined();
                 const file = pages.get(item.href)?.split(/[\\/]/) ?? [];
                 expect(file[file.lastIndexOf('src') + 1]).toBe(folder);

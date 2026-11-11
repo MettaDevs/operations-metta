@@ -198,15 +198,22 @@ CREATE TRIGGER log_change AFTER INSERT OR DELETE OR UPDATE ON public.sim_m_secti
 
 -- 6. Menu ----------------------------------------------------------------------------------------------------------
 
-UPDATE public.apps
-SET navigation = '[{"id":"dashboard","label":"Dashboard","icon":"layout-dashboard","items":[
-        {"id":"dashboard","label":"Dashboard","href":"/healthcare/dashboard"}]},
-    {"id":"patient","label":"Pasien","icon":"users","items":[
-        {"id":"patients","label":"Pasien","href":"/healthcare/patient/patients","permission":"healthcare.patient.read"}]},
-    {"id":"setup","label":"Setup","icon":"settings","items":[
-        {"id":"patient-types","label":"Tipe pasien","href":"/healthcare/coverage/patient-types","section":"Penjaminan","permission":"healthcare.patient-type.read"},
-        {"id":"guarantors","label":"Penjamin","href":"/healthcare/coverage/guarantors","section":"Penjaminan","permission":"healthcare.guarantor.read"},
-        {"id":"sections","label":"Section","href":"/healthcare/service/sections","section":"Pelayanan","permission":"healthcare.section.read"},
-        {"id":"rooms","label":"Ruangan","href":"/healthcare/service/rooms","section":"Pelayanan","permission":"healthcare.room.read"}]}]'::jsonb,
+-- Item ditambahkan ke grup setup, bukan menulis ulang seluruh menu, supaya migration module lain yang juga menambah item
+-- tidak saling menimpa. Item yang id-nya sudah ada dilewati, jadi aman dijalankan ulang.
+UPDATE public.apps a
+SET navigation = (
+        SELECT jsonb_agg(
+                   CASE WHEN g->>'id' = 'setup'
+                        THEN jsonb_set(g, '{items}', (g->'items') || coalesce((
+                            SELECT jsonb_agg(item ORDER BY position)
+                            FROM jsonb_array_elements('[
+                                {"id":"sections","label":"Section","href":"/healthcare/service/sections","section":"Pelayanan","permission":"healthcare.section.read"},
+                                {"id":"rooms","label":"Ruangan","href":"/healthcare/service/rooms","section":"Pelayanan","permission":"healthcare.room.read"}]'::jsonb)
+                                 WITH ORDINALITY AS added(item, position)
+                            WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(g->'items') existing
+                                              WHERE existing->>'id' = added.item->>'id')), '[]'::jsonb))
+                        ELSE g END
+                   ORDER BY ordinal)
+        FROM jsonb_array_elements(a.navigation) WITH ORDINALITY AS groups(g, ordinal)),
     updated_at = now() AT TIME ZONE 'utc'
-WHERE id = 'healthcare';
+WHERE a.id = 'healthcare';

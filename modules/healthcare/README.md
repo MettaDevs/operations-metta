@@ -136,7 +136,7 @@ URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types
 - **Section** (`/healthcare/service/sections`): daftar dengan pencarian di toolbar dan filter unit, jenis, serta status di panel kiri. Kartu section memilih ruangan yang melayaninya dari ruangan unit yang sama.
 - **Ruangan** (`/healthcare/service/rooms`): daftar dengan pencarian di toolbar dan filter unit serta status di panel kiri.
 - Penjaminan dan Pelayanan adalah bagian rail **Setup**; judul bagian mengikuti folder domainnya.
-- Menu module ditulis migration ke `apps.navigation` (terakhir `0011_section.sql`) dan disaring Shell dengan permission tiap entri.
+- Menu module ditulis migration ke `apps.navigation` (terakhir ditulis utuh oleh `0010_setup_rail.sql`; sejak `0011_section.sql` migration menambah item ke grupnya tanpa menimpa item lain) dan disaring Shell dengan permission tiap entri.
 - Ikon module di katalog aplikasi ditulis ke `apps.icon` (`heart-pulse`), dan ikon setiap grup rail ke `icon` di grup `apps.navigation`: Dashboard `layout-dashboard`, Pasien `users`, Penjaminan `shield-plus`. Isinya nama ikon lucide; nama yang tidak dikenal Shell (`src/platform/shell/navigation-icons.ts`) memakai ikon bawaan.
 
 ## Penjamin
