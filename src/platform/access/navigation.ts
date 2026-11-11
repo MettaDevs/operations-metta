@@ -178,6 +178,25 @@ export const sysAdminArea: NavigationAreaEntry = {
                 },
             ],
         },
+        {
+            id: 'calendar',
+            label: 'Kalender',
+            icon: 'calendar',
+            items: [
+                {
+                    id: 'calendars',
+                    label: 'Kalender',
+                    href: '/sysadmin/calendar/calendars',
+                    permission: 'core.calendar.read',
+                },
+                {
+                    id: 'working-time-templates',
+                    label: 'Template jam kerja',
+                    href: '/sysadmin/calendar/working-time-templates',
+                    permission: 'core.calendar.read',
+                },
+            ],
+        },
     ],
 };
 
