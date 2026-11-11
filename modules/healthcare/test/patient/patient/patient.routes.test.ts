@@ -1437,34 +1437,34 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ['patient', 'Pasien'],
             ['setup', 'Setup'],
         ]);
-        // Setiap bagian rail Setup memakai satu folder domain. Bagian yang ditambahkan fitur lain cukup memenuhi aturan
-        // itu; peta ini memeriksa judul bagian yang sudah dikenal.
+        // Judul bagian yang sudah diketahui wajib menunjuk foldernya. Bagian yang ditambah migration lain cukup konsisten:
+        // semua item satu judul bagian berada di satu folder.
         const sectionFolders = new Map([
             ['Penjaminan', 'coverage'],
+            ['Pelayanan', 'service'],
             ['Tenaga kesehatan', 'practitioner'],
         ]);
         const pages = new Map(
             pageFiles().map((file) => [readPage(file).path, file]),
         );
-        const foundSections = new Map<string, string>();
         for (const group of groups)
             for (const item of group.items) {
-                const folder =
-                    group.id === 'setup' ? item.href.split('/')[2] : group.id;
+                let folder: string | undefined = group.id;
                 if (group.id === 'setup') {
                     expect(item.section).toBeDefined();
                     const section = item.section ?? '';
-                    expect(foundSections.get(section) ?? folder).toBe(folder);
-                    foundSections.set(section, folder ?? '');
+                    folder =
+                        sectionFolders.get(section) ?? item.href.split('/')[2];
+                    if (folder && !sectionFolders.has(section))
+                        sectionFolders.set(section, folder);
                 }
+                expect(folder).toBeDefined();
                 const file = pages.get(item.href)?.split(/[\\/]/) ?? [];
                 expect(file[file.lastIndexOf('src') + 1]).toBe(folder);
                 expect(item.href.startsWith(`/healthcare/${folder}`)).toBe(
                     true,
                 );
             }
-        for (const [section, folder] of sectionFolders)
-            expect(foundSections.get(section)).toBe(folder);
         const shell = async (as: Browser) =>
             json<{
                 navigation: {

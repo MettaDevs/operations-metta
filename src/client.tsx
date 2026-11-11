@@ -6,6 +6,10 @@ import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from 
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
+import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
+import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
+import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
+import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -81,6 +85,39 @@ const modulesHealthcareSrcPractitionerPractitionerPractitionersRoute =
             title: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.title,
         },
     });
+
+const modulesHealthcareSrcServiceRoomRoomsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcServiceRoomRoomsPage.path,
+    component: modulesHealthcareSrcServiceRoomRoomsPage.component,
+    validateSearch: modulesHealthcareSrcServiceRoomRoomsPage.validateSearch,
+    staticData: { title: modulesHealthcareSrcServiceRoomRoomsPage.title },
+});
+
+const modulesHealthcareSrcServiceSectionSectionsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcServiceSectionSectionsPage.path,
+    component: modulesHealthcareSrcServiceSectionSectionsPage.component,
+    validateSearch:
+        modulesHealthcareSrcServiceSectionSectionsPage.validateSearch,
+    staticData: { title: modulesHealthcareSrcServiceSectionSectionsPage.title },
+});
+
+const foundationCalendarCalendarsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCalendarCalendarsPage.path,
+    component: foundationCalendarCalendarsPage.component,
+    validateSearch: foundationCalendarCalendarsPage.validateSearch,
+    staticData: { title: foundationCalendarCalendarsPage.title },
+});
+
+const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCalendarWorkingTimeTemplatesPage.path,
+    component: foundationCalendarWorkingTimeTemplatesPage.component,
+    validateSearch: foundationCalendarWorkingTimeTemplatesPage.validateSearch,
+    staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
+});
 
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -206,6 +243,10 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
+        modulesHealthcareSrcServiceRoomRoomsRoute,
+        modulesHealthcareSrcServiceSectionSectionsRoute,
+        foundationCalendarCalendarsRoute,
+        foundationCalendarWorkingTimeTemplatesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,

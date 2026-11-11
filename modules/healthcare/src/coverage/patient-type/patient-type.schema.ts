@@ -11,6 +11,8 @@ export const patientTypeRowSchema = z.object({
     is_active: z.boolean(),
     // Tipe bawaan pasien baru. Paling banyak satu per tenant (sim_m_tipe_pasien_bawaan_unique).
     is_default: z.boolean(),
+    // Berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari. 0 berarti tanpa batas.
+    max_visits_per_section_per_day: z.number(),
     version: z.number(),
 });
 
@@ -24,5 +26,9 @@ export const patientTypeInputSchema = z.object({
     behaviors: z.array(z.string()).optional(),
     is_active: z.boolean().optional(),
     is_default: z.boolean().optional(),
+    // Layar mengirim isian teks apa adanya; service yang memeriksa bilangan bulatnya.
+    max_visits_per_section_per_day: z
+        .union([z.number(), z.string()])
+        .optional(),
     version: z.number().optional(),
 });

@@ -26,7 +26,8 @@ const rowSql = `select * from (
                     select t.id, t.kode as code, t.nama as name, coalesce((select json_agg(b.perilaku order by b.perilaku) from sim_m_tipe_pasien_perilaku b
                          where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
                         '[]'::json) as behaviors,
-                           t.aktif as is_active, t.bawaan as is_default, t.version
+                           t.aktif as is_active, t.bawaan as is_default,
+                           t.maks_kunjungan_per_poli_per_hari as max_visits_per_section_per_day, t.version
                     from sim_m_tipe_pasien t where t.tenant_id = $1 and t.deleted_at is null) patient_types
                 where true`;
 
@@ -43,6 +44,17 @@ function checked(body: unknown) {
     const behaviors = [...new Set(data?.behaviors ?? [])];
     if (!behaviors.every(isPatientTypeBehavior))
         errors.behaviors = 'Pilih perilaku dari daftar.';
+    const rawLimit = data?.max_visits_per_section_per_day;
+    // Tanpa isian berarti tanpa batas; isian kosong dari layar ditolak, karena Number('') bernilai 0.
+    const visitLimit =
+        rawLimit === undefined
+            ? 0
+            : String(rawLimit).trim()
+              ? Number(rawLimit)
+              : Number.NaN;
+    if (!Number.isInteger(visitLimit) || visitLimit < 0 || visitLimit > 999)
+        errors.max_visits_per_section_per_day =
+            'Isi bilangan bulat 0 sampai 999. Isi 0 bila tidak dibatasi.';
     if (Object.keys(errors).length || !data) validation(errors);
     return {
         code,
@@ -50,6 +62,7 @@ function checked(body: unknown) {
         behaviors: behaviors.filter(isPatientTypeBehavior),
         is_active: data.is_active ?? true,
         is_default: data.is_default ?? false,
+        max_visits_per_section_per_day: visitLimit,
     };
 }
 
@@ -135,6 +148,8 @@ export class PatientTypes {
                         data.behaviors.includes('requires_guarantor'),
                     aktif: data.is_active,
                     bawaan: data.is_default,
+                    maks_kunjungan_per_poli_per_hari:
+                        data.max_visits_per_section_per_day,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -158,7 +173,7 @@ export class PatientTypes {
                 if (data.is_default) await this.clearDefault(current.id);
                 updated = await this.db.execute(
                     `update sim_m_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, bawaan = $9,
-                     updated_at = $5
+                     maks_kunjungan_per_poli_per_hari = $10, updated_at = $5
                  where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
                     [
                         data.code,
@@ -170,6 +185,7 @@ export class PatientTypes {
                         current.id,
                         version,
                         data.is_default,
+                        data.max_visits_per_section_per_day,
                     ],
                 );
                 if (updated)

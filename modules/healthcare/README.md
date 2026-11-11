@@ -1,10 +1,10 @@
 # healthcare
 
-Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, dan tenaga kesehatan. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
+Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, section, dan tenaga kesehatan. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
 
 ## Nama tabel
 
-Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, dan `sim_m_nakes`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
+Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, `sim_m_section`, `sim_m_ruangan`, `sim_m_section_ruangan`, dan `sim_m_nakes`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
 
 ## Pasien adalah peran party
 
@@ -93,18 +93,20 @@ Reference NRM boleh berscope legal entity atau operating unit, menyalakan `defau
 
 ## Izin
 
-| Duty                                                                                                     | Privilege                                                | Permission                                                  |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
-| `healthcare.patient.inquire` Lihat pasien                                                                | `patient.view`                                           | `patient.read`                                              |
-| `healthcare.patient.manage` Kelola pasien                                                                | `patient.register`, `patient.maintain`, `patient.retire` | `patient.read`, `.create`, `.update`, `.delete`             |
-| `healthcare.payment-setup.inquire` Lihat tipe pasien dan penjamin                                        | `patient-type.view`, `guarantor.view`                    | `patient-type.read`, `guarantor.read`                       |
-| `healthcare.payment-setup.manage` Kelola tipe pasien dan penjamin                                        | `patient-type.maintain`, `guarantor.maintain`            | `patient-type.read`, `.update`, `guarantor.read`, `.update` |
-| `healthcare.practitioner.inquire` Lihat tenaga kesehatan                                                 | `practitioner.view`                                      | `practitioner.read`                                         |
-| `healthcare.practitioner.manage` Kelola tenaga kesehatan                                                 | `practitioner.maintain`                                  | `practitioner.read`, `.update`                              |
-| `healthcare.patient-sharing.inquire` Lihat kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.view`                                   | `patient-sharing.read`                                      |
-| `healthcare.patient-sharing.manage` Kelola kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.maintain`                               | `patient-sharing.read`, `.update`                           |
+| Duty                                                                                                     | Privilege                                                            | Permission                                                         |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `healthcare.patient.inquire` Lihat pasien                                                                | `patient.view`                                                       | `patient.read`                                                     |
+| `healthcare.patient.manage` Kelola pasien                                                                | `patient.register`, `patient.maintain`, `patient.retire`             | `patient.read`, `.create`, `.update`, `.delete`                    |
+| `healthcare.payment-setup.inquire` Lihat tipe pasien dan penjamin                                        | `patient-type.view`, `guarantor.view`                                | `patient-type.read`, `guarantor.read`                              |
+| `healthcare.payment-setup.manage` Kelola tipe pasien dan penjamin                                        | `patient-type.maintain`, `guarantor.maintain`                        | `patient-type.read`, `.update`, `guarantor.read`, `.update`        |
+| `healthcare.service-setup.inquire` Lihat section dan ruangan                                             | `section.view`, `room.view`                                          | `section.read`, `room.read`                                        |
+| `healthcare.service-setup.manage` Kelola section dan ruangan                                             | `section.maintain`, `section.retire`, `room.maintain`, `room.retire` | `section.*` dan `room.*`: `.read`, `.create`, `.update`, `.delete` |
+| `healthcare.practitioner.inquire` Lihat tenaga kesehatan                                                 | `practitioner.view`                                                  | `practitioner.read`                                                |
+| `healthcare.practitioner.manage` Kelola tenaga kesehatan                                                 | `practitioner.maintain`                                              | `practitioner.read`, `.update`                                     |
+| `healthcare.patient-sharing.inquire` Lihat kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.view`                                               | `patient-sharing.read`                                             |
+| `healthcare.patient-sharing.manage` Kelola kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.maintain`                                           | `patient-sharing.read`, `.update`                                  |
 
-Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien dan penjamin adalah master tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
+Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien, penjamin, section, ruangan, dan nakes adalah master tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
 
 ## Tipe pasien dan perilakunya
 
@@ -116,6 +118,7 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 - Tipe pasien menyalakan perilaku lewat satu baris per perilaku di `sim_m_tipe_pasien_perilaku`. Perilaku baru kelak (cek kepesertaan, mode tagihan, wajib rujukan) cukup menjadi kode baru di katalog; tabel dan data pasien tidak berubah.
 - `sim_m_tipe_pasien.memakai_penjamin` dari `0001` masih ditulis sama dengan `requires_guarantor` untuk kode rilis sebelumnya, dan dibuang di rilis sesudahnya.
 - **Tipe bawaan:** centang "Bawaan pasien baru" menandai paling banyak satu tipe per tenant (`sim_m_tipe_pasien_bawaan_unique`). Menandai tipe lain memindahkan tandanya. Penjamin punya tanda serupa, paling banyak satu per tipe pasien. Kartu pasien baru terisi tipe bawaan beserta penjamin bawaannya, dan pendaftaran lewat API tanpa cara bayar memakainya. Hanya tipe dan penjamin yang aktif yang dipakai. Tidak ada id yang ditulis di kode.
+- **Batas kunjungan per poli per hari** (`sim_m_tipe_pasien.maks_kunjungan_per_poli_per_hari`, API `max_visits_per_section_per_day`): berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari, aturan puskesmas (misalnya BPJS 1, Umum tanpa batas). 0 berarti tanpa batas dan menjadi nilai tipe yang sudah ada; tenant sendiri yang mengisi 1 untuk tipe BPJS-nya. Sistem lama tidak punya kolom ini. Pendaftaran kunjungan kelak menolak pendaftaran yang melewati batas. Belum dibangun.
 
 ## Layar
 
@@ -126,6 +129,7 @@ Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `app
 | Dashboard        | `src/dashboard/`    | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
 | Pasien           | `src/patient/`      | Pasien (`patient/`); aturan siapa melihat pasien di `patient-sharing/` tanpa halaman                                          |
 | Penjaminan       | `src/coverage/`     | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
+| Pelayanan        | `src/service/`      | Section (`section/`), Ruangan (`room/`)                                                                                       |
 | Tenaga kesehatan | `src/practitioner/` | Nakes (`practitioner/`)                                                                                                       |
 
 URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`) dialihkan ke alamat barunya. `/healthcare/sharing-policies` dan `/healthcare/patient/sharing-policies` dialihkan ke `/sysadmin/data-sharing`.
@@ -133,8 +137,11 @@ URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types
 - **Pasien** (`/healthcare/patient/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
 - Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
 - **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
-- **Nakes** (`/healthcare/practitioner/practitioners`), di rail Setup bagian "Tenaga kesehatan": daftar dengan pencarian nama dan no. SIP di toolbar, filter profesi dan status di panel kiri, dan kartu nakes.
-- Menu module ditulis migration ke `apps.navigation` (terakhir `0012_practitioner.sql`) dan disaring Shell dengan permission tiap entri.
+- **Section** (`/healthcare/service/sections`): daftar dengan pencarian di toolbar dan filter unit, jenis, serta status di panel kiri. Kartu section memilih ruangan yang melayaninya dari ruangan unit yang sama.
+- **Ruangan** (`/healthcare/service/rooms`): daftar dengan pencarian di toolbar dan filter unit serta status di panel kiri.
+- **Nakes** (`/healthcare/practitioner/practitioners`): daftar dengan pencarian nama dan no. SIP di toolbar, filter profesi dan status di panel kiri, dan kartu nakes.
+- Penjaminan, Pelayanan, dan Tenaga kesehatan adalah bagian rail **Setup**; judul bagian mengikuti folder domainnya.
+- Menu module ditulis migration ke `apps.navigation` (terakhir ditulis utuh oleh `0010_setup_rail.sql`; sejak `0011_section.sql` migration menambah item ke grupnya tanpa menimpa item lain) dan disaring Shell dengan permission tiap entri.
 - Ikon module di katalog aplikasi ditulis ke `apps.icon` (`heart-pulse`), dan ikon setiap grup rail ke `icon` di grup `apps.navigation`: Dashboard `layout-dashboard`, Pasien `users`, Penjaminan `shield-plus`. Isinya nama ikon lucide; nama yang tidak dikenal Shell (`src/platform/shell/navigation-icons.ts`) memakai ikon bawaan.
 
 ## Penjamin
@@ -156,24 +163,40 @@ Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti
 - Sesudah dibuat, nama dan identitas diubah di Buku alamat; kartu nakes mengubah profesi, SIP, kode dokter BPJS, akun login, dan status.
 - Masa berlaku SIP hanya dicatat. Tidak ada aturan yang menolak nakes dengan SIP habis (keputusan pemilik produk: tidak menambah aturan bisnis sendiri).
 - Akun login opsional, dipilih dari anggota aktif tenant.
-- Menu ditambahkan sebagai satu entri di rail Setup, tanpa menulis ulang `apps.navigation`.
 
 ## Endpoint
 
 Semua di bawah `/api/modules/healthcare/v1`.
 
-| Endpoint                                                                                                                                                                              | Izin                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                  |
-| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                  |
-| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                  |
-| `POST /patients`                                                                                                                                                                      | `patient.create`                |
-| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                |
-| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                |
-| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update` |
-| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`    |
-| `GET /practitioners` (cari: nama, no. SIP; saring profesi, status), `GET /practitioners/metadata`                                                                                     | `practitioner.read`             |
-| `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                          | `practitioner.update`           |
+| Endpoint                                                                                                                                                                              | Izin                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                                     |
+| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                                     |
+| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                                     |
+| `POST /patients`                                                                                                                                                                      | `patient.create`                                   |
+| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                                   |
+| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                                   |
+| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update`                    |
+| `GET /sections/metadata` (pilihan unit, ruangan, dan izin layar)                                                                                                                      | `section.read`                                     |
+| `GET, POST /sections` (cari: nama, unit, kode nomor bukti; saring `operating_unit_id`, `kind`, `status`), `PATCH, DELETE /sections/{id}`                                              | `section.read` / `.create` / `.update` / `.delete` |
+| `GET /rooms/metadata` (pilihan unit dan izin layar)                                                                                                                                   | `room.read`                                        |
+| `GET, POST /rooms` (cari: kode, nama, lantai, nama di layar antrean; saring `operating_unit_id`, `status`), `PATCH, DELETE /rooms/{id}`                                               | `room.read` / `.create` / `.update` / `.delete`    |
+| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`                       |
+| `GET /practitioners` (cari: nama, no. SIP; saring profesi, status), `GET /practitioners/metadata`                                                                                     | `practitioner.read`                                |
+| `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                          | `practitioner.update`                              |
+
+## Section
+
+Section adalah poli atau titik layanan lain di satu operating unit (faskes), padanan `SIMmSection` sistem lama. Pendaftaran kunjungan kelak memilih section; tenaga kesehatan dan jadwal menyusul. Ruangan tidak dipilih saat pendaftaran dan tidak ditetapkan di jadwal dokter: petugas yang memanggil pasien berikutnya yang memilih ruangannya (PR berikutnya).
+
+- Satu section milik satu operating unit (`operating_unit_id`). Namanya unik per unit selama belum dihapus (`sim_m_section_nama_unique`).
+- Jenis section adalah kode dari katalog di kode (`src/service/section/section.kinds.ts`) beserta labelnya: `rawat_jalan` Rawat jalan, `gawat_darurat` Gawat darurat, `rawat_inap` Rawat inap, `penunjang` Penunjang, `farmasi` Farmasi, `kasir` Kasir. Kodenya disimpan di `sim_m_section.jenis`.
+- Tidak ada kode otomatis. `kode_no_bukti` adalah kode pendek opsional yang diketik pengguna dan kelak menjadi segmen nomor pemeriksaan; `kode_poli_bpjs` opsional.
+- **Ruangan** (`sim_m_ruangan`) adalah ruang fisik per operating unit, misalnya L1R1..L1R3, L2R1, dan L2R2 seperti di sistem lama, diisi di layar Ruangan. Kodenya unik per unit selama belum dihapus (`sim_m_ruangan_kode_unique`); `urutan` mengurutkannya di unit itu.
+- **Ruangan section** (`sim_m_section_ruangan`): banyak ke banyak, karena satu ruang fisik bisa melayani "Poli Umum" dan "Poli Umum Sore" yang sengaja dipisah supaya laporan bisa menyaringnya. Kartu section memilih ruangannya; API menerima `room_ids` lengkap, ruangan yang tidak disebut lagi dilepas (dihapus lunak), dan tanpa `room_ids` ruangan tidak disentuh. Section hanya menerima ruangan unit section itu sendiri, juga saat section pindah unit. Unit ruangan tidak bisa diganti selama section masih memakainya.
+- **Antrean**: `mode_antrean` adalah kode dari katalog di kode (`src/service/section/section.queue-modes.ts`), bawaan `bersama`. `bersama`: satu nomor per section per hari dipakai semua ruangan, dan ruangan terikat saat ruangan memanggil pasien, seperti sistem lama. `per_jadwal`: satu nomor per sesi praktik atau jadwal dokter. `awalan_antrean` adalah awalan pendek opsional, misalnya `A` menjadi `A-012`. Nomor antrean mulai lagi setiap hari, jadi tidak ada kolom periode. Belum ada yang menerbitkan nomor antrean; pendaftaran kunjungan yang kelak melakukannya.
+- Delete mengisi `deleted_at`. Section yang dihapus tidak tampil, melepas namanya, dan melepas ruangannya; ruangan yang dihapus lepas dari setiap section yang memakainya.
+- Pilihan unit dibaca module langsung dari `organizations` dan `operating_units` Core, karena daftar organisasi Core dijaga izin organisasi.
 
 ## Dicatat untuk nanti
 
