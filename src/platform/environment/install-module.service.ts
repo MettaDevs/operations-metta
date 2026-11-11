@@ -29,10 +29,10 @@ export type InstallModuleRequest = z.infer<typeof installModuleRequestSchema>;
 // 3. Terpasang: baris `core_module_installations` berstatus installed, ditulis hanya setelah migration berhasil.
 //
 // Entitlement, pemasangan, duty, dan data bawaan per organisasi ditulis dalam satu transaksi. Data bawaan itu, misalnya
-// number sequence NRM per legal entity, dibuat oleh yang didaftarkan lewat onOrganizationCreated (src/main.ts), yang
+// number sequence NRM per legal entity, dibuat oleh yang didaftarkan lewat onOrganizationCreated (registerOrganizationDefaults), yang
 // dijalankan ulang untuk setiap legal entity dan operating unit yang sudah ada sebelum module dipasang. Organisasi
-// yang dibuat sesudahnya mendapatkannya saat lahir. Proses yang memanggil installModule wajib memuat src/main.ts
-// supaya pendaftaran itu ada.
+// yang dibuat sesudahnya mendapatkannya saat lahir. Proses yang memanggil installModule wajib memanggil
+// registerOrganizationDefaults (src/foundation/number-sequence/) supaya pendaftaran itu ada.
 //
 // Role pemilik tenant lalu mendapat semua duty module itu, sama dengan duty Core yang diberikan saat penyiapan.
 // Aman diulang: entitlement aktif, migration yang sudah tercatat, catatan pemasangan, dan duty yang sudah ada dilewati.

@@ -2,10 +2,9 @@
 // lalu menutupnya. Satu operasi pada satu waktu; SIGTERM ditunggu sampai operasi yang sedang berjalan selesai.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { registerOrganizationDefaults } from './foundation/number-sequence/index.ts';
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
-// Pendaftaran onOrganizationCreated di main.ts (data bawaan per organisasi milik module) wajib ada saat module dipasang.
-import './main.ts';
 import {
     gatherHostReport,
     readModuleCatalog,
@@ -19,6 +18,8 @@ import {
 import { readMigrationSource } from './platform/migration/index.ts';
 
 const config = loadConfig();
+// Data bawaan per organisasi milik module yang dipasang sync_entitlements.
+registerOrganizationDefaults();
 startErrorReporting(config, 'worker');
 if (
     !config.CONTROL_PLANE_URL ||

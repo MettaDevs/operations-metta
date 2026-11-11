@@ -32,8 +32,8 @@ import {
     type Context,
 } from './platform/http/index.ts';
 import {
-    NumberSequences,
     numberSequenceRoutes,
+    registerOrganizationDefaults,
 } from './foundation/number-sequence/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import { dataSharingRoutes } from './platform/data-sharing/index.ts';
@@ -46,32 +46,9 @@ import {
 import { geographyRoutes } from './platform/geography/index.ts';
 import type { loginInputSchema } from './platform/identity/index.ts';
 import { Session, ValkeySessions } from './platform/identity/index.ts';
-import {
-    onOrganizationCreated,
-    organizationRoutes,
-} from './platform/organization/index.ts';
+import { organizationRoutes } from './platform/organization/index.ts';
 
-// Legal entity dan unit baru mendapat number sequence bawaan untuk setiap reference yang memintanya lewat
-// app_number_sequence_references. Organization ada di Platform, jadi ia tidak meng-import Foundation sendiri.
-onOrganizationCreated(async (db, organization) => {
-    const sequences = new NumberSequences(
-        db,
-        organization.tenantId,
-        organization.userId,
-    );
-    switch (organization.classification) {
-        case 'legal_entity':
-            return sequences.createLegalEntityDefaults(
-                organization.organizationId,
-            );
-        case 'operating_unit':
-            return sequences.createUnitDefaults(organization.organizationId);
-        default: {
-            const unknown: never = organization.classification;
-            throw new Error(`Unknown classification: ${String(unknown)}`);
-        }
-    }
-});
+registerOrganizationDefaults();
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {
