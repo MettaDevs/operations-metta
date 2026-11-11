@@ -16,7 +16,7 @@ import {
     type ClientManifest,
 } from '../src/platform/http/index.ts';
 
-// `bun run build`: server ke dist/main.js dan peramban ke dist/client/. Berkas peramban bernama `<nama>-<hash>.<ext>`,
+// `bun run build`: server ke dist/main.js, dist/worker.js, dan dist/migrate.js, dan peramban ke dist/client/. Berkas peramban bernama `<nama>-<hash>.<ext>`,
 // dan dist/client/manifest.json mencatat entry, stylesheet, dan setiap berkas yang boleh disajikan server.
 // Berkas hasil generate (src/client.tsx dan kontrak API) dibuat lebih dulu oleh scripts/generate-client.ts.
 
@@ -167,6 +167,7 @@ export async function buildServer(outdir: string): Promise<void> {
         entrypoints: [
             join(root, 'src', 'main.ts'),
             join(root, 'src', 'worker.ts'),
+            join(root, 'src', 'migrate.ts'),
         ],
         outdir,
         target: 'bun',
@@ -186,6 +187,6 @@ if (import.meta.main) {
     await buildServer(dist);
     const manifest = await buildClient(join(dist, 'client'));
     console.log(
-        `dist/main.js, dist/worker.js, dan dist/client/ (${manifest.files.length} berkas) selesai dibangun.`,
+        `dist/main.js, dist/worker.js, dist/migrate.js, dan dist/client/ (${manifest.files.length} berkas) selesai dibangun.`,
     );
 }

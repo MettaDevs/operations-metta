@@ -1,14 +1,14 @@
+// Proses migrate: membawa database runtime ke skema kode ini. `bun run migrate` di laptop dan CI, `bun dist/migrate.js`
+// dari image di host runtime sebelum proses HTTP dan worker versi baru dinyalakan. Berkas migration dibaca dari folder
+// induk berkas ini, yang di repo adalah akar repo dan di image adalah /app.
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import postgres from 'postgres';
-import { databaseSettingsSchema } from '../src/platform/config/index.ts';
-import {
-    migrate,
-    readMigrationSource,
-} from '../src/platform/migration/index.ts';
+import { databaseSettingsSchema } from './platform/config/index.ts';
+import { migrate, readMigrationSource } from './platform/migration/index.ts';
 
 const usage =
-    'Usage: bun scripts/migrate.ts [--adopt-coreerp] [--modules <module,...>]';
+    'Usage: bun src/migrate.ts (di image: bun dist/migrate.js) [--adopt-coreerp] [--modules <module,...>]';
 
 let options: { adoptCoreErp: boolean; modules: string[] | undefined };
 try {

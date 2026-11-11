@@ -137,14 +137,14 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Migrate an empty database
-        run: bun scripts/migrate.ts
+        run: bun src/migrate.ts
 
       - name: Check ids and user ids are uuid and both mappings are exact
         run: psql -X -v ON_ERROR_STOP=1 -f database/check-ids.sql
 
       - name: Migrate again without changes
         run: |
-          output=$(bun scripts/migrate.ts)
+          output=$(bun src/migrate.ts)
           echo "$output"
           grep -qx 'database is up to date' <<< "$output"
 
@@ -154,8 +154,8 @@ jobs:
         run: |
           set -o pipefail
           psql -X -v ON_ERROR_STOP=1 -c 'create database operations_ci_core_first'
-          DB_DATABASE=operations_ci_core_first bun scripts/migrate.ts --modules ''
-          DB_DATABASE=operations_ci_core_first bun scripts/migrate.ts
+          DB_DATABASE=operations_ci_core_first bun src/migrate.ts --modules ''
+          DB_DATABASE=operations_ci_core_first bun src/migrate.ts
           dump() {
             docker exec "$POSTGRES_CONTAINER" pg_dump -U ci --schema-only \
               --exclude-table=public.schema_migrations -d "$1" |

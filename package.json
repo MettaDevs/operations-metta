@@ -20,7 +20,7 @@
         "format:check": "prettier --check src modules packages scripts test .github package.json tsconfig.json eslint.config.js",
         "check:boundaries": "bun scripts/check-boundaries.ts",
         "check:ui": "bun scripts/check-ui.ts",
-        "migrate": "bun scripts/migrate.ts",
+        "migrate": "bun src/migrate.ts",
         "dev:setup": "bun scripts/dev-setup.ts"
     },
     "dependencies": {
