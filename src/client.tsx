@@ -6,6 +6,9 @@ import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from 
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
+import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage } from '../modules/healthcare/src/service/practice-schedule/practice-schedules.page.tsx';
+import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage } from '../modules/healthcare/src/service/practice-schedule/practice-sessions.page.tsx';
+import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage } from '../modules/healthcare/src/service/practice-schedule/schedule-templates.page.tsx';
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
@@ -83,6 +86,45 @@ const modulesHealthcareSrcPractitionerPractitionerPractitionersRoute =
             modulesHealthcareSrcPractitionerPractitionerPractitionersPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.title,
+        },
+    });
+
+const modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage.path,
+        component:
+            modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage.component,
+        validateSearch:
+            modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcServicePracticeSchedulePracticeSessionsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.path,
+        component:
+            modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.component,
+        validateSearch:
+            modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage.path,
+        component:
+            modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage.component,
+        validateSearch:
+            modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage.title,
         },
     });
 
@@ -243,6 +285,9 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
+        modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesRoute,
+        modulesHealthcareSrcServicePracticeSchedulePracticeSessionsRoute,
+        modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesRoute,
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,
         foundationCalendarCalendarsRoute,
