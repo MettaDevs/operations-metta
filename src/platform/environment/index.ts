@@ -48,5 +48,12 @@ export {
     type HostReport,
     type HostReportEnvironment,
 } from './host-report.service.ts';
+export {
+    readModuleCatalog,
+    syncEntitlements,
+    syncEntitlementsRequestSchema,
+    type CatalogModule,
+    type SyncEntitlementsRequest,
+} from './sync-entitlements.service.ts';
 export { findRoute, type EnvironmentRoute } from './route.service.ts';
 export { runOperation } from './worker.service.ts';

@@ -125,6 +125,7 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
     - Core hanya membaca. Menulis tetap lewat module pemiliknya.
 - Data sharing antar legal entity milik Core, pola "Configure cross-company data sharing" F&O (keputusan pemilik produk, 11 November 2026): Sys Admin → Data sharing, `src/platform/data-sharing/`. Module mendaftarkan jenis datanya di `data_sharing_types` lewat migration-nya (kode stabil, misalnya `healthcare.patient` "Master pasien") dan membaca legal entity yang saling melihat datanya lewat `sharedLegalEntities`. Module tidak menyimpan kebijakan sharing sendiri.
 - Katalog, entitlement, dan pemasangan module tidak sama. Katalog berarti produk dikenal, entitlement berarti tenant berhak memakai, dan `installed` hanya sah setelah migration module berhasil dan tercatat di `core_module_installations`. Layar berlabel "terpasang" membaca catatan pemasangan itu, tidak menyimpulkannya dari entitlement.
+- Module yang boleh dijual punya `modules/<module>/module.json` berisi `name` dan `description`. Worker melaporkannya ke control plane sebagai katalog module. Entitlement datang dari control plane lewat operasi `sync_entitlements`, yang memasang module dan mencabut hak yang tidak lagi diberikan. Module tanpa `module.json` tetap bisa dipasang `dev:setup`, tetapi tidak tampil di katalog.
 
 ## Database
 

@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
+import { z } from 'zod';
 import { databaseSettingsSchema } from '../../../src/platform/config/index.ts';
 import {
     type ControlPlaneClient,
@@ -11,6 +12,7 @@ import {
     findRoute,
     gatherHostReport,
     provisionEnvironment,
+    readModuleCatalog,
     provisionRequestSchema,
     runOperation,
 } from '../../../src/platform/environment/index.ts';
@@ -22,7 +24,8 @@ import {
 describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     if (!process.env.DB_HOST) return;
     const settings = databaseSettingsSchema.parse(process.env);
-    const source = readMigrationSource(resolve(import.meta.dir, '../../..'));
+    const root = resolve(import.meta.dir, '../../..');
+    const source = readMigrationSource(root);
     const runtime = postgres({
         host: settings.DB_HOST,
         port: settings.DB_PORT,
@@ -767,8 +770,17 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             ],
         );
 
-        const report = await gatherHostReport(settings, '0.3.0');
+        const report = await gatherHostReport(
+            settings,
+            '0.3.0',
+            readModuleCatalog(root, source),
+        );
         expect(report.release).toBe('0.3.0');
+        expect(report.modules).toContainEqual({
+            id: 'healthcare',
+            name: 'Layanan kesehatan',
+            description: 'Pasien, cara bayar, dan pelayanan klinik.',
+        });
         const bySlug = (slug: string) =>
             report.environments.find(
                 (environment) => environment.tenant_slug === slug,
@@ -792,4 +804,158 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             'Database lingkungan tidak bisa dibaca',
         );
     }, 180_000);
+
+    test('sync_entitlements memasang module, memberi tanggal berakhir, dan mencabut hak yang tidak lagi ada', async () => {
+        const request = await parameters();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', request),
+            ),
+        ).toBe('succeeded');
+        const environment = postgres({
+            host: settings.DB_HOST,
+            port: settings.DB_PORT,
+            database: request.database,
+            username: settings.DB_USERNAME,
+            password: settings.DB_PASSWORD,
+            max: 1,
+            onnotice: () => {},
+        });
+        const entitlements = async () =>
+            z
+                .array(
+                    z.object({
+                        app_id: z.string(),
+                        status: z.string(),
+                        ends_at: z.string().nullable(),
+                    }),
+                )
+                .parse(
+                    await environment.unsafe(
+                        `select app_id, status, to_char(ends_at, 'YYYY-MM-DD HH24:MI') as ends_at
+                         from tenant_app_entitlements where tenant_id = $1 order by id`,
+                        [request.tenant.id],
+                    ),
+                );
+        const sync = (modules: unknown[]) =>
+            runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('sync_entitlements', {
+                    tenant_id: request.tenant.id,
+                    database: request.database,
+                    modules,
+                }),
+            );
+        try {
+            const { client, reports } = recorder();
+            expect(
+                await runOperation(
+                    settings,
+                    source,
+                    client,
+                    claimed('sync_entitlements', {
+                        tenant_id: request.tenant.id,
+                        database: request.database,
+                        modules: [{ module_id: 'healthcare', ends_on: null }],
+                    }),
+                ),
+            ).toBe('succeeded');
+            expect(reports.map((report) => report.step)).toEqual([
+                'pasang healthcare',
+                'cabut hak lain',
+                'done',
+            ]);
+            const [installed] = await environment.unsafe(
+                `select count(*)::int as count from core_module_installations
+                 where tenant_id = $1 and module_id = 'healthcare' and status = 'installed'`,
+                [request.tenant.id],
+            );
+            expect(installed?.count).toBe(1);
+            expect(await entitlements()).toEqual([
+                { app_id: 'healthcare', status: 'active', ends_at: null },
+            ]);
+
+            // Diulang dengan tanggal berakhir: tidak ada hak kedua, tanggalnya menjadi awal hari sesudahnya.
+            expect(
+                await sync([
+                    { module_id: 'healthcare', ends_on: '2099-12-31' },
+                ]),
+            ).toBe('succeeded');
+            expect(await entitlements()).toEqual([
+                {
+                    app_id: 'healthcare',
+                    status: 'active',
+                    ends_at: '2100-01-01 00:00',
+                },
+            ]);
+
+            expect(await sync([])).toBe('succeeded');
+            expect(await entitlements()).toEqual([
+                {
+                    app_id: 'healthcare',
+                    status: 'revoked',
+                    ends_at: '2100-01-01 00:00',
+                },
+            ]);
+            // Diberikan lagi: baris yang sama aktif kembali, karena satu tenant punya satu baris per module.
+            expect(
+                await sync([{ module_id: 'healthcare', ends_on: null }]),
+            ).toBe('succeeded');
+            expect(await entitlements()).toEqual([
+                { app_id: 'healthcare', status: 'active', ends_at: null },
+            ]);
+            // Hak yang tanggalnya sudah lewat tetap tercatat berakhir, tanpa bentrok dengan baris yang ada.
+            expect(
+                await sync([
+                    { module_id: 'healthcare', ends_on: '2000-01-01' },
+                ]),
+            ).toBe('succeeded');
+            expect(await entitlements()).toEqual([
+                {
+                    app_id: 'healthcare',
+                    status: 'active',
+                    ends_at: '2000-01-02 00:00',
+                },
+            ]);
+            const [installations] = await environment.unsafe(
+                `select count(*)::int as count from core_module_installations
+                 where tenant_id = $1 and module_id = 'healthcare'`,
+                [request.tenant.id],
+            );
+            expect(installations?.count).toBe(1);
+        } finally {
+            await environment.end();
+        }
+    }, 180_000);
+
+    test('sync_entitlements menolak module yang tidak dibawa rilis ini tanpa mengubah apa pun', async () => {
+        const request = await parameters();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', request),
+            ),
+        ).toBe('succeeded');
+        const { client, reports } = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                client,
+                claimed('sync_entitlements', {
+                    tenant_id: request.tenant.id,
+                    database: request.database,
+                    modules: [{ module_id: 'tidak-ada', ends_on: null }],
+                }),
+            ),
+        ).toBe('failed');
+        expect(reports.at(-1)?.failure_message).toContain('tidak-ada');
+    }, 120_000);
 });

@@ -12,6 +12,10 @@ import { provisionRequestSchema } from './provision.schema.ts';
 import { provisionEnvironment } from './provision.service.ts';
 import { purgeEnvironment, purgeRequestSchema } from './purge.service.ts';
 import { restoreEnvironment, restoreRequestSchema } from './restore.service.ts';
+import {
+    syncEntitlements,
+    syncEntitlementsRequestSchema,
+} from './sync-entitlements.service.ts';
 
 const knownOperations = [
     'provision',
@@ -20,6 +24,7 @@ const knownOperations = [
     'expire',
     'restore',
     'purge',
+    'sync_entitlements',
 ] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
@@ -132,6 +137,21 @@ export async function runOperation(
                         `Parameter purge tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await purgeEnvironment(settings, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'sync_entitlements': {
+                const request = syncEntitlementsRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter sync_entitlements tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await syncEntitlements(settings, source, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',
