@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { pageFiles, readPage } from '../../../scripts/generate-client.ts';
-import { coreNavigation } from '../../../src/platform/access/navigation.ts';
+import { sysAdminArea } from '../../../src/platform/access/navigation.ts';
 import {
     operationsTestApp,
     type Browser,
@@ -18,25 +18,25 @@ test('the address book screens are app pages at their menu addresses, guarded by
         join(src, 'geography', 'address-setup.page.tsx'),
     ].map((file) => readPage(file));
     expect(pages.map(({ path, layout }) => ({ path, layout }))).toEqual([
-        { path: '/settings/global-address-book', layout: 'app' },
-        { path: '/settings/occupations', layout: 'app' },
-        { path: '/settings/party-duplicate-check', layout: 'app' },
-        { path: '/settings/address-setup', layout: 'app' },
+        { path: '/sysadmin/address-book/parties', layout: 'app' },
+        { path: '/sysadmin/address-book/occupations', layout: 'app' },
+        { path: '/sysadmin/address-book/duplicate-check', layout: 'app' },
+        { path: '/sysadmin/geography/address-setup', layout: 'app' },
     ]);
     // Route tree dirakit dari setiap `.page.tsx`, jadi keempat halaman ada di dalamnya.
     const tree = new Set(pageFiles().map((file) => readPage(file).path));
     for (const page of pages) expect(tree.has(page.path)).toBe(true);
     const menu = (group: string) =>
-        coreNavigation
+        sysAdminArea.groups
             .find((entry) => entry.id === group)
             ?.items.map((item) => [item.href, item.permission]);
     expect(menu('address-book')).toEqual([
-        ['/settings/global-address-book', 'core.organization.read'],
-        ['/settings/occupations', 'core.organization.read'],
-        ['/settings/party-duplicate-check', 'core.organization.read'],
+        ['/sysadmin/address-book/parties', 'core.organization.read'],
+        ['/sysadmin/address-book/occupations', 'core.organization.read'],
+        ['/sysadmin/address-book/duplicate-check', 'core.organization.read'],
     ]);
-    expect(menu('address-setup')).toEqual([
-        ['/settings/address-setup', 'core.reference-data.read'],
+    expect(menu('geography')).toEqual([
+        ['/sysadmin/geography/address-setup', 'core.reference-data.read'],
     ]);
 });
 

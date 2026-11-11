@@ -4,20 +4,27 @@ import { cn } from '@operations-metta/ui/utils';
 import { useLocation } from '@tanstack/react-router';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { ShellData } from './api.ts';
+import { areaOf } from './home.ts';
 import { navigationIcon } from './navigation-icons.ts';
+import { ProductLauncher } from './product-launcher.tsx';
 import { ShellLink } from './shell-link.tsx';
 
-type NavigationGroup = ShellData['navigation'][number];
+type NavigationGroup = ShellData['navigation'][number]['groups'][number];
 type NavigationItem = NavigationGroup['items'][number];
 
-// Rail kiri dan submenu, dipindah dari app-sidebar CoreERP. Kelompok dan halamannya datang dari `/api/v1/shell`,
-// sudah disaring izin anggota ini. Peluncur aplikasi CoreERP di atas rail belum dipindah: belum ada module yang
-// punya halaman.
+// Rail kiri dan submenu, dipindah dari app-sidebar CoreERP. Paling atas katalog aplikasi; di bawahnya grup menu
+// aplikasi yang sedang dibuka, satu grup per folder fitur; submenu berisi halaman grup itu. Semuanya datang dari
+// `/api/v1/shell`, sudah disaring izin anggota ini.
 export function AppSidebar({
     navigation,
+    style,
 }: {
     navigation: ShellData['navigation'];
+    // Lebar rail dan submenu. Di layar sempit Sidebar dirender sebagai Sheet di luar SidebarProvider, jadi variabel
+    // lebarnya harus ikut sampai ke sana; tanpa itu rail melebar mengikuti labelnya dan submenu terpotong.
+    style: CSSProperties;
 }) {
     const { open, setOpen, isMobile, setOpenMobile } = useSidebar();
     const location = useLocation();
@@ -33,22 +40,26 @@ export function AppSidebar({
         setPinnedId(null);
     }
 
+    const activeProduct = areaOf(navigation, path) ?? navigation[0];
+    const groups = activeProduct?.groups ?? [];
     const selectedGroup =
-        navigation.find((group) =>
+        groups.find((group) =>
             group.items.some((item) => path === item.href.split('?')[0]),
-        ) ?? navigation[0];
+        ) ?? groups[0];
     const isItemActive = (item: NavigationItem) =>
         url === item.href || (!item.href.includes('?') && path === item.href);
     const displayedGroup =
-        navigation.find((group) => group.id === previewId) ??
-        (open
-            ? navigation.find((group) => group.id === pinnedId)
-            : undefined) ??
+        groups.find((group) => group.id === previewId) ??
+        (open ? groups.find((group) => group.id === pinnedId) : undefined) ??
         selectedGroup;
     const showItems = isMobile || open || previewId !== null;
+    const closeMobile = () => {
+        if (isMobile) setOpenMobile(false);
+    };
 
     return (
         <Sidebar
+            style={style}
             collapsible="icon"
             className="z-30 border-r border-sidebar-border bg-sidebar"
             onMouseLeave={() => setPreviewId(null)}
@@ -70,11 +81,22 @@ export function AppSidebar({
         >
             <div className="relative flex h-full w-full">
                 <aside className="flex h-full w-(--sidebar-width-icon) shrink-0 flex-col items-center border-r border-sidebar-border">
+                    <div className="flex h-12 w-full shrink-0 items-center justify-center border-b border-sidebar-border">
+                        <ProductLauncher
+                            navigation={navigation}
+                            activeId={activeProduct?.id}
+                            onLaunch={closeMobile}
+                        />
+                    </div>
                     <nav
-                        aria-label="Menu utama"
+                        aria-label={
+                            activeProduct
+                                ? `Menu ${activeProduct.label}`
+                                : 'Menu utama'
+                        }
                         className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-y-auto px-0.5 py-2 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-sidebar-foreground/40 [&::-webkit-scrollbar-thumb]:bg-clip-content"
                     >
-                        {navigation.map((group) => {
+                        {groups.map((group) => {
                             const Icon = navigationIcon(group.id);
                             const selected = selectedGroup?.id === group.id;
                             const previewed =
@@ -82,12 +104,10 @@ export function AppSidebar({
                             return (
                                 <ShellLink
                                     key={group.id}
-                                    href={group.href}
+                                    href={group.items[0]?.href ?? '/'}
                                     onMouseEnter={() => setPreviewId(group.id)}
                                     onFocus={() => setPreviewId(group.id)}
-                                    onClick={() => {
-                                        if (isMobile) setOpenMobile(false);
-                                    }}
+                                    onClick={closeMobile}
                                     aria-current={selected ? 'page' : undefined}
                                     className={cn(
                                         'flex min-h-11 min-w-0 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-center text-[10px] font-normal text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring [&_svg]:size-4',

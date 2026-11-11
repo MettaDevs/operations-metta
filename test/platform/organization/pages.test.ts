@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { readPage } from '../../../scripts/generate-client.ts';
-import { coreNavigation } from '../../../src/platform/access/navigation.ts';
+import { sysAdminArea } from '../../../src/platform/access/navigation.ts';
 
 const folder = join(
     import.meta.dir,
@@ -27,25 +27,30 @@ test('the three organization screens are app pages at the menu addresses', () =>
         })),
     ).toEqual([
         {
-            path: '/settings/legal-entities',
+            path: '/sysadmin/organization/legal-entities',
             layout: 'app',
             validatesSearch: true,
         },
         {
-            path: '/settings/operating-units',
+            path: '/sysadmin/organization/operating-units',
             layout: 'app',
             validatesSearch: true,
         },
         {
-            path: '/settings/organization-hierarchies',
+            path: '/sysadmin/organization/hierarchies',
             layout: 'app',
             validatesSearch: true,
         },
     ]);
-    const menu = coreNavigation.find((group) => group.id === 'organization');
-    // Nomor dokumen ikut kelompok Organisasi, seperti Number sequences di Organization administration F&O.
-    expect(menu?.items.map((item) => [item.href, item.permission])).toEqual([
-        ...pages.map((page) => [page.path, 'core.organization.read']),
-        ['/settings/number-sequences', 'core.number-sequence.read'],
+    const menu = (id: string) =>
+        sysAdminArea.groups
+            .find((group) => group.id === id)
+            ?.items.map((item) => [item.href, item.permission]);
+    expect(menu('organization')).toEqual(
+        pages.map((page) => [page.path, 'core.organization.read']),
+    );
+    // Nomor dokumen punya kelompok sendiri, karena kodenya di folder sendiri (src/foundation/number-sequence/).
+    expect(menu('number-sequence')).toEqual([
+        ['/sysadmin/number-sequences', 'core.number-sequence.read'],
     ]);
 });

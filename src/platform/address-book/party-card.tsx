@@ -466,7 +466,7 @@ function PartyCardBody({
                   recordTitle: form.name || 'Pihak baru',
                   editing: true,
                   recordUrl: party
-                      ? `/settings/global-address-book?party=${party.id}`
+                      ? `/sysadmin/address-book/parties?party=${party.id}`
                       : undefined,
               }
             : {
@@ -475,7 +475,7 @@ function PartyCardBody({
                   onEdit: canManage ? () => setEditing(true) : undefined,
                   onDelete: canManage ? () => void remove() : undefined,
                   recordUrl: party
-                      ? `/settings/global-address-book?party=${party.id}`
+                      ? `/sysadmin/address-book/parties?party=${party.id}`
                       : undefined,
               },
     );

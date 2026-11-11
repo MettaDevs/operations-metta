@@ -33,7 +33,7 @@ import { PatientCard, type PatientRow } from './patient-card.tsx';
 // Daftar pasien yang terlihat bagi pengguna (sekelompok berbagi dengan unit kerjanya), kartu pasien, dan pendaftaran
 // pasien baru. Pencarian sama dengan sistem lama: nama, NRM, NIK, no. BPJS/jaminan, dan tanggal lahir.
 
-const route = getRouteApi('/_app/healthcare/patients');
+const route = getRouteApi('/_app/healthcare/patient/patients');
 const ALL = 'all';
 type Search = z.infer<typeof searchSchema>;
 type PatientType = ApiBody<'healthcarePatientTypeList'>['data'][number];
@@ -422,7 +422,8 @@ function PatientsPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/healthcare/patients',
+    path: '/healthcare/patient/patients',
+    previousPaths: ['/healthcare/patients'],
     layout: 'app',
     title: 'Pasien',
     validateSearch: searchSchema,

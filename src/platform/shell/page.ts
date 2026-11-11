@@ -15,7 +15,8 @@ declare module '@tanstack/react-router' {
  *
  * ```tsx
  * export const page = definePage({
- *     path: '/settings/legal-entities',
+ *     path: '/sysadmin/organization/legal-entities',
+ *     previousPaths: ['/settings/legal-entities'],
  *     layout: 'app',
  *     title: 'Perusahaan',
  *     validateSearch: z.object({ q: z.string().optional() }),
@@ -24,7 +25,9 @@ declare module '@tanstack/react-router' {
  * ```
  *
  * `path` adalah URL layar dan ditulis sebagai teks literal, karena scripts/generate-client.ts membacanya tanpa
- * menjalankan halaman. Nama dan folder berkas tidak menentukan URL. `layout: 'app'` memasang halaman di dalam Shell dan
+ * menjalankan halaman. Nama dan folder berkas tidak menentukan URL. `previousPaths` (opsional, juga teks literal) adalah
+ * URL lama halaman itu: membukanya dialihkan ke `path` beserta search params-nya, supaya tautan dan bookmark lama tetap
+ * jalan. `layout: 'app'` memasang halaman di dalam Shell dan
  * mewajibkan login; `'auth'` untuk halaman sebelum login. `validateSearch` (schema zod) memeriksa search params
  * halaman; di dalam komponen, `getRouteApi(path).useSearch()` memberi nilainya dengan tipe dari schema itu.
  */
@@ -36,6 +39,7 @@ export function definePage<
     TSearch extends z.ZodType | undefined = undefined,
 >(page: {
     path: TPath;
+    previousPaths?: readonly `/${string}`[];
     layout: 'app' | 'auth';
     title: string;
     validateSearch?: TSearch;

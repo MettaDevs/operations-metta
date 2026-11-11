@@ -1,12 +1,10 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
-import {
-    Field,
-    FieldDescription,
-    FieldLabel,
-} from '@operations-metta/ui/field';
+import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
+import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
@@ -22,8 +20,8 @@ import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { getRouteApi } from '@tanstack/react-router';
-import { useCallback, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
@@ -34,45 +32,41 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
-import {
-    isPatientTypeBehavior,
-    patientTypeBehaviors,
-    type PatientTypeBehavior,
-} from './patient-type.behaviors.ts';
 
-// Tipe pasien (Umum, BPJS, Asuransi, Perusahaan, dan seterusnya), master kecil per tenant dengan kode pendek.
-// "Memakai penjamin" memunculkan isian penjamin dan nomor kartu di cara bayar pasien.
+// Penjamin cara bayar pasien: organisasi di buku alamat (misalnya BPJS Kesehatan) yang menjamin satu tipe pasien.
+// Nama penjamin adalah nama organisasinya, jadi setelah dibuat ia diubah di Buku alamat.
 
-const route = getRouteApi('/_app/healthcare/patient-types');
-// Nama perilaku di layar. Daftar perilakunya katalog kode (patient-type.behaviors.ts); yang dinyalakan tiap tipe
-// pasien adalah data.
-const behaviorLabels: Record<PatientTypeBehavior, string> = {
-    requires_guarantor: 'Perlu perusahaan penjamin',
-    requires_card_number: 'Perlu nomor kartu asuransi',
-};
+const route = getRouteApi('/_app/healthcare/coverage/guarantors');
+type Guarantor = ApiBody<'healthcareGuarantorList'>['data'][number];
 type PatientType = ApiBody<'healthcarePatientTypeList'>['data'][number];
 type Errors = Record<string, string[]>;
 const searchSchema = z.object({ q: z.string().max(200).optional() });
 
-function PatientTypeCard({
-    type,
+function GuarantorCard({
+    guarantor,
     canManage,
+    portalContainer,
     onSaved,
     onClose,
 }: {
-    type: PatientType | null;
+    guarantor: Guarantor | null;
     canManage: boolean;
-    onSaved: (type: PatientType) => void;
+    portalContainer: RefObject<HTMLElement | null>;
+    onSaved: (guarantor: Guarantor) => void;
     onClose: () => void;
 }): ReactNode {
-    const [editing, setEditing] = useState(type === null);
+    const [editing, setEditing] = useState(guarantor === null);
     const blank = {
-        code: type?.code ?? '',
-        name: type?.name ?? '',
-        behaviors: type?.behaviors ?? [],
-        // Tipe baru langsung aktif.
-        is_active: type?.is_active ?? true,
-        is_default: type?.is_default ?? false,
+        name: guarantor?.name ?? '',
+        patient_type: guarantor
+            ? {
+                  id: guarantor.patient_type_id,
+                  name: guarantor.patient_type_name,
+              }
+            : null,
+        // Penjamin baru langsung aktif.
+        is_active: guarantor?.is_active ?? true,
+        is_default: guarantor?.is_default ?? false,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -80,41 +74,70 @@ function PatientTypeCard({
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
     usePageDialogRecord({
-        recordTitle: type ? `${type.code} · ${type.name}` : 'Tipe pasien baru',
+        recordTitle: guarantor?.name ?? 'Penjamin baru',
         editing,
     });
+    const loader = useCallback<LookupLoader<PatientType>>(
+        async ({ query, cursor, signal }) => {
+            const { body } = await api.healthcarePatientTypeList(
+                {
+                    query: {
+                        q: query,
+                        active: '1',
+                        ...(cursor ? { cursor } : {}),
+                    },
+                },
+                { signal },
+            );
+            return { items: body.data, nextCursor: body.next_cursor };
+        },
+        [],
+    );
 
     const save = async () => {
         setBusy(true);
         setErrors({});
         setMessage(null);
+        const patientTypeId = form.patient_type?.id ?? '';
         try {
-            const { body } = type
-                ? await api.healthcarePatientTypeUpdate({
-                      params: { id: type.id },
-                      body: { ...form, version: type.version },
+            const { body } = guarantor
+                ? await api.healthcareGuarantorUpdate({
+                      params: { id: guarantor.id },
+                      body: {
+                          patient_type_id: patientTypeId,
+                          is_active: form.is_active,
+                          is_default: form.is_default,
+                          version: guarantor.version,
+                      },
                   })
-                : await api.healthcarePatientTypeCreate({ body: form });
+                : await api.healthcareGuarantorCreate({
+                      body: {
+                          name: form.name,
+                          patient_type_id: patientTypeId,
+                          is_active: form.is_active,
+                          is_default: form.is_default,
+                      },
+                  });
             toast.success(
-                type ? 'Tipe pasien diperbarui.' : 'Tipe pasien dibuat.',
+                guarantor ? 'Penjamin diperbarui.' : 'Penjamin dibuat.',
             );
             setEditing(false);
             onSaved(body.data);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
                 setErrors(caught.errors);
-            else setMessage(errorText(caught, 'Tipe pasien belum disimpan.'));
+            else setMessage(errorText(caught, 'Penjamin belum disimpan.'));
         } finally {
             setBusy(false);
         }
     };
     const remove = async () => {
-        if (!type) return;
+        if (!guarantor) return;
         if (
             !(await confirm({
-                title: `Delete tipe pasien ${type.name}?`,
+                title: `Delete penjamin ${guarantor.name}?`,
                 description:
-                    'Tipe pasien tidak bisa dipilih lagi. Cara bayar pasien yang sudah memakainya tetap tersimpan.',
+                    'Penjamin tidak bisa dipilih lagi untuk tipe pasien ini. Cara bayar pasien yang sudah memakainya tetap tersimpan, dan organisasinya tetap ada di buku alamat.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -122,14 +145,14 @@ function PatientTypeCard({
             return;
         setBusy(true);
         try {
-            await api.healthcarePatientTypeDelete({
-                params: { id: type.id },
-                body: { version: type.version },
+            await api.healthcareGuarantorDelete({
+                params: { id: guarantor.id },
+                body: { version: guarantor.version },
             });
-            toast.success('Tipe pasien dihapus.');
+            toast.success('Penjamin dihapus.');
             onClose();
         } catch (caught) {
-            setMessage(errorText(caught, 'Tipe pasien belum dihapus.'));
+            setMessage(errorText(caught, 'Penjamin belum dihapus.'));
         } finally {
             setBusy(false);
         }
@@ -158,7 +181,7 @@ function PatientTypeCard({
                             type="button"
                             disabled={busy}
                             onClick={() => {
-                                if (!type) {
+                                if (!guarantor) {
                                     onClose();
                                     return;
                                 }
@@ -187,94 +210,111 @@ function PatientTypeCard({
             <FormErrorHeader
                 errors={errors}
                 message={message}
-                operation="Tipe pasien belum disimpan"
+                operation="Penjamin belum disimpan"
             />
             <PageDialogBody className="py-3">
                 <FormGrid>
-                    <FormControl error={errors.code?.[0]}>
+                    <FormControl
+                        error={errors.name?.[0]}
+                        hint={
+                            guarantor
+                                ? 'Nama organisasi diubah di Buku alamat, karena organisasinya bisa dipakai peran lain.'
+                                : 'Organisasi baru dibuat di buku alamat dengan nama ini.'
+                        }
+                    >
                         <Input
-                            label="Kode"
+                            label="Nama penjamin"
                             required
-                            maxLength={20}
-                            data-error-field="code"
-                            value={form.code}
-                            readOnly={!editing}
-                            onChange={(event) =>
-                                setForm({ ...form, code: event.target.value })
-                            }
-                        />
-                    </FormControl>
-                    <FormControl error={errors.name?.[0]}>
-                        <Input
-                            label="Nama"
-                            required
-                            maxLength={100}
+                            maxLength={200}
                             data-error-field="name"
                             value={form.name}
-                            readOnly={!editing}
+                            readOnly={!editing || guarantor !== null}
+                            editActivation={guarantor === null}
                             onChange={(event) =>
                                 setForm({ ...form, name: event.target.value })
                             }
                         />
                     </FormControl>
-                    {patientTypeBehaviors.map((behavior) => (
-                        <Field
-                            key={behavior}
-                            orientation="horizontal"
-                            className="w-auto"
-                        >
-                            <Switch
-                                id={`patient-type-${behavior}`}
-                                checked={form.behaviors.includes(behavior)}
-                                disabled={!editing}
-                                onCheckedChange={(checked) =>
+                    <FormControl error={errors.patient_type_id?.[0]}>
+                        {editing ? (
+                            <InlineLookup
+                                label="Tipe pasien"
+                                required
+                                loadItems={loader}
+                                value={
+                                    form.patient_type
+                                        ? {
+                                              ...form.patient_type,
+                                              code: '',
+                                              behaviors: [],
+                                              is_active: true,
+                                              is_default: false,
+                                              version: 0,
+                                          }
+                                        : null
+                                }
+                                onValueChange={(type) =>
                                     setForm({
                                         ...form,
-                                        behaviors: checked
-                                            ? [...form.behaviors, behavior]
-                                            : form.behaviors.filter(
-                                                  (item) => item !== behavior,
-                                              ),
+                                        patient_type: {
+                                            id: type.id,
+                                            name: type.name,
+                                        },
                                     })
                                 }
+                                getItemValue={(item) => item.id}
+                                getItemLabel={(item) => item.name}
+                                placeholder="Cari tipe pasien…"
+                                emptyMessage="Tipe pasien tidak ditemukan."
+                                columns={[
+                                    {
+                                        id: 'code',
+                                        header: 'Kode',
+                                        cell: (item) => item.code,
+                                    },
+                                    {
+                                        id: 'name',
+                                        header: 'Nama',
+                                        cell: (item) => item.name,
+                                    },
+                                ]}
+                                portalContainer={portalContainer}
+                                showDetails={false}
                             />
-                            <FieldLabel htmlFor={`patient-type-${behavior}`}>
-                                {behaviorLabels[behavior]}
-                            </FieldLabel>
-                        </Field>
-                    ))}
+                        ) : (
+                            <Input
+                                label="Tipe pasien"
+                                value={form.patient_type?.name ?? ''}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
                     <Field orientation="horizontal" className="w-auto">
                         <Switch
-                            id="patient-type-active"
+                            id="guarantor-active"
                             checked={form.is_active}
                             disabled={!editing}
                             onCheckedChange={(checked) =>
                                 setForm({ ...form, is_active: checked })
                             }
                         />
-                        <FieldLabel htmlFor="patient-type-active">
+                        <FieldLabel htmlFor="guarantor-active">
                             Aktif
                         </FieldLabel>
                     </Field>
                     <Field orientation="horizontal" className="w-auto">
                         <Switch
-                            id="patient-type-default"
+                            id="guarantor-default"
                             checked={form.is_default}
                             disabled={!editing}
                             onCheckedChange={(checked) =>
                                 setForm({ ...form, is_default: checked })
                             }
                         />
-                        <FieldLabel htmlFor="patient-type-default">
-                            Bawaan pasien baru
+                        <FieldLabel htmlFor="guarantor-default">
+                            Bawaan untuk tipe pasien ini
                         </FieldLabel>
                     </Field>
-                    {editing && form.is_default && (
-                        <FieldDescription>
-                            Pasien baru otomatis memakai tipe ini. Tipe lain
-                            yang sebelumnya bawaan dilepas saat disimpan.
-                        </FieldDescription>
-                    )}
                 </FormGrid>
             </PageDialogBody>
             {confirmation}
@@ -282,14 +322,15 @@ function PatientTypeCard({
     );
 }
 
-function PatientTypesPage(): ReactNode {
+function GuarantorsPage(): ReactNode {
     const search = route.useSearch();
     const navigate = route.useNavigate();
-    const [open, setOpen] = useState<PatientType | 'new' | null>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const [open, setOpen] = useState<Guarantor | 'new' | null>(null);
     const [canManage, setCanManage] = useState(false);
-    const loader = useCallback<ListLoader<PatientType>>(
+    const loader = useCallback<ListLoader<Guarantor>>(
         async ({ query, cursor, sort, signal }) => {
-            const { body } = await api.healthcarePatientTypeList(
+            const { body } = await api.healthcareGuarantorList(
                 {
                     query: {
                         q: query,
@@ -309,7 +350,7 @@ function PatientTypesPage(): ReactNode {
     const list = useIncrementalList({
         loadItems: loader,
         query: search.q ?? '',
-        getKey: (type) => type.id,
+        getKey: (guarantor) => guarantor.id,
     });
 
     return (
@@ -317,7 +358,7 @@ function PatientTypesPage(): ReactNode {
             <ListPageLayout
                 header={
                     <RecordActionBar
-                        title="Tipe pasien"
+                        title="Penjamin"
                         search={{
                             value: search.q ?? '',
                             onValueChange: (q) =>
@@ -325,8 +366,9 @@ function PatientTypesPage(): ReactNode {
                                     search: q ? { q } : {},
                                     replace: true,
                                 }),
-                            label: 'Cari tipe pasien',
-                            placeholder: 'Cari kode atau nama...',
+                            label: 'Cari penjamin',
+                            placeholder:
+                                'Cari nama penjamin atau tipe pasien...',
                         }}
                     >
                         {canManage && (
@@ -339,75 +381,64 @@ function PatientTypesPage(): ReactNode {
                 }
                 footer={
                     <p className="p-3 text-sm text-muted-foreground">
-                        {list.items.length} tipe pasien dimuat
+                        {list.items.length} penjamin dimuat
                     </p>
                 }
             >
                 <DataTable
                     data={list.items}
-                    getRowKey={(type) => type.id}
-                    getRowLabel={(type) => type.name}
+                    getRowKey={(guarantor) => guarantor.id}
+                    getRowLabel={(guarantor) => guarantor.name}
                     showRowNumbers
                     actionsPlacement="inline"
                     actions={[{ id: 'open', label: 'Buka' }]}
-                    onRowAction={(_, type) => setOpen(type)}
-                    onRowClick={(type) => setOpen(type)}
+                    onRowAction={(_, guarantor) => setOpen(guarantor)}
+                    onRowClick={(guarantor) => setOpen(guarantor)}
                     sort={list.sort}
                     onSortChange={list.onSortChange}
                     serverSort
                     incremental={list}
                     emptyMessage={
                         canManage
-                            ? 'Belum ada tipe pasien. Pilih Baru untuk menambahkan tipe pasien yang dipakai klinik.'
-                            : 'Belum ada tipe pasien.'
+                            ? 'Belum ada penjamin. Pilih Baru untuk menambahkan.'
+                            : 'Belum ada penjamin.'
                     }
                     columns={[
                         {
-                            id: 'code',
-                            header: 'Kode',
-                            width: 120,
-                            cell: (type) => (
-                                <DataTableText>{type.code}</DataTableText>
-                            ),
-                            sortValue: (type) => type.code,
-                        },
-                        {
                             id: 'name',
-                            header: 'Nama',
-                            width: 240,
-                            cell: (type) => (
-                                <DataTableText>{type.name}</DataTableText>
+                            header: 'Penjamin',
+                            width: 280,
+                            cell: (guarantor) => (
+                                <DataTableText>{guarantor.name}</DataTableText>
                             ),
-                            sortValue: (type) => type.name,
+                            sortValue: (guarantor) => guarantor.name,
                         },
                         {
-                            id: 'behaviors',
-                            header: 'Perilaku',
-                            width: 300,
-                            cell: (type) => (
+                            id: 'patient_type_name',
+                            header: 'Tipe pasien',
+                            width: 200,
+                            cell: (guarantor) => (
                                 <DataTableText>
-                                    {type.behaviors
-                                        .filter(isPatientTypeBehavior)
-                                        .map(
-                                            (behavior) =>
-                                                behaviorLabels[behavior],
-                                        )
-                                        .join(', ') || '—'}
+                                    {guarantor.patient_type_name}
                                 </DataTableText>
                             ),
+                            sortValue: (guarantor) =>
+                                guarantor.patient_type_name,
                         },
                         {
                             id: 'status',
                             header: 'Status',
                             width: 110,
-                            cell: (type) => (
+                            cell: (guarantor) => (
                                 <Badge
                                     variant={
-                                        type.is_active ? 'secondary' : 'outline'
+                                        guarantor.is_active
+                                            ? 'secondary'
+                                            : 'outline'
                                     }
                                 >
-                                    {type.is_active ? 'Aktif' : 'Nonaktif'}
-                                    {type.is_default ? ' · Bawaan' : ''}
+                                    {guarantor.is_active ? 'Aktif' : 'Nonaktif'}
+                                    {guarantor.is_default ? ' · Bawaan' : ''}
                                 </Badge>
                             ),
                         },
@@ -421,13 +452,14 @@ function PatientTypesPage(): ReactNode {
                         if (!next) setOpen(null);
                     }}
                 >
-                    <PageDialogContent title="Tipe pasien">
-                        <PatientTypeCard
+                    <PageDialogContent ref={contentRef} title="Penjamin">
+                        <GuarantorCard
                             key={open === 'new' ? 'new' : open.id}
-                            type={open === 'new' ? null : open}
+                            guarantor={open === 'new' ? null : open}
                             canManage={canManage}
-                            onSaved={(type) => {
-                                setOpen(type);
+                            portalContainer={contentRef}
+                            onSaved={(guarantor) => {
+                                setOpen(guarantor);
                                 list.reload();
                             }}
                             onClose={() => {
@@ -443,9 +475,10 @@ function PatientTypesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/healthcare/patient-types',
+    path: '/healthcare/coverage/guarantors',
+    previousPaths: ['/healthcare/guarantors'],
     layout: 'app',
-    title: 'Tipe pasien',
+    title: 'Penjamin',
     validateSearch: searchSchema,
-    component: PatientTypesPage,
+    component: GuarantorsPage,
 });

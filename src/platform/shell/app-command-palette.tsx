@@ -8,7 +8,7 @@ import {
 } from '@operations-metta/ui/command';
 import { useNavigate } from '@tanstack/react-router';
 import type { ShellData } from './api.ts';
-import { navigationIcon } from './navigation-icons.ts';
+import { productIcon } from './navigation-icons.ts';
 
 // Pencarian halaman (Ctrl+K), dipindah dari app-command-palette CoreERP. Isinya menu yang sama dengan rail, jadi
 // halaman yang tidak boleh dibuka anggota ini juga tidak muncul di sini.
@@ -24,12 +24,14 @@ export function AppCommandPalette({
     const navigate = useNavigate();
     const seen = new Set<string>();
     const items = navigation
-        .flatMap((group) =>
-            group.items.map((item) => ({
-                ...item,
-                section: group.label,
-                icon: navigationIcon(group.id),
-            })),
+        .flatMap((area) =>
+            area.groups.flatMap((group) =>
+                group.items.map((item) => ({
+                    ...item,
+                    section: `${area.label} · ${group.label}`,
+                    icon: productIcon(area.id),
+                })),
+            ),
         )
         .filter((item) => {
             if (seen.has(item.href)) return false;

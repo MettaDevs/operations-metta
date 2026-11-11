@@ -8,6 +8,17 @@ export type Bind = string | number | boolean | null;
 export const jsonObject = z.record(z.string(), z.json());
 export type JsonObject = z.infer<typeof jsonObject>;
 
+// Tanggal dan waktu dibaca sebagai teks apa adanya, tidak diubah menjadi Date. Setiap koneksi yang dibungkus Database
+// memakainya, karena schema baris di service membaca kolom tanggal sebagai teks.
+export const databaseTypes = {
+    rawDate: {
+        to: 1082,
+        from: [1082, 1114, 1184],
+        serialize: String,
+        parse: String,
+    },
+};
+
 export function createPool(config: Config) {
     return postgres({
         host: config.DB_HOST,
@@ -21,14 +32,7 @@ export function createPool(config: Config) {
         onnotice: () => {
             // NOTICE PostgreSQL sengaja tidak dicetak.
         },
-        types: {
-            rawDate: {
-                to: 1082,
-                from: [1082, 1114, 1184],
-                serialize: String,
-                parse: String,
-            },
-        },
+        types: databaseTypes,
     });
 }
 

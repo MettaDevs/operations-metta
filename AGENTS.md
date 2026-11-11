@@ -47,7 +47,7 @@ Repo ini tumbuh dengan menambah folder dan berkas di tempat yang sudah ditetapka
 
 Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Router dan TanStack Query di atas API oRPC, bukan Inertia. Server tidak merender halaman dan tidak mengirim props halaman. Ia menyajikan satu dokumen yang sama untuk setiap URL layar, dan layar mengambil datanya sendiri dari `/api/`.
 
-- **URL layar dan URL data terpisah.** Data hanya di bawah `/api/`. URL lain milik layar, misalnya `/dashboard` dan `/settings/legal-entities`. Pengecualiannya `POST /login` dan `POST /logout`, yang tetap di tempatnya.
+- **URL layar dan URL data terpisah.** Data hanya di bawah `/api/`. URL lain milik layar, misalnya `/sysadmin/dashboard` dan `/sysadmin/organization/legal-entities`. Pengecualiannya `POST /login` dan `POST /logout`, yang tetap di tempatnya.
     - Route Elysia yang satu-satunya itu lebih dulu memeriksa dua hal, tanpa membuka sesi atau database (`src/platform/http/spa.ts`). `GET /build/<berkas>` mendapat berkas build ber-hash yang tercatat di manifest. GET lain di luar `/api/` mendapat dokumen layar.
     - Selain dua hal itu, semuanya diteruskan ke oRPC. Permintaan `/api/...` tidak pernah mendapat dokumen layar, dan 404-nya tetap JSON.
     - Procedure baru yang dibaca layar ditulis di bawah `/api/v1/...`. Jangan menulis GET oRPC di luar `/api/`, karena dokumen layar akan menutupinya.
@@ -55,7 +55,8 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
 
     ```tsx
     export const page = definePage({
-        path: '/settings/legal-entities',
+        path: '/sysadmin/organization/legal-entities',
+        previousPaths: ['/settings/legal-entities'],
         layout: 'app',
         title: 'Perusahaan',
         validateSearch: z.object({ q: z.string().optional() }),
@@ -63,10 +64,11 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
     });
     ```
 
-    - `path` adalah URL layar dan ditulis sebagai teks literal. Nama dan folder berkas tidak menentukan URL.
+    - `path` adalah URL layar dan ditulis sebagai teks literal. Nama dan folder berkas tidak menentukan URL, tetapi URL berawalan area lalu folder fiturnya: `/sysadmin/<folder>/...` untuk halaman Core dan `/<module>/<folder>/...` untuk halaman module.
+    - `previousPaths` (opsional, teks literal) adalah URL lama halaman itu. Route tree mengalihkannya ke `path` beserta search params-nya, supaya tautan dan bookmark lama tetap jalan. URL lama tidak boleh menunjuk dua halaman.
     - `layout: 'app'` memasang halaman di dalam Shell dan mewajibkan login. `'auth'` dipakai untuk halaman sebelum login.
     - Search params divalidasi schema zod di `validateSearch`.
-    - Id route adalah id layout ditambah path, sama dengan layout tanpa path di TanStack Router: `/_app/settings/legal-entities` atau `/_auth/login`. Di dalam komponen, `getRouteApi('<id>').useSearch()` memberi search params dengan tipe dari schema. `Link`, `navigate`, dan `redirect` memakai path. TypeScript menolak id, path, dan search param yang tidak ada.
+    - Id route adalah id layout ditambah path, sama dengan layout tanpa path di TanStack Router: `/_app/sysadmin/organization/legal-entities` atau `/_auth/login`. Di dalam komponen, `getRouteApi('<id>').useSearch()` memberi search params dengan tipe dari schema. `Link`, `navigate`, dan `redirect` memakai path. TypeScript menolak id, path, dan search param yang tidak ada.
     - Komponen halaman dan layout menulis tipe kembaliannya (`(): ReactNode`). Tanpa itu, TypeScript dapat kehilangan tipe route tree tanpa pesan apa pun, karena tipe komponen dan route tree saling bergantung.
 
 - **Route tree dirakit otomatis.** `scripts/generate-client.ts` membaca setiap `.page.tsx` di `src/` dan `modules/*/src/`, lalu menulis dua berkas:
@@ -81,7 +83,10 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
     - Query string yang dibaca handler dari URL-nya sendiri diberi tipe lewat `typedQuery<z.input<typeof schema>>()`, misalnya `organizationPageQuerySchema`.
     - Kegagalan API menjadi `ApiError`, berisi status, pesan, error per field, dan kodenya.
 - **Data bersama Shell** datang dari `GET /api/v1/shell` di `src/platform/access/`, berisi pengguna, workspace aktif beserta pilihannya, menu, dan lingkungan. Endpoint ini pengganti shared props CoreERP.
-    - Menu Core ditulis di `src/platform/access/navigation.ts` beserta permission tiap entri, dan disaring di server.
+    - Susunannya mengikuti Shell CoreERP (keputusan pemilik produk, 11 November 2026). Paling atas rail ada katalog aplikasi (`product-launcher.tsx`): **Sys Admin** untuk semua halaman Core, dan satu aplikasi per module yang dihak tenant dan sudah terpasang, dengan nama dari baris `apps` module itu. Di bawahnya rail berisi grup menu aplikasi yang sedang dibuka, sama persis dengan folder fitur di kode, dan sidebar berisi halaman grup yang dipilih. Di kode aplikasi ini disebut area.
+    - Setiap area dibuka dengan dashboard-nya sendiri sebagai grup pertama; tidak ada dashboard bersama. Dashboard Sys Admin di `src/platform/dashboard/`, dashboard module di `modules/<module>/src/dashboard/`. Dashboard tidak membawa permission dan tidak membuat areanya tampil: area hanya tampil bila pengguna boleh membuka halaman lain di dalamnya.
+    - Halaman awal setelah login (`/`) adalah dashboard area terakhir yang dibuka pengguna bila masih boleh, kalau tidak dashboard area pertama yang boleh. Area terakhir disimpan di localStorage peramban per pengguna (`src/platform/shell/home.ts`).
+    - Menu Core ditulis di `src/platform/access/navigation.ts` beserta permission tiap entri, dan disaring di server. Menu module ditulis migration module ke `apps.navigation`; mengubahnya berarti menulis migration baru.
     - Hanya halaman yang sudah ada yang masuk menu, dan test memeriksanya.
     - Pesan berhasil tampil sebagai toast di layar.
 - **Sesi dan CSRF** memakai mekanisme `src/platform/identity/`: cookie sesi, header `X-XSRF-TOKEN` dari cookie `XSRF-TOKEN`, dan `Sec-Fetch-Site`.

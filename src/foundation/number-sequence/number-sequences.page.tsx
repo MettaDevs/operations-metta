@@ -35,7 +35,7 @@ import {
 // dan satu nilai scope, dengan kolom Smallest, Largest, Next, dan Format seperti daftar F&O. Saringan Area dan
 // Reference di panel kiri (aturan layar repo ini), dan Status list serta Manual cleanup di grup Administrasi toolbar.
 
-const route = getRouteApi('/_app/settings/number-sequences');
+const route = getRouteApi('/_app/sysadmin/number-sequences');
 const ALL = 'all';
 type Row = ApiBody<'numberSequenceList'>['data'][number];
 const scopeTypes = [
@@ -513,7 +513,8 @@ function NumberSequencesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/number-sequences',
+    path: '/sysadmin/number-sequences',
+    previousPaths: ['/settings/number-sequences'],
     layout: 'app',
     title: 'Nomor dokumen',
     validateSearch: searchSchema,

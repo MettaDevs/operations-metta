@@ -1,10 +1,11 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
+import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
+import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
+import { page as modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage } from '../modules/healthcare/src/patient/patient-sharing/sharing-policies.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
-import { page as modulesHealthcareSrcSetupGuarantorGuarantorsPage } from '../modules/healthcare/src/setup/guarantor/guarantors.page.tsx';
-import { page as modulesHealthcareSrcSetupPatientTypePatientTypesPage } from '../modules/healthcare/src/setup/patient-type/patient-types.page.tsx';
-import { page as modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage } from '../modules/healthcare/src/setup/sharing-policy/sharing-policies.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -12,20 +13,64 @@ import { page as platformAccessSecurityConfigurationPage } from './platform/acce
 import { page as platformAddressBookDuplicateSettingsPage } from './platform/address-book/duplicate-settings.page.tsx';
 import { page as platformAddressBookGlobalAddressBookPage } from './platform/address-book/global-address-book.page.tsx';
 import { page as platformAddressBookOccupationsPage } from './platform/address-book/occupations.page.tsx';
+import { page as platformDashboardDashboardPage } from './platform/dashboard/dashboard.page.tsx';
 import { page as platformGeographyAddressSetupPage } from './platform/geography/address-setup.page.tsx';
 import { page as platformOrganizationHierarchiesPage } from './platform/organization/hierarchies.page.tsx';
 import { page as platformOrganizationLegalEntitiesPage } from './platform/organization/legal-entities.page.tsx';
 import { page as platformOrganizationOperatingUnitsPage } from './platform/organization/operating-units.page.tsx';
-import { page as platformShellDashboardPage } from './platform/shell/dashboard.page.tsx';
+import { page as platformShellHomePage } from './platform/shell/home.page.tsx';
 import { page as platformShellLoginPage } from './platform/shell/login.page.tsx';
 import {
     appLayoutRoute,
     authLayoutRoute,
-    indexRoute,
+    previousPathRoute,
     rootRoute,
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const modulesHealthcareSrcCoverageGuarantorGuarantorsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcCoverageGuarantorGuarantorsPage.path,
+    component: modulesHealthcareSrcCoverageGuarantorGuarantorsPage.component,
+    validateSearch:
+        modulesHealthcareSrcCoverageGuarantorGuarantorsPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcCoverageGuarantorGuarantorsPage.title,
+    },
+});
+
+const modulesHealthcareSrcCoveragePatientTypePatientTypesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcCoveragePatientTypePatientTypesPage.path,
+    component:
+        modulesHealthcareSrcCoveragePatientTypePatientTypesPage.component,
+    validateSearch:
+        modulesHealthcareSrcCoveragePatientTypePatientTypesPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcCoveragePatientTypePatientTypesPage.title,
+    },
+});
+
+const modulesHealthcareSrcDashboardDashboardRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcDashboardDashboardPage.path,
+    component: modulesHealthcareSrcDashboardDashboardPage.component,
+    staticData: { title: modulesHealthcareSrcDashboardDashboardPage.title },
+});
+
+const modulesHealthcareSrcPatientPatientSharingSharingPoliciesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.path,
+        component:
+            modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.component,
+        validateSearch:
+            modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.title,
+        },
+    });
 
 const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -34,40 +79,6 @@ const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
     validateSearch:
         modulesHealthcareSrcPatientPatientPatientsPage.validateSearch,
     staticData: { title: modulesHealthcareSrcPatientPatientPatientsPage.title },
-});
-
-const modulesHealthcareSrcSetupGuarantorGuarantorsRoute = createRoute({
-    getParentRoute: () => appLayoutRoute,
-    path: modulesHealthcareSrcSetupGuarantorGuarantorsPage.path,
-    component: modulesHealthcareSrcSetupGuarantorGuarantorsPage.component,
-    validateSearch:
-        modulesHealthcareSrcSetupGuarantorGuarantorsPage.validateSearch,
-    staticData: {
-        title: modulesHealthcareSrcSetupGuarantorGuarantorsPage.title,
-    },
-});
-
-const modulesHealthcareSrcSetupPatientTypePatientTypesRoute = createRoute({
-    getParentRoute: () => appLayoutRoute,
-    path: modulesHealthcareSrcSetupPatientTypePatientTypesPage.path,
-    component: modulesHealthcareSrcSetupPatientTypePatientTypesPage.component,
-    validateSearch:
-        modulesHealthcareSrcSetupPatientTypePatientTypesPage.validateSearch,
-    staticData: {
-        title: modulesHealthcareSrcSetupPatientTypePatientTypesPage.title,
-    },
-});
-
-const modulesHealthcareSrcSetupSharingPolicySharingPoliciesRoute = createRoute({
-    getParentRoute: () => appLayoutRoute,
-    path: modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.path,
-    component:
-        modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.component,
-    validateSearch:
-        modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.validateSearch,
-    staticData: {
-        title: modulesHealthcareSrcSetupSharingPolicySharingPoliciesPage.title,
-    },
 });
 
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
@@ -125,6 +136,13 @@ const platformAddressBookOccupationsRoute = createRoute({
     staticData: { title: platformAddressBookOccupationsPage.title },
 });
 
+const platformDashboardDashboardRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformDashboardDashboardPage.path,
+    component: platformDashboardDashboardPage.component,
+    staticData: { title: platformDashboardDashboardPage.title },
+});
+
 const platformGeographyAddressSetupRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: platformGeographyAddressSetupPage.path,
@@ -157,11 +175,11 @@ const platformOrganizationOperatingUnitsRoute = createRoute({
     staticData: { title: platformOrganizationOperatingUnitsPage.title },
 });
 
-const platformShellDashboardRoute = createRoute({
+const platformShellHomeRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
-    path: platformShellDashboardPage.path,
-    component: platformShellDashboardPage.component,
-    staticData: { title: platformShellDashboardPage.title },
+    path: platformShellHomePage.path,
+    component: platformShellHomePage.component,
+    staticData: { title: platformShellHomePage.title },
 });
 
 const platformShellLoginRoute = createRoute({
@@ -173,12 +191,12 @@ const platformShellLoginRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-    indexRoute,
     appLayoutRoute.addChildren([
+        modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
+        modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
+        modulesHealthcareSrcDashboardDashboardRoute,
+        modulesHealthcareSrcPatientPatientSharingSharingPoliciesRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
-        modulesHealthcareSrcSetupGuarantorGuarantorsRoute,
-        modulesHealthcareSrcSetupPatientTypePatientTypesRoute,
-        modulesHealthcareSrcSetupSharingPolicySharingPoliciesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
@@ -186,13 +204,69 @@ const routeTree = rootRoute.addChildren([
         platformAddressBookDuplicateSettingsRoute,
         platformAddressBookGlobalAddressBookRoute,
         platformAddressBookOccupationsRoute,
+        platformDashboardDashboardRoute,
         platformGeographyAddressSetupRoute,
         platformOrganizationHierarchiesRoute,
         platformOrganizationLegalEntitiesRoute,
         platformOrganizationOperatingUnitsRoute,
-        platformShellDashboardRoute,
+        platformShellHomeRoute,
     ]),
     authLayoutRoute.addChildren([platformShellLoginRoute]),
+    previousPathRoute(
+        '/healthcare/guarantors',
+        modulesHealthcareSrcCoverageGuarantorGuarantorsPage.path,
+    ),
+    previousPathRoute(
+        '/healthcare/patient-types',
+        modulesHealthcareSrcCoveragePatientTypePatientTypesPage.path,
+    ),
+    previousPathRoute(
+        '/healthcare/sharing-policies',
+        modulesHealthcareSrcPatientPatientSharingSharingPoliciesPage.path,
+    ),
+    previousPathRoute(
+        '/healthcare/patients',
+        modulesHealthcareSrcPatientPatientPatientsPage.path,
+    ),
+    previousPathRoute(
+        '/settings/number-sequences',
+        foundationNumberSequenceNumberSequencesPage.path,
+    ),
+    previousPathRoute('/settings/access', platformAccessAccessPage.path),
+    previousPathRoute('/settings/roles', platformAccessRolesPage.path),
+    previousPathRoute(
+        '/settings/security-configuration',
+        platformAccessSecurityConfigurationPage.path,
+    ),
+    previousPathRoute(
+        '/settings/party-duplicate-check',
+        platformAddressBookDuplicateSettingsPage.path,
+    ),
+    previousPathRoute(
+        '/settings/global-address-book',
+        platformAddressBookGlobalAddressBookPage.path,
+    ),
+    previousPathRoute(
+        '/settings/occupations',
+        platformAddressBookOccupationsPage.path,
+    ),
+    previousPathRoute(
+        '/settings/address-setup',
+        platformGeographyAddressSetupPage.path,
+    ),
+    previousPathRoute(
+        '/settings/organization-hierarchies',
+        platformOrganizationHierarchiesPage.path,
+    ),
+    previousPathRoute(
+        '/settings/legal-entities',
+        platformOrganizationLegalEntitiesPage.path,
+    ),
+    previousPathRoute(
+        '/settings/operating-units',
+        platformOrganizationOperatingUnitsPage.path,
+    ),
+    previousPathRoute('/dashboard', platformShellHomePage.path),
 ]);
 
 const router = createRouter({ ...routerOptions, routeTree });

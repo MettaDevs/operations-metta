@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { base, ok } from '../http/index.ts';
 import {
-    coreNavigation,
     navigationGroupSchema,
+    sysAdminArea,
     visibleNavigation,
 } from './navigation.ts';
 import { Workspace } from './workspace.ts';
@@ -24,26 +24,51 @@ export function shellRoutes() {
                 outputStructure: 'detailed',
             })
             .handler(async ({ context }) => {
-                // Menu module datang dari apps.navigation yang ditulis migration module-nya, jadi Core tidak menulis
-                // nama atau label module mana pun.
-                const moduleNavigation = (
+                // Satu aplikasi per module di katalog, dengan nama dari baris apps dan kelompok dari apps.navigation yang ditulis
+                // migration module-nya, jadi Core tidak menulis nama atau label module mana pun.
+                const moduleAreas = (
                     await context.db.rows(
-                        z.object({ navigation: z.unknown() }),
-                        "select navigation from apps where id <> 'core' and navigation is not null order by id",
+                        z.object({
+                            id: z.string(),
+                            name: z.string(),
+                            navigation: z.unknown(),
+                        }),
+                        "select id, name, navigation from apps where id <> 'core' and navigation is not null order by id",
                     )
-                ).flatMap(
-                    (row) =>
+                ).map((row) => ({
+                    id: row.id,
+                    label: row.name,
+                    groups:
                         z.array(navigationGroupSchema).safeParse(row.navigation)
                             .data ?? [],
-                );
+                }));
                 const shell = await Workspace.shell(
                     context.db,
                     context.session,
-                    moduleNavigation.flatMap((group) =>
-                        group.items.flatMap((item) =>
-                            item.permission ? [item.permission] : [],
+                    moduleAreas.flatMap((area) =>
+                        area.groups.flatMap((group) =>
+                            group.items.flatMap((item) =>
+                                item.permission ? [item.permission] : [],
+                            ),
                         ),
                     ),
+                );
+                // Module hanya tampil di katalog bila tenant aktif berhak memakainya dan module itu sudah terpasang
+                // (core_module_installations). Entitlement saja tidak cukup: migration module belum tentu berjalan.
+                const usable = new Set(
+                    shell.membership
+                        ? (
+                              await context.db.rows(
+                                  z.object({ module_id: z.string() }),
+                                  `select i.module_id from core_module_installations i
+                                   where i.tenant_id = $1 and i.status = 'installed'
+                                     and exists (select 1 from tenant_app_entitlements e
+                                                 where e.tenant_id = i.tenant_id and e.app_id = i.module_id and e.status = 'active'
+                                                   and (e.ends_at is null or e.ends_at > current_timestamp))`,
+                                  [shell.membership.tenant_id],
+                              )
+                          ).map((row) => row.module_id)
+                        : [],
                 );
                 return ok({
                     auth: {
@@ -66,7 +91,12 @@ export function shellRoutes() {
                         org_units: shell.orgUnits.map(organization),
                     },
                     navigation: visibleNavigation(
-                        [...coreNavigation, ...moduleNavigation],
+                        [
+                            sysAdminArea,
+                            ...moduleAreas.filter((area) =>
+                                usable.has(area.id),
+                            ),
+                        ],
                         shell.permissions,
                     ),
                     environment: context.session.environment

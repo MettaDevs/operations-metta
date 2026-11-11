@@ -8,7 +8,7 @@ import {
     OrganizationDirectory,
 } from './organization-directory.tsx';
 
-const route = getRouteApi('/_app/settings/operating-units');
+const route = getRouteApi('/_app/sysadmin/organization/operating-units');
 
 function OperatingUnitsPage(): ReactNode {
     const { data: props } = useSuspenseQuery(
@@ -37,7 +37,8 @@ function OperatingUnitsPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/operating-units',
+    path: '/sysadmin/organization/operating-units',
+    previousPaths: ['/settings/operating-units'],
     layout: 'app',
     title: 'Operating unit',
     validateSearch: z.object({ q: z.string().max(200).optional() }),

@@ -60,7 +60,7 @@ export function AppSidebarHeader({
                     <Search />
                 </Button>
                 <Button variant="ghost" size="icon" asChild>
-                    <Link to="/dashboard" aria-label="Beranda" title="Beranda">
+                    <Link to="/" aria-label="Beranda" title="Beranda">
                         <House />
                     </Link>
                 </Button>

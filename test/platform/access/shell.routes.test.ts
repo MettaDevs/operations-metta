@@ -31,7 +31,11 @@ type Shell = {
         id: string;
         label: string;
         href: string;
-        items: { id: string; label: string; href: string }[];
+        groups: {
+            id: string;
+            label: string;
+            items: { id: string; label: string; href: string }[];
+        }[];
     }[];
     environment: null;
 };
@@ -152,56 +156,65 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                 },
             ],
         });
+        // Satu area Sys Admin, kelompoknya sama dengan folder kode. Tautan area adalah halaman awal anggota ini.
         expect(data.navigation).toEqual([
             {
-                id: 'dashboard',
-                label: 'Dashboard',
-                href: '/dashboard',
-                items: [
-                    { id: 'dashboard', label: 'Ringkasan', href: '/dashboard' },
-                ],
-            },
-            {
-                id: 'organization',
-                label: 'Organisasi',
-                href: '/settings/legal-entities',
-                items: [
+                id: 'sysadmin',
+                label: 'Sys Admin',
+                href: '/sysadmin/dashboard',
+                groups: [
                     {
-                        id: 'legal-entities',
-                        label: 'Perusahaan',
-                        href: '/settings/legal-entities',
+                        id: 'dashboard',
+                        label: 'Dashboard',
+                        items: [
+                            {
+                                id: 'dashboard',
+                                label: 'Dashboard',
+                                href: '/sysadmin/dashboard',
+                            },
+                        ],
                     },
                     {
-                        id: 'operating-units',
-                        label: 'Operating unit',
-                        href: '/settings/operating-units',
+                        id: 'organization',
+                        label: 'Organisasi',
+                        items: [
+                            {
+                                id: 'legal-entities',
+                                label: 'Perusahaan',
+                                href: '/sysadmin/organization/legal-entities',
+                            },
+                            {
+                                id: 'operating-units',
+                                label: 'Operating unit',
+                                href: '/sysadmin/organization/operating-units',
+                            },
+                            {
+                                id: 'hierarchies',
+                                label: 'Hierarki organisasi',
+                                href: '/sysadmin/organization/hierarchies',
+                            },
+                        ],
                     },
                     {
-                        id: 'organization-hierarchies',
-                        label: 'Hierarki organisasi',
-                        href: '/settings/organization-hierarchies',
-                    },
-                ],
-            },
-            {
-                id: 'address-book',
-                label: 'Buku alamat',
-                href: '/settings/global-address-book',
-                items: [
-                    {
-                        id: 'parties',
-                        label: 'Pihak',
-                        href: '/settings/global-address-book',
-                    },
-                    {
-                        id: 'occupations',
-                        label: 'Pekerjaan',
-                        href: '/settings/occupations',
-                    },
-                    {
-                        id: 'party-duplicate-check',
-                        label: 'Cek data ganda',
-                        href: '/settings/party-duplicate-check',
+                        id: 'address-book',
+                        label: 'Buku alamat',
+                        items: [
+                            {
+                                id: 'parties',
+                                label: 'Pihak',
+                                href: '/sysadmin/address-book/parties',
+                            },
+                            {
+                                id: 'occupations',
+                                label: 'Pekerjaan',
+                                href: '/sysadmin/address-book/occupations',
+                            },
+                            {
+                                id: 'duplicate-check',
+                                label: 'Cek data ganda',
+                                href: '/sysadmin/address-book/duplicate-check',
+                            },
+                        ],
                     },
                 ],
             },
@@ -219,27 +232,45 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
         );
     });
 
-    test('the menu shows organization, address book, and address setup screens only to members who may read them', async () => {
+    test('the Sys Admin area and its groups show only to members who may open one of their pages', async () => {
         const viewers = [
             [
                 ['core.organization.inquire'],
-                ['dashboard', 'organization', 'address-book'],
+                [['sysadmin', ['dashboard', 'organization', 'address-book']]],
             ],
             [
                 ['core.organization.manage'],
-                ['dashboard', 'organization', 'address-book'],
+                [['sysadmin', ['dashboard', 'organization', 'address-book']]],
             ],
-            [['core.reference-data.inquire'], ['dashboard', 'address-setup']],
-            [[], ['dashboard']],
+            [
+                ['core.reference-data.inquire'],
+                [['sysadmin', ['dashboard', 'geography']]],
+            ],
+            // Tanpa halaman yang boleh dibuka tidak ada area, jadi tidak ada halaman awal.
+            [[], []],
         ] as const;
-        for (const [duties, groups] of viewers) {
+        for (const [duties, areas] of viewers) {
             const member = await createMember(pool, tenantId, [...duties]);
             const viewer = browser();
             await viewer.login(member.email, member.password);
             expect(
-                (await shell(viewer)).navigation.map((group) => group.id),
-            ).toEqual([...groups]);
+                (await shell(viewer)).navigation.map((area) => [
+                    area.id,
+                    area.groups.map((group) => group.id),
+                ]),
+            ).toEqual(areas.map(([area, groups]) => [area, [...groups]]));
         }
+    });
+
+    test('every member who may open a Sys Admin page starts at the Sys Admin dashboard', async () => {
+        const member = await createMember(pool, tenantId, [
+            'core.reference-data.inquire',
+        ]);
+        const viewer = browser();
+        await viewer.login(member.email, member.password);
+        expect((await shell(viewer)).navigation[0]?.href).toBe(
+            '/sysadmin/dashboard',
+        );
     });
 
     test('organizations outside the data policy are not offered', async () => {
@@ -302,6 +333,6 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
             legal_entities: [],
             org_units: [],
         });
-        expect(data.navigation.map((group) => group.id)).toEqual(['dashboard']);
+        expect(data.navigation).toEqual([]);
     });
 });

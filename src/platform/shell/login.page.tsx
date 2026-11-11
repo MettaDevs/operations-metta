@@ -21,7 +21,7 @@ function destination(redirect: string | undefined): string {
         !redirect.startsWith('//') &&
         !redirect.startsWith('/\\')
         ? redirect
-        : '/dashboard';
+        : '/';
 }
 
 // Layar login CoreERP di atas POST /login yang sudah ada. Yang belum dipindah di server, dan karena itu tidak

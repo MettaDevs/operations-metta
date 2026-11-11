@@ -1,12 +1,13 @@
 import { SidebarInset, SidebarProvider } from '@operations-metta/ui/sidebar';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { Outlet } from '@tanstack/react-router';
-import { Fragment, useState } from 'react';
+import { Outlet, useLocation } from '@tanstack/react-router';
+import { Fragment, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { shellQuery } from './api.ts';
 import { AppSidebar } from './app-sidebar.tsx';
 import { AppSidebarHeader } from './app-sidebar-header.tsx';
 import { EnvironmentBanner } from './environment-banner.tsx';
+import { areaOf, rememberArea } from './home.ts';
 import { useDocumentTitle } from './use-document-title.ts';
 
 const sidebarStyle: CSSProperties & Record<`--${string}`, string> = {
@@ -29,6 +30,13 @@ export function AppLayout(): ReactNode {
     const [isScrolled, setIsScrolled] = useState(false);
     const [defaultOpen] = useState(sidebarOpen);
     useDocumentTitle(shell.auth.membership?.tenant_name ?? null);
+    const pathname = useLocation({ select: (location) => location.pathname });
+    const areaId = areaOf(shell.navigation, pathname)?.id;
+    const userId = shell.auth.user.id;
+    // Area yang sedang dibuka menjadi halaman awal berikutnya (home.ts).
+    useEffect(() => {
+        if (areaId) rememberArea(userId, areaId);
+    }, [userId, areaId]);
     // Data dan draft konteks lama tidak boleh tertinggal ketika workspace berganti.
     const scope = JSON.stringify([
         shell.auth.user.id,
@@ -43,7 +51,7 @@ export function AppLayout(): ReactNode {
             className="h-svh min-h-0 min-w-[320px] overflow-hidden"
             style={sidebarStyle}
         >
-            <AppSidebar navigation={shell.navigation} />
+            <AppSidebar navigation={shell.navigation} style={sidebarStyle} />
             <SidebarInset className="h-svh min-w-0 overflow-hidden bg-muted/30 py-2 pr-2 pl-0">
                 <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-background shadow-sm">
                     <AppSidebarHeader shell={shell} isScrolled={isScrolled} />

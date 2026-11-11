@@ -20,7 +20,7 @@ import { limitLabel, StaffAccessCard } from './staff-access-card.tsx';
 // Daftar staf tenant beserta role yang dipegangnya di unit kerja mana, dipindah dari daftar anggota layar akses
 // CoreERP. Undangan, pengguna baru, SSO, dan 2FA milik control plane dan tidak ada di layar ini.
 
-const route = getRouteApi('/_app/settings/access');
+const route = getRouteApi('/_app/sysadmin/access/staff');
 // Pilihan "Semua" pada filter. Select SDK menganggap nilai kosong sebagai belum memilih, jadi pilihan ini butuh nilai
 // sendiri.
 const ALL = 'all';
@@ -335,7 +335,8 @@ function AccessPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/access',
+    path: '/sysadmin/access/staff',
+    previousPaths: ['/settings/access'],
     layout: 'app',
     title: 'Staf',
     validateSearch: searchSchema,
