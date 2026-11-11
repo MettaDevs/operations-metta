@@ -9,14 +9,9 @@ import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
     PageDialogBody,
-    PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import {
-    RecordEditBoundary,
-    RecordEditControl,
-} from '@operations-metta/ui/record-edit-boundary';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { Textarea } from '@operations-metta/ui/textarea';
@@ -634,7 +629,8 @@ function PatientCardBody({
     onDirtyChange: (dirty: boolean) => void;
 }): ReactNode {
     const permissions = metadata.permissions;
-    const [editing, setEditing] = useState(patient === null);
+    // Pasien tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = patient === null || permissions.update;
     const fallback = metadata.default_payment_method;
     const [form, setForm] = useState(() => formOf(patient, fallback));
     const [busy, setBusy] = useState(false);
@@ -678,7 +674,6 @@ function PatientCardBody({
         setForm(formOf(patient, fallback));
         setErrors({});
         setMessage(null);
-        setEditing(false);
     };
 
     const save = async () => {
@@ -717,7 +712,6 @@ function PatientCardBody({
                     body: { ...patientBody(form), version: patient.version },
                 });
                 toast.success('Data pasien diperbarui.');
-                setEditing(false);
                 onUpdated();
             }
         } catch (caught) {
@@ -1012,13 +1006,7 @@ function PatientCardBody({
     const usesCard = behaviors.includes('requires_card_number');
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={permissions.update}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex min-h-0 flex-1 flex-col"
-        >
+        <div className="flex min-h-0 flex-1 flex-col">
             <form
                 noValidate
                 className="flex min-h-0 flex-1 flex-col"
@@ -1027,45 +1015,37 @@ function PatientCardBody({
                     void save();
                 }}
             >
-                {editing ? (
-                    <PageDialogToolbar>
+                <RecordActionBar
+                    groups={groups.filter((group) => group.actions.length)}
+                >
+                    {editing && (
+                        <>
+                            <ActionButton
+                                action="save"
+                                type="submit"
+                                disabled={
+                                    busy ||
+                                    (patient === null &&
+                                        metadata.registering_unit === null)
+                                }
+                                pending={busy}
+                            />
+                            <ActionButton
+                                action="cancel"
+                                type="button"
+                                disabled={busy}
+                                onClick={cancel}
+                            />
+                        </>
+                    )}
+                    {patient && permissions.delete && (
                         <ActionButton
-                            action="save"
-                            type="submit"
-                            disabled={
-                                busy ||
-                                (patient === null &&
-                                    metadata.registering_unit === null)
-                            }
-                            pending={busy}
-                        />
-                        <ActionButton
-                            action="cancel"
-                            type="button"
+                            action="archive"
                             disabled={busy}
-                            onClick={cancel}
+                            onClick={() => void remove()}
                         />
-                    </PageDialogToolbar>
-                ) : (
-                    <RecordActionBar
-                        groups={groups.filter((group) => group.actions.length)}
-                    >
-                        {permissions.update && (
-                            <ActionButton
-                                action="edit"
-                                disabled={busy}
-                                onClick={() => setEditing(true)}
-                            />
-                        )}
-                        {permissions.delete && (
-                            <ActionButton
-                                action="archive"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        )}
-                    </RecordActionBar>
-                )}
+                    )}
+                </RecordActionBar>
                 <FormErrorHeader
                     errors={errors}
                     message={message}
@@ -1103,7 +1083,6 @@ function PatientCardBody({
                                             patient ? undefined : 'Otomatis'
                                         }
                                         readOnly
-                                        editActivation={false}
                                     />
                                 </FormControl>
                                 <FormControl
@@ -1264,32 +1243,27 @@ function PatientCardBody({
                                         label="Umur"
                                         value={ageOf(form.birth_date)}
                                         readOnly
-                                        editActivation={false}
                                     />
                                 </FormControl>
                                 {input('birth_place', 'Tempat lahir', {
                                     maxLength: 120,
                                 })}
-                                <RecordEditControl label="Aktif">
-                                    <Field
-                                        orientation="horizontal"
-                                        className="w-auto"
-                                    >
-                                        <Switch
-                                            id="patient-active"
-                                            checked={form.is_active}
-                                            disabled={
-                                                !editing && !permissions.update
-                                            }
-                                            onCheckedChange={(checked) =>
-                                                set('is_active', checked)
-                                            }
-                                        />
-                                        <FieldLabel htmlFor="patient-active">
-                                            Aktif
-                                        </FieldLabel>
-                                    </Field>
-                                </RecordEditControl>
+                                <Field
+                                    orientation="horizontal"
+                                    className="w-auto"
+                                >
+                                    <Switch
+                                        id="patient-active"
+                                        checked={form.is_active}
+                                        disabled={!editing}
+                                        onCheckedChange={(checked) =>
+                                            set('is_active', checked)
+                                        }
+                                    />
+                                    <FieldLabel htmlFor="patient-active">
+                                        Aktif
+                                    </FieldLabel>
+                                </Field>
                             </FormGrid>
                         </section>
                         <section aria-label="Data tambahan pasien">
@@ -1354,26 +1328,22 @@ function PatientCardBody({
                                 </>
                             )}
                             {domestic ? (
-                                <RecordEditControl label="Alamat domisili berbeda">
-                                    <Field
-                                        orientation="horizontal"
-                                        className="w-auto pb-3"
-                                    >
-                                        <Switch
-                                            id="patient-domicile"
-                                            checked={form.has_domicile}
-                                            disabled={
-                                                !editing && !permissions.update
-                                            }
-                                            onCheckedChange={(checked) =>
-                                                set('has_domicile', checked)
-                                            }
-                                        />
-                                        <FieldLabel htmlFor="patient-domicile">
-                                            Alamat domisili berbeda dengan KTP
-                                        </FieldLabel>
-                                    </Field>
-                                </RecordEditControl>
+                                <Field
+                                    orientation="horizontal"
+                                    className="w-auto pb-3"
+                                >
+                                    <Switch
+                                        id="patient-domicile"
+                                        checked={form.has_domicile}
+                                        disabled={!editing}
+                                        onCheckedChange={(checked) =>
+                                            set('has_domicile', checked)
+                                        }
+                                    />
+                                    <FieldLabel htmlFor="patient-domicile">
+                                        Alamat domisili berbeda dengan KTP
+                                    </FieldLabel>
+                                </Field>
                             ) : (
                                 <h3
                                     id="patient-address-title"
@@ -1389,6 +1359,6 @@ function PatientCardBody({
                 </PageDialogBody>
             </form>
             {confirmation}
-        </RecordEditBoundary>
+        </div>
     );
 }

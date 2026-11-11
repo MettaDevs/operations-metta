@@ -283,7 +283,6 @@ export function StaffAccessCard({
         select: (response) => response.body.data,
     });
     const { data: member } = useSuspenseQuery(query);
-    const [editing, setEditing] = useState(false);
     const [adding, setAdding] = useState(false);
     const [draft, setDraft] = useState<Assignment[]>(() => fromMember(member));
     const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -296,6 +295,7 @@ export function StaffAccessCard({
         () => new Map(page.organizations.map((item) => [item.id, item])),
         [page.organizations],
     );
+    // Akses staf langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
     const canEdit = page.canManage && member.can_edit_access;
 
     const rows: Row[] = draft.flatMap((assignment) => {
@@ -393,7 +393,6 @@ export function StaffAccessCard({
         setErrors({});
         setMessage(null);
         setAdding(false);
-        setEditing(false);
         onDirtyChange(false);
     };
 
@@ -420,7 +419,6 @@ export function StaffAccessCard({
                 body,
             });
             setDraft(fromMember(body.data));
-            setEditing(false);
             setAdding(false);
             onDirtyChange(false);
             toast.success('Akses staf disimpan.');
@@ -439,11 +437,10 @@ export function StaffAccessCard({
             ref={contentRef}
             title="Akses staf"
             recordTitle={member.name}
-            editing={editing}
+            editing={canEdit}
             busy={busy}
-            onEdit={canEdit && !editing ? () => setEditing(true) : undefined}
         >
-            {editing && (
+            {canEdit && (
                 <PageDialogToolbar>
                     <ActionButton
                         action="save"
@@ -509,9 +506,9 @@ export function StaffAccessCard({
                     scrollMode="inline"
                     showRowNumbers={false}
                     actionsPlacement="inline"
-                    actions={editing ? [{ id: 'revoke', label: 'Cabut' }] : []}
+                    actions={canEdit ? [{ id: 'revoke', label: 'Cabut' }] : []}
                     getRowActions={(row) =>
-                        editing && row.assignment.source === 'manual'
+                        canEdit && row.assignment.source === 'manual'
                             ? [
                                   {
                                       id: 'revoke',
@@ -523,7 +520,7 @@ export function StaffAccessCard({
                     }
                     onRowAction={(_, row) => revoke(row)}
                     emptyMessage={
-                        editing
+                        canEdit
                             ? 'Belum ada role. Pilih Tambah untuk memberikan role.'
                             : 'Staf ini belum memegang role.'
                     }

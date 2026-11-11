@@ -65,7 +65,8 @@ function PatientTypeCard({
     onSaved: (type: PatientType) => void;
     onClose: () => void;
 }): ReactNode {
-    const [editing, setEditing] = useState(type === null);
+    // Tipe pasien tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = type === null || canManage;
     const blank = {
         code: type?.code ?? '',
         name: type?.name ?? '',
@@ -98,7 +99,6 @@ function PatientTypeCard({
             toast.success(
                 type ? 'Tipe pasien diperbarui.' : 'Tipe pasien dibuat.',
             );
-            setEditing(false);
             onSaved(body.data);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
@@ -145,7 +145,7 @@ function PatientTypeCard({
             }}
         >
             <PageDialogToolbar>
-                {editing ? (
+                {editing && (
                     <>
                         <ActionButton
                             action="save"
@@ -164,24 +164,16 @@ function PatientTypeCard({
                                 }
                                 setForm(blank);
                                 setErrors({});
-                                setEditing(false);
                             }}
                         />
                     </>
-                ) : (
-                    canManage && (
-                        <>
-                            <ActionButton
-                                action="edit"
-                                onClick={() => setEditing(true)}
-                            />
-                            <ActionButton
-                                action="archive"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        </>
-                    )
+                )}
+                {type && canManage && (
+                    <ActionButton
+                        action="archive"
+                        disabled={busy}
+                        onClick={() => void remove()}
+                    />
                 )}
             </PageDialogToolbar>
             <FormErrorHeader
@@ -423,7 +415,11 @@ function PatientTypesPage(): ReactNode {
                 >
                     <PageDialogContent title="Tipe pasien">
                         <PatientTypeCard
-                            key={open === 'new' ? 'new' : open.id}
+                            key={
+                                open === 'new'
+                                    ? 'new'
+                                    : `${open.id}:${open.version}`
+                            }
                             type={open === 'new' ? null : open}
                             canManage={canManage}
                             onSaved={(type) => {

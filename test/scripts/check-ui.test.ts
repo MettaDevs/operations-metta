@@ -48,6 +48,12 @@ const rules: { name: string; bad: string; good: string; message: string }[] = [
         message: 'Panel filter daftar ada di kiri',
     },
     {
+        name: 'a stored record opens in edit mode for users who may update it',
+        bad: `const [editing, setEditing] = useState(record === null);`,
+        good: `const editing = record === null || canUpdate; const [editing, setEditing] = useState<Line | 'new' | null>(null);`,
+        message: 'dari izin, bukan dari useState',
+    },
+    {
         name: 'no HTML table',
         bad: `<table><tbody /></table>;`,
         good: `import { DataTable } from '@operations-metta/ui/data-table'; <DataTable data={[]} columns={[]} />;`,

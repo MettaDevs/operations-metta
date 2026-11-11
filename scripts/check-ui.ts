@@ -138,6 +138,23 @@ for (const file of screens) {
                 }
         }
         if (isElement(node)) elements.push(node);
+        // Record tersimpan terbuka langsung dalam mode Ubah bagi pengguna yang berhak, jadi mode edit diturunkan
+        // dari izin (`const editing = record === null || canUpdate`), bukan saklar baca/ubah di state. State
+        // `editing` bertipe union (baris rincian yang sedang dibuka di popup) tidak ditolak.
+        if (
+            ts.isVariableDeclaration(node) &&
+            ts.isArrayBindingPattern(node.name) &&
+            node.name.elements[0]?.getText() === 'editing' &&
+            node.initializer &&
+            ts.isCallExpression(node.initializer) &&
+            node.initializer.expression.getText() === 'useState' &&
+            (!node.initializer.typeArguments ||
+                node.initializer.typeArguments[0]?.getText() === 'boolean')
+        )
+            report(
+                node,
+                'Record tersimpan langsung terbuka dalam mode Ubah bila pengguna berhak mengubahnya; turunkan `editing` dari izin, bukan dari useState.',
+            );
         ts.forEachChild(node, visit);
     };
     visit(source);

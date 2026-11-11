@@ -70,7 +70,8 @@ function DataSharingPolicyCard({
     onSaved: (policy: Policy) => void;
     onClose: () => void;
 }): ReactNode {
-    const [editing, setEditing] = useState(policy === null);
+    // Kebijakan tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = policy === null || canManage;
     const blank = {
         name: policy?.name ?? '',
         // Bila hanya ada satu jenis data, kebijakan baru langsung memakainya.
@@ -115,7 +116,6 @@ function DataSharingPolicyCard({
                     ? 'Kebijakan sharing diperbarui.'
                     : 'Kebijakan sharing dibuat.',
             );
-            setEditing(false);
             onSaved(body.data);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
@@ -178,7 +178,7 @@ function DataSharingPolicyCard({
             }}
         >
             <PageDialogToolbar>
-                {editing ? (
+                {editing && (
                     <>
                         <ActionButton
                             action="save"
@@ -197,24 +197,16 @@ function DataSharingPolicyCard({
                                 }
                                 setForm(blank);
                                 setErrors({});
-                                setEditing(false);
                             }}
                         />
                     </>
-                ) : (
-                    canManage && (
-                        <>
-                            <ActionButton
-                                action="edit"
-                                onClick={() => setEditing(true)}
-                            />
-                            <ActionButton
-                                action="archive"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        </>
-                    )
+                )}
+                {policy && canManage && (
+                    <ActionButton
+                        action="archive"
+                        disabled={busy}
+                        onClick={() => void remove()}
+                    />
                 )}
             </PageDialogToolbar>
             <FormErrorHeader
@@ -270,7 +262,7 @@ function DataSharingPolicyCard({
                         ) : (
                             <Input
                                 label="Data yang di-share"
-                                value={policy?.data_type.name ?? ''}
+                                value={policy.data_type.name}
                                 readOnly
                             />
                         )}
@@ -612,7 +604,11 @@ function DataSharingPage(): ReactNode {
                         title="Kebijakan data sharing"
                     >
                         <DataSharingPolicyCard
-                            key={open === 'new' ? 'new' : open.id}
+                            key={
+                                open === 'new'
+                                    ? 'new'
+                                    : `${open.id}:${open.version}`
+                            }
                             policy={open === 'new' ? null : open}
                             dataTypes={dataTypes.data ?? []}
                             canManage={canManage}

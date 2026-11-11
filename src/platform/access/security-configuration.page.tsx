@@ -12,7 +12,6 @@ import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import { MasterDetailLayout } from '@operations-metta/ui/master-detail-layout';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { RecordEditBoundary } from '@operations-metta/ui/record-edit-boundary';
 import { TransferList } from '@operations-metta/ui/transfer-list';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
@@ -62,7 +61,8 @@ function RoleComposer({
 }): ReactNode {
     const creating = role === null;
     const canEdit = catalog.canManage && !role?.is_owner;
-    const [editing, setEditing] = useState(creating);
+    // Role tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = creating || canEdit;
     const [name, setName] = useState(role?.name ?? '');
     const [duties, setDuties] = useState<string[]>(role?.duty_codes ?? []);
     const [busy, setBusy] = useState(false);
@@ -111,7 +111,6 @@ function RoleComposer({
         setDuties(role.duty_codes);
         setErrors({});
         setMessage(null);
-        setEditing(false);
     };
 
     const submit = async () => {
@@ -132,7 +131,6 @@ function RoleComposer({
                       body: { ...body, version: role.version },
                   });
             toast.success('Role disimpan.');
-            setEditing(false);
             onSaved(saved.data);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
@@ -169,43 +167,31 @@ function RoleComposer({
     };
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={canEdit}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground"
-        >
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground">
             <RecordActionBar title={role?.name ?? 'Role baru'}>
-                {canEdit &&
-                    (!editing ? (
-                        <>
-                            <ActionButton
-                                action="edit"
-                                onClick={() => setEditing(true)}
-                            />
-                            <ActionButton
-                                action="delete"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <ActionButton
-                                action="save"
-                                type="submit"
-                                form={formId}
-                                disabled={busy}
-                                pending={busy}
-                            />
-                            <ActionButton
-                                action="cancel"
-                                disabled={busy}
-                                onClick={cancel}
-                            />
-                        </>
-                    ))}
+                {editing && (
+                    <>
+                        <ActionButton
+                            action="save"
+                            type="submit"
+                            form={formId}
+                            disabled={busy}
+                            pending={busy}
+                        />
+                        <ActionButton
+                            action="cancel"
+                            disabled={busy}
+                            onClick={cancel}
+                        />
+                    </>
+                )}
+                {!creating && canEdit && (
+                    <ActionButton
+                        action="delete"
+                        disabled={busy}
+                        onClick={() => void remove()}
+                    />
+                )}
             </RecordActionBar>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <form
@@ -321,7 +307,7 @@ function RoleComposer({
                 </form>
             </div>
             {confirmation}
-        </RecordEditBoundary>
+        </div>
     );
 }
 

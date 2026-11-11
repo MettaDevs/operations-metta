@@ -16,10 +16,6 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
-import {
-    RecordEditBoundary,
-    RecordEditControl,
-} from '@operations-metta/ui/record-edit-boundary';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { Textarea } from '@operations-metta/ui/textarea';
@@ -330,7 +326,8 @@ function PartyCardBody({
     onDirtyChange: (dirty: boolean) => void;
 }): ReactNode {
     const canManage = metadata.canManage;
-    const [editing, setEditing] = useState(party === null);
+    // Pihak tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = party === null || canManage;
     const [form, setForm] = useState(() => formOf(party));
     const [searchEdited, setSearchEdited] = useState(
         () =>
@@ -385,7 +382,6 @@ function PartyCardBody({
         setForm(formOf(party));
         setErrors({});
         setMessage(null);
-        setEditing(false);
     };
 
     const save = async () => {
@@ -414,7 +410,6 @@ function PartyCardBody({
                     },
                 });
                 toast.success('Pihak diperbarui.');
-                setEditing(false);
                 onUpdated(body.data);
             }
         } catch (caught) {
@@ -460,25 +455,14 @@ function PartyCardBody({
         }
     };
 
-    usePageDialogRecord(
-        editing
-            ? {
-                  recordTitle: form.name || 'Pihak baru',
-                  editing: true,
-                  recordUrl: party
-                      ? `/sysadmin/address-book/parties?party=${party.id}`
-                      : undefined,
-              }
-            : {
-                  recordTitle: party?.name,
-                  editing: false,
-                  onEdit: canManage ? () => setEditing(true) : undefined,
-                  onDelete: canManage ? () => void remove() : undefined,
-                  recordUrl: party
-                      ? `/sysadmin/address-book/parties?party=${party.id}`
-                      : undefined,
-              },
-    );
+    usePageDialogRecord({
+        recordTitle: editing ? form.name || 'Pihak baru' : party.name,
+        editing,
+        onDelete: party && canManage ? () => void remove() : undefined,
+        recordUrl: party
+            ? `/sysadmin/address-book/parties?party=${party.id}`
+            : undefined,
+    });
 
     const select = (
         field: keyof PartyForm,
@@ -571,13 +555,7 @@ function PartyCardBody({
         code;
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={canManage}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex min-h-0 flex-1 flex-col"
-        >
+        <div className="flex min-h-0 flex-1 flex-col">
             <form
                 noValidate
                 className="flex min-h-0 flex-1 flex-col"
@@ -661,7 +639,6 @@ function PartyCardBody({
                                             label="Jenis pihak"
                                             value={typeName(form.type)}
                                             readOnly
-                                            editActivation={false}
                                         />
                                     )}
                                 </FormControl>
@@ -711,29 +688,25 @@ function PartyCardBody({
                                         'NIB (Nomor Induk Berusaha)',
                                         { maxLength: 200 },
                                     )}
-                                <RecordEditControl label="Aktif">
-                                    <Field
-                                        orientation="horizontal"
-                                        className="w-auto"
-                                    >
-                                        <Switch
-                                            id="party-active"
-                                            checked={form.status === 'active'}
-                                            disabled={!editing && !canManage}
-                                            onCheckedChange={(checked) =>
-                                                set(
-                                                    'status',
-                                                    checked
-                                                        ? 'active'
-                                                        : 'inactive',
-                                                )
-                                            }
-                                        />
-                                        <FieldLabel htmlFor="party-active">
-                                            Aktif
-                                        </FieldLabel>
-                                    </Field>
-                                </RecordEditControl>
+                                <Field
+                                    orientation="horizontal"
+                                    className="w-auto"
+                                >
+                                    <Switch
+                                        id="party-active"
+                                        checked={form.status === 'active'}
+                                        disabled={!editing}
+                                        onCheckedChange={(checked) =>
+                                            set(
+                                                'status',
+                                                checked ? 'active' : 'inactive',
+                                            )
+                                        }
+                                    />
+                                    <FieldLabel htmlFor="party-active">
+                                        Aktif
+                                    </FieldLabel>
+                                </Field>
                             </FormGrid>
                         </CollapsibleSection>
                         {person && (
@@ -1030,6 +1003,6 @@ function PartyCardBody({
                 </PageDialogBody>
             </form>
             {confirmation}
-        </RecordEditBoundary>
+        </div>
     );
 }

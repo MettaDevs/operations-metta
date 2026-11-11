@@ -17,7 +17,6 @@ import {
     PageDialogToolbar,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { RecordEditBoundary } from '@operations-metta/ui/record-edit-boundary';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
@@ -163,7 +162,8 @@ function OccupationDetail({
     onSaved: (occupation: Occupation) => void;
     onDeleted: () => void;
 }) {
-    const [editing, setEditing] = useState(false);
+    // Pekerjaan tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
+    const editing = canManage;
     const [name, setName] = useState(occupation.name);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -181,7 +181,6 @@ function OccupationDetail({
                 body: { name, version: occupation.version },
             });
             toast.success('Pekerjaan disimpan.');
-            setEditing(false);
             onSaved(body.data);
         } catch (caught) {
             const failed = failure(caught, 'Perubahan belum disimpan.');
@@ -218,48 +217,33 @@ function OccupationDetail({
     };
 
     return (
-        <RecordEditBoundary
-            editing={editing}
-            canEdit={canManage}
-            disabled={busy}
-            onEdit={() => setEditing(true)}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground"
-        >
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card text-foreground">
             <RecordActionBar title={occupation.name}>
-                {canManage &&
-                    (!editing ? (
-                        <>
-                            <ActionButton
-                                action="edit"
-                                onClick={() => setEditing(true)}
-                            />
-                            <ActionButton
-                                action="delete"
-                                disabled={busy}
-                                onClick={() => void remove()}
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <ActionButton
-                                action="save"
-                                type="submit"
-                                form={formId}
-                                disabled={busy}
-                                pending={busy}
-                            />
-                            <ActionButton
-                                action="cancel"
-                                disabled={busy}
-                                onClick={() => {
-                                    setName(occupation.name);
-                                    setErrors({});
-                                    setMessage(null);
-                                    setEditing(false);
-                                }}
-                            />
-                        </>
-                    ))}
+                {editing && (
+                    <>
+                        <ActionButton
+                            action="save"
+                            type="submit"
+                            form={formId}
+                            disabled={busy}
+                            pending={busy}
+                        />
+                        <ActionButton
+                            action="cancel"
+                            disabled={busy}
+                            onClick={() => {
+                                setName(occupation.name);
+                                setErrors({});
+                                setMessage(null);
+                            }}
+                        />
+                        <ActionButton
+                            action="delete"
+                            disabled={busy}
+                            onClick={() => void remove()}
+                        />
+                    </>
+                )}
             </RecordActionBar>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <form
@@ -293,7 +277,7 @@ function OccupationDetail({
                 </form>
             </div>
             {confirmation}
-        </RecordEditBoundary>
+        </div>
     );
 }
 
