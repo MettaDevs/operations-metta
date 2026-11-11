@@ -36,7 +36,12 @@ type Shell = {
             id: string;
             label: string;
             icon: string | null;
-            items: { id: string; label: string; href: string }[];
+            items: {
+                id: string;
+                label: string;
+                href: string;
+                section: string | null;
+            }[];
         }[];
     }[];
     uninstalled_apps: { id: string; label: string; icon: string | null }[];
@@ -177,6 +182,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                                 id: 'dashboard',
                                 label: 'Dashboard',
                                 href: '/sysadmin/dashboard',
+                                section: null,
                             },
                         ],
                     },
@@ -189,16 +195,19 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                                 id: 'legal-entities',
                                 label: 'Legal entity',
                                 href: '/sysadmin/organization/legal-entities',
+                                section: null,
                             },
                             {
                                 id: 'operating-units',
                                 label: 'Operating unit',
                                 href: '/sysadmin/organization/operating-units',
+                                section: null,
                             },
                             {
                                 id: 'hierarchies',
                                 label: 'Hierarki organisasi',
                                 href: '/sysadmin/organization/hierarchies',
+                                section: null,
                             },
                         ],
                     },
@@ -211,16 +220,19 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                                 id: 'parties',
                                 label: 'Pihak',
                                 href: '/sysadmin/address-book/parties',
+                                section: null,
                             },
                             {
                                 id: 'occupations',
                                 label: 'Pekerjaan',
                                 href: '/sysadmin/address-book/occupations',
+                                section: null,
                             },
                             {
                                 id: 'duplicate-check',
                                 label: 'Cek data ganda',
                                 href: '/sysadmin/address-book/duplicate-check',
+                                section: null,
                             },
                         ],
                     },

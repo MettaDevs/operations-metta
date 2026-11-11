@@ -1128,6 +1128,10 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             patientBody({ name: 'Pasien Kebijakan Lama' }),
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
+        // 0008 juga menulis menu module; migration sesudahnya mengubah menu itu lagi, jadi menu terkini dikembalikan.
+        const [menuBefore] = await pool.unsafe<{ navigation: string }[]>(
+            "select navigation::text as navigation from apps where id = 'healthcare'",
+        );
         try {
             // Dijalankan dua kali: pemindahan aman diulang.
             await pool.unsafe(migration);
@@ -1171,6 +1175,10 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             );
             expect(orphan?.note).toContain('Yatim');
         } finally {
+            await pool.unsafe(
+                "update apps set navigation = $1::text::jsonb where id = 'healthcare'",
+                [menuBefore?.navigation ?? null],
+            );
             await pool.unsafe(
                 'update data_sharing_policy_companies set deleted_at = now() where policy_id = $1 and deleted_at is null',
                 [active],
@@ -1385,6 +1393,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                         z.object({
                             label: z.string(),
                             href: z.string(),
+                            section: z.string().optional(),
                             permission: z.string().optional(),
                         }),
                     ),
@@ -1396,7 +1405,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(groups.map((group) => [group.id, group.icon])).toEqual([
             ['dashboard', 'layout-dashboard'],
             ['patient', 'users'],
-            ['coverage', 'shield-plus'],
+            ['setup', 'settings'],
         ]);
         expect(
             groups
@@ -1421,20 +1430,27 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             expect(label.name).toContain('sharing');
             expect(label.name).not.toContain('berbagi');
         }
-        // Kelompok sidebar sama dengan folder area di src/ module, dan URL halamannya berawalan folder itu.
+        // Kelompok sidebar sama dengan folder area di src/ module, dan URL halamannya berawalan folder itu. Rail Setup
+        // mengumpulkan halaman pengaturan dari beberapa folder domain; di sana judul bagian yang mengikuti foldernya.
         expect(groups.map((group) => [group.id, group.label])).toEqual([
             ['dashboard', 'Dashboard'],
             ['patient', 'Pasien'],
-            ['coverage', 'Penjaminan'],
+            ['setup', 'Setup'],
         ]);
+        const sectionFolders = new Map([['Penjaminan', 'coverage']]);
         const pages = new Map(
             pageFiles().map((file) => [readPage(file).path, file]),
         );
         for (const group of groups)
             for (const item of group.items) {
+                const folder =
+                    group.id === 'setup'
+                        ? sectionFolders.get(item.section ?? '')
+                        : group.id;
+                expect(folder).toBeDefined();
                 const file = pages.get(item.href)?.split(/[\\/]/) ?? [];
-                expect(file[file.lastIndexOf('src') + 1]).toBe(group.id);
-                expect(item.href.startsWith(`/healthcare/${group.id}`)).toBe(
+                expect(file[file.lastIndexOf('src') + 1]).toBe(folder);
+                expect(item.href.startsWith(`/healthcare/${folder}`)).toBe(
                     true,
                 );
             }
@@ -1483,14 +1499,14 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(adminMenu[1]?.groups.map((group) => group.id)).toEqual([
             'dashboard',
             'patient',
-            'coverage',
+            'setup',
         ]);
         // Shell meneruskan ikon area dan grup dari data module.
         expect(adminMenu[1]?.icon).toBe('heart-pulse');
         expect(adminMenu[1]?.groups.map((group) => group.icon)).toEqual([
             'layout-dashboard',
             'users',
-            'shield-plus',
+            'settings',
         ]);
         expect((await shell(admin)).uninstalled_apps).toEqual([]);
         // Dibeli tetapi belum terpasang: module tidak bisa dibuka, tetapi tetap tampil di katalog sebagai aplikasi
