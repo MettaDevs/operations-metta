@@ -1,10 +1,10 @@
 # healthcare
 
-Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, section, dan tenaga kesehatan. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
+Module layanan kesehatan: master pasien, tipe pasien, penjamin, cara bayar, section, tenaga kesehatan, dan jadwal praktik. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
 
 ## Nama tabel
 
-Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Semua tabel sekarang master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, `sim_m_section`, `sim_m_ruangan`, `sim_m_section_ruangan`, dan `sim_m_nakes`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Transaksi kelak, misalnya kunjungan, memakai `sim_tr_`. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
+Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi, mengikuti pola legacy sistem lama (keputusan pemilik produk, 10 November 2026). Detail master ikut `m_`. Master: `sim_m_pasien`, `sim_m_pasien_cara_bayar`, `sim_m_tipe_pasien`, `sim_m_tipe_pasien_perilaku`, `sim_m_penjamin`, `sim_m_section`, `sim_m_ruangan`, `sim_m_section_ruangan`, `sim_m_nakes`, `sim_m_sesi_praktik`, dan `sim_m_jadwal_template`. Transaksi pertama adalah `sim_tr_jadwal_praktik`. `sim_m_kebijakan_berbagi` dan `sim_m_kebijakan_berbagi_perusahaan` menjadi tabel yatim sejak `0008_data_sharing_to_core.sql`: isinya disalin ke tabel Core, dan keduanya tidak dibaca atau ditulis lagi. Awalan lama `kes_` diganti `0005_table_prefix.sql`. `bun run check:boundaries` menolak `sim_` di kode Core.
 
 ## Pasien adalah peran party
 
@@ -103,10 +103,12 @@ Reference NRM boleh berscope legal entity atau operating unit, menyalakan `defau
 | `healthcare.service-setup.manage` Kelola section dan ruangan                                             | `section.maintain`, `section.retire`, `room.maintain`, `room.retire` | `section.*` dan `room.*`: `.read`, `.create`, `.update`, `.delete` |
 | `healthcare.practitioner.inquire` Lihat tenaga kesehatan                                                 | `practitioner.view`                                                  | `practitioner.read`                                                |
 | `healthcare.practitioner.manage` Kelola tenaga kesehatan                                                 | `practitioner.maintain`                                              | `practitioner.read`, `.update`                                     |
+| `healthcare.practice-schedule.inquire` Lihat jadwal praktik                                              | `practice-schedule.view`                                             | `practice-schedule.read`                                           |
+| `healthcare.practice-schedule.manage` Kelola jadwal praktik                                              | `practice-schedule.maintain`, `practice-schedule.retire`             | `practice-schedule.read`, `.create`, `.update`, `.delete`          |
 | `healthcare.patient-sharing.inquire` Lihat kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.view`                                               | `patient-sharing.read`                                             |
 | `healthcare.patient-sharing.manage` Kelola kebijakan sharing pasien (tidak menjaga apa pun sejak `0008`) | `patient-sharing.maintain`                                           | `patient-sharing.read`, `.update`                                  |
 
-Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien, penjamin, section, ruangan, dan nakes adalah master tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
+Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerja wajib, turunan boleh). Tipe pasien, penjamin, section, ruangan, nakes, dan jadwal praktik adalah data tenant, tidak dibatasi unit; daftar tipe pasien dan penjamin juga terbaca pemegang `healthcare.patient.read` karena dipakai form pasien. Module tidak membawa role bawaan: CoreERP tidak punya pola role bawaan dari module. Saat module dipasang (`installModule`), role pemilik tenant mendapat semua duty module.
 
 ## Tipe pasien dan perilakunya
 
@@ -129,7 +131,7 @@ Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `app
 | Dashboard        | `src/dashboard/`    | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
 | Pasien           | `src/patient/`      | Pasien (`patient/`); aturan siapa melihat pasien di `patient-sharing/` tanpa halaman                                          |
 | Penjaminan       | `src/coverage/`     | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
-| Pelayanan        | `src/service/`      | Section (`section/`), Ruangan (`room/`)                                                                                       |
+| Pelayanan        | `src/service/`      | Section (`section/`), Ruangan (`room/`), Sesi praktik, Template jadwal, dan Jadwal praktik (`practice-schedule/`)             |
 | Tenaga kesehatan | `src/practitioner/` | Nakes (`practitioner/`)                                                                                                       |
 
 URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`) dialihkan ke alamat barunya. `/healthcare/sharing-policies` dan `/healthcare/patient/sharing-policies` dialihkan ke `/sysadmin/data-sharing`.
@@ -139,6 +141,9 @@ URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types
 - **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
 - **Section** (`/healthcare/service/sections`): daftar dengan pencarian di toolbar dan filter unit, jenis, serta status di panel kiri. Kartu section memilih ruangan yang melayaninya dari ruangan unit yang sama.
 - **Ruangan** (`/healthcare/service/rooms`): daftar dengan pencarian di toolbar dan filter unit serta status di panel kiri.
+- **Sesi praktik** (`/healthcare/service/practice-sessions`): daftar dengan pencarian di toolbar dan filter status di panel kiri, dan kartu sesi.
+- **Template jadwal** (`/healthcare/service/schedule-templates`): pilih section, lalu delapan kolom Senin sampai Minggu dan Hari libur, masing-masing berisi nakes, sesi, dan kapasitasnya. Tambah di kolom membuka kartu template dengan hari itu.
+- **Jadwal praktik** (`/healthcare/service/practice-schedules`): pilih section dan minggu (bawaan minggu ini), lalu tujuh kolom tanggal berisi jadwal bertanggal: nakes (dan yang digantikannya), sesi dan jam, terdaftar dan kapasitas, serta status. Kartu jadwal mengubah status (Batal dengan alasan), nakes pengganti, dan kapasitas. Baru membuat jadwal tambahan di luar template; Generate jadwal menyusun jadwal dari template.
 - **Nakes** (`/healthcare/practitioner/practitioners`): daftar dengan pencarian nama dan no. SIP di toolbar, filter profesi dan status di panel kiri, dan kartu nakes.
 - Penjaminan, Pelayanan, dan Tenaga kesehatan adalah bagian rail **Setup**; judul bagian mengikuti folder domainnya.
 - Menu module ditulis migration ke `apps.navigation` (terakhir ditulis utuh oleh `0010_setup_rail.sql`; sejak `0011_section.sql` migration menambah item ke grupnya tanpa menimpa item lain) dan disaring Shell dengan permission tiap entri.
@@ -150,7 +155,7 @@ Penjamin adalah party organisasi berperan `healthcare.guarantor`, dicatat untuk 
 
 ## Tenaga kesehatan
 
-Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti pola pasien: party orang berperan `healthcare.practitioner` ("Tenaga kesehatan"), didaftarkan untuk legal entity aktif, dan dicatat di `sim_m_nakes` satu baris per orang per tenant (`sim_m_nakes_party_unique`). Ditambahkan `0012_practitioner.sql` (keputusan pemilik produk, 11 November 2026). Pendaftaran kunjungan kelak memilih nakes dari yang punya jadwal praktik; jadwal belum dibangun.
+Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti pola pasien: party orang berperan `healthcare.practitioner` ("Tenaga kesehatan"), didaftarkan untuk legal entity aktif, dan dicatat di `sim_m_nakes` satu baris per orang per tenant (`sim_m_nakes_party_unique`). Ditambahkan `0012_practitioner.sql` (keputusan pemilik produk, 11 November 2026). Pendaftaran kunjungan kelak memilih nakes dari yang punya jadwal praktik (lihat [Jadwal praktik](#jadwal-praktik)).
 
 | Data                                               | Tempat                                                                    |
 | -------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -168,22 +173,27 @@ Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti
 
 Semua di bawah `/api/modules/healthcare/v1`.
 
-| Endpoint                                                                                                                                                                              | Izin                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                                     |
-| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                                     |
-| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                                     |
-| `POST /patients`                                                                                                                                                                      | `patient.create`                                   |
-| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                                   |
-| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                                   |
-| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update`                    |
-| `GET /sections/metadata` (pilihan unit, ruangan, dan izin layar)                                                                                                                      | `section.read`                                     |
-| `GET, POST /sections` (cari: nama, unit, kode nomor bukti; saring `operating_unit_id`, `kind`, `status`), `PATCH, DELETE /sections/{id}`                                              | `section.read` / `.create` / `.update` / `.delete` |
-| `GET /rooms/metadata` (pilihan unit dan izin layar)                                                                                                                                   | `room.read`                                        |
-| `GET, POST /rooms` (cari: kode, nama, lantai, nama di layar antrean; saring `operating_unit_id`, `status`), `PATCH, DELETE /rooms/{id}`                                               | `room.read` / `.create` / `.update` / `.delete`    |
-| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`                       |
-| `GET /practitioners` (cari: nama, no. SIP; saring profesi, status), `GET /practitioners/metadata`                                                                                     | `practitioner.read`                                |
-| `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                          | `practitioner.update`                              |
+| Endpoint                                                                                                                                                                              | Izin                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `GET /patients` (cari: nama, NRM, NRM lama, NIK, nomor kartu, nomor HP, alamat, tanggal lahir yyyy-mm-dd, dd-mm-yyyy, ddmmyyyy, yyyymmdd; saring status, tipe pasien, unit pendaftar) | `patient.read`                                               |
+| `GET /patients/metadata` (termasuk cara bayar bawaan)                                                                                                                                 | `patient.read`                                               |
+| `GET /patients/{id}`                                                                                                                                                                  | `patient.read`                                               |
+| `POST /patients`                                                                                                                                                                      | `patient.create`                                             |
+| `PATCH /patients/{id}`                                                                                                                                                                | `patient.update`                                             |
+| `DELETE /patients/{id}` (mengisi `deleted_at`)                                                                                                                                        | `patient.delete`                                             |
+| `GET, POST /patient-types`, `PATCH, DELETE /patient-types/{id}`                                                                                                                       | `patient-type.read` / `.update`                              |
+| `GET /sections/metadata` (pilihan unit, ruangan, dan izin layar)                                                                                                                      | `section.read`                                               |
+| `GET, POST /sections` (cari: nama, unit, kode nomor bukti; saring `operating_unit_id`, `kind`, `status`), `PATCH, DELETE /sections/{id}`                                              | `section.read` / `.create` / `.update` / `.delete`           |
+| `GET /rooms/metadata` (pilihan unit dan izin layar)                                                                                                                                   | `room.read`                                                  |
+| `GET, POST /rooms` (cari: kode, nama, lantai, nama di layar antrean; saring `operating_unit_id`, `status`), `PATCH, DELETE /rooms/{id}`                                               | `room.read` / `.create` / `.update` / `.delete`              |
+| `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                             | `guarantor.read` / `.update`                                 |
+| `GET /practitioners` (cari: nama, no. SIP; saring profesi, status), `GET /practitioners/metadata`                                                                                     | `practitioner.read`                                          |
+| `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                          | `practitioner.update`                                        |
+| `GET /practice-schedules/metadata` (section aktif, sesi, kalender, izin), `GET /practice-schedules/practitioners` (nakes aktif untuk pemilih)                                         | `practice-schedule.read`                                     |
+| `GET, POST /practice-sessions` (cari: nama; saring `status`), `PATCH, DELETE /practice-sessions/{id}`                                                                                 | `practice-schedule.read` / `.create` / `.update` / `.delete` |
+| `GET /schedule-templates?section_id=`, `POST /schedule-templates`, `PATCH, DELETE /schedule-templates/{id}`                                                                           | `practice-schedule.read` / `.create` / `.update` / `.delete` |
+| `GET /practice-schedules?section_id=&from=&to=` (paling panjang 42 hari), `POST /practice-schedules` (jadwal tambahan), `PATCH /practice-schedules/{id}`                              | `practice-schedule.read` / `.create` / `.update`             |
+| `POST /practice-schedules/generate` (`from`, `to`, `section_id` opsional; paling panjang 92 hari)                                                                                     | `practice-schedule.create` dan `.update`                     |
 
 ## Section
 
@@ -197,6 +207,24 @@ Section adalah poli atau titik layanan lain di satu operating unit (faskes), pad
 - **Antrean**: `mode_antrean` adalah kode dari katalog di kode (`src/service/section/section.queue-modes.ts`), bawaan `bersama`. `bersama`: satu nomor per section per hari dipakai semua ruangan, dan ruangan terikat saat ruangan memanggil pasien, seperti sistem lama. `per_jadwal`: satu nomor per sesi praktik atau jadwal dokter. `awalan_antrean` adalah awalan pendek opsional, misalnya `A` menjadi `A-012`. Nomor antrean mulai lagi setiap hari, jadi tidak ada kolom periode. Belum ada yang menerbitkan nomor antrean; pendaftaran kunjungan yang kelak melakukannya.
 - Delete mengisi `deleted_at`. Section yang dihapus tidak tampil, melepas namanya, dan melepas ruangannya; ruangan yang dihapus lepas dari setiap section yang memakainya.
 - Pilihan unit dibaca module langsung dari `organizations` dan `operating_units` Core, karena daftar organisasi Core dijaga izin organisasi.
+
+## Jadwal praktik
+
+Pendaftaran kunjungan kelak menawarkan nakes yang punya jadwal praktik di section itu pada hari itu. Tidak ada tabel penugasan nakes ke section terpisah (keputusan pemilik produk, 11 November 2026). Bentuknya mengikuti sistem lama (template mingguan `SIMtrDokterJagaDefault`, jadwal bertanggal `SIMtrDokterJagaDetail`, sesi `SIMmWaktuPraktek`, prosedur `GenerateJadwalDokterMingguan`) dengan pola F&O "Compose working times". Ditambahkan `0014_practice_schedule.sql`.
+
+| Tabel                   | Isi                                                                                                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sim_m_sesi_praktik`    | Sesi: nama, jam mulai dan selesai. `lewat_tengah_malam` dihitung database (selesai pada atau sebelum jam mulai), jadi 20:00-08:00 jaga malam dan 08:00-08:00 jaga 24 jam. Tanpa kode.                                              |
+| `sim_m_jadwal_template` | Template mingguan per nakes, section, hari, dan sesi, dengan kapasitas, kalender libur, dan masa berlaku. `hari` 1..7 = Senin..Minggu, 8 = template hari libur. Satu template aktif per kunci itu.                                 |
+| `sim_tr_jadwal_praktik` | Jadwal bertanggal. Jam, tanggal selesai, dan kapasitas disalin. `sumber` `template`, `manual`, atau kelak `impor_bpjs`; `status` `terjadwal` atau `batal` dengan `alasan_batal`. Satu baris per nakes, section, tanggal, dan sesi. |
+
+- **Kapasitas.** Kosong (NULL) berarti tanpa batas; angka yang diisi paling kecil 1. Kapasitas jadwal tidak boleh diturunkan di bawah jumlah pasien yang sudah terdaftar. `jumlah_terdaftar` kelak dinaikkan pendaftaran kunjungan.
+- **Generate jadwal** (`generatePracticeSchedule` di `practice-schedule.service.ts`) aman diulang. Tanggal tanpa baris mendapat baris dari template aktif yang berlaku. Baris dari template yang belum disentuh (`diubah_manual` false dan `jumlah_terdaftar` 0) diperbarui bila templatenya berubah, dan diarsipkan bila tidak ada lagi template yang menurunkannya. Baris manual, baris yang diubah di layar, dan baris yang sudah punya pendaftar tidak pernah disentuh. Template, nakes, section, dan sesi yang nonaktif tidak ikut.
+- **Hari libur** datang dari kalender Core yang dipasang di template (`calendar_id`). Pada tanggal yang disusun dan ditutup kalender itu, jadwal hari itu tetap ditulis dengan status `batal` dan alasan "Hari libur", supaya terlihat di layar. Bila ada template hari libur (hari 8) dengan kalender itu untuk nakes, section, dan sesi yang sama, template itulah yang dipakai. Tanggal yang belum disusun di kalender tidak dihitung libur, berbeda dari pembacaan kalender biasa: kalender yang lupa disusun tidak boleh membatalkan seluruh jadwal.
+- **Batal** mengisi status dan alasan; barisnya tidak dihapus. **Nakes pengganti** (`nakes_pengganti_id`) disimpan di baris bertanggal. Setiap perubahan di layar menandai `diubah_manual`.
+- **Untuk pendaftaran**, `schedulesForRegistration(db, { tenantId, sectionId, date })` di `practice-schedule.service.ts` mengembalikan jadwal terjadwal di section aktif, dengan nakes yang benar-benar praktik (pengganti bila ada, dan masih aktif), jam sesi, kapasitas, jumlah terdaftar, dan `full`. Jadwal tanpa kapasitas tidak pernah penuh.
+- Generate hanya dijalankan dari tombol di layar. Repo ini belum punya penjadwal per tenant: worker hanya menjalankan operasi dari control plane.
+- Kuota per tipe pasien (`QuotaAntrian` dan `QuotaAntrianBPJS` sistem lama) belum dibuat, karena belum ada pendaftaran yang membacanya.
 
 ## Dicatat untuk nanti
 
