@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
+import { z } from 'zod';
 import { databaseSettingsSchema } from '../../../src/platform/config/index.ts';
 import {
     type ControlPlaneClient,
@@ -17,6 +18,11 @@ import {
     migrate,
     readMigrationSource,
 } from '../../../src/platform/migration/index.ts';
+import {
+    createModule,
+    createReference,
+    createSequence,
+} from '../../support/number-sequence-fixtures.ts';
 
 describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     if (!process.env.DB_HOST) return;
@@ -723,4 +729,200 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             `Address ${slug} (production) is still active`,
         );
     });
+
+    test('copy menyalin produksi menjadi sandbox yang terlucuti, tanpa menyentuh produksi, dan aman diulang', async () => {
+        const production = await parameters();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                recorder().client,
+                claimed('provision', production),
+            ),
+        ).toBe('succeeded');
+        const connectTo = (database: string) =>
+            postgres({
+                host: settings.DB_HOST,
+                port: settings.DB_PORT,
+                database,
+                username: settings.DB_USERNAME,
+                password: settings.DB_PASSWORD,
+                max: 1,
+                onnotice: () => {},
+            });
+        const sourceDb = connectTo(production.database);
+        const sandboxDatabase = `${settings.DB_DATABASE.slice(0, 40)}_sb_${crypto.randomUUID().slice(-8)}`;
+        databases.push(sandboxDatabase);
+        const leftovers = async (sql: postgres.Sql) =>
+            z
+                .object({
+                    events: z.number(),
+                    exports: z.number(),
+                    reservations: z.number(),
+                    pool: z.number(),
+                    jobs: z.number(),
+                    credentials: z.number(),
+                    sessions: z.number(),
+                    cache: z.number(),
+                    users: z.number(),
+                })
+                .parse(
+                    (
+                        await sql.unsafe(
+                            `select
+                                (select count(*)::int from outbox_events where published_at is null) as events,
+                                (select count(*)::int from report_exports where status = 'queued') as exports,
+                                (select count(*)::int from number_sequence_reservations where status = 'reserved') as reservations,
+                                (select count(*)::int from number_sequence_continuous_pool where status = 'reserved') as pool,
+                                (select count(*)::int from jobs) as jobs,
+                                (select count(*)::int from app_service_credentials) as credentials,
+                                (select count(*)::int from sessions) as sessions,
+                                (select count(*)::int from cache) as cache,
+                                (select count(*)::int from users) as users`,
+                        )
+                    )[0],
+                );
+        try {
+            // Efek keluar yang menunggu di produksi, dengan app dan number sequence yang sah supaya kunci asingnya utuh.
+            const tenant = production.tenant.id;
+            const app = await createModule(sourceDb);
+            const reference = await createReference(sourceDb, app, 'Uji');
+            const sequence = await createSequence(
+                sourceDb,
+                tenant,
+                reference.id,
+                {},
+            );
+            await sourceDb.begin(async (transaction) => {
+                const reservation = Bun.randomUUIDv7();
+                await transaction.unsafe(
+                    `insert into outbox_events (id, tenant_id, type, payload, occurred_at)
+                     values ($1, $2, 'uji.event.v1', '{}', now())`,
+                    [Bun.randomUUIDv7(), tenant],
+                );
+                await transaction.unsafe(
+                    `insert into report_exports (id, tenant_id, membership_id, user_id, app_id, report_code, report_name,
+                        layout_ref, layout_name, format, parameters, status)
+                     values ($1, $2, $3, $4, 'core', 'uji', 'Uji', 'uji', 'Uji', 'pdf', '{}', 'queued')`,
+                    [
+                        Bun.randomUUIDv7(),
+                        tenant,
+                        Bun.randomUUIDv7(),
+                        production.admin.id,
+                    ],
+                );
+                await transaction.unsafe(
+                    `insert into number_sequence_reservations (id, sequence_id, app_id, scope_key, numeric_value,
+                        formatted_value, idempotency_key, status, expires_at)
+                     values ($1, $2, $4, 'uji', 7, 'UJI-7', $3, 'reserved', now() + interval '15 minutes')`,
+                    [reservation, sequence, `uji-${reservation}`, app],
+                );
+                await transaction.unsafe(
+                    `insert into number_sequence_continuous_pool (sequence_id, scope_key, numeric_value, status,
+                        reservation_id)
+                     values ($1, 'uji', 7, 'reserved', $2)`,
+                    [sequence, reservation],
+                );
+                await transaction.unsafe(
+                    "insert into jobs (queue, payload, attempts, available_at, created_at) values ('default', '{}', 0, 0, 0)",
+                );
+                await transaction.unsafe(
+                    "insert into app_service_credentials (id, app_id, name) values ($1, $2, 'token produksi')",
+                    [Bun.randomUUIDv7(), app],
+                );
+                await transaction.unsafe(
+                    "insert into sessions (id, payload, last_activity) values ($1, '{}', 0)",
+                    [crypto.randomUUID()],
+                );
+                await transaction.unsafe(
+                    "insert into cache (key, value, expiration) values ($1, 'x', 0)",
+                    [crypto.randomUUID()],
+                );
+            });
+            const before = await leftovers(sourceDb);
+            const copy = {
+                tenant_id: production.tenant.id,
+                tenant_slug: production.tenant.slug,
+                name: 'Sandbox',
+                source_database: production.database,
+                database: sandboxDatabase,
+            };
+            const first = recorder();
+            const outcome = await runOperation(
+                settings,
+                source,
+                first.client,
+                claimed('copy', copy),
+            );
+            // Pesan kegagalan ikut dibandingkan supaya sebabnya terbaca bila copy gagal.
+            expect({
+                outcome,
+                failure: first.reports.at(-1)?.failure_message,
+            }).toEqual({ outcome: 'succeeded', failure: undefined });
+            expect(first.reports.map((report) => report.step)).toEqual([
+                'create-database',
+                'copy',
+                'disarm',
+                'migrate',
+                'check-health',
+                'record-route',
+                'done',
+            ]);
+            const sandboxDb = connectTo(sandboxDatabase);
+            try {
+                expect(await leftovers(sandboxDb)).toEqual({
+                    events: 0,
+                    exports: 0,
+                    reservations: 0,
+                    pool: 0,
+                    jobs: 0,
+                    credentials: 0,
+                    sessions: 0,
+                    cache: 0,
+                    users: before.users,
+                });
+            } finally {
+                await sandboxDb.end();
+            }
+            expect(await leftovers(sourceDb)).toEqual(before);
+            expect(
+                (await findRoute(runtime, production.tenant.slug, 'sandbox'))
+                    ?.database_name,
+            ).toBe(sandboxDatabase);
+
+            const again = recorder();
+            expect(
+                await runOperation(
+                    settings,
+                    source,
+                    again.client,
+                    claimed('copy', copy),
+                ),
+            ).toBe('succeeded');
+            expect(again.reports.map((report) => report.step)).not.toContain(
+                'copy',
+            );
+        } finally {
+            await sourceDb.end();
+        }
+
+        const same = recorder();
+        expect(
+            await runOperation(
+                settings,
+                source,
+                same.client,
+                claimed('copy', {
+                    tenant_id: production.tenant.id,
+                    tenant_slug: production.tenant.slug,
+                    name: 'Sandbox',
+                    source_database: production.database,
+                    database: production.database,
+                }),
+            ),
+        ).toBe('failed');
+        expect(same.reports.at(-1)?.failure_message).toContain(
+            'Parameter copy tidak sah',
+        );
+    }, 240_000);
 });

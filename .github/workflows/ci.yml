@@ -55,6 +55,16 @@ jobs:
         with:
           bun-version: 1.4.4
 
+      # Test salinan produksi ke sandbox menjalankan pg_dump dan pg_restore. Versinya harus sama dengan server
+      # PostgreSQL 17 di atas; klien bawaan runner lebih tua dan menolak server yang lebih baru.
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q postgresql-client-17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
