@@ -60,10 +60,10 @@ type ScopeValue = ApiBody<'numberSequenceScopeValues'>['data'][number];
 type Errors = Record<string, string[]>;
 
 export const scopeLabels: Record<ScopeType, string> = {
-    tenant: 'Shared (semua perusahaan)',
-    legal_entity: 'Perusahaan',
+    tenant: 'Shared (semua legal entity)',
+    legal_entity: 'Legal entity',
     operating_unit: 'Operating unit',
-    legal_entity_fiscal_period: 'Perusahaan dan periode fiskal',
+    legal_entity_fiscal_period: 'Legal entity dan periode fiskal',
 };
 export const statusLabels: Record<Stored['status'], string> = {
     draft: 'Belum dipakai',
@@ -105,7 +105,7 @@ export function appliesTo(row: {
     return (
         [row.scope_value_name, row.fiscal_period_name]
             .filter(Boolean)
-            .join(' · ') || 'Semua perusahaan'
+            .join(' · ') || 'Semua legal entity'
     );
 }
 
@@ -643,7 +643,7 @@ export function NumberSequenceCard({
                                                     error={error(
                                                         'reference_id',
                                                     )}
-                                                    hint="Dokumen atau master yang diberi nomor. Satu jenis nomor boleh punya pengaturan sendiri untuk setiap perusahaan, operating unit, atau periode fiskal."
+                                                    hint="Dokumen atau master yang diberi nomor. Satu jenis nomor boleh punya pengaturan sendiri untuk setiap legal entity, operating unit, atau periode fiskal."
                                                 >
                                                     <Select
                                                         label="Jenis nomor"
@@ -715,7 +715,7 @@ export function NumberSequenceCard({
                                             <FormGrid>
                                                 <FormControl
                                                     error={error('scope_type')}
-                                                    hint="Shared memakai satu urutan nomor untuk semua perusahaan. Perusahaan, operating unit, atau periode fiskal memberi urutan nomor sendiri untuk organisasi yang dipilih."
+                                                    hint="Shared memakai satu urutan nomor untuk semua legal entity. Legal entity, operating unit, atau periode fiskal memberi urutan nomor sendiri untuk organisasi yang dipilih."
                                                 >
                                                     <Select
                                                         label="Scope"
@@ -790,7 +790,7 @@ export function NumberSequenceCard({
                                                         )}
                                                     >
                                                         <ScopeValueLookup
-                                                            label="Perusahaan"
+                                                            label="Legal entity"
                                                             kind="legal_entity"
                                                             value={
                                                                 form.legal_entity

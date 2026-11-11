@@ -45,7 +45,7 @@ const typesSql = `select t.code, t.name, t.description from data_sharing_types t
                                   and (e.ends_at is null or e.ends_at > current_timestamp)))
     order by t.name`;
 
-// Perusahaan yang data jenis ini terlihat dari perusahaan itu: dirinya sendiri, ditambah anggota kebijakan aktif dan
+// Legal entity yang data jenis ini terlihat dari legal entity itu: dirinya sendiri, ditambah anggota kebijakan aktif dan
 // sudah berlaku untuk jenis data yang sama yang ia ikuti. Ini pintu yang dipakai module pemilik data saat menyaring
 // datanya sendiri; Core hanya membaca kebijakan, tidak membaca tabel module.
 export async function sharedLegalEntities(
@@ -79,12 +79,12 @@ type Input = {
     legal_entity_ids: string[];
 };
 
-// Kebijakan data sharing antar perusahaan. Mengikuti cross-company data sharing F&O:
+// Kebijakan data sharing antar legal entity. Mengikuti cross-company data sharing F&O:
 // https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/sysadmin/cross-company-data-sharing
-// - sysadmin memilih satu jenis data dan perusahaan mana saja yang saling melihatnya;
-// - satu perusahaan hanya boleh ikut satu kebijakan aktif per jenis data ("a company and table can only be in one
-//   enabled policy"), dan satu kebijakan butuh sedikitnya dua perusahaan;
-// - kebijakan berlaku sejak tanggal berlaku mulai selama aktif. Perubahan tercatat lewat log_change, dan perusahaan
+// - sysadmin memilih satu jenis data dan legal entity mana saja yang saling melihatnya;
+// - satu legal entity hanya boleh ikut satu kebijakan aktif per jenis data ("a company and table can only be in one
+//   enabled policy"), dan satu kebijakan butuh sedikitnya dua legal entity;
+// - kebijakan berlaku sejak tanggal berlaku mulai selama aktif. Perubahan tercatat lewat log_change, dan legal entity
 //   yang dilepas diarsipkan, tidak dihapus.
 // Kepemilikan data tidak berubah; yang berubah hanya siapa yang melihatnya, dihitung module pemilik datanya lewat
 // sharedLegalEntities.
@@ -201,9 +201,9 @@ export class DataSharingPolicies {
         const ids = [...new Set(data?.legal_entity_ids ?? [])];
         if (ids.length < 2)
             errors.legal_entity_ids =
-                'Pilih sedikitnya dua perusahaan yang saling sharing data ini.';
+                'Pilih sedikitnya dua legal entity yang saling sharing data ini.';
         else if (!ids.every((id) => lookupId(id)))
-            errors.legal_entity_ids = 'Pilih perusahaan dari daftar.';
+            errors.legal_entity_ids = 'Pilih legal entity dari daftar.';
         if (Object.keys(errors).length || !data) validation(errors);
         const known = await this.db.rows(
             z.object({ id: z.string() }),
@@ -212,7 +212,7 @@ export class DataSharingPolicies {
             [this.workspace.tenantId, ...ids],
         );
         if (known.length !== ids.length)
-            validation({ legal_entity_ids: 'Pilih perusahaan dari daftar.' });
+            validation({ legal_entity_ids: 'Pilih legal entity dari daftar.' });
         return {
             name,
             data_type_code: dataTypeCode,
@@ -222,7 +222,7 @@ export class DataSharingPolicies {
         };
     }
 
-    // Satu perusahaan hanya ikut satu kebijakan aktif per jenis data. Dijalankan di bawah kunci per tenant, supaya dua
+    // Satu legal entity hanya ikut satu kebijakan aktif per jenis data. Dijalankan di bawah kunci per tenant, supaya dua
     // admin yang menyimpan bersamaan tidak sama-sama lolos.
     private async checkSingleActivePolicy(
         policyId: string,
@@ -262,12 +262,12 @@ export class DataSharingPolicies {
             validation({
                 legal_entity_ids: conflicts.map(
                     (conflict) =>
-                        `${conflict.legal_entity_name} sudah ikut kebijakan aktif "${conflict.policy_name}" untuk data yang sama. Satu perusahaan hanya boleh ikut satu kebijakan aktif per data; nonaktifkan kebijakan itu atau lepaskan perusahaannya lebih dulu.`,
+                        `${conflict.legal_entity_name} sudah ikut kebijakan aktif "${conflict.policy_name}" untuk data yang sama. Satu legal entity hanya boleh ikut satu kebijakan aktif per data; nonaktifkan kebijakan itu atau lepaskan legal entity-nya lebih dulu.`,
                 ),
             });
     }
 
-    // Perusahaan kebijakan diganti: yang tidak dipilih lagi diarsipkan, yang baru ditambah.
+    // Legal entity kebijakan diganti: yang tidak dipilih lagi diarsipkan, yang baru ditambah.
     private async writeMembers(policyId: string, ids: string[]) {
         const stamp = nowSql();
         await this.db.execute(
@@ -354,7 +354,7 @@ export class DataSharingPolicies {
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Menghapus berarti mengisi deleted_at pada kebijakan beserta perusahaannya. Data tidak berubah; perusahaan yang
+    // Menghapus berarti mengisi deleted_at pada kebijakan beserta legal entity-nya. Data tidak berubah; legal entity yang
     // tadinya sharing kembali hanya melihat datanya sendiri.
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('data-sharing', 'update');

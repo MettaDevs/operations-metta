@@ -15,7 +15,7 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
     // Kebijakan data uji: dipakai role yang memegang izin vendor, organisasi, atau data referensi, dan mewajibkan
-    // perusahaan serta unit. Core sendiri belum punya kebijakan data; module yang membawanya.
+    // legal entity serta unit. Core sendiri belum punya kebijakan data; module yang membawanya.
     const policy = 'uji.akses-faskes';
     let tenantId: string;
     let ownerMembership: string;
@@ -522,7 +522,7 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
             ),
         ).toEqual({
             organization_id: [
-                'Pilih unit kerja, bukan badan hukum, untuk batas akses ini.',
+                'Pilih unit kerja, bukan legal entity, untuk batas akses ini.',
             ],
         });
         expect(
@@ -553,7 +553,7 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
                 ]),
             ),
         ).toEqual({
-            legal_entity_id: ['Pilih badan hukum untuk batas akses ini.'],
+            legal_entity_id: ['Pilih legal entity untuk batas akses ini.'],
         });
         const unrestricted = await json<{
             data: {

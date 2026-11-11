@@ -24,7 +24,7 @@ import { sampleSchema, seedSample } from './dev-sample.ts';
 // di server. Module yang dibeli tenant contoh (`modules`) dipasang lewat installModule: entitlement, migration module,
 // catatan pemasangan, dan duty module untuk role pemilik. Data contoh (`sample`) diisi lewat API sebagai admin pertama
 // (scripts/dev-sample.ts). Aman diulang: lingkungan yang alamatnya sudah tercatat tidak disiapkan ulang, module yang
-// sudah terpasang dan lingkungan yang sudah berisi perusahaan dilewati. Di server, tenant hanya lahir dari admin.erp.
+// sudah terpasang dan lingkungan yang sudah berisi legal entity dilewati. Di server, tenant hanya lahir dari admin.erp.
 const tenantsSchema = z.array(
     z.object({
         legal_name: z.string(),

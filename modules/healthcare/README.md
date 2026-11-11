@@ -1,6 +1,6 @@
 # healthcare
 
-Module layanan kesehatan: master pasien, tipe pasien, penjamin, dan cara bayar. Kebijakan sharing pasien antar perusahaan ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
+Module layanan kesehatan: master pasien, tipe pasien, penjamin, dan cara bayar. Kebijakan sharing pasien antar legal entity ada di Core (Sys Admin → Data sharing); module ini mendaftarkan jenis datanya, "Master pasien". Nama module yang tampil di layar datang dari baris `apps` (`Layanan kesehatan`), bukan dari kode.
 
 ## Nama tabel
 
@@ -8,7 +8,7 @@ Tabel module berawalan `sim_`, lalu `m_` untuk master dan `tr_` untuk transaksi,
 
 ## Pasien adalah peran party
 
-Pasien mengikuti Global address book F&O (keputusan pemilik produk, 9 dan 10 November 2026). Satu orang adalah satu party Core; pasien adalah perannya (`healthcare.patient` di `party_roles`), didaftarkan untuk perusahaan aktif saat pendaftaran.
+Pasien mengikuti Global address book F&O (keputusan pemilik produk, 9 dan 10 November 2026). Satu orang adalah satu party Core; pasien adalah perannya (`healthcare.patient` di `party_roles`), didaftarkan untuk legal entity aktif saat pendaftaran.
 
 | Data                                                                                                                          | Tempat                                                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -27,7 +27,7 @@ Nama orang tua dan NIK ibu tetap teks seperti form lama, bukan relasi party. `Kl
 
 `POST /api/modules/healthcare/v1/patients`, dalam satu transaksi:
 
-1. Unit pendaftar adalah unit aktif di tempat kerja, dan unit itu harus termasuk batas data pasien pengguna di perusahaan aktif. Perusahaan aktif menjadi perusahaan pasien.
+1. Unit pendaftar adalah unit aktif di tempat kerja, dan unit itu harus termasuk batas data pasien pengguna di legal entity aktif. Legal entity aktif menjadi legal entity pasien.
 2. Party dicari lewat NIK (lihat bagian NIK). Bila ada, hanya peran pasien yang ditambahkan; isian identitas form diabaikan.
 3. Bila tidak ada, party orang dibuat beserta nomor identitas, alamat, dan kontaknya.
 4. NRM diambil dari `NumberIssuer` (reference `healthcare.medical-record-number`), lihat bagian NRM.
@@ -67,7 +67,7 @@ Mengikuti pola F&O (keputusan pemilik produk, 10 November 2026). Di F&O operatin
 
 - **Bawaan:** pasien terlihat di semua operating unit yang bekerja untuk legal entity pendaftarnya. Antar legal entity tidak terlihat.
 - **Sharing antar legal entity:** sysadmin membuat kebijakan di Core, layar **Sys Admin → Data sharing** (`/sysadmin/data-sharing`, izin `core.data-sharing.*`), memilih data **Master pasien** (`healthcare.patient`, didaftarkan `0008` di `data_sharing_types`), lalu legal entity yang saling melihat pasien. Kebijakan berlaku selama aktif, sejak tanggal berlaku mulai. Satu legal entity hanya boleh ikut satu kebijakan aktif per jenis data, seperti aturan F&O "a company and table can only be in one enabled policy"; kebijakan untuk jenis data lain tidak memengaruhi pasien. Module membacanya lewat `sharedLegalEntities` dari `@core/platform/data-sharing`. Kebijakan lama di tabel module dipindah `0008` dengan id yang sama, dan role yang memegang duty `healthcare.patient-sharing.*` mendapat duty `core.data-sharing.*` yang setara. Duty lama tetap di katalog tanpa menjaga route apa pun.
-- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Kelompok sharing pasien** (`healthcare.patient-sharing`) hanya sharing dengan kelompoknya. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia sharing dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
+- **Mempersempit dalam legal entity:** unit yang ditempatkan sysadmin di hierarchy bertujuan **Tidak sharing master pasien** (`healthcare.patient-sharing`) hanya sharing dengan kelompoknya, jadi tujuan ini memisahkan pasien antar unit dalam satu legal entity, bukan membuka sharing. Labelnya diganti dari "Kelompok sharing pasien" oleh `0009_screen_terms.sql` (keputusan pemilik produk, 11 November 2026); kodenya tetap. Kepala kelompok sebuah unit adalah operating unit teratas di jalurnya ke akar, pada versi terbit yang sedang berlaku; kelompok adalah kepala itu beserta semua operating unit di bawahnya. Unit yang tidak ditempatkan memakai bawaan legal entity: ia sharing dengan semua unit lain yang juga tidak ditempatkan. Perilaku #45 "unit yang tidak ditempatkan menjadi kelompok sendiri" sudah tidak berlaku.
 - **Kepemilikan tetap.** `sim_m_pasien` menyimpan party, legal entity, unit pendaftar (`org_unit_id`), unit pemilik nomor (`nrm_unit_id`), dan NRM sekali saat didaftarkan. Trigger `pemilik_tetap` menolak perubahannya, juga lewat SQL di luar module. Kelompok dan kebijakan dihitung saat data dibaca, tidak ditulis ke catatan pasien.
 
 Urutan penerapan setiap daftar, detail, ubah, hapus, dan pemeriksaan NIK saat mendaftar (`PatientSharing.visible`):

@@ -18,7 +18,7 @@ declare module '@tanstack/react-router' {
  *     path: '/sysadmin/organization/legal-entities',
  *     previousPaths: ['/settings/legal-entities'],
  *     layout: 'app',
- *     title: 'Perusahaan',
+ *     title: 'Legal entity',
  *     validateSearch: z.object({ q: z.string().optional() }),
  *     component: LegalEntitiesPage,
  * });

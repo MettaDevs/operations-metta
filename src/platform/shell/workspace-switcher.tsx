@@ -23,7 +23,7 @@ import { api, ApiError, errorText } from './api.ts';
 import type { ShellData } from './api.ts';
 import { FormErrorHeader } from './form-error-header.tsx';
 
-// Pemilih tempat kerja, dipindah dari workspace-switcher CoreERP: ruang kerja (tenant), perusahaan, dan unit kerja
+// Pemilih tempat kerja, dipindah dari workspace-switcher CoreERP: ruang kerja (tenant), legal entity, dan unit kerja
 // aktif. Server memeriksa pilihan terhadap yang terjangkau (PUT /api/v1/workspace-context) dan menyimpannya di sesi.
 export function WorkspaceSwitcher({
     membership,
@@ -117,9 +117,9 @@ export function WorkspaceSwitcher({
                 <SheetHeader className="border-b px-6 py-5 pr-12">
                     <SheetTitle>Tempat kerja</SheetTitle>
                     <SheetDescription>
-                        Daftar transaksi mengikuti perusahaan aktif. Unit kerja
-                        menjadi pilihan awal transaksi baru. Hak akses Anda
-                        tetap berlaku.
+                        Daftar transaksi mengikuti legal entity aktif. Unit
+                        kerja menjadi pilihan awal transaksi baru. Hak akses
+                        Anda tetap berlaku.
                     </SheetDescription>
                 </SheetHeader>
                 {(error || Object.keys(fieldErrors).length > 0) && (
@@ -179,7 +179,7 @@ export function WorkspaceSwitcher({
                                 {changingWorkspace ? (
                                     <FieldDescription>
                                         Terapkan untuk membuka ruang kerja ini.
-                                        Setelah itu, pilih perusahaan dan unit
+                                        Setelah itu, pilih legal entity dan unit
                                         yang tersedia di dalamnya.
                                     </FieldDescription>
                                 ) : (
@@ -193,7 +193,7 @@ export function WorkspaceSwitcher({
                                             {workspace.legal_entities.length >
                                             1 ? (
                                                 <Select
-                                                    label="Perusahaan"
+                                                    label="Legal entity"
                                                     value={legalEntityId}
                                                     onValueChange={(value) =>
                                                         value &&
@@ -205,20 +205,20 @@ export function WorkspaceSwitcher({
                                                             label: item.name,
                                                         }),
                                                     )}
-                                                    searchPlaceholder="Cari perusahaan…"
-                                                    emptyMessage="Perusahaan tidak ditemukan."
+                                                    searchPlaceholder="Cari legal entity…"
+                                                    emptyMessage="Legal entity tidak ditemukan."
                                                     portalContainer={contentRef}
                                                 />
                                             ) : (
                                                 <>
                                                     <FieldLabel>
-                                                        Perusahaan
+                                                        Legal entity
                                                     </FieldLabel>
                                                     <p className="text-sm">
                                                         {workspace
                                                             .active_legal_entity
                                                             ?.name ??
-                                                            'Belum ada perusahaan yang tersedia.'}
+                                                            'Belum ada legal entity yang tersedia.'}
                                                     </p>
                                                 </>
                                             )}

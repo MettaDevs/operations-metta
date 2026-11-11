@@ -167,6 +167,7 @@ Saat menambah atau mengubah lookup, putuskan bentuk field dan kemampuan tiap aks
    - Kontrol yang tidak punya `readOnly` dapat dibungkus `RecordEditControl` dari subpath yang sama, termasuk labelnya. Klik pertama mengaktifkan edit tanpa membuka/membalik nilainya; label dan kontrol asli mendapat fokus setelah edit. Pembatasan bisnis dan izin yang membuat kontrol tetap disabled tetap milik form. Data acuan baca saja dan versi yang sudah dipublikasikan tidak menjadi editable hanya karena memakai layout bersama.
 5. Use SDK `DataTable`, `Card`, `Badge`, and `Empty`, dengan pemuatan bertahap saat scroll sesuai aturan daftar di atas. Jangan menambahkan navigasi halaman.
 6. Keep end-user copy in everyday Indonesian and explain the action or impact. Technical terms that already have a standard name (push, pull, scope, token, webhook, endpoint, GET/POST/PUT) stay as they are; the boundary is in `operations-metta-docs`, section *Where the loanword boundary sits*.
+   - Entitas hukum ditulis **"Legal entity"** di layar (label, menu, kolom, pesan, bantuan, toast), bukan "Perusahaan", "Badan hukum", atau "Entitas legal": "Legal entity" di awal label, "legal entity" di tengah kalimat, dan bentuk jamaknya tetap "legal entity". Keputusan pemilik produk, 11 November 2026: "jangan pakai perusahaan, kita ganti pakai Legal entity aja, sesuai padanan di Microsoft, biar gak rancu". "Perusahaan" yang berarti hal lain, misalnya perusahaan penjamin di kartu pasien, tetap "Perusahaan".
 
 ## New screens inside the Shell
 

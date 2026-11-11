@@ -86,7 +86,7 @@ export async function createLegalEntity(
     const id = Bun.randomUUIDv7();
     await sql.unsafe(
         "insert into organizations (id, tenant_id, name, classification, status, created_at, updated_at) values ($1, $2, $3, 'legal_entity', 'active', now(), now())",
-        [id, tenantId, `Perusahaan ${companyCode}`],
+        [id, tenantId, `Legal entity ${companyCode}`],
     );
     await sql.unsafe(
         "insert into legal_entities (organization_id, tenant_id, company_code, country_code, fiscal_calendar_id, created_at, updated_at) values ($1, $2, $3, 'ID', $4, now(), now())",

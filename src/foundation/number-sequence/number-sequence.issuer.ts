@@ -273,13 +273,13 @@ export class NumberIssuer {
                 return failSequence(
                     organization
                         ? `Nomor ${name} belum diatur untuk ${organization.name} pada periode fiskal tanggal ${request.documentDate}. Minta admin membuat pengaturan nomor untuk periode itu.`
-                        : `Nomor ${name} diatur per perusahaan dan periode fiskal, tetapi dokumen ini belum menyebut perusahaannya.`,
+                        : `Nomor ${name} diatur per legal entity dan periode fiskal, tetapi dokumen ini belum menyebut legal entity-nya.`,
                 );
             default:
                 return failSequence(
                     organization
-                        ? `Nomor ${name} belum diatur untuk ${organization.name}. Minta admin membuat pengaturan nomor untuk perusahaan itu.`
-                        : `Nomor ${name} diatur per perusahaan, tetapi dokumen ini belum menyebut perusahaannya.`,
+                        ? `Nomor ${name} belum diatur untuk ${organization.name}. Minta admin membuat pengaturan nomor untuk legal entity itu.`
+                        : `Nomor ${name} diatur per legal entity, tetapi dokumen ini belum menyebut legal entity-nya.`,
                 );
         }
     }
@@ -332,7 +332,7 @@ export class NumberIssuer {
                     'Organisasi untuk pengaturan nomor ini sudah tidak aktif.',
                 );
             const unit = sequence.scope_type === 'operating_unit';
-            // Segmen organisasi mencetak kode yang dikenal orang: kode perusahaan, atau nomor operating unit. Id
+            // Segmen organisasi mencetak kode yang dikenal orang: kode legal entity, atau nomor operating unit. Id
             // internal tidak pernah dicetak; unit tanpa nomor ditolak bila formatnya memuat segmen ini.
             code = unit ? organization.unit_number : organization.company_code;
             if (
@@ -395,7 +395,7 @@ export class NumberIssuer {
                     : null);
             if (!legalEntityId)
                 failSequence(
-                    'Nomor ini direset per periode fiskal, jadi dokumen harus menyebut perusahaannya.',
+                    'Nomor ini direset per periode fiskal, jadi dokumen harus menyebut legal entity-nya.',
                 );
             const fiscal = await this.fiscal(
                 legalEntityId,

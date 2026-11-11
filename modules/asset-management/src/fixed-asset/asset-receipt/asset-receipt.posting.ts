@@ -57,7 +57,7 @@ export class AcquisitionPosting {
             )) === 'direct_payable'
         )
             blockers.vendor_id =
-                'Pilih vendornya. Entitas legal ini mencatat pembelian aset langsung sebagai hutang ke vendor, jadi vendor wajib diisi.';
+                'Pilih vendornya. Legal entity ini mencatat pembelian aset langsung sebagai hutang ke vendor, jadi vendor wajib diisi.';
         for (const [index, line] of lines.entries()) {
             if (!(await this.inventory.postedBook(line.group_aset_id))) {
                 const group = await this.inventory.group(line.group_aset_id);

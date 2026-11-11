@@ -65,7 +65,7 @@ export const sysAdminArea: NavigationAreaEntry = {
             items: [
                 {
                     id: 'legal-entities',
-                    label: 'Perusahaan',
+                    label: 'Legal entity',
                     href: '/sysadmin/organization/legal-entities',
                     permission: 'core.organization.read',
                 },

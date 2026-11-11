@@ -2,7 +2,7 @@ const copy: Record<string, { label: string; sentence: string }> = {
     demo: {
         label: 'Demo',
         sentence:
-            'Ini tempat peragaan. Angkanya bukan angka perusahaan Anda, dan tidak ada email, webhook, maupun laporan terjadwal yang dikirim dari sini.',
+            'Ini tempat peragaan. Angkanya bukan angka sungguhan Anda, dan tidak ada email, webhook, maupun laporan terjadwal yang dikirim dari sini.',
     },
     sandbox: {
         label: 'Sandbox',

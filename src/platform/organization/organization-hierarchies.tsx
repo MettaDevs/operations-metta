@@ -433,7 +433,7 @@ function OrganizationHierarchyFlowNode({
             </div>
             <p className="mt-1 text-muted-foreground">
                 {data.classification === 'legal_entity'
-                    ? 'Perusahaan (Badan Hukum)'
+                    ? 'Legal entity'
                     : [
                           data.operatingUnitType ?? 'Operating Unit',
                           data.operatingUnitNumber,
@@ -579,7 +579,7 @@ function HierarchyCanvas({
             <div className="flex items-center justify-between border-b border-border bg-card/80 px-4 py-2.5 font-semibold text-foreground">
                 <span className="flex items-center gap-2">
                     <Network className="size-4 text-primary" /> Visualisasi
-                    Organigram Struktur Perusahaan
+                    Organigram Struktur Organisasi
                 </span>
                 <Badge
                     variant="outline"

@@ -456,7 +456,7 @@ export class Receipts {
             if (vendor?.legal_entity_id !== data.legal_entity_id)
                 validation({
                     vendor_id:
-                        'Pilih vendor milik entitas legal penerimaan ini.',
+                        'Pilih vendor milik legal entity penerimaan ini.',
                 });
         }
         return validated;
@@ -569,7 +569,7 @@ export class Receipts {
                 )
                     validation({
                         [`details.${index}.permintaan_pembelian_detail_id`]:
-                            'Pilih permintaan yang belum dibatalkan dari perusahaan yang sama.',
+                            'Pilih permintaan yang belum dibatalkan dari legal entity yang sama.',
                     });
                 this.workspace.require(
                     header.legal_entity_id,
@@ -638,7 +638,7 @@ export class Receipts {
                     data.cara_perolehan,
                     true,
                 );
-                // Nomor diambil di dalam transaksi dokumen, dari perusahaan dan unit penerimaan ini: penerimaan
+                // Nomor diambil di dalam transaksi dokumen, dari legal entity dan unit penerimaan ini: penerimaan
                 // yang gagal tersimpan tidak menghabiskan nomor.
                 const code = await this.numbers.issue({
                     reference: this.workspace.moduleId + '.penerimaan-aset',

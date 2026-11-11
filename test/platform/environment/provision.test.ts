@@ -61,7 +61,7 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
     const shared = operationsTestApp();
     afterAll(shared.close);
 
-    // Admin pertama login lalu membuat perusahaan pertama, pekerjaan yang dibutuhkan duty Core.
+    // Admin pertama login lalu membuat legal entity pertama, pekerjaan yang dibutuhkan duty Core.
     async function createLegalEntity(
         app: ReturnType<typeof operationsTestApp>,
         email: string,

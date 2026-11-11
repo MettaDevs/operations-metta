@@ -137,8 +137,8 @@ export class NumberSequences {
         const errors: Record<string, string> = {};
         if (needsCompany !== (input.legal_entity_id !== null))
             errors.legal_entity_id = needsCompany
-                ? 'Pilih perusahaan untuk pengaturan nomor ini.'
-                : 'Perusahaan hanya diisi untuk scope perusahaan.';
+                ? 'Pilih legal entity untuk pengaturan nomor ini.'
+                : 'Legal entity hanya diisi untuk scope legal entity.';
         if (needsUnit !== (input.operating_unit_id !== null))
             errors.operating_unit_id = needsUnit
                 ? 'Pilih unit untuk pengaturan nomor ini.'
@@ -146,7 +146,7 @@ export class NumberSequences {
         if (needsPeriod !== (input.fiscal_period_id !== null))
             errors.fiscal_period_id = needsPeriod
                 ? 'Pilih periode fiskal untuk pengaturan nomor ini.'
-                : 'Periode fiskal hanya diisi untuk scope perusahaan dan periode fiskal.';
+                : 'Periode fiskal hanya diisi untuk scope legal entity dan periode fiskal.';
         if (Object.keys(errors).length) validation(errors);
         if (input.legal_entity_id !== null) {
             const company = await this.db.one(
@@ -156,7 +156,7 @@ export class NumberSequences {
             );
             if (!company)
                 validation({
-                    legal_entity_id: 'Pilih perusahaan milik tenant ini.',
+                    legal_entity_id: 'Pilih legal entity milik tenant ini.',
                 });
             if (input.fiscal_period_id !== null) {
                 const period = await this.db.one(
@@ -167,7 +167,7 @@ export class NumberSequences {
                 if (!period)
                     validation({
                         fiscal_period_id:
-                            'Pilih periode dari kalender fiskal perusahaan ini.',
+                            'Pilih periode dari kalender fiskal legal entity ini.',
                     });
             }
         }
@@ -253,7 +253,7 @@ export class NumberSequences {
         if (fiscalReset && scopeType === 'tenant')
             validation({
                 reset_period:
-                    'Reset fiskal memerlukan scope perusahaan atau unit; scope tenant tidak memiliki kalender fiskal.',
+                    'Reset fiskal memerlukan scope legal entity atau unit; scope tenant tidak memiliki kalender fiskal.',
             });
         if (
             scopeType === 'legal_entity_fiscal_period' &&
@@ -326,7 +326,7 @@ export class NumberSequences {
                 case 'scope':
                     if (scopeType === 'tenant')
                         fail(
-                            'Segmen kode organisasi memerlukan scope perusahaan atau unit.',
+                            'Segmen kode organisasi memerlukan scope legal entity atau unit.',
                         );
                     length += 50;
                     break;
@@ -377,7 +377,7 @@ export class NumberSequences {
     }
 
     // Dua pengaturan nomor untuk dokumen yang sama dapat menghasilkan nomor terformat yang sama. Indeks unik dokumen
-    // hanya menjaga perusahaan (misalnya aset: tenant, legal entity, kode), jadi kembaran di dalam satu perusahaan
+    // hanya menjaga legal entity (misalnya aset: tenant, legal entity, kode), jadi kembaran di dalam satu legal entity
     // ditolak di sini: format yang sama, tanpa segmen pembeda, dengan rentang yang beririsan.
     private async checkOverlap(
         id: string | null,
@@ -441,7 +441,7 @@ export class NumberSequences {
     }
 
     // Semua sequence aktif satu reference memakai jenis scope yang sama, supaya satu dokumen tidak cocok dengan dua
-    // sequence (misalnya satu per tenant dan satu per perusahaan) dan nomor tidak dipilih diam-diam. Reference yang
+    // sequence (misalnya satu per tenant dan satu per legal entity) dan nomor tidak dipilih diam-diam. Reference yang
     // nomornya unik per nilai scope (numbers_unique_per_scope) dikecualikan: pemanggilnya menyebut tepat satu nilai
     // scope per dokumen, misalnya NRM per legal entity atau per unit kepala kelompok, dan NumberIssuer tetap menolak
     // dokumen yang cocok dengan dua sequence.
@@ -1003,7 +1003,7 @@ export class NumberSequenceDirectory {
         };
     }
 
-    // Pilihan nilai scope saat membuat: perusahaan, unit, atau periode fiskal milik perusahaan yang dipilih.
+    // Pilihan nilai scope saat membuat: legal entity, unit, atau periode fiskal milik legal entity yang dipilih.
     async scopeValues(parameters: URLSearchParams) {
         const kind = parameters.get('kind');
         const periods = kind === 'fiscal_period';

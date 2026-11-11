@@ -241,7 +241,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             savedHierarchy: { versions: { id: string }[] };
         }>(
             await admin.post('/api/v1/settings/organization/hierarchies', {
-                name: 'Kelompok sharing pasien uji',
+                name: 'Tidak sharing master pasien uji',
                 purpose_codes: ['healthcare.patient-sharing'],
                 root_organization_id: company,
                 effective_from: '2026-01-01',
@@ -911,7 +911,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
     test('a patient of another legal entity is not visible, not even by NIK', async () => {
         const lepas = await created(
             clerks.lepas!,
-            patientBody({ name: 'Pasien Perusahaan Satu', nik: nik(20) }),
+            patientBody({ name: 'Pasien Legal Entity Satu', nik: nik(20) }),
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
         expect(
@@ -920,7 +920,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         ).toBe(404);
         const other = await created(
             clerks.kedua!,
-            patientBody({ name: 'Pasien Perusahaan Dua' }),
+            patientBody({ name: 'Pasien Legal Entity Dua' }),
         );
         expect(await listed(clerks.lepas!)).not.toContain(other.data.id);
         expect(await listed(admin)).not.toContain(other.data.id);
@@ -967,7 +967,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             name: 'Master pasien',
             description: expect.any(String),
         });
-        // Kebijakan untuk jenis data lain tidak membuka pasien, walau perusahaannya sama.
+        // Kebijakan untuk jenis data lain tidak membuka pasien, walau legal entity-nya sama.
         await pool.unsafe(
             `insert into data_sharing_types (code, app_id, name, created_at, updated_at)
              values ('test.other', 'core', 'Data uji lain', now(), now()) on conflict (code) do nothing`,
@@ -982,7 +982,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             201,
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
-        // Satu perusahaan saja tidak cukup untuk sharing.
+        // Satu legal entity saja tidak cukup untuk sharing.
         expect(
             (
                 await admin.post(policies, {
@@ -1004,7 +1004,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             201,
         );
         expect(await listed(clerks.kedua!)).not.toContain(lepas.data.id);
-        // Kebijakan kedua yang aktif untuk perusahaan dan data yang sama ditolak.
+        // Kebijakan kedua yang aktif untuk legal entity dan data yang sama ditolak.
         const second = await admin.post(policies, {
             name: 'Grup lain',
             data_type_code: 'healthcare.patient',
@@ -1034,7 +1034,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         expect(
             effective.data.legal_entities.map((entity) => entity.id).sort(),
         ).toEqual([company, otherCompany].sort());
-        // Kedua perusahaan saling melihat pasien unit yang tidak ditempatkan.
+        // Kedua legal entity saling melihat pasien unit yang tidak ditempatkan.
         expect(await listed(clerks.kedua!)).toContain(lepas.data.id);
         expect(await listed(clerks.lepas!)).toContain(other.data.id);
         expect(
@@ -1407,7 +1407,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         const [purpose] = await pool.unsafe<{ name: string }[]>(
             "select name from hierarchy_purposes where code = 'healthcare.patient-sharing'",
         );
-        expect(purpose?.name).toBe('Kelompok sharing pasien');
+        expect(purpose?.name).toBe('Tidak sharing master pasien');
         const labels = await pool.unsafe<{ name: string }[]>(
             `select name from security_duties where code like 'healthcare.patient-sharing.%'
              union all select name from security_privileges where code like 'healthcare.patient-sharing.%'

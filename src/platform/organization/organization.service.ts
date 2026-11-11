@@ -231,7 +231,7 @@ export class Organizations {
         )
             validation({
                 company_code:
-                    'Kode perusahaan sudah digunakan pada tenant ini.',
+                    'Kode legal entity sudah digunakan pada tenant ini.',
             });
         const number = data.operating_unit_number;
         if (number !== null && (await this.numberTaken(number, null)))
@@ -337,7 +337,7 @@ export class Organizations {
         )
             validation({
                 company_code:
-                    'Kode perusahaan sudah dipakai perusahaan lain dalam bisnis ini.',
+                    'Kode legal entity sudah dipakai legal entity lain dalam bisnis ini.',
             });
         const version = expectedVersion(request, body);
         if (found.tenant_id !== this.workspace.tenantId)

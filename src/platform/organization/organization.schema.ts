@@ -91,7 +91,7 @@ const timezoneRules = (prohibited: boolean): Rule[] => [
     {
         kind: 'prohibited',
         when: prohibited,
-        message: 'Zona waktu hanya untuk entitas legal.',
+        message: 'Zona waktu hanya untuk legal entity.',
     },
     { kind: 'string' },
     {
@@ -101,13 +101,13 @@ const timezoneRules = (prohibited: boolean): Rule[] => [
     },
 ];
 const companyCodeRules = (required: boolean): Rule[] => [
-    { kind: 'required', when: required, message: 'Isi kode perusahaan.' },
+    { kind: 'required', when: required, message: 'Isi kode legal entity.' },
     { kind: 'string' },
     {
         kind: 'regex',
         pattern: companyCodeFormat,
         message:
-            'Kode perusahaan berisi 2 sampai 16 huruf, angka, atau tanda hubung, dan tidak diawali tanda hubung.',
+            'Kode legal entity berisi 2 sampai 16 huruf, angka, atau tanda hubung, dan tidak diawali tanda hubung.',
     },
 ];
 const countryCodeRules = (required: boolean): Rule[] => [

@@ -18,7 +18,7 @@ const areas = [
                 items: [
                     {
                         id: 'legal-entities',
-                        label: 'Perusahaan',
+                        label: 'Legal entity',
                         href: '/sysadmin/organization/legal-entities',
                         permission: 'core.organization.read',
                     },
@@ -93,7 +93,7 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
                     items: [
                         {
                             id: 'legal-entities',
-                            label: 'Perusahaan',
+                            label: 'Legal entity',
                             href: '/sysadmin/organization/legal-entities',
                         },
                     ],
