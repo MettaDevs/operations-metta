@@ -5,6 +5,7 @@ import { databaseSettingsSchema } from '../../../src/platform/config/index.ts';
 import {
     provisionEnvironment,
     provisionRequestSchema,
+    UNKNOWN_ADDRESS_MESSAGE,
 } from '../../../src/platform/environment/index.ts';
 import { readMigrationSource } from '../../../src/platform/migration/index.ts';
 import { operationsTestApp } from '../../support/operations-app.ts';
@@ -140,6 +141,9 @@ describe.skipIf(!process.env.DB_HOST)('alamat menentukan lingkungan', () => {
         ]) {
             const response = await app.browser(unknown).get('/api/v1/shell');
             expect(response.status).toBe(404);
+            expect(await response.json()).toEqual({
+                message: UNKNOWN_ADDRESS_MESSAGE,
+            });
         }
     });
 

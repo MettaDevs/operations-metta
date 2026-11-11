@@ -1,5 +1,10 @@
-import { watch } from 'node:fs';
+import { readFileSync, watch } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { z } from 'zod';
+import {
+    environmentHost,
+    environmentKinds,
+} from '../src/platform/environment/index.ts';
 import { buildClient } from './build.ts';
 
 // `bun run dev`: server dari src/main.ts dengan `bun --watch`, yang menyalakan ulang server bila kode server berubah,
@@ -51,6 +56,38 @@ async function rebuild(): Promise<void> {
 
 await rebuild();
 
+// Server mencari lingkungan dari nama host, jadi `localhost:<port>` saja dijawab "tidak terhubung ke ruang kerja".
+// Cetak alamat yang benar untuk setiap lingkungan di dev/tenants.json supaya tidak ada yang menebak.
+function printAddresses(): void {
+    const baseDomain = process.env.BASE_DOMAIN ?? '';
+    if (!baseDomain) return;
+    const port = process.env.PORT ?? '8000';
+    const tenants = z
+        .array(
+            z.object({
+                slug: z.string(),
+                name: z.string(),
+                environments: z.array(
+                    z.object({
+                        kind: z.enum(environmentKinds),
+                        name: z.string(),
+                    }),
+                ),
+            }),
+        )
+        .parse(
+            JSON.parse(readFileSync(join(root, 'dev', 'tenants.json'), 'utf8')),
+        );
+    console.log(
+        '[dev] buka lingkungan di alamatnya sendiri, bukan localhost saja:',
+    );
+    for (const tenant of tenants)
+        for (const environment of tenant.environments)
+            console.log(
+                `[dev]   http://${environmentHost(tenant.slug, environment.kind, baseDomain)}:${port}  (${tenant.name}, ${environment.name})`,
+            );
+}
+
 let timer: Timer | undefined;
 for (const folder of ['src', 'modules', join('packages', 'ui', 'src')])
     watch(join(root, folder), { recursive: true }, (_event, file) => {
@@ -64,6 +101,8 @@ for (const folder of ['src', 'modules', join('packages', 'ui', 'src')])
             void rebuild();
         }, 150);
     });
+
+printAddresses();
 
 const server = Bun.spawn(['bun', '--watch', 'src/main.ts'], {
     cwd: root,

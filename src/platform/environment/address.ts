@@ -33,6 +33,11 @@ export function parseAddress(host: string, baseDomain: string): Address {
     return { kind: 'unknown' };
 }
 
+// Jawaban untuk alamat yang tidak menunjuk lingkungan tercatat. Penyebab paling sering di laptop adalah membuka
+// `localhost:<port>` tanpa nama tenant di depannya.
+export const UNKNOWN_ADDRESS_MESSAGE =
+    'Alamat ini tidak terhubung ke ruang kerja mana pun. Buka alamat ruang kerja Anda, yang diawali nama klinik atau perusahaan Anda.';
+
 export function environmentHost(
     tenantSlug: string,
     environment: EnvironmentKind,

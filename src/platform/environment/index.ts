@@ -1,6 +1,8 @@
 export {
     environmentHost,
+    environmentKinds,
     parseAddress,
+    UNKNOWN_ADDRESS_MESSAGE,
     type EnvironmentKind,
 } from './address.ts';
 export {
