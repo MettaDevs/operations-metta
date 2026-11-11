@@ -1442,6 +1442,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         const sectionFolders = new Map([
             ['Penjaminan', 'coverage'],
             ['Pelayanan', 'service'],
+            ['Tenaga kesehatan', 'practitioner'],
         ]);
         const pages = new Map(
             pageFiles().map((file) => [readPage(file).path, file]),

@@ -5,6 +5,7 @@ import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
+import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
@@ -71,6 +72,19 @@ const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
         modulesHealthcareSrcPatientPatientPatientsPage.validateSearch,
     staticData: { title: modulesHealthcareSrcPatientPatientPatientsPage.title },
 });
+
+const modulesHealthcareSrcPractitionerPractitionerPractitionersRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.path,
+        component:
+            modulesHealthcareSrcPractitionerPractitionerPractitionersPage.component,
+        validateSearch:
+            modulesHealthcareSrcPractitionerPractitionerPractitionersPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.title,
+        },
+    });
 
 const modulesHealthcareSrcServiceRoomRoomsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -228,6 +242,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
+        modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,
         foundationCalendarCalendarsRoute,
