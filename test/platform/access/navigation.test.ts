@@ -95,6 +95,7 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
                             id: 'legal-entities',
                             label: 'Legal entity',
                             href: '/sysadmin/organization/legal-entities',
+                            section: null,
                         },
                     ],
                 },
@@ -124,6 +125,49 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
         visibleNavigation(areas, new Set(['core.organization.update']))[0]
             ?.href,
     ).toBe('/sysadmin/organization/hierarchies');
+});
+
+test('an entry carries its sidebar section title, and the title goes with the entry when a sibling is filtered out', () => {
+    const setup = [
+        {
+            id: 'clinic',
+            label: 'Klinik',
+            icon: null,
+            groups: [
+                {
+                    id: 'setup',
+                    label: 'Setup',
+                    items: [
+                        {
+                            id: 'patient-types',
+                            label: 'Tipe pasien',
+                            href: '/clinic/coverage/patient-types',
+                            section: 'Penjaminan',
+                            permission: 'clinic.patient-type.read',
+                        },
+                        {
+                            id: 'guarantors',
+                            label: 'Penjamin',
+                            href: '/clinic/coverage/guarantors',
+                            section: 'Penjaminan',
+                            permission: 'clinic.guarantor.read',
+                        },
+                    ],
+                },
+            ],
+        },
+    ];
+    expect(
+        visibleNavigation(setup, new Set(['clinic.guarantor.read']))[0]
+            ?.groups[0]?.items,
+    ).toEqual([
+        {
+            id: 'guarantors',
+            label: 'Penjamin',
+            href: '/clinic/coverage/guarantors',
+            section: 'Penjaminan',
+        },
+    ]);
 });
 
 test('every menu entry opens a page that exists, under the area prefix', () => {

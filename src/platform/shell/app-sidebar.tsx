@@ -3,7 +3,7 @@ import { Sidebar, useSidebar } from '@operations-metta/ui/sidebar';
 import { cn } from '@operations-metta/ui/utils';
 import { useLocation } from '@tanstack/react-router';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ShellData } from './api.ts';
 import { areaOf } from './home.ts';
@@ -183,30 +183,48 @@ export function AppSidebar({
                             </Button>
                         </div>
                         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
-                            {displayedGroup.items.map((item) => (
-                                <ShellLink
-                                    key={item.id}
-                                    href={item.href}
-                                    onClick={() => {
-                                        // Desktop mempertahankan menu hover selama URL tujuan belum terpasang.
-                                        if (isMobile) {
-                                            setPreviewId(null);
-                                            setOpenMobile(false);
+                            {displayedGroup.items.map((item, index) => (
+                                <Fragment key={item.id}>
+                                    {item.section !== null &&
+                                        item.section !==
+                                            displayedGroup.items[index - 1]
+                                                ?.section && (
+                                            <div
+                                                role="presentation"
+                                                className={cn(
+                                                    'px-2 pt-1 text-[11px] font-medium text-muted-foreground',
+                                                    index > 0 &&
+                                                        'mt-2 border-t border-sidebar-border pt-3',
+                                                )}
+                                            >
+                                                {item.section}
+                                            </div>
+                                        )}
+                                    <ShellLink
+                                        href={item.href}
+                                        onClick={() => {
+                                            // Desktop mempertahankan menu hover selama URL tujuan belum terpasang.
+                                            if (isMobile) {
+                                                setPreviewId(null);
+                                                setOpenMobile(false);
+                                            }
+                                        }}
+                                        aria-current={
+                                            isItemActive(item)
+                                                ? 'page'
+                                                : undefined
                                         }
-                                    }}
-                                    aria-current={
-                                        isItemActive(item) ? 'page' : undefined
-                                    }
-                                    className={cn(
-                                        'flex min-h-8 shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[13px] text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-ring',
-                                        isItemActive(item) &&
-                                            'bg-sidebar-primary/15 text-sidebar-primary ring-1 ring-sidebar-primary/30 ring-inset hover:bg-sidebar-primary/20 hover:text-sidebar-primary',
-                                    )}
-                                >
-                                    <span className="min-w-0 break-words whitespace-normal">
-                                        {item.label}
-                                    </span>
-                                </ShellLink>
+                                        className={cn(
+                                            'flex min-h-8 shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[13px] text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-ring',
+                                            isItemActive(item) &&
+                                                'bg-sidebar-primary/15 text-sidebar-primary ring-1 ring-sidebar-primary/30 ring-inset hover:bg-sidebar-primary/20 hover:text-sidebar-primary',
+                                        )}
+                                    >
+                                        <span className="min-w-0 break-words whitespace-normal">
+                                            {item.label}
+                                        </span>
+                                    </ShellLink>
+                                </Fragment>
                             ))}
                         </div>
                     </nav>

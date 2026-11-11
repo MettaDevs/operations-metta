@@ -19,6 +19,11 @@ import { z } from 'zod';
 // dari `icon` di setiap grup apps.navigation; keduanya ditulis migration module. Server meneruskan namanya apa adanya,
 // dan Shell yang menerjemahkannya ke ikon dari daftar yang ia kenal, dengan ikon bawaan bila tidak dikenal
 // (src/platform/shell/navigation-icons.ts).
+//
+// Entri boleh membawa `section`: judul bagian di sidebar, dengan garis pemisah sebelum bagian berikutnya. Dipakai grup
+// Setup sebuah aplikasi, yang mengumpulkan halaman pengaturan dari beberapa domain dalam satu rail (pola grup Setup di
+// menu module F&O); judul bagiannya mengikuti folder domain di kode, misalnya Penjaminan untuk `coverage/`. Entri
+// berurutan dengan judul yang sama membentuk satu bagian.
 export const navigationGroupSchema = z.object({
     id: z.string(),
     label: z.string(),
@@ -28,6 +33,7 @@ export const navigationGroupSchema = z.object({
             id: z.string(),
             label: z.string(),
             href: z.string(),
+            section: z.string().optional(),
             permission: z.string().optional(),
         }),
     ),
@@ -175,14 +181,19 @@ export const sysAdminArea: NavigationAreaEntry = {
     ],
 };
 
-export type NavigationItem = { id: string; label: string; href: string };
+export type NavigationItem = {
+    id: string;
+    label: string;
+    href: string;
+    section: string | null;
+};
 export type NavigationGroup = {
     id: string;
     label: string;
     icon: string | null;
     items: NavigationItem[];
 };
-export type NavigationArea = NavigationItem & {
+export type NavigationArea = Omit<NavigationItem, 'section'> & {
     icon: string | null;
     groups: NavigationGroup[];
 };
@@ -209,7 +220,12 @@ export function visibleNavigation(
                         item.permission === undefined ||
                         permissions.has(item.permission),
                 )
-                .map(({ id, label, href }) => ({ id, label, href }));
+                .map(({ id, label, href, section }) => ({
+                    id,
+                    label,
+                    href,
+                    section: section ?? null,
+                }));
             return items.length
                 ? [
                       {
