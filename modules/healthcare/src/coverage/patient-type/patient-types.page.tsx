@@ -74,6 +74,9 @@ function PatientTypeCard({
         // Tipe baru langsung aktif.
         is_active: type?.is_active ?? true,
         is_default: type?.is_default ?? false,
+        max_visits_per_section_per_day: String(
+            type?.max_visits_per_section_per_day ?? 0,
+        ),
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -206,6 +209,27 @@ function PatientTypeCard({
                             readOnly={!editing}
                             onChange={(event) =>
                                 setForm({ ...form, name: event.target.value })
+                            }
+                        />
+                    </FormControl>
+                    <FormControl
+                        error={errors.max_visits_per_section_per_day?.[0]}
+                        hint="Berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari. Isi 0 bila tidak dibatasi."
+                    >
+                        <Input
+                            label="Maks. kunjungan per poli per hari"
+                            required
+                            inputMode="numeric"
+                            maxLength={3}
+                            data-error-field="max_visits_per_section_per_day"
+                            value={form.max_visits_per_section_per_day}
+                            readOnly={!editing}
+                            onChange={(event) =>
+                                setForm({
+                                    ...form,
+                                    max_visits_per_section_per_day:
+                                        event.target.value,
+                                })
                             }
                         />
                     </FormControl>
@@ -385,6 +409,17 @@ function PatientTypesPage(): ReactNode {
                                                 behaviorLabels[behavior],
                                         )
                                         .join(', ') || '—'}
+                                </DataTableText>
+                            ),
+                        },
+                        {
+                            id: 'visit-limit',
+                            header: 'Maks. per poli per hari',
+                            width: 170,
+                            cell: (type) => (
+                                <DataTableText>
+                                    {type.max_visits_per_section_per_day ||
+                                        'Tanpa batas'}
                                 </DataTableText>
                             ),
                         },
