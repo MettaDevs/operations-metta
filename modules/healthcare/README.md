@@ -116,6 +116,7 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 - Tipe pasien menyalakan perilaku lewat satu baris per perilaku di `sim_m_tipe_pasien_perilaku`. Perilaku baru kelak (cek kepesertaan, mode tagihan, wajib rujukan) cukup menjadi kode baru di katalog; tabel dan data pasien tidak berubah.
 - `sim_m_tipe_pasien.memakai_penjamin` dari `0001` masih ditulis sama dengan `requires_guarantor` untuk kode rilis sebelumnya, dan dibuang di rilis sesudahnya.
 - **Tipe bawaan:** centang "Bawaan pasien baru" menandai paling banyak satu tipe per tenant (`sim_m_tipe_pasien_bawaan_unique`). Menandai tipe lain memindahkan tandanya. Penjamin punya tanda serupa, paling banyak satu per tipe pasien. Kartu pasien baru terisi tipe bawaan beserta penjamin bawaannya, dan pendaftaran lewat API tanpa cara bayar memakainya. Hanya tipe dan penjamin yang aktif yang dipakai. Tidak ada id yang ditulis di kode.
+- **Batas kunjungan per poli per hari** (`sim_m_tipe_pasien.maks_kunjungan_per_poli_per_hari`, API `max_visits_per_section_per_day`): berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari, aturan puskesmas (misalnya BPJS 1, Umum tanpa batas). 0 berarti tanpa batas dan menjadi nilai tipe yang sudah ada; tenant sendiri yang mengisi 1 untuk tipe BPJS-nya. Sistem lama tidak punya kolom ini. Pendaftaran kunjungan kelak menolak pendaftaran yang melewati batas. Belum dibangun.
 
 ## Layar
 

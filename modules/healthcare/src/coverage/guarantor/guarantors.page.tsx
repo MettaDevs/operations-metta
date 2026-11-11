@@ -240,6 +240,7 @@ function GuarantorCard({
                                               behaviors: [],
                                               is_active: true,
                                               is_default: false,
+                                              max_visits_per_section_per_day: 0,
                                               version: 0,
                                           }
                                         : null
