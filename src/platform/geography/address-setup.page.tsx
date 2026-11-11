@@ -52,7 +52,7 @@ import {
 // kiri, rincian di kanan, dan kartu Baru. Nama tingkatnya dibaca dari data. Bagian Address setup CoreERP yang lain
 // belum dipindah.
 
-const route = getRouteApi('/_app/settings/address-setup');
+const route = getRouteApi('/_app/sysadmin/geography/address-setup');
 type Row = ApiBody<'groupOfHousesList'>['data'][number];
 type Errors = Record<string, string[]>;
 type Village = {
@@ -813,7 +813,8 @@ function AddressSetupPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/address-setup',
+    path: '/sysadmin/geography/address-setup',
+    previousPaths: ['/settings/address-setup'],
     layout: 'app',
     title: 'Setup alamat',
     validateSearch: z.object({

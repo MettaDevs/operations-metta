@@ -41,7 +41,7 @@ import {
 // CoreERP. Rincian tugas akses (privilege) dan izin setiap tanggung jawab tampil hanya baca. Menyusun tanggung jawab
 // dan tugas akses buatan tenant sendiri belum dipindah.
 
-const route = getRouteApi('/_app/settings/security-configuration');
+const route = getRouteApi('/_app/sysadmin/access/security-configuration');
 type Catalog = ApiBody<'securityConfiguration'>['data'];
 type RoleRow = ApiBody<'roleList'>['data'][number];
 type Role = ApiBody<'roleShow'>['data'];
@@ -513,7 +513,8 @@ function SecurityConfigurationPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/security-configuration',
+    path: '/sysadmin/access/security-configuration',
+    previousPaths: ['/settings/security-configuration'],
     layout: 'app',
     title: 'Susun role',
     validateSearch: z.object({

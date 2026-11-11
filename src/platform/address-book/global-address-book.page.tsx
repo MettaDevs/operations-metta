@@ -31,7 +31,7 @@ import {
 // kartu party, dan party baru. Kelompok buku alamat, akun vendor, dan nomor party tidak ditampilkan karena belum ada
 // di API.
 
-const route = getRouteApi('/_app/settings/global-address-book');
+const route = getRouteApi('/_app/sysadmin/address-book/parties');
 // Pilihan "Semua" pada filter. Select SDK menganggap nilai kosong sebagai belum memilih, jadi pilihan ini butuh nilai
 // sendiri.
 const ALL = 'all';
@@ -495,7 +495,8 @@ function GlobalAddressBookPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/global-address-book',
+    path: '/sysadmin/address-book/parties',
+    previousPaths: ['/settings/global-address-book'],
     layout: 'app',
     title: 'Buku alamat',
     validateSearch: searchSchema,

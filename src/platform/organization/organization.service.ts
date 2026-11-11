@@ -83,13 +83,42 @@ export type OrganizationCreated = (
         tenantId: string;
         organizationId: string;
         classification: 'legal_entity' | 'operating_unit';
-        userId: string;
+        // Kosong bila tidak ada pengguna yang memicunya, misalnya saat module dipasang.
+        userId: string | null;
     },
 ) => Promise<void>;
 const organizationCreated: OrganizationCreated[] = [];
 
 export function onOrganizationCreated(listener: OrganizationCreated): void {
     organizationCreated.push(listener);
+}
+
+// Menjalankan ulang yang didaftarkan lewat onOrganizationCreated untuk setiap legal entity lalu operating unit tenant
+// yang sudah ada. Dipanggil saat module dipasang setelah organisasi dibuat: number sequence bawaan module itu (misalnya
+// NRM per legal entity) baru berlaku setelah entitlement-nya aktif, jadi organisasi lama belum mendapatkannya.
+// Pendengarnya wajib aman diulang; pembuat sequence bawaan melewati reference yang sudah punya sequence.
+export async function replayOrganizationsCreated(
+    db: Database,
+    tenantId: string,
+): Promise<void> {
+    const organizations = await db.rows(
+        z.object({
+            id: z.string(),
+            classification: z.enum(['legal_entity', 'operating_unit']),
+        }),
+        `select id, classification from organizations
+         where tenant_id = $1 and classification in ('legal_entity', 'operating_unit')
+         order by classification = 'operating_unit', created_at, id`,
+        [tenantId],
+    );
+    for (const organization of organizations)
+        for (const listener of organizationCreated)
+            await listener(db, {
+                tenantId,
+                organizationId: organization.id,
+                classification: organization.classification,
+                userId: null,
+            });
 }
 
 function unitNumberInUse(): never {

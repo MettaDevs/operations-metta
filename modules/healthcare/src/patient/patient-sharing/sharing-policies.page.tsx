@@ -41,7 +41,7 @@ import {
 // perusahaan hanya melihat pasiennya sendiri; perusahaan yang dipilih dalam satu kebijakan aktif saling melihat
 // pasien sejak tanggal berlakunya.
 
-const route = getRouteApi('/_app/healthcare/sharing-policies');
+const route = getRouteApi('/_app/healthcare/patient/sharing-policies');
 const ALL = 'all';
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
@@ -540,7 +540,8 @@ function SharingPoliciesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/healthcare/sharing-policies',
+    path: '/healthcare/patient/sharing-policies',
+    previousPaths: ['/healthcare/sharing-policies'],
     layout: 'app',
     title: 'Berbagi pasien antar perusahaan',
     validateSearch: searchSchema,

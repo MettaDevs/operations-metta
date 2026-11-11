@@ -28,7 +28,7 @@ import {
 // Daftar role tenant, sesederhana daftar permission set Business Central: nama, jumlah staf yang memegangnya, dan
 // penanda role Pemilik. Kartu role menampilkan staf pemegangnya. Duty dan privilege hanya tampil di layar Susun role.
 
-const route = getRouteApi('/_app/settings/roles');
+const route = getRouteApi('/_app/sysadmin/access/roles');
 type Role = ApiBody<'roleList'>['data'][number];
 type Member = ApiBody<'accessMemberList'>['data'][number];
 
@@ -118,7 +118,7 @@ function RolesPage(): ReactNode {
     });
     const compose = (role: string) =>
         void navigate({
-            to: '/settings/security-configuration',
+            to: '/sysadmin/access/security-configuration',
             search: { role },
         });
 
@@ -159,7 +159,7 @@ function RolesPage(): ReactNode {
                             value: search.q ?? '',
                             onValueChange: (q) =>
                                 void navigate({
-                                    to: '/settings/roles',
+                                    to: '/sysadmin/access/roles',
                                     search: q ? { q } : {},
                                     replace: true,
                                 }),
@@ -294,7 +294,8 @@ function RolesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/roles',
+    path: '/sysadmin/access/roles',
+    previousPaths: ['/settings/roles'],
     layout: 'app',
     title: 'Role',
     validateSearch: z.object({ q: z.string().max(200).optional() }),

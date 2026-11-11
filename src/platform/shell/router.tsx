@@ -65,7 +65,7 @@ function NotFound(): ReactNode {
                 Alamat ini tidak menunjuk halaman mana pun.
             </p>
             <Button asChild variant="outline" size="sm">
-                <Link to="/dashboard">Ke beranda</Link>
+                <Link to="/">Ke beranda</Link>
             </Button>
         </div>
     );
@@ -152,15 +152,25 @@ export const authLayoutRoute = createRoute({
     component: AuthLayout,
 });
 
-export const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    beforeLoad: (): never => {
-        // TanStack Router membaca redirect dari nilai yang dilempar, bukan dari Error.
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
-        throw redirect({ href: '/dashboard' });
-    },
-});
+// URL lama sebuah halaman (`previousPaths` di definePage). Search params ikut, jadi tautan yang membuka record tertentu
+// tetap membuka record itu di alamat barunya. Route ini dirakit scripts/generate-client.ts.
+export function previousPathRoute<const TFrom extends `/${string}`>(
+    from: TFrom,
+    to: `/${string}`,
+) {
+    return createRoute({
+        getParentRoute: () => rootRoute,
+        path: from,
+        beforeLoad: ({ location }): never => {
+            // TanStack Router membaca redirect dari nilai yang dilempar, bukan dari Error.
+            // eslint-disable-next-line @typescript-eslint/only-throw-error
+            throw redirect({
+                href: `${to}${location.searchStr}`,
+                replace: true,
+            });
+        },
+    });
+}
 
 // Data halaman gagal dimuat: pesannya tetap terlihat di tempat halaman, dengan jalan untuk mencoba lagi. Bingkai Shell
 // tetap ada, jadi pengguna masih bisa berpindah ke halaman lain.

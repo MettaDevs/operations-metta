@@ -8,6 +8,7 @@ export {
     type ApiBody,
     type ShellData,
 } from './api.ts';
+export { AreaDashboard } from './area-dashboard.tsx';
 export { FormErrorHeader } from './form-error-header.tsx';
 export { definePage } from './page.ts';
 export {
@@ -29,7 +30,7 @@ export { useAppearance } from './use-appearance.ts';
 export {
     appLayoutRoute,
     authLayoutRoute,
-    indexRoute,
+    previousPathRoute,
     rootRoute,
     routerOptions,
     startClient,

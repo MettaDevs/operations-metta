@@ -8,7 +8,7 @@ import {
     OrganizationDirectory,
 } from './organization-directory.tsx';
 
-const route = getRouteApi('/_app/settings/legal-entities');
+const route = getRouteApi('/_app/sysadmin/organization/legal-entities');
 
 function LegalEntitiesPage(): ReactNode {
     const { data: props } = useSuspenseQuery(
@@ -37,7 +37,8 @@ function LegalEntitiesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/legal-entities',
+    path: '/sysadmin/organization/legal-entities',
+    previousPaths: ['/settings/legal-entities'],
     layout: 'app',
     title: 'Perusahaan',
     validateSearch: z.object({ q: z.string().max(200).optional() }),

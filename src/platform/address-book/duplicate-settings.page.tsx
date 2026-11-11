@@ -140,7 +140,8 @@ function DuplicateSettingsPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/party-duplicate-check',
+    path: '/sysadmin/address-book/duplicate-check',
+    previousPaths: ['/settings/party-duplicate-check'],
     layout: 'app',
     title: 'Cek data ganda',
     component: DuplicateSettingsPage,

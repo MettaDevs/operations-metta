@@ -40,7 +40,7 @@ import {
 // Master pekerjaan untuk isian Pekerjaan pada party. Tidak ada di CoreERP; bentuk layarnya mengikuti layar setup
 // Organization: daftar di kiri, rincian di kanan, dan kartu Baru. Master kecil ini hanya punya nama.
 
-const route = getRouteApi('/_app/settings/occupations');
+const route = getRouteApi('/_app/sysadmin/address-book/occupations');
 type Occupation = ApiBody<'occupationList'>['data'][number];
 type Errors = Record<string, string[]>;
 
@@ -428,7 +428,8 @@ function OccupationsPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/occupations',
+    path: '/sysadmin/address-book/occupations',
+    previousPaths: ['/settings/occupations'],
     layout: 'app',
     title: 'Pekerjaan',
     validateSearch: z.object({ q: z.string().max(200).optional() }),

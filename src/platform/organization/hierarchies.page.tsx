@@ -8,7 +8,7 @@ import {
     OrganizationHierarchies,
 } from './organization-hierarchies.tsx';
 
-const route = getRouteApi('/_app/settings/organization-hierarchies');
+const route = getRouteApi('/_app/sysadmin/organization/hierarchies');
 
 function HierarchiesPage(): ReactNode {
     const { data: props } = useSuspenseQuery(
@@ -35,7 +35,8 @@ function HierarchiesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/settings/organization-hierarchies',
+    path: '/sysadmin/organization/hierarchies',
+    previousPaths: ['/settings/organization-hierarchies'],
     layout: 'app',
     title: 'Hierarki organisasi',
     validateSearch: z.object({ q: z.string().max(200).optional() }),

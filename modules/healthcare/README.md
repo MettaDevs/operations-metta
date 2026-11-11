@@ -86,7 +86,7 @@ Reference NRM boleh berscope legal entity atau operating unit, menyalakan `defau
 - Unit yang tidak ditempatkan di kelompok: NRM dari sequence legal entity pendaftar, satu untuk semua unit itu. `nrm_unit_id` kosong.
 - Unit yang ditempatkan di kelompok: NRM dari sequence unit kepala kelompoknya, seperti #45. `nrm_unit_id` berisi kepala itu.
 - Pendaftaran menyebut tepat satu nilai scope ke `NumberIssuer`. Tidak ada pindah ke scope lain: unit tanpa sequence aktif ditolak dengan pesan NumberIssuer.
-- Setiap legal entity dan operating unit baru mendapat sequence NRM bawaan dari Core (`NumberSequences.createLegalEntityDefaults`/`createUnitDefaults`, dipanggil Organization lewat `onOrganizationCreated` di `src/main.ts`), hanya bila tenant berhak memakai module ini. Reference NRM juga hanya ditawarkan di layar Nomor dokumen bagi tenant itu. Sequence yang terlanjur dibuat `0001` untuk tenant tanpa entitlement dihentikan `0004`.
+- Setiap legal entity dan operating unit baru mendapat sequence NRM bawaan dari Core (`NumberSequences.createLegalEntityDefaults`/`createUnitDefaults`, dipanggil Organization lewat `onOrganizationCreated` di `src/main.ts`), hanya bila tenant berhak memakai module ini. Module yang dipasang setelah legal entity dan unit dibuat (`installModule`) menjalankan ulang pembuat yang sama untuk setiap legal entity dan unit yang sudah ada, di transaksi yang sama dengan entitlement-nya; pemasangan ulang tidak membuat sequence kedua. Reference NRM juga hanya ditawarkan di layar Nomor dokumen bagi tenant itu. Sequence yang terlanjur dibuat `0001` untuk tenant tanpa entitlement dihentikan `0004`.
 - Format bawaan sama dengan sistem lama, `00.00.01` (segmen nomor dengan mask `##.##.##`), non-continuous, 1 sampai 999999. Admin bebas mengubahnya di Nomor dokumen.
 - NRM unik per pemilik nomornya: legal entity (`sim_m_pasien_nrm_legal_entity_unique`) atau unit kepala kelompok (`sim_m_pasien_nrm_unique`). Satu orang satu catatan pasien per pemilik nomor di setiap legal entity.
 - **Saat dua kelompok digabung**, pasien lama tetap membawa NRM dari unit pemilik nomornya, sehingga NRM yang sama bisa muncul dua kali dalam kelompok gabungan. Sarankan format berawalan kode unit, yaitu segmen Operating unit di Nomor dokumen (misalnya `PKM1-00.00.01`), sebelum menggabung. Ini saran, tidak dipaksa.
@@ -108,7 +108,7 @@ Permission pasien dilindungi kebijakan data `healthcare.patient-unit` (unit kerj
 
 Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di layar **Tipe pasien**. Kode tidak pernah mencocokkan nama atau id tipe pasien; yang dibaca adalah perilaku yang dinyalakan tipe itu.
 
-- Katalog perilaku ada di kode (`src/setup/patient-type/patient-type.behaviors.ts`), dan setiap perilaku diimplementasikan sekali. Isinya sekarang hanya yang dipakai form pasien sistem lama:
+- Katalog perilaku ada di kode (`src/coverage/patient-type/patient-type.behaviors.ts`), dan setiap perilaku diimplementasikan sekali. Isinya sekarang hanya yang dipakai form pasien sistem lama:
     - `requires_guarantor`: isian Perusahaan (penjamin);
     - `requires_card_number`: isian No. asuransi.
 - Tipe pasien menyalakan perilaku lewat satu baris per perilaku di `sim_m_tipe_pasien_perilaku`. Perilaku baru kelak (cek kepesertaan, mode tagihan, wajib rujukan) cukup menjadi kode baru di katalog; tabel dan data pasien tidak berubah.
@@ -117,11 +117,21 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 
 ## Layar
 
-- **Pasien** (`/healthcare/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
+Katalog aplikasi Shell menampilkan module ini sebagai satu aplikasi bernama `apps.name`, bila tenant berhak dan module terpasang. Grup menu di rail sama dengan folder di `src/`, dan URL halaman berawalan folder itu:
+
+| Kelompok sidebar | Folder           | Halaman                                                                                                                       |
+| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard        | `src/dashboard/` | Dashboard (`/healthcare/dashboard`), halaman pertama area dan halaman awal pengguna. Isinya belum diputuskan; kerangka kosong |
+| Pasien           | `src/patient/`   | Pasien (`patient/`), Berbagi pasien antar perusahaan (`patient-sharing/`)                                                     |
+| Penjaminan       | `src/coverage/`  | Tipe pasien (`patient-type/`), Penjamin (`guarantor/`)                                                                        |
+
+URL sebelum 11 November 2026 (`/healthcare/patients`, `/healthcare/patient-types`, `/healthcare/guarantors`, `/healthcare/sharing-policies`) dialihkan ke alamat barunya.
+
+- **Pasien** (`/healthcare/patient/patients`): daftar dengan pencarian di toolbar dan filter status serta tipe pasien di panel kiri, dan kartu pasien dengan urutan isian form lama dalam tiga kelompok (identitas dan cara bayar bawaan; data tambahan; alamat KTP dan domisili). Kode pos tidak tampil, seperti form lama; komponen alamat bersama tetap menampilkannya di layar lain (`showPostalCode`).
 - Kartu hanya mengelola cara bayar bawaan (utama). Cara bayar lain yang tersimpan lewat API tidak tampil dan dikirim balik apa adanya.
-- **Tipe pasien** (`/healthcare/patient-types`) dan **Penjamin** (`/healthcare/guarantors`).
-- **Berbagi pasien antar perusahaan** (`/healthcare/sharing-policies`): daftar kebijakan dengan pencarian di toolbar dan filter status di panel kiri; kartu dengan nama, tanggal berlaku mulai, status, dan pilihan perusahaan.
-- Menu module ditulis migration ke `apps.navigation` dan disaring Shell dengan permission tiap entri.
+- **Tipe pasien** (`/healthcare/coverage/patient-types`) dan **Penjamin** (`/healthcare/coverage/guarantors`).
+- **Berbagi pasien antar perusahaan** (`/healthcare/patient/sharing-policies`): daftar kebijakan dengan pencarian di toolbar dan filter status di panel kiri; kartu dengan nama, tanggal berlaku mulai, status, dan pilihan perusahaan.
+- Menu module ditulis migration ke `apps.navigation` (terakhir `0006_navigation_areas.sql`) dan disaring Shell dengan permission tiap entri.
 
 ## Penjamin
 

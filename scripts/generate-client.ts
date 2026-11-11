@@ -33,6 +33,7 @@ function isLayout(value: string): value is Layout {
 export type PageFile = {
     file: string;
     path: string;
+    previousPaths: string[];
     layout: Layout;
     validatesSearch: boolean;
 };
@@ -54,7 +55,8 @@ export function pageFiles(): string[] {
 }
 
 // Bentuk yang dibaca dari setiap halaman: `export const page = definePage({ path: '...', layout: '...', ... })`, dengan
-// path dan layout sebagai teks literal supaya route tree bisa dirakit tanpa menjalankan kode halaman.
+// path, URL lama (`previousPaths`), dan layout sebagai teks literal supaya route tree bisa dirakit tanpa menjalankan
+// kode halaman.
 export function readPage(file: string): PageFile {
     const source = ts.createSourceFile(
         file,
@@ -105,6 +107,20 @@ export function readPage(file: string): PageFile {
                     );
                 return value.text;
             };
+            const previous = property('previousPaths')?.initializer;
+            if (
+                previous &&
+                (!ts.isArrayLiteralExpression(previous) ||
+                    !previous.elements.every(ts.isStringLiteral))
+            )
+                throw new Error(
+                    `${shown}: \`previousPaths\` pada definePage harus daftar teks literal.`,
+                );
+            const previousPaths = previous
+                ? previous.elements.flatMap((element) =>
+                      ts.isStringLiteral(element) ? [element.text] : [],
+                  )
+                : [];
             const layout = literal('layout');
             if (!isLayout(layout))
                 throw new Error(
@@ -119,6 +135,7 @@ export function readPage(file: string): PageFile {
             return {
                 file,
                 path: literal('path'),
+                previousPaths,
                 layout,
                 validatesSearch,
             };
@@ -152,16 +169,19 @@ function importPath(file: string): string {
     return path.startsWith('.') ? path : `./${path}`;
 }
 
-function clientSource(pages: PageFile[]): string {
+export function clientSource(pages: PageFile[]): string {
+    // Path halaman dan URL lamanya berbagi satu ruang alamat: URL lama tidak boleh menunjuk dua halaman, dan tidak
+    // boleh menutupi halaman yang sekarang ada.
     const seen = new Map<string, string>();
-    for (const page of pages) {
-        const other = seen.get(page.path);
-        if (other)
-            throw new Error(
-                `Dua halaman memakai path ${page.path}: ${other} dan ${posix(relative(root, page.file))}.`,
-            );
-        seen.set(page.path, posix(relative(root, page.file)));
-    }
+    for (const page of pages)
+        for (const path of [page.path, ...page.previousPaths]) {
+            const other = seen.get(path);
+            if (other)
+                throw new Error(
+                    `Dua halaman memakai path ${path}: ${other} dan ${posix(relative(root, page.file))}.`,
+                );
+            seen.set(path, posix(relative(root, page.file)));
+        }
     const parents = { app: 'appLayoutRoute', auth: 'authLayoutRoute' };
     // Setiap route satu konstanta sendiri. createRoute yang ditulis langsung di dalam addChildren([...]) kehilangan
     // tipenya di TypeScript, dan route tree yang tidak bertipe tidak memeriksa path maupun search params.
@@ -178,6 +198,14 @@ function clientSource(pages: PageFile[]): string {
         ];
         return `const ${name.replace(/Page$/, 'Route')} = createRoute({ ${options.join(', ')} });`;
     };
+    // URL lama dialihkan ke path halamannya, satu route per URL lama, langsung di bawah root supaya tidak menunggu
+    // data Shell lebih dulu.
+    const previous = pages.flatMap((page) =>
+        page.previousPaths.map(
+            (path) =>
+                `previousPathRoute('${path}', ${importName(page.file)}.path)`,
+        ),
+    );
     const children = (layout: Layout) =>
         pages
             .filter((page) => page.layout === layout)
@@ -190,7 +218,7 @@ ${pages.map((page) => `import { page as ${importName(page.file)} } from '${impor
 import {
     appLayoutRoute,
     authLayoutRoute,
-    indexRoute,
+    previousPathRoute,
     rootRoute,
     routerOptions,
     startClient,
@@ -199,9 +227,9 @@ import {
 ${pages.map(route).join('\n\n')}
 
 const routeTree = rootRoute.addChildren([
-    indexRoute,
     appLayoutRoute.addChildren([${children('app')}]),
     authLayoutRoute.addChildren([${children('auth')}]),
+    ${previous.join(', ')}
 ]);
 
 const router = createRouter({ ...routerOptions, routeTree });

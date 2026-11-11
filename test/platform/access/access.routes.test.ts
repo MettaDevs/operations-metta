@@ -476,11 +476,14 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
         const session = browser();
         await session.login(member.email, member.password);
         expect((await session.get('/api/v1/access')).status).toBe(200);
-        const menu = await json<{ navigation: { id: string }[] }>(
-            await session.get('/api/v1/shell'),
-            200,
-        );
-        expect(menu.navigation.map((group) => group.id)).toContain('access');
+        const menu = await json<{
+            navigation: { id: string; groups: { id: string }[] }[];
+        }>(await session.get('/api/v1/shell'), 200);
+        expect(
+            menu.navigation.flatMap((area) =>
+                area.groups.map((group) => group.id),
+            ),
+        ).toContain('access');
 
         await json(await assign(member.membershipId, []), 200);
         expect((await session.get('/api/v1/access')).status).toBe(403);

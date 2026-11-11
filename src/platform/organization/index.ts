@@ -3,6 +3,7 @@ import { organizationRoutes as directoryRoutes } from './organization.routes.ts'
 
 export {
     onOrganizationCreated,
+    replayOrganizationsCreated,
     type OrganizationCreated,
 } from './organization.service.ts';
 

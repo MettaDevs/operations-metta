@@ -10,6 +10,7 @@ import {
     createTenant,
     entitle,
     grantAllOrganizations,
+    recordInstallation,
 } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Patient = {
@@ -191,6 +192,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         tenantId = await createTenant(pool, 'Klinik Uji Pasien');
         // Sequence NRM hanya untuk tenant yang berhak memakai module healthcare.
         await entitle(pool, tenantId, 'healthcare');
+        await recordInstallation(pool, tenantId, 'healthcare');
         const owner = await createMember(pool, tenantId, [
             'core.organization.manage',
             'healthcare.patient.manage',
@@ -1241,42 +1243,103 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         );
     }, 30_000);
 
-    test('the module menu comes from the database, opens existing pages, and follows permissions', async () => {
-        const [app] = await pool.unsafe<{ navigation: unknown }[]>(
-            "select navigation from apps where id = 'healthcare'",
-        );
+    test('the module is one rail area named in the database, grouped by its feature folders, and follows permissions', async () => {
+        const [app] = await pool.unsafe<
+            { name: string; navigation: unknown }[]
+        >("select name, navigation from apps where id = 'healthcare'");
         const groups = z
             .array(
                 z.object({
                     id: z.string(),
+                    label: z.string(),
                     items: z.array(
-                        z.object({ href: z.string(), permission: z.string() }),
+                        z.object({
+                            href: z.string(),
+                            permission: z.string().optional(),
+                        }),
                     ),
                 }),
             )
             .parse(app?.navigation);
-        const paths = new Set(pageFiles().map((file) => readPage(file).path));
-        for (const item of groups.flatMap((group) => group.items))
-            expect(paths.has(item.href)).toBe(true);
+        // Kelompok sidebar sama dengan folder area di src/ module, dan URL halamannya berawalan folder itu.
+        expect(groups.map((group) => [group.id, group.label])).toEqual([
+            ['dashboard', 'Dashboard'],
+            ['patient', 'Pasien'],
+            ['coverage', 'Penjaminan'],
+        ]);
+        const pages = new Map(
+            pageFiles().map((file) => [readPage(file).path, file]),
+        );
+        for (const group of groups)
+            for (const item of group.items) {
+                const file = pages.get(item.href)?.split(/[\\/]/) ?? [];
+                expect(file[file.lastIndexOf('src') + 1]).toBe(group.id);
+                expect(item.href.startsWith(`/healthcare/${group.id}`)).toBe(
+                    true,
+                );
+            }
         const menu = async (as: Browser) =>
             (
                 await json<{
-                    navigation: { id: string; items: { href: string }[] }[];
+                    navigation: {
+                        id: string;
+                        label: string;
+                        href: string;
+                        groups: { id: string; items: { href: string }[] }[];
+                    }[];
                 }>(await as.get('/api/v1/shell'), 200)
             ).navigation;
-        const group = groups[0]?.id ?? '';
+        // Petugas pendaftaran tidak melihat Sys Admin, dan halaman awalnya dashboard area module ini.
+        const clerkMenu = await menu(clerks.induk!);
+        expect(clerkMenu.map((area) => [area.id, area.label])).toEqual([
+            ['healthcare', String(app?.name)],
+        ]);
+        expect(clerkMenu[0]?.href).toBe('/healthcare/dashboard');
         expect(
-            (await menu(clerks.induk!))
-                .find((entry) => entry.id === group)
-                ?.items.map((item) => item.href),
-        ).toEqual(['/healthcare/patients']);
+            clerkMenu[0]?.groups.map((group) => [
+                group.id,
+                group.items.map((item) => item.href),
+            ]),
+        ).toEqual([
+            ['dashboard', ['/healthcare/dashboard']],
+            ['patient', ['/healthcare/patient/patients']],
+        ]);
+        // Admin melihat Sys Admin lebih dulu, lalu area module dengan kedua kelompoknya.
+        const adminMenu = await menu(admin);
+        expect(adminMenu.map((area) => area.id)).toEqual([
+            'sysadmin',
+            'healthcare',
+        ]);
+        expect(adminMenu[0]?.href).toBe('/sysadmin/dashboard');
+        expect(adminMenu[1]?.groups.map((group) => group.id)).toEqual([
+            'dashboard',
+            'patient',
+            'coverage',
+        ]);
+        // Berhak tetapi belum terpasang: module tidak ada di katalog, walau izinnya dipegang.
+        await pool.unsafe(
+            "update core_module_installations set status = 'uninstalled' where tenant_id = $1 and module_id = 'healthcare'",
+            [tenantId],
+        );
+        try {
+            expect((await menu(admin)).map((area) => area.id)).toEqual([
+                'sysadmin',
+            ]);
+        } finally {
+            await pool.unsafe(
+                "update core_module_installations set status = 'installed' where tenant_id = $1 and module_id = 'healthcare'",
+                [tenantId],
+            );
+        }
+        // Anggota tanpa duty module tidak mendapat area module, walau dashboard-nya tanpa permission; halaman awalnya
+        // dashboard Sys Admin.
         const outsider = await clerk(
             [unitId('Induk')],
             ['core.organization.inquire'],
         );
-        expect((await menu(outsider)).map((entry) => entry.id)).not.toContain(
-            group,
-        );
+        const outsiderMenu = await menu(outsider);
+        expect(outsiderMenu.map((area) => area.id)).toEqual(['sysadmin']);
+        expect(outsiderMenu[0]?.href).toBe('/sysadmin/dashboard');
     }, 30_000);
 
     test('a patient type turns behaviours from the catalog on and off, without its name deciding anything', async () => {

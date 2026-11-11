@@ -771,7 +771,7 @@ function PatientCardBody({
             : form.name || 'Pasien baru',
         editing,
         recordUrl: patient
-            ? `/healthcare/patients?patient=${patient.id}`
+            ? `/healthcare/patient/patients?patient=${patient.id}`
             : undefined,
     });
 

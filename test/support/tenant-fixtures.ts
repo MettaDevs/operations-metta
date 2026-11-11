@@ -102,3 +102,16 @@ export async function entitle(
         [tenantId, appId],
     );
 }
+
+// Catatan pemasangan module untuk tenant, yang di aplikasi ditulis installModule setelah migration module berhasil.
+// Menu module hanya tampil bila module terpasang, bukan sekadar dihak.
+export async function recordInstallation(
+    sql: postgres.Sql,
+    tenantId: string,
+    appId: string,
+) {
+    await sql.unsafe(
+        "insert into core_module_installations (tenant_id, module_id, version, status, installed_at, created_at, updated_at) select $1, id, version, 'installed', now(), now(), now() from apps where id = $2",
+        [tenantId, appId],
+    );
+}
