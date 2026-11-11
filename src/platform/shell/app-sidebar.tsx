@@ -3,7 +3,7 @@ import { Sidebar, useSidebar } from '@operations-metta/ui/sidebar';
 import { cn } from '@operations-metta/ui/utils';
 import { useLocation } from '@tanstack/react-router';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ShellData } from './api.ts';
 import { areaOf } from './home.ts';
@@ -17,6 +17,9 @@ type NavigationItem = NavigationGroup['items'][number];
 // Rail kiri dan submenu, dipindah dari app-sidebar CoreERP. Paling atas katalog aplikasi; di bawahnya grup menu
 // aplikasi yang sedang dibuka, satu grup per folder fitur; submenu berisi halaman grup itu. Semuanya datang dari
 // `/api/v1/shell`, sudah disaring izin anggota ini.
+// Cukup lama untuk dilewati kursor yang menyeberang serong, cukup singkat untuk terasa langsung saat kursor berhenti.
+const HOVER_INTENT_MS = 250;
+
 export function AppSidebar({
     navigation,
     uninstalledApps,
@@ -35,6 +38,20 @@ export function AppSidebar({
     const [previewId, setPreviewId] = useState<string | null>(null);
     const [pinnedId, setPinnedId] = useState<string | null>(null);
     const [previousUrl, setPreviousUrl] = useState(url);
+    // Niat hover: grup di rail baru menggantikan submenu setelah kursor diam sebentar di atasnya. Kursor yang bergerak
+    // serong dari rail ke submenu melewati grup lain; tanpa jeda, submenu berpindah ke grup yang hanya dilewati itu.
+    const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+        undefined,
+    );
+    const cancelHover = () => clearTimeout(hoverTimer.current);
+    const hoverGroup = (id: string) => {
+        cancelHover();
+        hoverTimer.current = setTimeout(
+            () => setPreviewId(id),
+            HOVER_INTENT_MS,
+        );
+    };
+    useEffect(() => cancelHover, []);
 
     if (previousUrl !== url) {
         setPreviousUrl(url);
@@ -64,7 +81,10 @@ export function AppSidebar({
             style={style}
             collapsible="icon"
             className="z-30 border-r border-sidebar-border bg-sidebar"
-            onMouseLeave={() => setPreviewId(null)}
+            onMouseLeave={() => {
+                cancelHover();
+                setPreviewId(null);
+            }}
             onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget))
                     setPreviewId(null);
@@ -108,7 +128,8 @@ export function AppSidebar({
                                 <ShellLink
                                     key={group.id}
                                     href={group.items[0]?.href ?? '/'}
-                                    onMouseEnter={() => setPreviewId(group.id)}
+                                    onMouseEnter={() => hoverGroup(group.id)}
+                                    onMouseLeave={cancelHover}
                                     onFocus={() => setPreviewId(group.id)}
                                     onClick={closeMobile}
                                     aria-current={selected ? 'page' : undefined}
