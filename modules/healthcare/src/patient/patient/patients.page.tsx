@@ -286,47 +286,53 @@ function PatientsPage(): ReactNode {
                             sortValue: (patient) => patient.nrm,
                         },
                         {
+                            // Satu sel berisi identitas pasien, satu baris per isian dengan label, mengikuti daftar
+                            // pasien aplikasi lama supaya petugas mengenali pasien tanpa membuka kartunya.
                             id: 'name',
-                            header: 'Nama',
+                            header: 'Identitas',
                             width: 340,
                             sortValue: (patient) => patient.name,
                             cell: (patient) => (
                                 <DataTableText multiline>
-                                    <span className="font-medium">
-                                        {patient.name}
-                                    </span>
-                                    <span className="block text-muted-foreground">
+                                    <ul className="list-disc space-y-0.5 pl-4">
+                                        <li className="font-medium">
+                                            {patient.name}
+                                        </li>
                                         {[
-                                            patient.nik && `NIK ${patient.nik}`,
-                                            patient.card_number &&
-                                                `${patient.guarantor_name ?? patient.patient_type_name ?? 'No. kartu'} ${patient.card_number}`,
-                                            patient.document_number &&
-                                                `No. dok RM ${patient.document_number}`,
-                                            patient.old_number &&
-                                                `No. RM lama ${patient.old_number}`,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                    </span>
-                                    <span className="block text-muted-foreground">
-                                        {[
-                                            references(
-                                                'gender',
-                                                patient.gender,
-                                            ),
+                                            ['NIK', patient.nik],
                                             [
+                                                'No. penjamin',
+                                                patient.card_number,
+                                            ],
+                                            [
+                                                'No. dok RM',
+                                                patient.document_number,
+                                            ],
+                                            ['No. RM lama', patient.old_number],
+                                            [
+                                                'Jenis kelamin',
+                                                references(
+                                                    'gender',
+                                                    patient.gender,
+                                                ),
+                                            ],
+                                            [
+                                                'Tempat lahir',
                                                 patient.birth_place,
+                                            ],
+                                            [
+                                                'Tgl. lahir',
                                                 patient.birth_date &&
                                                     displayDate(
                                                         patient.birth_date,
                                                     ),
-                                            ]
-                                                .filter(Boolean)
-                                                .join(', '),
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                    </span>
+                                            ],
+                                        ].map(([label, value]) => (
+                                            <li key={label}>
+                                                {label}: {value || '—'}
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </DataTableText>
                             ),
                         },
