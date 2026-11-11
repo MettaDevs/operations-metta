@@ -159,6 +159,19 @@ export const sysAdminArea: NavigationAreaEntry = {
                 },
             ],
         },
+        {
+            id: 'data-sharing',
+            label: 'Data sharing',
+            icon: 'share-2',
+            items: [
+                {
+                    id: 'data-sharing',
+                    label: 'Data sharing',
+                    href: '/sysadmin/data-sharing',
+                    permission: 'core.data-sharing.read',
+                },
+            ],
+        },
     ],
 };
 

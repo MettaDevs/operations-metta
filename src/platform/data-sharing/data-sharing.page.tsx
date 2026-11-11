@@ -35,32 +35,36 @@ import {
     FormErrorHeader,
     orpc,
     type ApiBody,
-} from '@core/platform/shell/index.ts';
+} from '../shell/index.ts';
 
-// Kebijakan berbagi pasien antar perusahaan (legal entity), pola cross-company data sharing F&O. Bawaannya setiap
-// perusahaan hanya melihat pasiennya sendiri; perusahaan yang dipilih dalam satu kebijakan aktif saling melihat
-// pasien sejak tanggal berlakunya.
+// Data sharing antar perusahaan (legal entity), pola "Configure cross-company data sharing" F&O. Bawaannya setiap
+// perusahaan hanya melihat datanya sendiri; perusahaan yang dipilih dalam satu kebijakan aktif saling melihat satu
+// jenis data sejak tanggal berlakunya. Jenis datanya didaftarkan module pemiliknya, misalnya Master pasien.
 
-const route = getRouteApi('/_app/healthcare/patient/sharing-policies');
+const route = getRouteApi('/_app/sysadmin/data-sharing');
 const ALL = 'all';
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
     status: z.enum(['active', 'inactive']).optional(),
+    data_type: z.string().max(160).optional(),
 });
 type Search = z.infer<typeof searchSchema>;
-type Policy = ApiBody<'healthcareSharingPolicyList'>['data'][number];
+type Policy = ApiBody<'dataSharingPolicyList'>['data'][number];
+type DataType = ApiBody<'dataSharingTypes'>['data'][number];
 type Errors = Record<string, string[]>;
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function SharingPolicyCard({
+function DataSharingPolicyCard({
     policy,
+    dataTypes,
     canManage,
     portalContainer,
     onSaved,
     onClose,
 }: {
     policy: Policy | null;
+    dataTypes: DataType[];
     canManage: boolean;
     portalContainer: RefObject<HTMLElement | null>;
     onSaved: (policy: Policy) => void;
@@ -69,6 +73,10 @@ function SharingPolicyCard({
     const [editing, setEditing] = useState(policy === null);
     const blank = {
         name: policy?.name ?? '',
+        // Bila hanya ada satu jenis data, kebijakan baru langsung memakainya.
+        data_type_code:
+            policy?.data_type.code ??
+            (dataTypes.length === 1 ? (dataTypes[0]?.code ?? '') : ''),
         // Kebijakan baru langsung aktif dan berlaku hari ini.
         is_active: policy?.is_active ?? true,
         effective_from: policy?.effective_from ?? today(),
@@ -81,12 +89,13 @@ function SharingPolicyCard({
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
     const legalEntities = useQuery(
-        orpc.healthcareSharingPolicyLegalEntities.queryOptions({
+        orpc.dataSharingLegalEntities.queryOptions({
+            input: { query: { data_type: form.data_type_code } },
             select: (response) => response.body.data,
         }),
     );
     usePageDialogRecord({
-        recordTitle: policy?.name ?? 'Kebijakan sharing baru',
+        recordTitle: policy?.name ?? 'Kebijakan data sharing baru',
         editing,
     });
 
@@ -96,11 +105,11 @@ function SharingPolicyCard({
         setMessage(null);
         try {
             const { body } = policy
-                ? await api.healthcareSharingPolicyUpdate({
+                ? await api.dataSharingPolicyUpdate({
                       params: { id: policy.id },
                       body: { ...form, version: policy.version },
                   })
-                : await api.healthcareSharingPolicyCreate({ body: form });
+                : await api.dataSharingPolicyCreate({ body: form });
             toast.success(
                 policy
                     ? 'Kebijakan sharing diperbarui.'
@@ -125,7 +134,7 @@ function SharingPolicyCard({
             !(await confirm({
                 title: `Delete kebijakan ${policy.name}?`,
                 description:
-                    'Perusahaan di kebijakan ini kembali hanya melihat pasiennya sendiri. Data pasien tidak berubah.',
+                    'Perusahaan di kebijakan ini kembali hanya melihat datanya sendiri. Datanya tidak berubah.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -133,7 +142,7 @@ function SharingPolicyCard({
             return;
         setBusy(true);
         try {
-            await api.healthcareSharingPolicyDelete({
+            await api.dataSharingPolicyDelete({
                 params: { id: policy.id },
                 body: { version: policy.version },
             });
@@ -229,8 +238,46 @@ function SharingPolicyCard({
                         />
                     </FormControl>
                     <FormControl
+                        error={errors.data_type_code?.[0]}
+                        hint={
+                            dataTypes.find(
+                                (type) => type.code === form.data_type_code,
+                            )?.description ?? undefined
+                        }
+                    >
+                        {editing ? (
+                            <div data-error-field="data_type_code">
+                                <Select
+                                    label="Data yang di-share"
+                                    required
+                                    items={dataTypes.map((type) => ({
+                                        value: type.code,
+                                        label: type.name,
+                                    }))}
+                                    value={form.data_type_code || null}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            data_type_code: value ?? '',
+                                        })
+                                    }
+                                    placeholder="Pilih data"
+                                    searchPlaceholder="Cari data"
+                                    emptyMessage="Data tidak ditemukan."
+                                    portalContainer={portalContainer}
+                                />
+                            </div>
+                        ) : (
+                            <Input
+                                label="Data yang di-share"
+                                value={policy?.data_type.name ?? ''}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
+                    <FormControl
                         error={errors.effective_from?.[0]}
-                        hint="Sejak tanggal ini perusahaan yang dipilih saling melihat pasien."
+                        hint="Sejak tanggal ini perusahaan yang dipilih saling melihat data itu."
                     >
                         <DatePicker
                             label="Berlaku mulai"
@@ -246,14 +293,14 @@ function SharingPolicyCard({
                     </FormControl>
                     <Field orientation="horizontal" className="w-auto">
                         <Switch
-                            id="sharing-policy-active"
+                            id="data-sharing-policy-active"
                             checked={form.is_active}
                             disabled={!editing}
                             onCheckedChange={(checked) =>
                                 setForm({ ...form, is_active: checked })
                             }
                         />
-                        <FieldLabel htmlFor="sharing-policy-active">
+                        <FieldLabel htmlFor="data-sharing-policy-active">
                             Aktif
                         </FieldLabel>
                     </Field>
@@ -274,7 +321,7 @@ function SharingPolicyCard({
                     ) : (
                         <TransferList
                             remainingTitle="Perusahaan lain"
-                            selectedTitle="Saling sharing pasien"
+                            selectedTitle="Saling sharing data ini"
                             remaining={entities
                                 .filter((entity) => !chosen.has(entity.id))
                                 .map(item)}
@@ -310,7 +357,7 @@ function SharingPolicyCard({
     );
 }
 
-function SharingPoliciesPage(): ReactNode {
+function DataSharingPage(): ReactNode {
     const search = route.useSearch();
     const navigate = route.useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
@@ -318,14 +365,20 @@ function SharingPoliciesPage(): ReactNode {
     const [canManage, setCanManage] = useState(false);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const filterPanelId = useId();
-    const { status } = search;
+    const { status, data_type: dataType } = search;
+    const dataTypes = useQuery(
+        orpc.dataSharingTypes.queryOptions({
+            select: (response) => response.body.data,
+        }),
+    );
     const loader = useCallback<ListLoader<Policy>>(
         async ({ query, cursor, sort, signal }) => {
-            const { body } = await api.healthcareSharingPolicyList(
+            const { body } = await api.dataSharingPolicyList(
                 {
                     query: {
                         q: query,
                         ...(status ? { status } : {}),
+                        ...(dataType ? { data_type: dataType } : {}),
                         ...(cursor ? { cursor } : {}),
                         ...(sort
                             ? { sort: sort.columnId, direction: sort.direction }
@@ -337,7 +390,7 @@ function SharingPoliciesPage(): ReactNode {
             setCanManage(body.can_manage);
             return { items: body.data, nextCursor: body.next_cursor };
         },
-        [status],
+        [status, dataType],
     );
     const list = useIncrementalList({
         loadItems: loader,
@@ -363,17 +416,17 @@ function SharingPoliciesPage(): ReactNode {
             <ListPageLayout
                 header={
                     <RecordActionBar
-                        title="Sharing master pasien"
+                        title="Data sharing"
                         search={{
                             value: search.q ?? '',
                             onValueChange: (q) => setSearch({ q }),
-                            label: 'Cari kebijakan sharing',
+                            label: 'Cari kebijakan data sharing',
                             placeholder: 'Cari nama kebijakan...',
                         }}
                         filter={{
                             open: filtersOpen,
                             onOpenChange: setFiltersOpen,
-                            active: Boolean(status),
+                            active: Boolean(status ?? dataType),
                             controls: filterPanelId,
                         }}
                     >
@@ -395,6 +448,35 @@ function SharingPoliciesPage(): ReactNode {
                         >
                             <div className="p-4">
                                 <FormGrid columns={1}>
+                                    <FormControl>
+                                        <Select
+                                            label="Data yang di-share"
+                                            items={[
+                                                {
+                                                    value: ALL,
+                                                    label: 'Semua data',
+                                                },
+                                                ...(dataTypes.data ?? []).map(
+                                                    (type) => ({
+                                                        value: type.code,
+                                                        label: type.name,
+                                                    }),
+                                                ),
+                                            ]}
+                                            value={dataType ?? ALL}
+                                            onValueChange={(value) =>
+                                                setSearch({
+                                                    data_type:
+                                                        value === ALL ||
+                                                        value === null
+                                                            ? undefined
+                                                            : value,
+                                                })
+                                            }
+                                            searchPlaceholder="Cari data"
+                                            emptyMessage="Data tidak ditemukan."
+                                        />
+                                    </FormControl>
                                     <FormControl>
                                         <Select
                                             label="Status"
@@ -452,8 +534,8 @@ function SharingPoliciesPage(): ReactNode {
                     incremental={list}
                     emptyMessage={
                         canManage
-                            ? 'Belum ada kebijakan. Setiap perusahaan hanya melihat pasiennya sendiri. Pilih Baru untuk memilih perusahaan yang saling sharing pasien.'
-                            : 'Belum ada kebijakan. Setiap perusahaan hanya melihat pasiennya sendiri.'
+                            ? 'Belum ada kebijakan. Setiap perusahaan hanya melihat datanya sendiri. Pilih Baru untuk memilih data dan perusahaan yang saling sharing.'
+                            : 'Belum ada kebijakan. Setiap perusahaan hanya melihat datanya sendiri.'
                     }
                     columns={[
                         {
@@ -464,6 +546,17 @@ function SharingPoliciesPage(): ReactNode {
                                 <DataTableText>{policy.name}</DataTableText>
                             ),
                             sortValue: (policy) => policy.name,
+                        },
+                        {
+                            id: 'data_type',
+                            header: 'Data',
+                            width: 180,
+                            cell: (policy) => (
+                                <DataTableText>
+                                    {policy.data_type.name}
+                                </DataTableText>
+                            ),
+                            sortValue: (policy) => policy.data_type.name,
                         },
                         {
                             id: 'legal_entities',
@@ -516,11 +609,12 @@ function SharingPoliciesPage(): ReactNode {
                 >
                     <PageDialogContent
                         ref={contentRef}
-                        title="Kebijakan sharing pasien"
+                        title="Kebijakan data sharing"
                     >
-                        <SharingPolicyCard
+                        <DataSharingPolicyCard
                             key={open === 'new' ? 'new' : open.id}
                             policy={open === 'new' ? null : open}
+                            dataTypes={dataTypes.data ?? []}
                             canManage={canManage}
                             portalContainer={contentRef}
                             onSaved={(policy) => {
@@ -540,10 +634,13 @@ function SharingPoliciesPage(): ReactNode {
 }
 
 export const page = definePage({
-    path: '/healthcare/patient/sharing-policies',
-    previousPaths: ['/healthcare/sharing-policies'],
+    path: '/sysadmin/data-sharing',
+    previousPaths: [
+        '/healthcare/sharing-policies',
+        '/healthcare/patient/sharing-policies',
+    ],
     layout: 'app',
-    title: 'Sharing master pasien',
+    title: 'Data sharing',
     validateSearch: searchSchema,
-    component: SharingPoliciesPage,
+    component: DataSharingPage,
 });

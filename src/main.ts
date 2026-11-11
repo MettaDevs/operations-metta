@@ -36,6 +36,7 @@ import {
     numberSequenceRoutes,
 } from './foundation/number-sequence/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
+import { dataSharingRoutes } from './platform/data-sharing/index.ts';
 import {
     findRoute,
     parseAddress,
@@ -137,6 +138,7 @@ export const router = {
     ...geographyRoutes(),
     ...addressBookRoutes(),
     ...numberSequenceRoutes(),
+    ...dataSharingRoutes(),
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
 };

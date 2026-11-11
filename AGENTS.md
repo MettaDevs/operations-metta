@@ -123,6 +123,7 @@ Aturan ini dibawa dari bagian [Satu bentuk module](https://github.com/MettaDevs/
     - Tenant disaring, dan kebijakan data yang dinyatakan module diterapkan.
     - Bacaan yang menggabungkan beberapa module hanya ditawarkan bila semuanya terpasang untuk tenant itu.
     - Core hanya membaca. Menulis tetap lewat module pemiliknya.
+- Data sharing antar perusahaan milik Core, pola "Configure cross-company data sharing" F&O (keputusan pemilik produk, 11 November 2026): Sys Admin → Data sharing, `src/platform/data-sharing/`. Module mendaftarkan jenis datanya di `data_sharing_types` lewat migration-nya (kode stabil, misalnya `healthcare.patient` "Master pasien") dan membaca perusahaan yang saling melihat datanya lewat `sharedLegalEntities`. Module tidak menyimpan kebijakan sharing sendiri.
 - Katalog, entitlement, dan pemasangan module tidak sama. Katalog berarti produk dikenal, entitlement berarti tenant berhak memakai, dan `installed` hanya sah setelah migration module berhasil dan tercatat di `core_module_installations`. Layar berlabel "terpasang" membaca catatan pemasangan itu, tidak menyimpulkannya dari entitlement.
 
 ## Database

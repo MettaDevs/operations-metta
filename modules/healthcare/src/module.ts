@@ -5,6 +5,8 @@ import type { Context } from '@core/platform/http/index.ts';
 export const moduleId = 'healthcare';
 // Kebijakan data pasien per unit kerja (app_data_policies), dipasang migration module ini.
 export const patientPolicy = `${moduleId}.patient-unit`;
+// Jenis data "Master pasien" di Data sharing Core (data_sharing_types), didaftarkan migration module ini.
+export const patientDataSharing = `${moduleId}.patient`;
 
 export async function moduleWorkspace(context: Context, body?: unknown) {
     context.session.csrf(body);

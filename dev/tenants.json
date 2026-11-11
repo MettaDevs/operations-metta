@@ -38,7 +38,7 @@
                     "duties": [
                         "healthcare.patient.manage",
                         "healthcare.payment-setup.manage",
-                        "healthcare.patient-sharing.manage"
+                        "core.data-sharing.manage"
                     ]
                 },
                 {
