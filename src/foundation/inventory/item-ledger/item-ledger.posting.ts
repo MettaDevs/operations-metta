@@ -70,6 +70,10 @@ export type TransferLine = LineBase & {
     fromLocationId: string;
     toLocationId: string;
     batchId: string | null;
+    // Baris masuk di lokasi asal yang boleh diambil, seperti Applies-to Entry di BC. Diisi penerimaan mutasi supaya
+    // hanya barang kiriman amprahnya yang keluar dari lokasi transit. Setelan pengambilan dan batch pilihan tidak
+    // berlaku: baris yang diambil sudah ditentukan, diurutkan dari yang paling dulu masuk.
+    appliesTo?: string[];
 };
 export type ItemLine = InboundLine | OutboundLine | TransferLine;
 
@@ -630,14 +634,16 @@ async function prepare(
                         'Lokasi tujuan harus berbeda dengan lokasi asal.';
                 if (!from || !to) break;
                 const policy = policyOf(item, from, 'transfer');
-                const batch = checkChosen(
-                    errors,
-                    line,
-                    item,
-                    policy,
-                    chosen,
-                    postingDate,
-                );
+                const batch = line.appliesTo
+                    ? null
+                    : checkChosen(
+                          errors,
+                          line,
+                          item,
+                          policy,
+                          chosen,
+                          postingDate,
+                      );
                 prepared.push({
                     kind: 'transfer',
                     line,
@@ -817,13 +823,19 @@ async function issue(
     },
 ): Promise<Slice[]> {
     const { line, item, location, policy } = args;
-    const plan = candidates(policy.picking, line.batchId);
+    const appliesTo = line.kind === 'transfer' ? line.appliesTo : undefined;
+    const plan: Candidates = appliesTo
+        ? { batch: { kind: 'any' }, order: 'posting' }
+        : candidates(policy.picking, line.batchId);
     const skipExpired =
-        policy.tracking.strictExpiry && plan.batch.kind === 'any';
+        !appliesTo && policy.tracking.strictExpiry && plan.batch.kind === 'any';
     const open = (
         await ledger.db.rows(
             openSchema,
-            ...openInbound(context, item.id, location.id, plan, skipExpired),
+            ...openInbound(context, item.id, location.id, plan, {
+                skipExpired,
+                appliesTo,
+            }),
         )
     ).map(openEntry);
     const { slices, shortfall } = allocate(open, line.quantity);
@@ -954,7 +966,7 @@ function openInbound(
     itemId: string,
     locationId: string,
     plan: Candidates,
-    skipExpired: boolean,
+    only: { skipExpired: boolean; appliesTo: string[] | undefined },
 ): [string, (string | null)[]] {
     const bindings: (string | null)[] = [
         context.tenantId,
@@ -978,8 +990,12 @@ function openInbound(
             throw new Error(`Unknown batch filter: ${JSON.stringify(unknown)}`);
         }
     }
-    if (skipExpired)
+    if (only.skipExpired)
         filter += ` and (kedaluwarsa is null or kedaluwarsa >= ${bind(context.postingDate)}::date)`;
+    if (only.appliesTo)
+        filter += only.appliesTo.length
+            ? ` and id in (${only.appliesTo.map(bind).join(',')})`
+            : ' and false';
     let order: string;
     switch (plan.order) {
         case 'expiry':
