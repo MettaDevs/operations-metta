@@ -5,6 +5,7 @@ export {
     staleMessage,
     validation,
 } from './errors.ts';
+export { correlationHeader, requestCorrelationId } from './correlation.ts';
 export { incrementalList, listParametersSchema } from './listing.ts';
 export {
     base,
