@@ -13,6 +13,8 @@ import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
 // Persediaan Core, pola Business Central: master per legal entity, satu kartu gudang dengan sisa per baris, dan satu
 // mesin posting. Module yang menggerakkan stok (farmasi, penerimaan, mutasi) memanggil postItemLines di dalam transaksi
 // dokumennya sendiri dan reverseItemEntries untuk membatalkan posting dokumen itu; module tidak menulis tabel gd_*.
+// Module yang memperluas barang (pola table extension BC, misalnya obat layanan kesehatan) menulis barangnya lewat
+// createItem, updateItem, dan deleteItem di transaksi yang sama dengan baris perluasannya.
 export { activeLegalEntity, exists, parseInput } from './inventory.service.ts';
 export { type Funding } from './item-ledger/allocation.ts';
 export {
@@ -27,6 +29,13 @@ export {
     type TransferLine,
 } from './item-ledger/item-ledger.posting.ts';
 export { unitConversion } from './item-unit/item-unit.service.ts';
+export {
+    createItem,
+    deleteItem,
+    updateItem,
+    type ItemInput,
+    type ItemScope,
+} from './item/item.service.ts';
 export {
     baseQuantity,
     decimalInput,
