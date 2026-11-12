@@ -8,6 +8,7 @@ import {
 import {
     abort,
     coded,
+    incrementalList,
     isRecord,
     lookupId,
     staleMessage,
@@ -207,7 +208,58 @@ const headerSchema = z.object({
     illness_years: z.number().nullable(),
     illness_months: z.number().nullable(),
     illness_days: z.number().nullable(),
+    prognosis_id: z.string().nullable(),
 });
+
+// Daftar pendek panel Diagnosa milik tenant. Baris nonaktif ikut dikirim supaya nilai tersimpan tetap berlabel; layar
+// hanya menawarkan yang aktif.
+const referenceTables = {
+    diagnosis_types: 'sim_m_diagnosa_jenis',
+    diagnosis_cases: 'sim_m_diagnosa_kasus',
+    prognoses: 'sim_m_prognosa',
+    chronic_diseases: 'sim_m_penyakit_kronis',
+} as const;
+type ReferenceList = keyof typeof referenceTables;
+const referenceRowSchema = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    active: z.boolean(),
+});
+
+const diagnosisRowSchema = z.object({
+    id: z.string(),
+    urutan: z.number(),
+    icd10_id: z.string(),
+    icd10_code: z.string(),
+    icd10_name: z.string(),
+    type_id: z.string(),
+    case_id: z.string(),
+    doctor_id: z.string().nullable(),
+    nurse_id: z.string().nullable(),
+});
+type Diagnosis = {
+    icd10_id: string;
+    type_id: string;
+    case_id: string;
+    doctor_id: string | null;
+    nurse_id: string | null;
+};
+
+const historyRowSchema = z.object({
+    id: z.string(),
+    date: z.string(),
+    icd10_code: z.string(),
+    icd10_name: z.string(),
+    type_name: z.string(),
+    case_name: z.string(),
+    doctor_name: z.string().nullable(),
+    nurse_name: z.string().nullable(),
+});
+
+// Pesan sistem lama bila baris diagnosa belum berisi jenis atau kasus.
+const diagnosisIncompleteMessage =
+    'Field Kasus dan Jenis pada diagnosa harus di isi';
 
 const allergyRowSchema = z.object({
     id: z.string(),
@@ -375,7 +427,18 @@ export class MedicalRecords {
              order by p.name`,
             [tenantId],
         );
+        const reference = (table: string) =>
+            this.db.rows(
+                referenceRowSchema,
+                `select id, kode as code, nama as name, aktif as active from ${table}
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                [tenantId],
+            );
         return {
+            diagnosis_types: await reference(referenceTables.diagnosis_types),
+            diagnosis_cases: await reference(referenceTables.diagnosis_cases),
+            prognoses: await reference(referenceTables.prognoses),
+            chronic_diseases: await reference(referenceTables.chronic_diseases),
             options: Object.fromEntries(
                 optionGroups.map((group) => [
                     group,
@@ -403,6 +466,9 @@ export class MedicalRecords {
                 manage: this.workspace.permissions.has(
                     'healthcare.examination.manage',
                 ),
+                create_icd10: this.workspace.permissions.has(
+                    'healthcare.icd10.create',
+                ),
             },
         };
     }
@@ -411,6 +477,53 @@ export class MedicalRecords {
         this.workspace.guard('examination', 'read');
         const destination = await this.destination(destinationId, false);
         return this.present(destination);
+    }
+
+    // Riwayat diagnosa: diagnosa kunjungan lain pasien ini, terbaru dulu. Hanya kunjungan yang terlihat bagi pengguna,
+    // dengan batas legal entity dan unit kerja yang sama dengan antrean pemeriksaan.
+    async diagnosisHistory(destinationId: string, parameters: URLSearchParams) {
+        this.workspace.guard('examination', 'read');
+        const destination = await this.destination(destinationId, false);
+        const bindings: Bind[] = [
+            this.workspace.tenantId,
+            destination.patient_id,
+            destination.id,
+        ];
+        const bind = (value: Bind) => {
+            bindings.push(value);
+            return `$${bindings.length}`;
+        };
+        const batch = await incrementalList(this.db, {
+            query: `select * from (
+                        select dg.id, r.tanggal::text as date, i.kode as icd10_code, i.nama as icd10_name,
+                               j.nama as type_name, k.nama as case_name, dp.name as doctor_name,
+                               np.name as nurse_name
+                        from sim_tr_pemeriksaan_diagnosa dg
+                        join sim_tr_pemeriksaan p on p.tenant_id = dg.tenant_id and p.id = dg.pemeriksaan_id
+                        join sim_tr_registrasi r on r.tenant_id = p.tenant_id and r.id = p.registrasi_id
+                        join sim_m_icd10 i on i.tenant_id = dg.tenant_id and i.id = dg.icd10_id
+                        join sim_m_diagnosa_jenis j on j.tenant_id = dg.tenant_id and j.id = dg.jenis_id
+                        join sim_m_diagnosa_kasus k on k.tenant_id = dg.tenant_id and k.id = dg.kasus_id
+                        left join sim_m_nakes dn on dn.tenant_id = dg.tenant_id and dn.id = dg.dokter_id
+                        left join parties dp on dp.tenant_id = dn.tenant_id and dp.id = dn.party_id
+                        left join sim_m_nakes nn on nn.tenant_id = dg.tenant_id and nn.id = dg.perawat_id
+                        left join parties np on np.tenant_id = nn.tenant_id and np.id = nn.party_id
+                        where dg.tenant_id = $1 and p.pasien_id = $2 and p.tujuan_id <> $3
+                          and dg.deleted_at is null and p.deleted_at is null and r.deleted_at is null
+                          and ${visitVisibility(this.workspace, bind)}) history
+                    where true`,
+            bindings,
+            parameters,
+            columns: { date: 'date', icd10_code: 'icd10_code' },
+            searchColumns: ['icd10_code', 'icd10_name'],
+            numericColumns: [],
+            defaultSort: 'date',
+            defaultDirection: 'desc',
+        });
+        return {
+            data: batch.data.map((row) => historyRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
+        };
     }
 
     // Satu Simpan untuk seluruh tab, seperti satu form sistem lama. Isian wajib periksa fisik ditolak dengan pesan sistem
@@ -473,6 +586,23 @@ export class MedicalRecords {
             const allergy = await this.readAllergy(input.allergy, errors);
             const findings = await this.readFindings(input.findings, errors);
             const anatomy = this.readAnatomy(input.anatomy, errors);
+            const diagnoses = await this.readDiagnoses(
+                input.diagnoses,
+                header?.id ?? null,
+                errors,
+            );
+            const prognosisId = await this.reference(
+                'prognoses',
+                input.prognosis_id,
+                header?.prognosis_id ?? null,
+                'prognosis_id',
+                errors,
+            );
+            const chronicDiseaseIds = await this.readChronicDiseases(
+                input.chronic_disease_ids,
+                header?.id ?? null,
+                errors,
+            );
             const required = await requiredErrors(
                 this.db,
                 this.workspace.tenantId,
@@ -491,6 +621,7 @@ export class MedicalRecords {
                 lama_sakit_tahun: anamnesis.illness_years ?? null,
                 lama_sakit_bulan: anamnesis.illness_months ?? null,
                 lama_sakit_hari: anamnesis.illness_days ?? null,
+                prognosa_id: prognosisId,
             };
             let recordId: string;
             if (header) {
@@ -531,6 +662,8 @@ export class MedicalRecords {
             );
             await this.writeFindings(recordId, findings, stamp);
             await this.writeAnatomy(recordId, anatomy, stamp);
+            await this.writeDiagnoses(recordId, diagnoses, stamp);
+            await this.writeChronicDiseases(recordId, chronicDiseaseIds, stamp);
         });
         return this.present(await this.destination(destinationId, false));
     }
@@ -575,7 +708,7 @@ export class MedicalRecords {
             `select id, version, dokter_id as doctor_id, perawat_id as nurse_id,
                     keluhan_utama as chief_complaint, keluhan_tambahan as additional_complaint,
                     lama_sakit_tahun as illness_years, lama_sakit_bulan as illness_months,
-                    lama_sakit_hari as illness_days
+                    lama_sakit_hari as illness_days, prognosa_id as prognosis_id
              from sim_tr_pemeriksaan
              where tenant_id = $1 and tujuan_id = $2 and deleted_at is null
              ${lock ? 'for update' : ''}`,
@@ -693,6 +826,10 @@ export class MedicalRecords {
                   [tenantId, header.id],
               )
             : [];
+        const diagnoses = header ? await this.diagnosisRows(header.id) : [];
+        const chronicDiseases = header
+            ? await this.chronicDiseaseIds(header.id)
+            : [];
         const data: MedicalRecord = {
             id: header?.id ?? null,
             version: header?.version ?? null,
@@ -716,6 +853,17 @@ export class MedicalRecords {
             findings,
             anatomy,
             other: panelSchemas.other.parse(panelValues.other),
+            diagnoses: diagnoses.map((row) => ({
+                icd10_id: row.icd10_id,
+                icd10_code: row.icd10_code,
+                icd10_name: row.icd10_name,
+                type_id: row.type_id,
+                case_id: row.case_id,
+                doctor_id: row.doctor_id,
+                nurse_id: row.nurse_id,
+            })),
+            prognosis_id: header?.prognosis_id ?? null,
+            chronic_disease_ids: chronicDiseases,
         };
         return {
             data,
@@ -898,6 +1046,169 @@ export class MedicalRecords {
         });
     }
 
+    private async diagnosisRows(recordId: string) {
+        return this.db.rows(
+            diagnosisRowSchema,
+            `select dg.id, dg.urutan, dg.icd10_id, i.kode as icd10_code, i.nama as icd10_name, dg.jenis_id as type_id,
+                    dg.kasus_id as case_id, dg.dokter_id as doctor_id, dg.perawat_id as nurse_id
+             from sim_tr_pemeriksaan_diagnosa dg
+             join sim_m_icd10 i on i.tenant_id = dg.tenant_id and i.id = dg.icd10_id
+             where dg.tenant_id = $1 and dg.pemeriksaan_id = $2 and dg.deleted_at is null
+             order by dg.urutan, dg.id`,
+            [this.workspace.tenantId, recordId],
+        );
+    }
+
+    private async chronicDiseaseIds(recordId: string): Promise<string[]> {
+        return (
+            await this.db.rows(
+                z.object({ id: z.string() }),
+                `select k.penyakit_kronis_id as id from sim_tr_pemeriksaan_penyakit_kronis k
+                 join sim_m_penyakit_kronis m on m.tenant_id = k.tenant_id and m.id = k.penyakit_kronis_id
+                 where k.tenant_id = $1 and k.pemeriksaan_id = $2 and k.deleted_at is null
+                 order by m.urutan, m.kode`,
+                [this.workspace.tenantId, recordId],
+            )
+        ).map((row) => row.id);
+    }
+
+    // Baris aktif daftar pendek panel Diagnosa, atau baris yang sudah tersimpan di pemeriksaan ini walau sejak itu
+    // nonaktif.
+    private async reference(
+        list: ReferenceList,
+        raw: unknown,
+        saved: string | null,
+        field: string,
+        errors: Errors,
+    ): Promise<string | null> {
+        if (raw === null || raw === undefined || raw === '') return null;
+        const id = typeof raw === 'string' ? lookupId(raw) : null;
+        const found = id
+            ? await this.db.one(
+                  z.object({ id: z.string() }),
+                  `select id from ${referenceTables[list]}
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                  [this.workspace.tenantId, id, saved],
+              )
+            : undefined;
+        if (!found) add(errors, field, 'Pilih dari daftar.');
+        return found?.id ?? null;
+    }
+
+    // Baris diagnosa. Jenis dan kasus wajib dengan pesan sistem lama; sistem lama tidak mewajibkan ada diagnosa.
+    // ICD-10, jenis, kasus, dan nakes yang sudah tersimpan di baris ini tetap diterima walau sejak itu nonaktif.
+    private async readDiagnoses(
+        raw: unknown[] | undefined,
+        recordId: string | null,
+        errors: Errors,
+    ): Promise<Diagnosis[]> {
+        const saved = recordId ? await this.diagnosisRows(recordId) : [];
+        const missing = (value: unknown) =>
+            value === null || value === undefined || value === '';
+        const rows: Diagnosis[] = [];
+        const seen = new Set<string>();
+        for (const [index, item] of (raw ?? []).entries()) {
+            const row = isRecord(item) ? item : {};
+            const field = (name: string) => `diagnoses.${index}.${name}`;
+            const icd10Id =
+                typeof row.icd10_id === 'string'
+                    ? lookupId(row.icd10_id)
+                    : null;
+            const before = saved.find((line) => line.icd10_id === icd10Id);
+            let icd10: string | null = null;
+            if (missing(row.icd10_id))
+                add(errors, field('icd10_id'), 'Pilih kode ICD-10.');
+            else {
+                const found = icd10Id
+                    ? await this.db.one(
+                          z.object({ id: z.string() }),
+                          `select id from sim_m_icd10
+                           where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or $3)`,
+                          [this.workspace.tenantId, icd10Id, Boolean(before)],
+                      )
+                    : undefined;
+                if (!found)
+                    add(
+                        errors,
+                        field('icd10_id'),
+                        'Pilih kode ICD-10 dari daftar.',
+                    );
+                else if (seen.has(found.id))
+                    add(
+                        errors,
+                        field('icd10_id'),
+                        'Kode ICD-10 ini sudah ada di diagnosa.',
+                    );
+                else {
+                    seen.add(found.id);
+                    icd10 = found.id;
+                }
+            }
+            if (missing(row.type_id))
+                add(errors, field('type_id'), diagnosisIncompleteMessage);
+            if (missing(row.case_id))
+                add(errors, field('case_id'), diagnosisIncompleteMessage);
+            const typeId = await this.reference(
+                'diagnosis_types',
+                row.type_id,
+                before?.type_id ?? null,
+                field('type_id'),
+                errors,
+            );
+            const caseId = await this.reference(
+                'diagnosis_cases',
+                row.case_id,
+                before?.case_id ?? null,
+                field('case_id'),
+                errors,
+            );
+            const doctorId = await this.practitioner(
+                row.doctor_id,
+                'isi_tenaga_medis',
+                before?.doctor_id ?? null,
+                field('doctor_id'),
+                errors,
+            );
+            const nurseId = await this.practitioner(
+                row.nurse_id,
+                'isi_perawat',
+                before?.nurse_id ?? null,
+                field('nurse_id'),
+                errors,
+            );
+            if (icd10 && typeId && caseId)
+                rows.push({
+                    icd10_id: icd10,
+                    type_id: typeId,
+                    case_id: caseId,
+                    doctor_id: doctorId,
+                    nurse_id: nurseId,
+                });
+        }
+        return rows;
+    }
+
+    // Penyakit kronis yang dicentang. Yang ganda dihitung sekali.
+    private async readChronicDiseases(
+        raw: unknown[] | undefined,
+        recordId: string | null,
+        errors: Errors,
+    ): Promise<string[]> {
+        const saved = recordId ? await this.chronicDiseaseIds(recordId) : [];
+        const ids = new Set<string>();
+        for (const [index, item] of (raw ?? []).entries()) {
+            const id = await this.reference(
+                'chronic_diseases',
+                item,
+                typeof item === 'string' && saved.includes(item) ? item : null,
+                `chronic_disease_ids.${index}`,
+                errors,
+            );
+            if (id) ids.add(id);
+        }
+        return [...ids];
+    }
+
     private async update(
         table: string,
         id: string,
@@ -1031,6 +1342,86 @@ export class MedicalRecords {
                     pemeriksaan_id: recordId,
                     aspek_id: aspectId,
                     hasil: result,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+    }
+
+    // Baris diagnosa dikenali dari kode ICD-10-nya: kode yang masih ada diubah di tempat, kode baru disisipkan, dan
+    // kode yang tidak dikirim lagi diberi deleted_at. Sistem lama menghapus fisik lalu menyisipkan ulang semuanya.
+    private async writeDiagnoses(
+        recordId: string,
+        rows: Diagnosis[],
+        stamp: string,
+    ): Promise<void> {
+        const existing = await this.diagnosisRows(recordId);
+        for (const item of existing)
+            if (!rows.some((row) => row.icd10_id === item.icd10_id))
+                await this.retire(
+                    'sim_tr_pemeriksaan_diagnosa',
+                    item.id,
+                    stamp,
+                );
+        for (const [index, row] of rows.entries()) {
+            const values = {
+                urutan: index + 1,
+                jenis_id: row.type_id,
+                kasus_id: row.case_id,
+                dokter_id: row.doctor_id,
+                perawat_id: row.nurse_id,
+            };
+            const match = existing.find(
+                (item) => item.icd10_id === row.icd10_id,
+            );
+            if (!match)
+                await this.db.insert('sim_tr_pemeriksaan_diagnosa', {
+                    id: Bun.randomUUIDv7(),
+                    tenant_id: this.workspace.tenantId,
+                    pemeriksaan_id: recordId,
+                    icd10_id: row.icd10_id,
+                    ...values,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+            else if (
+                match.urutan !== values.urutan ||
+                match.type_id !== values.jenis_id ||
+                match.case_id !== values.kasus_id ||
+                match.doctor_id !== values.dokter_id ||
+                match.nurse_id !== values.perawat_id
+            )
+                await this.update('sim_tr_pemeriksaan_diagnosa', match.id, {
+                    ...values,
+                    updated_at: stamp,
+                });
+        }
+    }
+
+    private async writeChronicDiseases(
+        recordId: string,
+        ids: string[],
+        stamp: string,
+    ): Promise<void> {
+        const existing = await this.db.rows(
+            z.object({ id: z.string(), disease_id: z.string() }),
+            `select id, penyakit_kronis_id as disease_id from sim_tr_pemeriksaan_penyakit_kronis
+             where tenant_id = $1 and pemeriksaan_id = $2 and deleted_at is null`,
+            [this.workspace.tenantId, recordId],
+        );
+        for (const row of existing)
+            if (!ids.includes(row.disease_id))
+                await this.retire(
+                    'sim_tr_pemeriksaan_penyakit_kronis',
+                    row.id,
+                    stamp,
+                );
+        for (const id of ids)
+            if (!existing.some((row) => row.disease_id === id))
+                await this.db.insert('sim_tr_pemeriksaan_penyakit_kronis', {
+                    id: Bun.randomUUIDv7(),
+                    tenant_id: this.workspace.tenantId,
+                    pemeriksaan_id: recordId,
+                    penyakit_kronis_id: id,
                     created_at: stamp,
                     updated_at: stamp,
                 });

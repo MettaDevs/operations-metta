@@ -35,6 +35,7 @@ import {
     type MedicalRecordMetadata,
     type MedicalRecordShown,
 } from '../medical-record/medical-record-panels.tsx';
+import { DiagnosisPanels } from '../medical-record/diagnosis-panels.tsx';
 import { ageText, DestinationStatusText, timeText } from './queue-display.tsx';
 
 // Pemeriksaan satu tujuan kunjungan: pasien dan kunjungannya, isi tab Rekam Medis poli sistem lama dengan satu Simpan
@@ -389,6 +390,14 @@ function ExaminationRecord({
                             setDraft={setDraft}
                             metadata={recordMetadata}
                             context={shown.context}
+                            errors={errors}
+                            disabled={!editable || busy}
+                        />
+                        <DiagnosisPanels
+                            destinationId={entry.id}
+                            draft={draft}
+                            setDraft={setDraft}
+                            metadata={recordMetadata}
                             errors={errors}
                             disabled={!editable || busy}
                         />

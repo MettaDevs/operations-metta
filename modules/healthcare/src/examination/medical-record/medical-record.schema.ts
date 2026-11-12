@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Isi tab Rekam Medis poli sistem lama, panel Anamnesa sampai Lainnya. Satu bentuk untuk dibaca dan disimpan: layar
+// Isi tab Rekam Medis poli sistem lama, panel Anamnesa sampai Diagnosa. Satu bentuk untuk dibaca dan disimpan: layar
 // mengirim kembali bentuk yang ia terima. Angka boleh datang sebagai teks dari isian; service yang memeriksanya.
 
 const text = z.string().nullable();
@@ -114,6 +114,18 @@ export const anatomySchema = z.object({
     description: text,
 });
 
+// Baris diagnosa (SIMtrRJDiagnosaAwal). Satu kode ICD-10 sekali per pemeriksaan, jadi baris dikenali dari kodenya.
+// Kode dan nama ICD-10 hanya dibaca, untuk label pilihan.
+export const diagnosisSchema = z.object({
+    icd10_id: text,
+    icd10_code: text,
+    icd10_name: text,
+    type_id: text,
+    case_id: text,
+    doctor_id: text,
+    nurse_id: text,
+});
+
 export const medicalRecordSchema = z.object({
     id: text,
     version: number,
@@ -127,6 +139,9 @@ export const medicalRecordSchema = z.object({
     findings: z.array(findingSchema),
     anatomy: z.array(anatomySchema),
     other: otherSchema,
+    diagnoses: z.array(diagnosisSchema),
+    prognosis_id: text,
+    chronic_disease_ids: z.array(z.string()),
 });
 export type MedicalRecord = z.infer<typeof medicalRecordSchema>;
 
@@ -144,6 +159,9 @@ export const medicalRecordInputSchema = z.object({
     findings: z.array(z.unknown()).optional(),
     anatomy: z.array(z.unknown()).optional(),
     other: panel,
+    diagnoses: z.array(z.unknown()).optional(),
+    prognosis_id: z.unknown().optional(),
+    chronic_disease_ids: z.array(z.unknown()).optional(),
 });
 // Bentuk kiriman layar: angka boleh masih berupa teks isian.
 type Loose<T> = T extends number
