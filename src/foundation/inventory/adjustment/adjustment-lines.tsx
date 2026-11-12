@@ -7,7 +7,10 @@ import { Input } from '@operations-metta/ui/input';
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api } from '../../../platform/shell/index.ts';
-import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import {
     MasterLookup,

@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import {
     displayNumber,
     parseDisplayNumber,
-} from '../../../src/foundation/inventory/display-number.ts';
+} from '../../src/components/display-number.ts';
 
-// Angka di layar persediaan ditulis cara Indonesia, sedangkan API memakai titik desimal.
-describe('inventory numbers on screen', () => {
+// Angka di layar ditulis cara Indonesia, sedangkan API memakai titik desimal.
+describe('numbers on screen', () => {
     test('shows API decimals with Indonesian grouping and a decimal comma', () => {
         expect(displayNumber('12500')).toBe('12.500');
         expect(displayNumber('1.5')).toBe('1,5');

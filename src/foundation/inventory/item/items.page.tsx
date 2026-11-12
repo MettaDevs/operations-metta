@@ -26,7 +26,7 @@ import {
     errorText,
     useUnsavedChangesGuard,
 } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import {
     ItemCategoryLookup,

@@ -1,5 +1,5 @@
 import type { ApiBody } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import type { ReportColumn, ReportTable } from '../report-table.ts';
 
 type Lplpo = ApiBody<'inventoryLplpo'>;

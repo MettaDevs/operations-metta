@@ -8,7 +8,7 @@ import { ScrollText } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api, ApiError, type ApiBody } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import type { Reference } from '../master-lookup.tsx';
 import type { Item } from './item-lookup.tsx';
 

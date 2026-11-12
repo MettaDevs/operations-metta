@@ -21,7 +21,10 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import type { Item } from '../item/item-lookup.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
 import type { Reference } from '../master-lookup.tsx';

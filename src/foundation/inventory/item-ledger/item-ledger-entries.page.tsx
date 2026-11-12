@@ -37,7 +37,7 @@ import {
     definePage,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { ItemCard } from '../item/item-card.tsx';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';
