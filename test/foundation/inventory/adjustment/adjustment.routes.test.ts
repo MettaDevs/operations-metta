@@ -305,6 +305,11 @@ describe.skipIf(!process.env.DB_HOST)('inventory adjustments', () => {
                                 quantity: 1,
                                 batch_id: Bun.randomUUIDv7(),
                             },
+                            {
+                                item_id: 'bukan-barang',
+                                quantity: 1,
+                                batch_id: Bun.randomUUIDv7(),
+                            },
                         ],
                     }),
                 ),
@@ -313,6 +318,8 @@ describe.skipIf(!process.env.DB_HOST)('inventory adjustments', () => {
             'lines.0.unit_cost',
             'lines.1.batch_number',
             'lines.2.batch_id',
+            'lines.3.batch_id',
+            'lines.3.item_id',
         ]);
     });
 
