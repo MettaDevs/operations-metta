@@ -3,7 +3,10 @@ import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
-import { healthcareRoutes } from '../modules/healthcare/src/index.ts';
+import {
+    healthcareRoutes,
+    registerHealthcareEventHandlers,
+} from '../modules/healthcare/src/index.ts';
 import {
     pharmacyRoutes,
     registerPharmacyEventHandlers,
@@ -63,6 +66,7 @@ import { organizationRoutes } from './platform/organization/index.ts';
 
 registerOrganizationDefaults();
 registerPharmacyEventHandlers();
+registerHealthcareEventHandlers();
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {

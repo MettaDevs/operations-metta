@@ -28,6 +28,7 @@ import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
+import { publishPrescriptionDispensed } from './dispensing.events.ts';
 import {
     dispensingHeaderSchema,
     dispensingInputSchema,
@@ -710,6 +711,7 @@ export class Dispensings {
                         billId,
                     ],
                 );
+                await publishPrescriptionDispensed(this.db, this.scope, billId);
             },
         );
     }

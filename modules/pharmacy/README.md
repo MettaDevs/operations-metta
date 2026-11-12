@@ -26,6 +26,8 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 | `far_tr_resep_detail`  | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                    |
 | `bill_farmasi`         | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, dan waktu setiap langkah    |
 | `bill_farmasi_detail`  | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep                    |
+| `retur_farmasi`        | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                           |
+| `retur_farmasi_detail` | Satu baris per obat dan batch yang kembali                                                                    |
 
 ## Resep masuk lewat event
 
@@ -53,6 +55,16 @@ Setiap perubahan mengunci baris resep (`for update`), jadi Siapkan yang ditekan 
 
 Apoteker dan asisten adalah pengguna tenant (`users`), dipilih dengan namanya. Di Kuta 1 keduanya dipilih di setiap penyerahan (`Pharmacy_id`, `Pharmacy_assistant_id`; 6 apoteker dan 7 asisten dalam 12.177 penyerahan, 425 di antaranya orang yang sama), jadi di sini keduanya boleh dipilih, dan terisi otomatis dari pengguna yang menyiapkan dan menyerahkan bila dibiarkan kosong.
 
+## Obat diserahkan: event ke layanan kesehatan
+
+Serahkan menerbitkan `pharmacy.prescription.dispensed.v1` (kontrak `contracts/events/pharmacy.prescription.dispensed.v1.yaml`) di transaksi yang sama. Isinya: id dan nomor resep asal, nomor penyerahan, waktu, lokasi, apoteker, asisten, dan satu baris per obat resep dengan jumlah resep, jumlah diserahkan, alasan, dan batch yang diambil (nomor, kedaluwarsa, jumlah). Serahkan yang diulang tidak menerbitkan event kedua, dan penyiapan yang dibatalkan tidak menerbitkan apa pun.
+
+Penerimanya module layanan kesehatan (`registerHealthcareEventHandlers()`, `modules/healthcare/src/examination/medical-record/dispensing.events.ts`): E-Resep menampilkan status "Diserahkan farmasi", waktu dan nomor penyerahan, serta jumlah yang diserahkan per baris. Ia idempoten lewat `sim_processed_events`, dan resep yang tidak dikenal dilewati dengan log.
+
+## Retur obat
+
+Retur langsung diposting saat disimpan (8 retur dari 12.177 penyerahan di Kuta 1 tidak membutuhkan draf). Stok masuk lagi ke lokasi penyerahan lewat `postItemLines` (jenis `penyerahan` dengan jumlah positif, seperti retur penjualan di BC yang tercatat sebagai Sale) dengan batch, kedaluwarsa, harga satuan, dan sumber dana yang sama dengan bagian stok yang keluar (`issuedSlices`; Appl.-from Item Entry di BC). Jumlah retur per obat dan batch tidak pernah melebihi yang diserahkan dikurangi yang sudah diretur; bagian yang sudah kembali dicocokkan dengan batch, harga, dan sumber dana baris kartu gudang retur sebelumnya, jadi retur berikutnya mengambil bagian yang memang belum kembali. Batal retur membalik posting itu lewat `reverseItemEntries` dan ditolak bila stoknya sudah terpakai. Retur belum diterbitkan sebagai event ke layanan kesehatan; jumlah di E-Resep adalah yang diserahkan.
+
 ## Golongan obat dan data obat farmasi
 
 Golongan obat diisi trigger migration untuk setiap legal entity saat module dipasang (`core_module_installations`) dan untuk legal entity yang lahir sesudahnya, hanya bila legal entity belum punya golongan sama sekali. Legal entity bebas menambah, mengubah, dan menghapusnya; golongan yang masih dipakai data obat tidak bisa dihapus.
@@ -61,13 +73,13 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                      |
-| ----------------------------- | -------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                      |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)             |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, dan batal siapkan (apoteker) |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat     |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat    |
+| Duty                          | Isi                                                             |
+| ----------------------------- | --------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                             |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                    |
+| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, dan retur (apoteker) |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat            |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat           |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 

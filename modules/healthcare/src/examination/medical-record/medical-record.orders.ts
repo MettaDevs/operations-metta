@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
-import type { Bind, Database } from '@core/platform/database/index.ts';
+import {
+    isoSql,
+    type Bind,
+    type Database,
+} from '@core/platform/database/index.ts';
 import { isRecord, lookupId, validation } from '@core/platform/http/index.ts';
 import { moduleId } from '../../module.ts';
 import {
@@ -137,6 +141,8 @@ const savedPrescriptionSchema = z.object({
     number: z.string().nullable(),
     status: z.enum(['draf', 'dikirim', 'dibatalkan']),
     sent_at: z.string().nullable(),
+    dispensed_at: z.string().nullable(),
+    dispensing_number: z.string().nullable(),
     doctor_name: z.string().nullable(),
     nurse_name: z.string().nullable(),
     notes: z.string().nullable(),
@@ -155,6 +161,7 @@ const savedLineSchema = z.object({
     signa: z.string().nullable(),
     usage_instruction_id: z.string().nullable(),
     notes: z.string().nullable(),
+    dispensed_quantity: z.number().nullable(),
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
 
@@ -272,7 +279,7 @@ export class ExaminationOrders {
             savedProcedureSchema,
             `select t.id, t.urutan, t.tindakan_id as procedure_id, m.kode as procedure_code,
                     m.nama as procedure_name, t.jumlah as quantity, t.dokter_id as doctor_id,
-                    u.name as added_by, to_char(t.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as added_at
+                    u.name as added_by, ${isoSql('t.created_at')} as added_at
              from sim_tr_pemeriksaan_tindakan t
              join sim_m_tindakan m on m.tenant_id = t.tenant_id and m.id = t.tindakan_id
              left join users u on u.id = t.created_by_user_id
@@ -416,7 +423,8 @@ export class ExaminationOrders {
         return this.db.rows(
             savedPrescriptionSchema,
             `select r.id, r.nomor as number, r.status,
-                    to_char(r.dikirim_pada, 'YYYY-MM-DD"T"HH24:MI:SS') as sent_at,
+                    ${isoSql('r.dikirim_pada')} as sent_at, ${isoSql('r.diserahkan_pada')} as dispensed_at,
+                    r.nomor_penyerahan as dispensing_number,
                     dp.name as doctor_name, np.name as nurse_name, r.catatan as notes
              from sim_tr_resep r
              left join sim_m_nakes dn on dn.tenant_id = r.tenant_id and dn.id = r.dokter_id
@@ -435,7 +443,8 @@ export class ExaminationOrders {
             `select d.id, d.urutan, d.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name,
                     s.nama as unit_name, d.racikan_ke as compound, d.jumlah::float8 as quantity,
                     d.jumlah_permintaan::float8 as requested_quantity, d.signa,
-                    d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes
+                    d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes,
+                    d.jumlah_diserahkan::float8 as dispensed_quantity
              from sim_tr_resep_detail d
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
              left join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id

@@ -17,14 +17,22 @@ import {
     type Reference,
 } from '@operations-metta/ui/master-lookup';
 import {
+    PageDialog,
     PageDialogBody,
+    PageDialogContent,
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { HandHeart, Megaphone, PackageCheck, Undo2 } from 'lucide-react';
+import {
+    HandHeart,
+    Megaphone,
+    PackageCheck,
+    RotateCcw,
+    Undo2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -41,6 +49,11 @@ import {
     LocationLookup,
     locationLabel,
 } from '../service-location/pharmacy-lookups.tsx';
+import {
+    ReturnCard,
+    ReturnsSection,
+    useCanReturn,
+} from '../dispensing-return/dispensing-returns.tsx';
 import { DispensingLines, type LineDraft } from './dispensing-lines.tsx';
 
 type View = ApiBody<'pharmacyDispensingShow'>;
@@ -242,7 +255,12 @@ function DispensingForm({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
     const [action, setAction] = useState<Action>('save');
+    const [returning, setReturning] = useState(false);
     const { confirm, confirmation } = useConfirmation();
+    const canReturn = useCanReturn(
+        prescription.id,
+        dispensing?.status === 'diserahkan',
+    );
     const dirty =
         editing && JSON.stringify(draft) !== JSON.stringify(draftOf(view.data));
     useEffect(() => {
@@ -505,6 +523,18 @@ function DispensingForm({
                             Serahkan
                         </Button>
                     )}
+                    {status === 'diserahkan' && canReturn && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={busy}
+                            title="Catat obat yang dikembalikan pasien; stoknya masuk lagi ke lokasi farmasi."
+                            onClick={() => setReturning(true)}
+                        >
+                            <RotateCcw aria-hidden="true" />
+                            Retur
+                        </Button>
+                    )}
                     {awaitingHandover && permissions.reverse && (
                         <Button
                             type="button"
@@ -524,7 +554,12 @@ function DispensingForm({
                 />
                 <PageDialogBody className="py-3">
                     <CollapsibleSectionGroup
-                        defaultValue={['prescription', 'dispensing', 'lines']}
+                        defaultValue={[
+                            'prescription',
+                            'dispensing',
+                            'lines',
+                            'returns',
+                        ]}
                     >
                         <CollapsibleSection
                             value="prescription"
@@ -662,10 +697,32 @@ function DispensingForm({
                                 />
                             </div>
                         </CollapsibleSection>
+                        {status === 'diserahkan' && (
+                            <CollapsibleSection value="returns" title="Retur">
+                                <ReturnsSection
+                                    prescriptionId={prescription.id}
+                                />
+                            </CollapsibleSection>
+                        )}
                     </CollapsibleSectionGroup>
                 </PageDialogBody>
                 {confirmation}
             </form>
+            {returning && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setReturning(false);
+                    }}
+                >
+                    <PageDialogContent title="Retur obat">
+                        <ReturnCard
+                            prescriptionId={prescription.id}
+                            onDone={() => setReturning(false)}
+                        />
+                    </PageDialogContent>
+                </PageDialog>
+            )}
         </div>
     );
 }

@@ -443,6 +443,7 @@ function PrescriptionsPage(): ReactNode {
                         }
                         showRowNumbers
                         actionsPlacement="inline"
+                        actions={[{ id: 'open', label: 'Buka' }]}
                         getRowActions={rowActions}
                         onRowAction={(action, row) =>
                             rowHandlers[action]?.(row)

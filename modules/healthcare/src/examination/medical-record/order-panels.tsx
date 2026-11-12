@@ -5,7 +5,6 @@ import {
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
 import { DataTableText } from '@operations-metta/ui/data-table';
-import { displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
@@ -53,8 +52,12 @@ const NOT_COMPOUND = 'none';
 const compoundLabel = (compound: number | string) => `Racikan ${compound}`;
 const drugLabel = (drug: { code: string | null; name: string }) =>
     drug.code ? `${drug.code} - ${drug.name}` : drug.name;
-const timeOf = (stamp: string | null) =>
-    stamp ? `${displayDate(stamp.slice(0, 10))} ${stamp.slice(11, 16)}` : '';
+// Waktu dari API adalah ISO UTC; layar menampilkannya dalam waktu peramban.
+const timeOf = (stamp: string | null | undefined) => {
+    if (!stamp) return '';
+    const date = new Date(stamp);
+    return `${date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+};
 
 function useDrugLoader(): LookupLoader<Drug> {
     return useCallback<LookupLoader<Drug>>(
@@ -616,7 +619,9 @@ function PrescriptionFacts({
                                 : 'secondary'
                         }
                     >
-                        {statusLabel[prescription.status]}
+                        {prescription.dispensed_at
+                            ? 'Diserahkan farmasi'
+                            : statusLabel[prescription.status]}
                     </Badge>
                 </dd>
             </div>
@@ -624,6 +629,19 @@ function PrescriptionFacts({
                 <div>
                     <dt className="text-xs text-muted-foreground">Dikirim</dt>
                     <dd>{timeOf(prescription.sent_at)}</dd>
+                </div>
+            )}
+            {prescription.dispensed_at && (
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Diserahkan
+                    </dt>
+                    <dd>
+                        {timeOf(prescription.dispensed_at)}
+                        {prescription.dispensing_number
+                            ? ` · ${prescription.dispensing_number}`
+                            : ''}
+                    </dd>
                 </div>
             )}
             {prescription.status !== 'draf' && (
@@ -1094,6 +1112,28 @@ function PrescriptionLines({
                                 </FormControl>
                             ),
                     },
+                    ...(prescription.dispensed_at
+                        ? [
+                              {
+                                  id: 'dispensed_quantity',
+                                  header: 'Diserahkan',
+                                  minWidth: 100,
+                                  cell: ({
+                                      row,
+                                  }: {
+                                      row: PrescriptionLine;
+                                  }) => (
+                                      <DataTableText>
+                                          {isHeader(row)
+                                              ? ''
+                                              : String(
+                                                    row.dispensed_quantity ?? 0,
+                                                )}
+                                      </DataTableText>
+                                  ),
+                              },
+                          ]
+                        : []),
                     {
                         id: 'notes',
                         header: 'Keterangan',
