@@ -10,6 +10,7 @@ import { page as modulesHealthcareSrcExaminationQueueExaminationPage } from '../
 import { page as modulesHealthcareSrcExaminationQueueQueuePage } from '../modules/healthcare/src/examination/queue/queue.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
+import { page as modulesHealthcareSrcPractitionerProfessionProfessionsPage } from '../modules/healthcare/src/practitioner/profession/professions.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitNewPage } from '../modules/healthcare/src/registration/visit/visit-new.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitPage } from '../modules/healthcare/src/registration/visit/visit.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitsPage } from '../modules/healthcare/src/registration/visit/visits.page.tsx';
@@ -137,6 +138,18 @@ const modulesHealthcareSrcPractitionerPractitionerPractitionersRoute =
             title: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.title,
         },
     });
+
+const modulesHealthcareSrcPractitionerProfessionProfessionsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcPractitionerProfessionProfessionsPage.path,
+    component:
+        modulesHealthcareSrcPractitionerProfessionProfessionsPage.component,
+    validateSearch:
+        modulesHealthcareSrcPractitionerProfessionProfessionsPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcPractitionerProfessionProfessionsPage.title,
+    },
+});
 
 const modulesHealthcareSrcRegistrationVisitVisitNewRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -388,6 +401,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcExaminationQueueQueueRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
+        modulesHealthcareSrcPractitionerProfessionProfessionsRoute,
         modulesHealthcareSrcRegistrationVisitVisitNewRoute,
         modulesHealthcareSrcRegistrationVisitVisitRoute,
         modulesHealthcareSrcRegistrationVisitVisitsRoute,

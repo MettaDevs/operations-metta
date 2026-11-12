@@ -23,7 +23,6 @@ import {
     validation,
 } from '@core/platform/http/index.ts';
 import { moduleId } from '../../module.ts';
-import { isPractitionerProfession } from './practitioner.professions.ts';
 import {
     practitionerInputSchema,
     practitionerRowSchema,
@@ -32,12 +31,14 @@ import {
 
 export const practitionerRole = `${moduleId}.practitioner`;
 
-const rowSql = `select n.id, n.party_id, p.name, n.profesi as profession, n.spesialisasi as specialization,
+const rowSql = `select n.id, n.party_id, p.name, n.profesi_id as profession_id, pr.nama as profession_name,
+                       n.spesialisasi as specialization,
                        n.no_sip as license_number, n.sip_berlaku_sampai::text as license_valid_until,
                        n.kode_dokter_bpjs as bpjs_doctor_code, n.user_id, u.name as user_name,
                        n.aktif as is_active, n.version
                 from sim_m_nakes n
                 join parties p on p.tenant_id = n.tenant_id and p.id = n.party_id
+                join sim_m_profesi pr on pr.tenant_id = n.tenant_id and pr.id = n.profesi_id
                 left join users u on u.id = n.user_id
                 where n.tenant_id = $1 and n.deleted_at is null`;
 
@@ -70,10 +71,10 @@ export class Practitioners {
         this.workspace.guard('practitioner', 'read');
         const bindings: Bind[] = [this.workspace.tenantId];
         const filters: string[] = [];
-        const profession = parameters.get('profession');
+        const profession = lookupId(parameters.get('profession_id') ?? '');
         if (profession) {
             bindings.push(profession);
-            filters.push(`profession = $${bindings.length}`);
+            filters.push(`profession_id = $${bindings.length}`);
         }
         const status = parameters.get('status');
         if (status === 'active') filters.push('is_active');
@@ -94,10 +95,21 @@ export class Practitioners {
         };
     }
 
-    // Pilihan jenis kelamin untuk orang baru, dan apa yang boleh dilakukan pengguna di layar.
+    // Pilihan jenis kelamin untuk orang baru, profesi, dan apa yang boleh dilakukan pengguna di layar.
     async metadata() {
         this.workspace.guard('practitioner', 'read');
         return {
+            professions: await this.db.rows(
+                z.object({
+                    id: z.string(),
+                    code: z.string(),
+                    name: z.string(),
+                    is_active: z.boolean(),
+                }),
+                `select id, kode as code, nama as name, aktif as is_active from sim_m_profesi
+                 where tenant_id = $1 and deleted_at is null order by urutan, nama`,
+                [this.workspace.tenantId],
+            ),
             genders: await this.db.rows(
                 z.object({ code: z.string(), name: z.string() }),
                 "select code, name from party_reference_values where category = 'gender' order by name",
@@ -152,13 +164,24 @@ export class Practitioners {
         return found;
     }
 
-    // Kolom nakes dari kiriman, diperiksa terhadap katalog profesi, panjang kolom, tanggal, dan akun anggota tenant.
-    // Status yang tidak dikirim tetap.
-    private async columns(data: PractitionerInput | null, active: boolean) {
+    // Kolom nakes dari kiriman, diperiksa terhadap master profesi, panjang kolom, tanggal, dan akun anggota tenant.
+    // Status yang tidak dikirim tetap. Profesi nonaktif hanya boleh tetap dipakai nakes yang sudah memegangnya.
+    private async columns(
+        data: PractitionerInput | null,
+        active: boolean,
+        currentProfessionId: string | null = null,
+    ) {
         const errors: Record<string, string> = {};
-        const profession = trimmed(data?.profession);
-        if (profession === null || !isPractitionerProfession(profession))
-            errors.profession = 'Pilih profesi dari daftar.';
+        const professionId = lookupId(trimmed(data?.profession_id) ?? '');
+        const profession = professionId
+            ? await this.db.one(
+                  z.object({ id: z.string(), code: z.string() }),
+                  `select id, kode as code from sim_m_profesi
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                  [this.workspace.tenantId, professionId, currentProfessionId],
+              )
+            : undefined;
+        if (!profession) errors.profession_id = 'Pilih profesi dari daftar.';
         // Panjang kolom teks sim_m_nakes.
         const text = (field: string, value: string | null, max: number) => {
             if (value !== null && value.length > max)
@@ -196,7 +219,9 @@ export class Practitioners {
         }
         if (Object.keys(errors).length) validation(errors);
         return {
-            profesi: profession,
+            profesi_id: profession?.id ?? null,
+            // Kode profesi tetap ditulis untuk kode rilis sebelumnya yang masih membacanya; dibuang di rilis sesudahnya.
+            profesi: profession?.code ?? null,
             spesialisasi: specialization,
             no_sip: licenseNumber,
             sip_berlaku_sampai: validUntil,
@@ -313,6 +338,7 @@ export class Practitioners {
         const columns = await this.columns(
             parsed.success ? parsed.data : null,
             current.is_active,
+            current.profession_id,
         );
         const names = Object.keys(columns);
         const updated = await this.db.execute(

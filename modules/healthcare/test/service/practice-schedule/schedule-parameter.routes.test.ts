@@ -43,6 +43,16 @@ describe.skipIf(!process.env.DB_HOST)('schedule parameters', () => {
     const { pool, browser, close } = operationsTestApp();
     afterAll(close);
 
+    // Profesi bawaan tenant dari migration 0022, menurut kodenya.
+    const professions: Record<string, string> = {};
+    async function loadProfessions() {
+        for (const row of await pool.unsafe<{ kode: string; id: string }[]>(
+            'select kode, id from sim_m_profesi where tenant_id = $1 and deleted_at is null',
+            [tenantId],
+        ))
+            professions[row.kode] = row.id;
+    }
+
     let tenantId: string;
     let admin: Browser;
     let poli: string;
@@ -107,6 +117,7 @@ describe.skipIf(!process.env.DB_HOST)('schedule parameters', () => {
         tenantId = await createTenant(pool, 'Klinik Uji Parameter Jadwal');
         await entitle(pool, tenantId, 'healthcare');
         await recordInstallation(pool, tenantId, 'healthcare');
+        await loadProfessions();
         const owner = await createMember(pool, tenantId, [
             'core.organization.manage',
             'healthcare.service-setup.manage',
@@ -160,7 +171,7 @@ describe.skipIf(!process.env.DB_HOST)('schedule parameters', () => {
                 nik: nik(),
                 gender: 'female',
                 phone: '081200000005',
-                profession: 'dokter',
+                profession_id: professions.dokter,
             })
         ).id;
         for (let day = 1; day <= 7; day++)

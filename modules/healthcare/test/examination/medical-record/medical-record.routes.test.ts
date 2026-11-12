@@ -57,7 +57,13 @@ type Metadata = {
         aspects: { id: string; name: string; normal_text: string | null }[];
     }[];
     required: { field: string; label: string }[];
-    practitioners: { id: string; name: string; profession: string }[];
+    practitioners: {
+        id: string;
+        name: string;
+        profession: string;
+        fills_medical_staff: boolean;
+        fills_nurse: boolean;
+    }[];
 };
 
 const api = '/api/modules/healthcare/v1';
@@ -81,6 +87,16 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
     const { pool, browser, close } = operationsTestApp();
     afterAll(close);
 
+    // Profesi bawaan tenant dari migration 0022, menurut kodenya.
+    const professions: Record<string, string> = {};
+    async function loadProfessions() {
+        for (const row of await pool.unsafe<{ kode: string; id: string }[]>(
+            'select kode, id from sim_m_profesi where tenant_id = $1 and deleted_at is null',
+            [tenantId],
+        ))
+            professions[row.kode] = row.id;
+    }
+
     let tenantId: string;
     let admin: Browser;
     let unit: string;
@@ -89,6 +105,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
     let section: string;
     let room: string;
     let doctor: string;
+    let nurse: string;
     let metadata: Metadata;
 
     async function json<T>(response: Response, status: number): Promise<T> {
@@ -163,6 +180,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         tenantId = await createTenant(pool, 'Klinik Uji Rekam Medis');
         await entitle(pool, tenantId, 'healthcare');
         await recordInstallation(pool, tenantId, 'healthcare');
+        await loadProfessions();
         const owner = await createMember(pool, tenantId, [
             'core.organization.manage',
             'healthcare.patient.manage',
@@ -235,7 +253,18 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
                 nik: String(Date.now()).slice(-12).padStart(16, '5'),
                 gender: 'male',
                 phone: '081200000010',
-                profession: 'dokter',
+                profession_id: professions.dokter,
+            })
+        ).id;
+        nurse = (
+            await created(`${api}/practitioners`, {
+                name: 'Bidan Rekam Medis',
+                nik: String(Date.now() + 7)
+                    .slice(-12)
+                    .padStart(16, '6'),
+                gender: 'female',
+                phone: '081200000011',
+                profession_id: professions.bidan,
             })
         ).id;
         metadata = await json<Metadata>(
@@ -365,7 +394,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
             anamnesis: {
                 ...opened.data.anamnesis,
                 doctor_id: doctor,
-                nurse_id: doctor,
+                nurse_id: nurse,
                 chief_complaint: 'Demam tiga hari',
                 additional_complaint: 'Batuk',
                 illness_years: 0,
@@ -564,6 +593,63 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
             'physical.triage': ['Pilih dari daftar.'],
             'anatomy.0.description': ['Isi keterangan.'],
         });
+    });
+
+    test('the profession flags decide who can be picked as doctor or nurse', async () => {
+        const id = await visit();
+        await start(id);
+        const opened = await show(admin, id);
+        const swapped = {
+            ...opened.data,
+            anamnesis: {
+                ...opened.data.anamnesis,
+                doctor_id: nurse,
+                nurse_id: doctor,
+            },
+            physical: { ...opened.data.physical, ...vitals },
+        };
+        expect((await refused(await save(admin, id, swapped))).errors).toEqual({
+            'anamnesis.doctor_id': ['Pilih tenaga kesehatan dari daftar.'],
+            'anamnesis.nurse_id': ['Pilih tenaga kesehatan dari daftar.'],
+        });
+        // Satu profesi boleh mengisi kedua peran, seperti kategori V-004 sistem lama.
+        await pool.unsafe(
+            'update sim_m_profesi set isi_perawat = true where id = $1',
+            [professions.dokter!],
+        );
+        try {
+            const roles = (
+                await json<Metadata>(
+                    await admin.get(
+                        `${api}/examination/medical-record/metadata`,
+                    ),
+                    200,
+                )
+            ).practitioners.find((row) => row.id === doctor);
+            expect(roles).toEqual(
+                expect.objectContaining({
+                    profession: 'Dokter',
+                    fills_medical_staff: true,
+                    fills_nurse: true,
+                }),
+            );
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    ...swapped,
+                    anamnesis: { ...swapped.anamnesis, doctor_id: doctor },
+                }),
+                200,
+            );
+            expect([
+                saved.data.anamnesis.doctor_id,
+                saved.data.anamnesis.nurse_id,
+            ]).toEqual([doctor, doctor]);
+        } finally {
+            await pool.unsafe(
+                'update sim_m_profesi set isi_perawat = false where id = $1',
+                [professions.dokter!],
+            );
+        }
     });
 
     test('allergies belong to the patient and carry over to the next visit', async () => {

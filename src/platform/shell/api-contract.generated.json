@@ -1627,6 +1627,66 @@
             }
         }
     },
+    "healthcareProfessionMetadata": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/professions/metadata",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareProfessionList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/professions",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareProfessionCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/professions",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareProfessionUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/modules/healthcare/v1/professions/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareProfessionDelete": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "DELETE",
+                "path": "/api/modules/healthcare/v1/professions/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcareSectionMetadata": {
         "~orpc": {
             "errorMap": {},

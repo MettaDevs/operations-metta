@@ -362,11 +362,15 @@ export class MedicalRecords {
                 id: z.string(),
                 name: z.string(),
                 profession: z.string(),
+                fills_medical_staff: z.boolean(),
+                fills_nurse: z.boolean(),
                 active: z.boolean(),
             }),
-            `select n.id, p.name, n.profesi as profession, n.aktif as active
+            `select n.id, p.name, pr.nama as profession, pr.isi_tenaga_medis as fills_medical_staff,
+                    pr.isi_perawat as fills_nurse, n.aktif as active
              from sim_m_nakes n
              join parties p on p.tenant_id = n.tenant_id and p.id = n.party_id
+             join sim_m_profesi pr on pr.tenant_id = n.tenant_id and pr.id = n.profesi_id
              where n.tenant_id = $1 and n.deleted_at is null
              order by p.name`,
             [tenantId],
@@ -431,6 +435,7 @@ export class MedicalRecords {
             if (destination.status !== 'diperiksa')
                 validation({ status: notStartedMessage });
             const options = await this.optionSets();
+            const header = await this.header(destination.id, true);
             const errors: Errors = {};
             const anamnesis = readPanel(
                 anamnesisFields,
@@ -441,11 +446,15 @@ export class MedicalRecords {
             );
             const doctorId = await this.practitioner(
                 input.anamnesis?.doctor_id,
+                'isi_tenaga_medis',
+                header?.doctor_id ?? null,
                 'anamnesis.doctor_id',
                 errors,
             );
             const nurseId = await this.practitioner(
                 input.anamnesis?.nurse_id,
+                'isi_perawat',
+                header?.nurse_id ?? null,
                 'anamnesis.nurse_id',
                 errors,
             );
@@ -474,7 +483,6 @@ export class MedicalRecords {
             if (Object.keys(errors).length) validation(errors);
 
             const stamp = nowSql();
-            const header = await this.header(destination.id, true);
             const headerValues: Values = {
                 dokter_id: doctorId,
                 perawat_id: nurseId,
@@ -747,8 +755,12 @@ export class MedicalRecords {
         return sets;
     }
 
+    // Nakes aktif yang profesinya boleh mengisi peran itu (centang di Setup → Profesi). Nakes yang sudah tersimpan di
+    // pemeriksaan ini tetap diterima walau sejak itu nonaktif atau profesinya berubah.
     private async practitioner(
         raw: unknown,
+        role: 'isi_tenaga_medis' | 'isi_perawat',
+        saved: string | null,
         field: string,
         errors: Errors,
     ): Promise<string | null> {
@@ -757,8 +769,11 @@ export class MedicalRecords {
         const found = id
             ? await this.db.one(
                   z.object({ id: z.string() }),
-                  'select id from sim_m_nakes where tenant_id = $1 and id = $2 and deleted_at is null',
-                  [this.workspace.tenantId, id],
+                  `select n.id from sim_m_nakes n
+                   join sim_m_profesi pr on pr.tenant_id = n.tenant_id and pr.id = n.profesi_id
+                   where n.tenant_id = $1 and n.id = $2 and n.deleted_at is null
+                     and (n.id = $3 or (n.aktif and pr.${role}))`,
+                  [this.workspace.tenantId, id, saved],
               )
             : undefined;
         if (!found) add(errors, field, 'Pilih tenaga kesehatan dari daftar.');

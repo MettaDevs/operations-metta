@@ -17,7 +17,6 @@ import { Textarea } from '@operations-metta/ui/textarea';
 import { Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ApiBody } from '@core/platform/shell/index.ts';
-import { professionLabel } from '../../practitioner/practitioner/practitioner.professions.ts';
 
 // Panel tab Rekam Medis poli sistem lama (rekammedis/index.php), dalam urutan dan susunan kolom aslinya: Anamnesa,
 // Riwayat penyakit dan alergi, Status fisik, Periksa fisik, Asesmen nyeri, Risiko jatuh, Keadaan fisik, Anatomi tubuh,
@@ -43,9 +42,6 @@ type Panel = Exclude<
     keyof MedicalRecordDraft,
     'id' | 'version' | 'findings' | 'anatomy'
 >;
-
-const doctorProfessions = ['dokter', 'dokter_gigi'];
-const nurseProfessions = ['perawat', 'bidan', 'lainnya'];
 
 function numberOf(value: number | string | null): number | null {
     if (value === null || value === '') return null;
@@ -294,7 +290,7 @@ function PractitionerField({
     field,
     label,
     practitioners,
-    professions,
+    fills,
     value,
     error,
     disabled,
@@ -303,7 +299,7 @@ function PractitionerField({
     field: string;
     label: string;
     practitioners: Practitioner[];
-    professions: string[];
+    fills: (practitioner: Practitioner) => boolean;
     value: string | null;
     error: string | undefined;
     disabled: boolean;
@@ -316,7 +312,7 @@ function PractitionerField({
                 label={label}
                 disabled={disabled}
                 items={practitioners.filter(
-                    (row) => row.active && professions.includes(row.profession),
+                    (row) => (row.active && fills(row)) || row.id === value,
                 )}
                 value={current}
                 displayValue={current?.name ?? ''}
@@ -337,7 +333,7 @@ function PractitionerField({
                         id: 'profession',
                         header: 'Profesi',
                         width: 120,
-                        cell: (row) => professionLabel(row.profession),
+                        cell: (row) => row.profession,
                     },
                 ]}
             />
@@ -509,7 +505,7 @@ export function MedicalRecordPanels({
                         field="anamnesis.doctor_id"
                         label="Dokter / Tenaga medis"
                         practitioners={metadata.practitioners}
-                        professions={doctorProfessions}
+                        fills={(row) => row.fills_medical_staff}
                         value={anamnesis.doctor_id}
                         error={error('anamnesis.doctor_id')}
                         disabled={disabled}
@@ -521,7 +517,7 @@ export function MedicalRecordPanels({
                         field="anamnesis.nurse_id"
                         label="Perawat / Bidan / Nutrisionist / Sanitarian"
                         practitioners={metadata.practitioners}
-                        professions={nurseProfessions}
+                        fills={(row) => row.fills_nurse}
                         value={anamnesis.nurse_id}
                         error={error('anamnesis.nurse_id')}
                         disabled={disabled}

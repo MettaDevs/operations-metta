@@ -37,10 +37,6 @@ import {
     orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
-import {
-    practitionerProfessions,
-    professionLabel,
-} from './practitioner.professions.ts';
 
 // Tenaga kesehatan (nakes): orang di buku alamat dengan profesi, SIP, dan kode dokter BPJS. Nakes baru memakai orang
 // yang sudah ada di buku alamat atau membuat orang baru; nama dan identitasnya sesudah itu diubah di Buku alamat.
@@ -61,7 +57,7 @@ type CardForm = {
     nik: string;
     gender: string;
     phone: string;
-    profession: string;
+    professionId: string;
     specialization: string;
     license_number: string;
     license_valid_until: string;
@@ -71,7 +67,7 @@ type CardForm = {
 };
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
-    profession: z.string().max(40).optional(),
+    profession_id: z.string().max(40).optional(),
     status: z.enum(['active', 'inactive']).optional(),
 });
 
@@ -97,7 +93,7 @@ function PractitionerCard({
         nik: '',
         gender: '',
         phone: '',
-        profession: practitioner?.profession ?? '',
+        professionId: practitioner?.profession_id ?? '',
         specialization: practitioner?.specialization ?? '',
         license_number: practitioner?.license_number ?? '',
         license_valid_until: practitioner?.license_valid_until ?? '',
@@ -110,6 +106,9 @@ function PractitionerCard({
         is_active: practitioner?.is_active ?? true,
     };
     const [form, setForm] = useState(blank);
+    const profession =
+        metadata.professions.find((item) => item.id === form.professionId) ??
+        null;
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -153,7 +152,7 @@ function PractitionerCard({
         setErrors({});
         setMessage(null);
         const details = {
-            profession: form.profession,
+            profession_id: form.professionId,
             specialization: nullable(form.specialization),
             license_number: nullable(form.license_number),
             license_valid_until: nullable(form.license_valid_until),
@@ -387,35 +386,48 @@ function PractitionerCard({
                             })}
                         </>
                     )}
-                    <FormControl error={error('profession')}>
-                        {editing ? (
-                            <Select
-                                label="Profesi"
-                                required
-                                items={practitionerProfessions.map(
-                                    (profession) => ({
-                                        value: profession.code,
-                                        label: profession.label,
-                                    }),
-                                )}
-                                value={form.profession || null}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        profession: value ?? '',
-                                    })
-                                }
-                                searchPlaceholder="Cari profesi"
-                                emptyMessage="Profesi tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="Profesi"
-                                value={professionLabel(form.profession)}
-                                readOnly
-                            />
-                        )}
+                    <FormControl
+                        error={error('profession_id')}
+                        data-error-field="profession_id"
+                    >
+                        <InlineLookup
+                            label="Profesi"
+                            required
+                            disabled={!editing}
+                            items={metadata.professions.filter(
+                                (item) =>
+                                    item.is_active ||
+                                    item.id === form.professionId,
+                            )}
+                            value={profession}
+                            displayValue={profession?.name ?? ''}
+                            onValueChange={(item) =>
+                                setForm({ ...form, professionId: item.id })
+                            }
+                            getItemValue={(item) => item.id}
+                            getItemLabel={(item) => item.name}
+                            getSearchText={(item) =>
+                                `${item.code} ${item.name}`
+                            }
+                            placeholder="Cari profesi…"
+                            emptyMessage="Profesi tidak ditemukan."
+                            showDetails={false}
+                            portalContainer={portalContainer}
+                            columns={[
+                                {
+                                    id: 'code',
+                                    header: 'Kode',
+                                    width: 120,
+                                    cell: (item) => item.code,
+                                },
+                                {
+                                    id: 'name',
+                                    header: 'Nama',
+                                    width: 200,
+                                    cell: (item) => item.name,
+                                },
+                            ]}
+                        />
                     </FormControl>
                     {text('specialization', 'Spesialisasi', {
                         maxLength: 200,
@@ -524,7 +536,7 @@ function PractitionersPage(): ReactNode {
     const [open, setOpen] = useState<Practitioner | 'new' | null>(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const filterPanelId = useId();
-    const { profession, status } = search;
+    const { profession_id: professionId, status } = search;
     const setSearch = (next: Partial<Search>) =>
         void navigate({
             search: (current) =>
@@ -544,7 +556,9 @@ function PractitionersPage(): ReactNode {
                 {
                     query: {
                         q: query,
-                        ...(profession ? { profession } : {}),
+                        ...(professionId
+                            ? { profession_id: professionId }
+                            : {}),
                         ...(status ? { status } : {}),
                         ...(cursor ? { cursor } : {}),
                         ...(sort
@@ -556,7 +570,7 @@ function PractitionersPage(): ReactNode {
             );
             return { items: body.data, nextCursor: body.next_cursor };
         },
-        [profession, status],
+        [professionId, status],
     );
     const list = useIncrementalList({
         loadItems: loader,
@@ -579,7 +593,7 @@ function PractitionersPage(): ReactNode {
                         filter={{
                             open: filtersOpen,
                             onOpenChange: setFiltersOpen,
-                            active: Boolean(profession || status),
+                            active: Boolean(professionId || status),
                             controls: filterPanelId,
                         }}
                     >
@@ -609,17 +623,17 @@ function PractitionersPage(): ReactNode {
                                                     value: ALL,
                                                     label: 'Semua profesi',
                                                 },
-                                                ...practitionerProfessions.map(
+                                                ...metadata.professions.map(
                                                     (item) => ({
-                                                        value: item.code,
-                                                        label: item.label,
+                                                        value: item.id,
+                                                        label: item.name,
                                                     }),
                                                 ),
                                             ]}
-                                            value={profession ?? ALL}
+                                            value={professionId ?? ALL}
                                             onValueChange={(value) =>
                                                 setSearch({
-                                                    profession:
+                                                    profession_id:
                                                         value === null ||
                                                         value === ALL
                                                             ? undefined
@@ -708,7 +722,7 @@ function PractitionersPage(): ReactNode {
                             width: 140,
                             cell: (practitioner) => (
                                 <DataTableText>
-                                    {professionLabel(practitioner.profession)}
+                                    {practitioner.profession_name}
                                 </DataTableText>
                             ),
                         },
