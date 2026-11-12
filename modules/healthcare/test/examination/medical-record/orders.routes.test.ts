@@ -92,11 +92,11 @@ const finished =
 const issued = 'healthcare.prescription.issued.v1';
 // Penerima uji yang gagal hanya untuk tenant yang disebut, dipakai untuk membuktikan event dan resep batal bersama.
 const failingTenants = new Set<string>();
-onEvent(issued, 'healthcare', async (_db, envelope) => {
-    if (failingTenants.has(envelope.tenant_id))
-        throw new Error('Penerima uji gagal.');
-    await Promise.resolve();
-});
+onEvent(issued, 'healthcare', (_db, envelope) =>
+    failingTenants.has(envelope.tenant_id)
+        ? Promise.reject(new Error('Penerima uji gagal.'))
+        : Promise.resolve(),
+);
 describe.skipIf(!process.env.DB_HOST)(
     'examination procedures and prescriptions',
     () => {
