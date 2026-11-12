@@ -274,7 +274,7 @@ describe.skipIf(!process.env.DB_HOST)('visit life cycle and cluster', () => {
         ]).toEqual([false, 'DEWASA', 'K3']);
     });
 
-    test('a tie or no matching rule is refused unless the officer picks the life cycle', async () => {
+    test('a tie or no matching rule is refused, and the officer cannot pick a life cycle instead', async () => {
         const noBirthDate = await patient('female', null);
         const unknown = await classify(noBirthDate);
         expect(unknown.life_cycle).toBeNull();
@@ -309,36 +309,19 @@ describe.skipIf(!process.env.DB_HOST)('visit life cycle and cluster', () => {
                     )
                 ).errors.life_cycle_id,
             ).toEqual([undetermined]);
+            // Klaster dan siklus hidup selalu hasil hitungan: siklus hidup kiriman klien diabaikan.
             const lansia = lifeCycles.find((row) => row.code === 'LANSIA');
-            const chosen = (
-                await json<{ data: Visit }>(
-                    await register({
-                        patient_id: adult,
-                        life_cycle_id: lansia?.id,
-                    }),
-                    201,
-                )
-            ).data;
-            expect([chosen.life_cycle_id, chosen.cluster_id]).toEqual([
-                lansia?.id ?? null,
-                lansia?.cluster_id ?? null,
-            ]);
-            // Pilihan petugas harus siklus hidup aktif tenant ini.
-            await pool.unsafe(
-                'update sim_m_siklus_hidup set aktif = false where id = $1',
-                [tie!.id],
-            );
             expect(
                 (
                     await json<{ errors: Record<string, string[]> }>(
                         await register({
                             patient_id: adult,
-                            life_cycle_id: tie?.id,
+                            life_cycle_id: lansia?.id,
                         }),
                         422,
                     )
                 ).errors.life_cycle_id,
-            ).toEqual(['Pilih siklus hidup dari daftar.']);
+            ).toEqual([undetermined]);
         } finally {
             await pool.unsafe(
                 'update sim_m_siklus_hidup set aktif = false, deleted_at = now() where id = $1',
@@ -418,17 +401,17 @@ describe.skipIf(!process.env.DB_HOST)('visit life cycle and cluster', () => {
         expect(foreign).toBeDefined();
         expect(lifeCycles.some((row) => row.id === foreign?.id)).toBe(false);
         const adult = await patient('male', born(today, 35));
-        expect(
-            (
-                await json<{ errors: Record<string, string[]> }>(
-                    await register({
-                        patient_id: adult,
-                        life_cycle_id: foreign?.id,
-                    }),
-                    422,
-                )
-            ).errors.life_cycle_id,
-        ).toEqual(['Pilih siklus hidup dari daftar.']);
+        // Siklus hidup tenant lain yang dikirim klien diabaikan; kunjungan tetap memakai aturan tenant ini.
+        const visit = (
+            await json<{ data: Visit }>(
+                await register({
+                    patient_id: adult,
+                    life_cycle_id: foreign?.id,
+                }),
+                201,
+            )
+        ).data;
+        expect(visit.life_cycle_id).not.toBe(foreign?.id ?? null);
         const stranger = await createMember(pool, otherTenant, [
             'healthcare.visit.manage',
         ]);
