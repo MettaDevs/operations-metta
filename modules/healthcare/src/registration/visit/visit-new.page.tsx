@@ -31,6 +31,7 @@ function NewVisitPage(): ReactNode {
                 void navigate({
                     search: patient ? { patient } : {},
                     replace: true,
+                    ignoreBlocker: true,
                 })
             }
         />

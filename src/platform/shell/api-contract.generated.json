@@ -2130,5 +2130,113 @@
                 "outputStructure": "detailed"
             }
         }
+    },
+    "healthcareExaminationMetadata": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/examination/metadata",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationQueue": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/examination/queue",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationCallNext": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/queue/call-next",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationShow": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationRecall": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/recall",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationSkip": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/skip",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationNoShow": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/no-show",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationStart": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/start",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationFinish": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/finish",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
     }
 }

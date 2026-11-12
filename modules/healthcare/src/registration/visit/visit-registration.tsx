@@ -52,6 +52,7 @@ import {
     errorText,
     FormErrorHeader,
     orpc,
+    useUnsavedChangesGuard,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import {
@@ -71,10 +72,12 @@ import {
     visitConditionLabels,
 } from './visit-display.tsx';
 import {
-    isVisitCondition,
-    visitConditions,
-    type VisitCondition,
-} from './visit.statuses.ts';
+    emptyDraft,
+    isDraftDirty,
+    type Draft,
+    type Payer,
+} from './visit-draft.ts';
+import { isVisitCondition, visitConditions } from './visit.statuses.ts';
 
 // Halaman penuh pendaftaran kunjungan rawat jalan (varian B yang dipilih pemilik produk): kiri data pasien sebagai
 // baris label : nilai beserta riwayatnya, kanan data kunjungan, skrining visual, dan tujuan. Kunjungan tersimpan dibuka
@@ -90,43 +93,6 @@ type Section = Metadata['sections'][number];
 type Schedule = Section['schedules'][number];
 type LifeCycle = Metadata['life_cycles'][number];
 type Errors = Record<string, string[]>;
-
-// Cara bayar kunjungan. `null` berarti mengikuti cara bayar utama pasien (atau tipe bawaan), sampai petugas
-// mengubahnya.
-type Payer = {
-    patientType: { id: string; name: string; behaviors: string[] } | null;
-    guarantor: { id: string; name: string } | null;
-    cardNumber: string;
-};
-
-type Draft = {
-    payer: Payer | null;
-    height: string;
-    weight: string;
-    condition: VisitCondition;
-    conditionIds: string[];
-    signIds: string[];
-    kind: string | null;
-    sectionId: string | null;
-    scheduleId: string | null;
-    pregnant: boolean;
-    // Pilihan petugas; null mengikuti siklus hidup hasil hitungan server.
-    lifeCycleId: string | null;
-};
-
-const emptyDraft: Draft = {
-    payer: null,
-    height: '',
-    weight: '',
-    condition: 'sakit',
-    conditionIds: [],
-    signIds: [],
-    kind: null,
-    sectionId: null,
-    scheduleId: null,
-    pregnant: false,
-    lifeCycleId: null,
-};
 
 function draftOf(visit: Visit, metadata: Metadata): Draft {
     const destination = visit.destinations[0];
@@ -159,7 +125,6 @@ function draftOf(visit: Visit, metadata: Metadata): Draft {
         sectionId: destination?.section_id ?? null,
         scheduleId: destination?.practice_schedule_id ?? null,
         pregnant: visit.pregnant,
-        lifeCycleId: visit.life_cycle_id,
     };
 }
 
@@ -759,70 +724,21 @@ function VisitPanel({
                         />
                     </FormControl>
                 )}
-                {lifeCycleText ? (
-                    <FormControl>
-                        <Input
-                            label="Siklus hidup"
-                            value={lifeCycleText.lifeCycle}
-                            readOnly
-                        />
-                    </FormControl>
-                ) : (
-                    !locked && (
-                        <FormControl
-                            error={
-                                error('life_cycle_id') ??
-                                lifeCycleMessage ??
-                                undefined
-                            }
-                            hint="Terisi dari umur, jenis kelamin, dan status hamil pasien. Ganti bila pasien perlu dicatat di siklus hidup lain."
-                        >
-                            <InlineLookup<LifeCycle>
-                                label="Siklus hidup"
-                                required
-                                items={metadata.life_cycles}
-                                value={lifeCycle}
-                                onValueChange={(item) =>
-                                    set('lifeCycleId', item.id)
-                                }
-                                getItemValue={(item) => item.id}
-                                getItemLabel={(item) => item.name}
-                                getSearchText={(item) =>
-                                    `${item.code} ${item.name} ${item.cluster_code} ${item.cluster_name}`
-                                }
-                                placeholder="Pilih pasien dulu"
-                                emptyMessage="Siklus hidup tidak ditemukan. Tambahkan di Siklus hidup."
-                                columns={[
-                                    {
-                                        id: 'name',
-                                        header: 'Siklus hidup',
-                                        cell: (item) => item.name,
-                                    },
-                                    {
-                                        id: 'cluster',
-                                        header: 'Klaster',
-                                        cell: (item) =>
-                                            `${item.cluster_code} ${item.cluster_name}`,
-                                    },
-                                ]}
-                                showDetails={false}
-                            />
-                        </FormControl>
-                    )
+                {/* Klaster dan siklus hidup tidak pernah dipilih: server menghitungnya dari umur, jenis kelamin, dan status hamil
+                    (aplikasi lama: Registrations.php create). Hasilnya hanya ditampilkan. */}
+                {(lifeCycleText ?? lifeCycle) && (
+                    <p className="text-sm text-muted-foreground">
+                        {lifeCycleText
+                            ? `${lifeCycleText.cluster} · ${lifeCycleText.lifeCycle}`
+                            : lifeCycle
+                              ? `${lifeCycle.cluster_code} ${lifeCycle.cluster_name} · ${lifeCycle.name}`
+                              : ''}
+                    </p>
                 )}
-                {(lifeCycleText !== null || !locked) && (
-                    <FormControl>
-                        <Input
-                            label="Klaster"
-                            value={
-                                lifeCycleText?.cluster ??
-                                (lifeCycle
-                                    ? `${lifeCycle.cluster_code} ${lifeCycle.cluster_name}`
-                                    : '')
-                            }
-                            readOnly
-                        />
-                    </FormControl>
+                {!locked && (error('life_cycle_id') ?? lifeCycleMessage) && (
+                    <p className="text-sm text-destructive">
+                        {error('life_cycle_id') ?? lifeCycleMessage}
+                    </p>
                 )}
             </FormGrid>
             <FormGrid columns={1}>
@@ -1612,6 +1528,17 @@ export function VisitRegistration({
     // Satu kunci per isian: simpan ulang setelah jaringan putus mengembalikan kunjungan yang sama.
     const [idempotencyKey] = useState(() => crypto.randomUUID());
     const shownPatientId = visit?.patient_id ?? patientId;
+    // Pasien yang dipilih atau dibuat di form ini. Pasien yang dibawa alamat halaman (`?patient=`) bukan isian petugas.
+    const [patientPicked, setPatientPicked] = useState(false);
+    const leaveGuard = useUnsavedChangesGuard(
+        visit === null && (patientPicked || isDraftDirty(draft)),
+        () => {
+            setDraft(emptyDraft);
+            setPatientPicked(false);
+            setErrors({});
+            setMessage(null);
+        },
+    );
     const patientMetadata = useQuery(
         orpc.healthcarePatientMetadata.queryOptions({
             select: (response) => response.body,
@@ -1654,12 +1581,7 @@ export function VisitRegistration({
     const asksPregnancy = visit
         ? visit.pregnant
         : (classification.data?.asks_pregnancy ?? false);
-    const lifeCycle =
-        (draft.lifeCycleId
-            ? metadata.life_cycles.find((item) => item.id === draft.lifeCycleId)
-            : undefined) ??
-        classification.data?.life_cycle ??
-        null;
+    const lifeCycle = classification.data?.life_cycle ?? null;
     const clusterId = visit
         ? visit.cluster_id
         : (lifeCycle?.cluster_id ?? null);
@@ -1690,9 +1612,9 @@ export function VisitRegistration({
             ...current,
             payer: null,
             pregnant: false,
-            lifeCycleId: null,
         }));
         setErrors(({ patient_id: _, ...rest }) => rest);
+        setPatientPicked(true);
         onPatientChange(id);
     };
 
@@ -1735,7 +1657,6 @@ export function VisitRegistration({
                     section_id: section?.id ?? '',
                     practice_schedule_id: draft.scheduleId,
                     pregnant: asksPregnancy && draft.pregnant,
-                    life_cycle_id: draft.lifeCycleId,
                 },
                 headers: { 'idempotency-key': idempotencyKey },
             });
@@ -1760,6 +1681,7 @@ export function VisitRegistration({
                 params: { visitId: saved.id },
                 search: { saved: true },
                 replace: true,
+                ignoreBlocker: true,
             });
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422) {
@@ -1937,10 +1859,7 @@ export function VisitRegistration({
                                                 : null
                                         }
                                         lifeCycleMessage={
-                                            draft.lifeCycleId
-                                                ? null
-                                                : (classification.data
-                                                      ?.message ?? null)
+                                            classification.data?.message ?? null
                                         }
                                         error={error}
                                         set={set}
@@ -1949,7 +1868,6 @@ export function VisitRegistration({
                                             setDraft((current) => ({
                                                 ...current,
                                                 pregnant,
-                                                lifeCycleId: null,
                                             }));
                                             setErrors(
                                                 ({
@@ -2075,6 +1993,7 @@ export function VisitRegistration({
                 </PageDialog>
             )}
             {patientTransition.confirmation}
+            {leaveGuard}
             {cancelling && visit && (
                 <CancelVisitDialog
                     visit={visit}
