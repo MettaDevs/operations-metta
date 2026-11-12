@@ -59,5 +59,7 @@ export const queueEntrySchema = z.object({
     // Panggilan terakhir dan jumlahnya, dari riwayat tindakan antrean.
     called_at: z.string().nullable(),
     call_count: z.number(),
+    // Poli asal rujuk internal, bila tujuan ini rujukan.
+    referrer_section_name: z.string().nullable(),
 });
 export type QueueEntry = z.infer<typeof queueEntrySchema>;

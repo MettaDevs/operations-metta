@@ -4,6 +4,8 @@ import { drugRoutes } from './clinical/drug/drug.routes.ts';
 import { icd10Routes } from './clinical/icd10/icd10.routes.ts';
 import { lifeCycleRoutes } from './clinical/life-cycle/life-cycle.routes.ts';
 import { procedureRoutes } from './clinical/procedure/procedure.routes.ts';
+import { cpptRoutes } from './examination/cppt/cppt.routes.ts';
+import { dischargeRoutes } from './examination/discharge/discharge.routes.ts';
 import { medicalRecordRoutes } from './examination/medical-record/medical-record.routes.ts';
 import { examinationQueueRoutes } from './examination/queue/queue.routes.ts';
 import { guarantorRoutes } from './coverage/guarantor/guarantor.routes.ts';
@@ -35,5 +37,7 @@ export function healthcareRoutes() {
         ...visitRoutes(),
         ...examinationQueueRoutes(),
         ...medicalRecordRoutes(),
+        ...dischargeRoutes(),
+        ...cpptRoutes(),
     };
 }

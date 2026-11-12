@@ -55,6 +55,7 @@ export const optionGroups = [
     'gigi_druk',
     'gigi_palpasi',
     'gigi_status_karies',
+    'waktu_meninggal',
 ] as const;
 export type OptionGroup = (typeof optionGroups)[number];
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { dischargeSchema } from '../discharge/discharge.schema.ts';
 
 // Isi tab Rekam Medis poli sistem lama, panel Anamnesa sampai E-Resep. Satu bentuk untuk dibaca dan disimpan: layar
 // mengirim kembali bentuk yang ia terima. Angka boleh datang sebagai teks dari isian; service yang memeriksanya.
@@ -213,6 +214,7 @@ export const medicalRecordSchema = z.object({
     drug_allergies: z.array(drugAllergySchema).optional(),
     procedures: z.array(procedureSchema).optional(),
     prescriptions: z.array(prescriptionSchema).optional(),
+    discharge: dischargeSchema.optional(),
 });
 export type MedicalRecord = z.infer<typeof medicalRecordSchema>;
 
@@ -237,6 +239,7 @@ export const medicalRecordInputSchema = z.object({
     drug_allergies: z.array(z.unknown()).optional(),
     procedures: z.array(z.unknown()).optional(),
     prescriptions: z.array(z.unknown()).optional(),
+    discharge: panel,
 });
 // Bentuk kiriman layar: angka boleh masih berupa teks isian.
 type Loose<T> = T extends number

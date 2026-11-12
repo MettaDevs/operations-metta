@@ -99,11 +99,38 @@ function painLabel(scale: number): string {
 }
 
 // Hasil Get Up and Go sistem lama: jumlah jawaban Ya.
-const fallRiskResults = [
+export const fallRiskResults = [
     { label: 'Tidak Beresiko', className: 'bg-emerald-600 text-white' },
     { label: 'Resiko Rendah', className: 'bg-amber-500 text-white' },
     { label: 'Resiko Tinggi', className: 'bg-red-600 text-white' },
 ];
+
+// Isian Pemeriksaan dasar gigi dalam urutan PemeriksaanGigiDasar.php: Extraoral lalu Intraoral, dengan kelompok
+// pilihannya. Dipakai panel ini dan CPPT.
+export const dentalSections = [
+    [
+        'Pemeriksaan extraoral',
+        [
+            ['swelling', 'Bengkak', 'gigi_bengkak'],
+            ['consistency', 'Konsistensi', 'gigi_konsistensi'],
+            ['skin_color', 'Warna kulit', 'gigi_warna_kulit'],
+            ['skin_temperature', 'Suhu kulit', 'gigi_suhu_kulit'],
+        ],
+    ],
+    [
+        'Pemeriksaan intraoral',
+        [
+            ['mobility', 'Goyang', 'gigi_goyang'],
+            ['gum_color', 'Warna gusi', 'gigi_warna_gusi'],
+            ['caries', 'Karies gigi', 'gigi_karies'],
+            ['intraoral_swelling', 'Pembengkakan', 'gigi_pembengkakan'],
+            ['percussion', 'Perkusi', 'gigi_perkusi'],
+            ['pressure', 'Druk', 'gigi_druk'],
+            ['palpation', 'Palpasi', 'gigi_palpasi'],
+            ['caries_status', 'Status karies', 'gigi_status_karies'],
+        ],
+    ],
+] as const;
 
 function TextField({
     id,
@@ -296,7 +323,7 @@ function YesNoField({
     );
 }
 
-function PractitionerField({
+export function PractitionerField({
     field,
     label,
     practitioners,
@@ -1232,68 +1259,7 @@ export function MedicalRecordPanels({
                     keepMounted
                 >
                     <div className="grid items-start gap-x-6 gap-y-4 md:grid-cols-2">
-                        {(
-                            [
-                                [
-                                    'Pemeriksaan extraoral',
-                                    [
-                                        ['swelling', 'Bengkak', 'gigi_bengkak'],
-                                        [
-                                            'consistency',
-                                            'Konsistensi',
-                                            'gigi_konsistensi',
-                                        ],
-                                        [
-                                            'skin_color',
-                                            'Warna kulit',
-                                            'gigi_warna_kulit',
-                                        ],
-                                        [
-                                            'skin_temperature',
-                                            'Suhu kulit',
-                                            'gigi_suhu_kulit',
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    'Pemeriksaan intraoral',
-                                    [
-                                        ['mobility', 'Goyang', 'gigi_goyang'],
-                                        [
-                                            'gum_color',
-                                            'Warna gusi',
-                                            'gigi_warna_gusi',
-                                        ],
-                                        [
-                                            'caries',
-                                            'Karies gigi',
-                                            'gigi_karies',
-                                        ],
-                                        [
-                                            'intraoral_swelling',
-                                            'Pembengkakan',
-                                            'gigi_pembengkakan',
-                                        ],
-                                        [
-                                            'percussion',
-                                            'Perkusi',
-                                            'gigi_perkusi',
-                                        ],
-                                        ['pressure', 'Druk', 'gigi_druk'],
-                                        [
-                                            'palpation',
-                                            'Palpasi',
-                                            'gigi_palpasi',
-                                        ],
-                                        [
-                                            'caries_status',
-                                            'Status karies',
-                                            'gigi_status_karies',
-                                        ],
-                                    ],
-                                ],
-                            ] as const
-                        ).map(([heading, fields]) => (
+                        {dentalSections.map(([heading, fields]) => (
                             <FormGrid key={heading} columns={1}>
                                 <Subheading>{heading}</Subheading>
                                 {fields.map(([field, label, group]) => (

@@ -24,6 +24,7 @@ import {
     isVisitStatus,
     refusedTransition,
 } from '../../registration/visit/visit.statuses.ts';
+import { referrerUnfinishedMessage } from '../discharge/discharge.behaviors.ts';
 import { missingRequired } from '../medical-record/medical-record.service.ts';
 import {
     callNextInputSchema,
@@ -61,7 +62,8 @@ const entrySelect = `
            r.umur_hari as age_days, t.nama as patient_type_name, gp.name as guarantor_name,
            kl.kode as cluster_code, kl.nama as cluster_name, sh.nama as life_cycle_name,
            sk.nama as screening_category_name, sk.warna as screening_category_color,
-           to_char(calls.called_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as called_at, calls.call_count
+           to_char(calls.called_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as called_at, calls.call_count,
+           asal_s.nama as referrer_section_name
     from sim_tr_registrasi_tujuan d
     join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
     join sim_m_section s on s.tenant_id = d.tenant_id and s.id = d.section_id
@@ -76,6 +78,8 @@ const entrySelect = `
     left join sim_m_klaster kl on kl.tenant_id = r.tenant_id and kl.id = r.klaster_id
     left join sim_m_siklus_hidup sh on sh.tenant_id = r.tenant_id and sh.id = r.siklus_hidup_id
     left join sim_m_skrining_kategori sk on sk.tenant_id = r.tenant_id and sk.id = r.kategori_skrining_id
+    left join sim_tr_registrasi_tujuan asal on asal.tenant_id = d.tenant_id and asal.id = d.asal_tujuan_id
+    left join sim_m_section asal_s on asal_s.tenant_id = asal.tenant_id and asal_s.id = asal.section_id
     cross join lateral (
         select max(a.dilakukan_pada) as called_at, count(*)::int as call_count
         from sim_tr_antrean_panggilan a
@@ -370,6 +374,8 @@ export class ExaminationQueue {
                  join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
                  where d.tenant_id = $1 and d.section_id = $2 and r.tanggal = $3::date and d.status = 'menunggu'
                    and d.deleted_at is null and r.deleted_at is null and r.legal_entity_id = $4
+                   and not exists (select 1 from sim_tr_registrasi_tujuan a
+                                   where a.tenant_id = d.tenant_id and a.id = d.asal_tujuan_id and a.status <> 'selesai')
                  order by coalesce(d.posisi_antrean, d.no_antrean), d.id
                  limit 1
                  for update of d skip locked`,
@@ -417,11 +423,16 @@ export class ExaminationQueue {
                           section_id: z.string(),
                           status: z.string(),
                           room_id: z.string().nullable(),
+                          referrer_status: z.string().nullable(),
+                          referrer_section: z.string().nullable(),
                       }),
                       `select d.id, d.registrasi_id as visit_id, r.status as visit_status, r.tanggal::text as date,
-                              d.section_id, d.status, d.ruangan_id as room_id
+                              d.section_id, d.status, d.ruangan_id as room_id, a.status as referrer_status,
+                              s.nama as referrer_section
                        from sim_tr_registrasi_tujuan d
                        join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
+                       left join sim_tr_registrasi_tujuan a on a.tenant_id = d.tenant_id and a.id = d.asal_tujuan_id
+                       left join sim_m_section s on s.tenant_id = a.tenant_id and s.id = a.section_id
                        where d.tenant_id = $1 and d.id = $2 and d.deleted_at is null and r.deleted_at is null
                          and ${visitVisibility(this.workspace, bind)}
                        for update of d, r`,
@@ -472,7 +483,18 @@ export class ExaminationQueue {
                     position = (last?.position ?? 0) + 1;
                     break;
                 }
+                // Rujuk internal baru boleh diperiksa setelah pemeriksaan di poli asalnya selesai, seperti
+                // statuspasien_helper::update_statuspasien.
                 case 'mulai_periksa': {
+                    if (
+                        current.referrer_status !== null &&
+                        current.referrer_status !== 'selesai'
+                    )
+                        validation({
+                            status: referrerUnfinishedMessage(
+                                current.referrer_section ?? '',
+                            ),
+                        });
                     if (current.status !== 'dipanggil') {
                         const parsed = startInputSchema.safeParse(body ?? {});
                         const chosen = parsed.success

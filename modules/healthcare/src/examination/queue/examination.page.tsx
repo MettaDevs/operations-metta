@@ -37,6 +37,11 @@ import {
 } from '../medical-record/medical-record-panels.tsx';
 import { DiagnosisPanels } from '../medical-record/diagnosis-panels.tsx';
 import { OrderPanels } from '../medical-record/order-panels.tsx';
+import { CpptPanel } from '../cppt/cppt-panel.tsx';
+import {
+    DischargePanel,
+    type ReferralRequest,
+} from '../discharge/discharge-panel.tsx';
 import { ageText, DestinationStatusText, timeText } from './queue-display.tsx';
 
 // Pemeriksaan satu tujuan kunjungan: pasien dan kunjungannya, isi tab Rekam Medis poli sistem lama dengan satu Simpan
@@ -243,6 +248,9 @@ function ExaminationRecord({
             setMessage(null);
             toast.success('Data berhasil disimpan.');
             showRecord(body);
+            void queryClient.invalidateQueries({
+                queryKey: orpc.healthcareCppt.key(),
+            });
             return true;
         } catch (caught) {
             fail(caught, 'Terjadi kesalahan saat menyimpan data.');
@@ -291,6 +299,43 @@ function ExaminationRecord({
             fail(caught, 'Resep belum dikirim ke farmasi.');
         } finally {
             setBusy(false);
+        }
+    };
+
+    // Tambah Rujuk Internal menyimpan perubahan yang belum disimpan lebih dulu, lalu membuat tujuan baru dengan status
+    // rujuk internal yang dipilih. Kesalahan isian dialog dikembalikan ke dialog.
+    const refer = async (request: ReferralRequest): Promise<Errors | null> => {
+        if (dirty && !(await save()))
+            return {
+                referral: [
+                    'Rekam medis belum disimpan. Periksa isian yang perlu diperbaiki.',
+                ],
+            };
+        try {
+            const { body } = await api.healthcareInternalReferralCreate({
+                params: { id: entry.id },
+                body: {
+                    ...request,
+                    status_id: draft.discharge?.status_id ?? null,
+                },
+            });
+            setErrors({});
+            setMessage(null);
+            showRecord(body);
+            setDraft(body.data);
+            const referral = body.data.discharge?.internal_referrals.at(-1);
+            if (referral)
+                toast.success(
+                    `Pasien dirujuk ke ${referral.section_name} dengan antrean ${referral.queue_code}.`,
+                );
+            void queryClient.invalidateQueries({
+                queryKey: orpc.healthcareExaminationQueue.key(),
+            });
+            return null;
+        } catch (caught) {
+            if (caught instanceof ApiError && Object.keys(caught.errors).length)
+                return caught.errors;
+            return { referral: [errorText(caught, 'Pasien belum dirujuk.')] };
         }
     };
 
@@ -384,104 +429,149 @@ function ExaminationRecord({
                             <AlertDescription>{notice}</AlertDescription>
                         </Alert>
                     )}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex flex-wrap items-baseline gap-3">
-                                <span className="text-2xl font-bold tabular-nums">
-                                    {entry.queue_code}
-                                </span>
-                                <span className="text-base">
-                                    {entry.patient_name}
-                                </span>
-                                <DestinationStatusText status={entry.status} />
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm md:grid-cols-4">
-                                <Fact label="NRM">{entry.patient_nrm}</Fact>
-                                <Fact label="Jenis kelamin">{gender}</Fact>
-                                <Fact label="Tanggal lahir">
-                                    {entry.birth_date &&
-                                        displayDate(entry.birth_date)}
-                                </Fact>
-                                <Fact label="Umur">{ageText(entry)}</Fact>
-                                <Fact label="Tipe pasien">
-                                    {entry.guarantor_name
-                                        ? `${entry.patient_type_name} · ${entry.guarantor_name}`
-                                        : entry.patient_type_name}
-                                </Fact>
-                                <Fact label="Klaster / siklus hidup">
-                                    {entry.cluster_code &&
-                                        `${entry.cluster_code} ${entry.cluster_name ?? ''} · ${entry.life_cycle_name ?? ''}`}
-                                </Fact>
-                                <Fact label="Kunjungan">
-                                    {entry.visit_kind === 'lama'
-                                        ? 'Lama'
-                                        : 'Baru'}
-                                </Fact>
-                                <Fact label="Skrining">
-                                    {entry.screening_category_name}
-                                </Fact>
-                                <Fact label="Poli">{entry.section_name}</Fact>
-                                <Fact label="Ruangan">{entry.room_name}</Fact>
-                                <Fact label="Nakes">
-                                    {entry.practitioner_name}
-                                </Fact>
-                                <Fact label="Tanggal kunjungan">
-                                    {displayDate(entry.date)}{' '}
-                                    {timeText(entry.registered_at)}
-                                </Fact>
-                                <Fact label="NoReg">
-                                    {entry.registration_number}
-                                </Fact>
-                                <Fact label="NoBukti">
-                                    {entry.examination_number}
-                                </Fact>
-                            </dl>
-                        </CardContent>
-                    </Card>
-                    <fieldset
-                        disabled={!editable || busy}
-                        className="min-w-0 rounded-lg border bg-card disabled:opacity-90"
-                    >
-                        <MedicalRecordPanels
-                            draft={draft}
-                            setDraft={setDraft}
-                            metadata={recordMetadata}
-                            context={shown.context}
-                            errors={errors}
-                            disabled={!editable || busy}
-                        />
-                        <DiagnosisPanels
-                            destinationId={entry.id}
-                            draft={draft}
-                            setDraft={setDraft}
-                            metadata={recordMetadata}
-                            errors={errors}
-                            disabled={!editable || busy}
-                        />
-                        <OrderPanels
-                            draft={draft}
-                            setDraft={setDraft}
-                            metadata={recordMetadata}
-                            errors={errors}
-                            disabled={!editable || busy}
-                            onSend={(position) => void send(position)}
-                        />
-                    </fieldset>
-                    {editable && (
-                        <Button
-                            type="button"
-                            size="lg"
-                            className="w-full"
-                            data-action="save"
-                            disabled={busy}
-                            onClick={() => void save()}
-                        >
-                            <Save aria-hidden="true" />
-                            {busy ? 'Menyimpan…' : 'Simpan'}
-                        </Button>
-                    )}
+                    <div className="grid items-start gap-4 lg:grid-cols-12">
+                        <div className="min-w-0 space-y-4 lg:col-span-4">
+                            {shown.data.discharge && (
+                                <DischargePanel
+                                    destinationId={entry.id}
+                                    visitDate={entry.date}
+                                    discharge={
+                                        draft.discharge ?? shown.data.discharge
+                                    }
+                                    setDischarge={(discharge) =>
+                                        setDraft((current) => ({
+                                            ...current,
+                                            discharge,
+                                        }))
+                                    }
+                                    metadata={recordMetadata}
+                                    errors={errors}
+                                    disabled={!editable || busy}
+                                    onRefer={refer}
+                                />
+                            )}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex flex-wrap items-baseline gap-3">
+                                        <span className="text-2xl font-bold tabular-nums">
+                                            {entry.queue_code}
+                                        </span>
+                                        <span className="text-base">
+                                            {entry.patient_name}
+                                        </span>
+                                        <DestinationStatusText
+                                            status={entry.status}
+                                        />
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-2">
+                                        <Fact label="NRM">
+                                            {entry.patient_nrm}
+                                        </Fact>
+                                        <Fact label="Jenis kelamin">
+                                            {gender}
+                                        </Fact>
+                                        <Fact label="Tanggal lahir">
+                                            {entry.birth_date &&
+                                                displayDate(entry.birth_date)}
+                                        </Fact>
+                                        <Fact label="Umur">
+                                            {ageText(entry)}
+                                        </Fact>
+                                        <Fact label="Tipe pasien">
+                                            {entry.guarantor_name
+                                                ? `${entry.patient_type_name} · ${entry.guarantor_name}`
+                                                : entry.patient_type_name}
+                                        </Fact>
+                                        <Fact label="Klaster / siklus hidup">
+                                            {entry.cluster_code &&
+                                                `${entry.cluster_code} ${entry.cluster_name ?? ''} · ${entry.life_cycle_name ?? ''}`}
+                                        </Fact>
+                                        <Fact label="Kunjungan">
+                                            {entry.visit_kind === 'lama'
+                                                ? 'Lama'
+                                                : 'Baru'}
+                                        </Fact>
+                                        <Fact label="Skrining">
+                                            {entry.screening_category_name}
+                                        </Fact>
+                                        <Fact label="Poli">
+                                            {entry.section_name}
+                                        </Fact>
+                                        <Fact label="Ruangan">
+                                            {entry.room_name}
+                                        </Fact>
+                                        <Fact label="Nakes">
+                                            {entry.practitioner_name}
+                                        </Fact>
+                                        <Fact label="Tanggal kunjungan">
+                                            {displayDate(entry.date)}{' '}
+                                            {timeText(entry.registered_at)}
+                                        </Fact>
+                                        <Fact label="NoReg">
+                                            {entry.registration_number}
+                                        </Fact>
+                                        <Fact label="NoBukti">
+                                            {entry.examination_number}
+                                        </Fact>
+                                        {entry.referrer_section_name && (
+                                            <Fact label="Rujukan dari">
+                                                {entry.referrer_section_name}
+                                            </Fact>
+                                        )}
+                                    </dl>
+                                </CardContent>
+                            </Card>
+                            {shown.context.panels.includes('cppt') && (
+                                <CpptPanel destinationId={entry.id} />
+                            )}
+                        </div>
+                        <div className="min-w-0 space-y-4 lg:col-span-8">
+                            <fieldset
+                                disabled={!editable || busy}
+                                className="min-w-0 rounded-lg border bg-card disabled:opacity-90"
+                            >
+                                <MedicalRecordPanels
+                                    draft={draft}
+                                    setDraft={setDraft}
+                                    metadata={recordMetadata}
+                                    context={shown.context}
+                                    errors={errors}
+                                    disabled={!editable || busy}
+                                />
+                                <DiagnosisPanels
+                                    destinationId={entry.id}
+                                    draft={draft}
+                                    setDraft={setDraft}
+                                    metadata={recordMetadata}
+                                    errors={errors}
+                                    disabled={!editable || busy}
+                                />
+                                <OrderPanels
+                                    draft={draft}
+                                    setDraft={setDraft}
+                                    metadata={recordMetadata}
+                                    errors={errors}
+                                    disabled={!editable || busy}
+                                    onSend={(position) => void send(position)}
+                                />
+                            </fieldset>
+                            {editable && (
+                                <Button
+                                    type="button"
+                                    size="lg"
+                                    className="w-full"
+                                    data-action="save"
+                                    disabled={busy}
+                                    onClick={() => void save()}
+                                >
+                                    <Save aria-hidden="true" />
+                                    {busy ? 'Menyimpan…' : 'Simpan'}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

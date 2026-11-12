@@ -5,7 +5,8 @@ import type { Database } from '@core/platform/database/index.ts';
 // adalah layar dan kode simpan sendiri; panel yang dipakai sebuah section adalah data, diatur di kartu section
 // (sim_m_section_panel_pemeriksaan). `inputs` adalah kunci isi rekam medis milik panel itu, dan `byDefault` menentukan
 // panel tampil bila section belum mengaturnya: semua kecuali Pemeriksaan dasar gigi, perilaku sistem lama untuk
-// section bukan gigi.
+// section bukan gigi. Status pasien dan CPPT ada di kolom kiri halaman pemeriksaan seperti sistem lama
+// (outpatient/form.php); CPPT hanya dibaca, jadi tidak punya kunci isi.
 export const examinationPanels = [
     { code: 'anamnesis', label: 'Anamnesa', inputs: ['anamnesis'] },
     {
@@ -42,6 +43,8 @@ export const examinationPanels = [
     },
     { code: 'procedures', label: 'Biaya Tindakan', inputs: ['procedures'] },
     { code: 'prescriptions', label: 'E-Resep', inputs: ['prescriptions'] },
+    { code: 'discharge', label: 'Status pasien', inputs: ['discharge'] },
+    { code: 'cppt', label: 'CPPT', inputs: [] },
 ] as const satisfies readonly {
     code: string;
     label: string;

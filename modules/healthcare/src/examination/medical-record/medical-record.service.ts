@@ -15,6 +15,7 @@ import {
     validation,
 } from '@core/platform/http/index.ts';
 import { visitVisibility } from '../../registration/visit/visit.service.ts';
+import { Discharges } from '../discharge/discharge.service.ts';
 import {
     finishedMessage,
     isRequirableField,
@@ -197,6 +198,7 @@ const destinationSchema = z.object({
     visit_id: z.string(),
     patient_id: z.string(),
     practitioner_id: z.string().nullable(),
+    referral_note: z.string().nullable(),
     height: z.number().nullable(),
     weight: z.number().nullable(),
     gender: z.string().nullable(),
@@ -384,12 +386,14 @@ export async function missingRequired(
 // selama tujuan diperiksa (sesudah Mulai periksa, sebelum Selesai periksa) oleh yang boleh memeriksa.
 export class MedicalRecords {
     private readonly orders: ExaminationOrders;
+    private readonly discharges: Discharges;
 
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {
         this.orders = new ExaminationOrders(db, workspace);
+        this.discharges = new Discharges(db, workspace);
     }
 
     // Data acuan layar: pilihan isian, kode alergi, bagian keadaan fisik, isian wajib, dan tenaga kesehatan.
@@ -504,6 +508,7 @@ export class MedicalRecords {
                     : [],
             ),
             practitioners,
+            discharge_statuses: await this.discharges.statuses(),
             permissions: {
                 manage: this.workspace.permissions.has(
                     'healthcare.examination.manage',
@@ -706,6 +711,14 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
+            const discharge = uses('discharge')
+                ? await this.discharges.read(
+                      input.discharge,
+                      await this.savedDischarge(destination.id),
+                      options,
+                      errors,
+                  )
+                : null;
             if (values.physical) {
                 const required = await requiredErrors(
                     this.db,
@@ -797,6 +810,8 @@ export class MedicalRecords {
                     prescriptions,
                     stamp,
                 );
+            if (discharge)
+                await this.discharges.write(destination.id, discharge, stamp);
         });
         return this.present(await this.destination(destinationId, false));
     }
@@ -853,7 +868,7 @@ export class MedicalRecords {
             ? await this.db.one(
                   destinationSchema,
                   `select d.id, d.status, d.section_id, r.id as visit_id, r.pasien_id as patient_id,
-                          d.nakes_id as practitioner_id,
+                          d.nakes_id as practitioner_id, d.catatan_rujukan as referral_note,
                           r.tinggi_badan::float8 as height, r.berat_badan::float8 as weight, p.gender,
                           rv.name as religion, oc.name as occupation, mv.name as marital_status,
                           coalesce(gp.name, t.nama) as guarantee
@@ -875,6 +890,19 @@ export class MedicalRecords {
             : undefined;
         if (!found) abort(404, 'Not Found');
         return found;
+    }
+
+    private async savedDischarge(destinationId: string) {
+        const saved = await this.db.one(
+            z.object({
+                status_id: z.string().nullable(),
+                consultant_id: z.string().nullable(),
+            }),
+            `select status_pulang_id as status_id, dokter_konsul_id as consultant_id from sim_tr_registrasi_tujuan
+             where tenant_id = $1 and id = $2`,
+            [this.workspace.tenantId, destinationId],
+        );
+        return saved ?? { status_id: null, consultant_id: null };
     }
 
     private async header(destinationId: string, lock: boolean) {
@@ -973,7 +1001,9 @@ export class MedicalRecords {
                     ? header.doctor_id
                     : destination.practitioner_id,
                 nurse_id: header?.nurse_id ?? null,
-                chief_complaint: header?.chief_complaint ?? null,
+                chief_complaint: header
+                    ? header.chief_complaint
+                    : destination.referral_note,
                 additional_complaint: header?.additional_complaint ?? null,
                 illness_years: header?.illness_years ?? null,
                 illness_months: header?.illness_months ?? null,
@@ -1055,10 +1085,13 @@ export class MedicalRecords {
             data.prescriptions = await this.orders.prescriptions(
                 header?.id ?? null,
             );
+        if (uses('discharge'))
+            data.discharge = await this.discharges.present(destination.id);
         return {
             data,
             context: {
                 status: destination.status,
+                panels: active,
                 editable:
                     destination.status === 'diperiksa' &&
                     this.workspace.permissions.has(
