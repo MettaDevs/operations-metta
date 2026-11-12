@@ -104,8 +104,11 @@ const messages = {
     batch_id: 'Pilih batch dari daftar.',
 };
 
+// Alasan yang dicatat sebagai pemakaian menulis jenis pemakaian ke dua arah (Consumption di BC; masuk berarti
+// pengembalian sisa pemakaian). Alasan lain menulis penyesuaian tambah atau kurang.
 function itemLine(
     direction: Direction,
+    consumption: boolean,
     locationId: string,
     line: StoredLine,
     index: number,
@@ -126,7 +129,7 @@ function itemLine(
             return {
                 ...base,
                 kind: 'inbound',
-                entryKind: 'penyesuaian_tambah',
+                entryKind: consumption ? 'pemakaian' : 'penyesuaian_tambah',
                 locationId,
                 unitCost: fromNumeric(line.unit_cost, quantityScale),
                 batchNumber: line.batch_number,
@@ -136,7 +139,7 @@ function itemLine(
             return {
                 ...base,
                 kind: 'outbound',
-                entryKind: 'penyesuaian_kurang',
+                entryKind: consumption ? 'pemakaian' : 'penyesuaian_kurang',
                 locationId,
                 batchId: line.batch_id,
             };
@@ -613,11 +616,14 @@ export class Adjustments {
                 direction: z.enum(adjustmentDirections),
                 posting_date: z.string(),
                 location_id: z.string(),
+                consumption: z.boolean(),
             }),
-            `update gd_tr_penyesuaian set status = $3, ${stamp}, updated_at = $1
+            `update gd_tr_penyesuaian h set status = $3, ${stamp}, updated_at = $1
              where tenant_id = $4 and legal_entity_id = $5 and id = $6 and status = $7 and version = $8
                and deleted_at is null
-             returning nomor as number, arah as direction, tanggal::text as posting_date, lokasi_id as location_id`,
+             returning nomor as number, arah as direction, tanggal::text as posting_date, lokasi_id as location_id,
+                       (select a.pemakaian from gd_m_alasan a where a.tenant_id = h.tenant_id and a.id = h.alasan_id)
+                           as consumption`,
             [
                 nowSql(),
                 this.workspace.userId,
@@ -685,6 +691,7 @@ export class Adjustments {
                 lines.map((line, index) =>
                     itemLine(
                         claimed.direction,
+                        claimed.consumption,
                         claimed.location_id,
                         line,
                         index,

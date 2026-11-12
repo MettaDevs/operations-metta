@@ -318,7 +318,7 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
         >(
             `select trim_scale(jumlah)::text as quantity, sumber_dana_id as funding, tahun_anggaran as year
              from gd_tr_kartu_gudang
-             where tenant_id = $1 and lokasi_id = $2 and jenis = 'penyesuaian_kurang'
+             where tenant_id = $1 and lokasi_id = $2 and jumlah < 0
              order by sumber_dana_id = $3 desc`,
             [business.tenantId, location2.id, apbd.id],
         );

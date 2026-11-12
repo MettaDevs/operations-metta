@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Workspace } from '../../../platform/access/index.ts';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import {
@@ -19,11 +20,17 @@ import {
 } from '../inventory.service.ts';
 import { codeListInputSchema, codeListRowSchema } from './code-list.schema.ts';
 
+const storedRowSchema = codeListRowSchema.extend({
+    consumption: z.boolean().nullable(),
+});
+
 export type CodeList = {
     table: string;
     resource: string;
     label: string;
     usage: { sql: string; message: string };
+    // Tabel punya kolom pemakaian (hanya alasan penyesuaian).
+    consumption?: true;
 };
 
 export const unitsOfMeasure: CodeList = {
@@ -40,11 +47,13 @@ export const unitsOfMeasure: CodeList = {
     },
 };
 
-// Alasan bawaan per legal entity diisi migration 0024 (gd_isi_acuan); setelah itu milik tenant sepenuhnya.
+// Alasan bawaan per legal entity diisi migration 0024 (gd_isi_acuan); setelah itu milik tenant sepenuhnya. Alasan yang
+// ditandai pemakaian membuat dokumen penyesuaian menulis jenis pemakaian di kartu gudang (Consumption di BC).
 export const reasonCodes: CodeList = {
     table: 'gd_m_alasan',
     resource: 'inventory-reason',
     label: 'alasan',
+    consumption: true,
     usage: {
         sql: 'select 1 as found from gd_tr_penyesuaian where tenant_id = $1 and alasan_id = $2 and deleted_at is null limit 1',
         message:
@@ -84,7 +93,8 @@ export class CodeLists {
 
     private get rowSql() {
         return `select * from (
-                    select k.id, k.kode as code, k.nama as name, k.version
+                    select k.id, k.kode as code, k.nama as name,
+                           ${this.kind.consumption ? 'k.pemakaian' : 'null'} as consumption, k.version
                     from ${this.kind.table} k
                     where k.tenant_id = $1 and k.legal_entity_id = $2 and k.deleted_at is null) entries
                 where true`;
@@ -102,7 +112,11 @@ export class CodeLists {
             name: 100,
         });
         if (Object.keys(errors).length) validation(errors);
-        return values;
+        return { ...values, consumption: data.consumption ?? false };
+    }
+
+    private consumptionColumn(value: boolean): Record<string, boolean> {
+        return this.kind.consumption ? { pemakaian: value } : {};
     }
 
     private codeTaken(error: unknown): void {
@@ -128,7 +142,7 @@ export class CodeLists {
             defaultDirection: 'asc',
         });
         return {
-            data: batch.data.map((row) => codeListRowSchema.parse(row)),
+            data: batch.data.map((row) => this.parsed(row)),
             next_cursor: batch.next_cursor,
             can_manage: this.workspace.permissions.has(
                 `core.${this.kind.resource}.update`,
@@ -136,10 +150,16 @@ export class CodeLists {
         };
     }
 
+    // Daftar kode tanpa kolom pemakaian tidak mengirim field consumption sama sekali.
+    private parsed(row: unknown): z.infer<typeof codeListRowSchema> {
+        const { consumption, ...entry } = storedRowSchema.parse(row);
+        return consumption === null ? entry : { ...entry, consumption };
+    }
+
     private async row(id: string) {
         const found = lookupId(id)
             ? await this.db.one(
-                  codeListRowSchema,
+                  storedRowSchema,
                   `${this.rowSql} and entries.id = $3`,
                   [
                       this.workspace.tenantId,
@@ -149,7 +169,7 @@ export class CodeLists {
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
-        return found;
+        return this.parsed(found);
     }
 
     async create(body: unknown) {
@@ -165,6 +185,7 @@ export class CodeLists {
                 legal_entity_id: legalEntityId,
                 kode: data.code,
                 nama: data.name,
+                ...this.consumptionColumn(data.consumption),
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -183,6 +204,7 @@ export class CodeLists {
         try {
             updated = await this.db.execute(
                 `update ${this.kind.table} set kode = $1, nama = $2, updated_at = $3
+                        ${this.kind.consumption ? ', pemakaian = $7' : ''}
                  where tenant_id = $4 and id = $5 and version = $6 and deleted_at is null`,
                 [
                     data.code,
@@ -191,6 +213,7 @@ export class CodeLists {
                     this.workspace.tenantId,
                     current.id,
                     expectedVersion(request, body),
+                    ...(this.kind.consumption ? [data.consumption] : []),
                 ],
             );
         } catch (error) {

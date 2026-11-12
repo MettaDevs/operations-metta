@@ -37,7 +37,7 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
         business = await createBusiness(pool, browser, 'Klinik Uji Master');
     });
 
-    test('a new legal entity starts with FEFO, refused negative stock, direct transfers, FIFO cost, and four reasons', async () => {
+    test('a new legal entity starts with FEFO, refused negative stock, direct transfers, FIFO cost, and four reasons of which unit use counts as consumption', async () => {
         const setup = await json<{ data: Setup }>(
             await business.admin.get(`${inventoryApi}/setup`),
             200,
@@ -49,15 +49,16 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
             costing_method: 'fifo',
             version: 1,
         });
-        const reasons = await json<{ data: { code: string }[] }>(
-            await business.admin.get(`${inventoryApi}/reason-codes`),
-            200,
-        );
-        expect(reasons.data.map((reason) => reason.code)).toEqual([
-            'KEDALUWARSA',
-            'PEMAKAIAN',
-            'PEMUSNAHAN',
-            'SALDO-AWAL',
+        const reasons = await json<{
+            data: { code: string; consumption: boolean }[];
+        }>(await business.admin.get(`${inventoryApi}/reason-codes`), 200);
+        expect(
+            reasons.data.map((reason) => [reason.code, reason.consumption]),
+        ).toEqual([
+            ['KEDALUWARSA', false],
+            ['PEMAKAIAN', true],
+            ['PEMUSNAHAN', false],
+            ['SALDO-AWAL', false],
         ]);
     });
 

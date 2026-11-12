@@ -95,3 +95,14 @@ export async function inUse(
         )
             validation({ _form: check.message });
 }
+
+// CTE `kategori`: satu kategori beserta semua subkategorinya, untuk saringan laporan. Dipakai di dalam `with recursive`
+// yang membawa tenant di $1 dan legal entity di $2.
+export function categoryTreeSql(categoryAt: string): string {
+    return `kategori as (
+                select id from gd_m_kategori where tenant_id = $1 and legal_entity_id = $2 and id = ${categoryAt}
+                union all
+                select c.id from gd_m_kategori c join kategori p on c.parent_id = p.id
+                where c.tenant_id = $1 and c.legal_entity_id = $2
+            )`;
+}

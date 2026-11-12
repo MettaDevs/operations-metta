@@ -5,8 +5,11 @@ import { itemLedgerRoutes } from './item-ledger/item-ledger.routes.ts';
 import { itemUnitRoutes } from './item-unit/item-unit.routes.ts';
 import { itemRoutes } from './item/item.routes.ts';
 import { locationRoutes } from './location/location.routes.ts';
+import { lplpoRoutes } from './lplpo/lplpo.routes.ts';
 import { inventorySetupRoutes } from './setup/inventory-setup.routes.ts';
+import { stockByLocationRoutes } from './stock-by-location/stock-by-location.routes.ts';
 import { stockCountRoutes } from './stock-count/stock-count.routes.ts';
+import { stockkeepingUnitRoutes } from './stockkeeping-unit/stockkeeping-unit.routes.ts';
 import { trackingCodeRoutes } from './tracking-code/tracking-code.routes.ts';
 import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
 
@@ -57,5 +60,8 @@ export function inventoryRoutes() {
         ...itemLedgerRoutes(),
         ...transferOrderRoutes(),
         ...stockCountRoutes(),
+        ...stockkeepingUnitRoutes(),
+        ...stockByLocationRoutes(),
+        ...lplpoRoutes(),
     };
 }
