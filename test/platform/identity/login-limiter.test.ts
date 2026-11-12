@@ -36,6 +36,7 @@ async function harness() {
         must_change_password: false,
         two_factor_secret: null,
         two_factor_confirmed_at: null,
+        sessions_revoked_epoch: null,
     };
     let log: string[] = [];
     const label = (value: Bind | undefined) =>
@@ -91,7 +92,11 @@ async function harness() {
         } else if (query.startsWith('update cache')) {
             cache.get(String(second))!.value = String(first);
             count = 1;
-        } else if (query.startsWith('select * from users')) {
+        } else if (
+            query.startsWith(
+                'select *,extract(epoch from sessions_revoked_at)::float8 as sessions_revoked_epoch from users',
+            )
+        ) {
             rows = first === email ? [user] : [];
         }
         return Promise.resolve(Object.assign(rows, { count }));
@@ -146,7 +151,7 @@ const hit = (key: string) => [
     'commit',
 ];
 const findUser =
-    "select * from users where email=$1 and account_type='person' limit 1";
+    "select *,extract(epoch from sessions_revoked_at)::float8 as sessions_revoked_epoch from users where email=$1 and account_type='person' limit 1";
 
 test('failed login hits the route key before and the Fortify key after the credential check', async () => {
     const { cache, attempt } = await harness();

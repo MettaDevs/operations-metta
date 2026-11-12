@@ -26,6 +26,8 @@ export {
     type PartyDraft,
     type PartyDraftDetails,
 } from './party-addresses.tsx';
+export { PasswordInput } from './password-input.tsx';
+export { ssoErrorMessage } from './sso-messages.ts';
 export { useAppearance } from './use-appearance.ts';
 export {
     appLayoutRoute,

@@ -29,6 +29,7 @@ import { page as platformAddressBookOccupationsPage } from './platform/address-b
 import { page as platformDashboardDashboardPage } from './platform/dashboard/dashboard.page.tsx';
 import { page as platformDataSharingDataSharingPage } from './platform/data-sharing/data-sharing.page.tsx';
 import { page as platformGeographyAddressSetupPage } from './platform/geography/address-setup.page.tsx';
+import { page as platformIdentityProfilePage } from './platform/identity/profile.page.tsx';
 import { page as platformOrganizationHierarchiesPage } from './platform/organization/hierarchies.page.tsx';
 import { page as platformOrganizationLegalEntitiesPage } from './platform/organization/legal-entities.page.tsx';
 import { page as platformOrganizationOperatingUnitsPage } from './platform/organization/operating-units.page.tsx';
@@ -309,6 +310,14 @@ const platformGeographyAddressSetupRoute = createRoute({
     staticData: { title: platformGeographyAddressSetupPage.title },
 });
 
+const platformIdentityProfileRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformIdentityProfilePage.path,
+    component: platformIdentityProfilePage.component,
+    validateSearch: platformIdentityProfilePage.validateSearch,
+    staticData: { title: platformIdentityProfilePage.title },
+});
+
 const platformOrganizationHierarchiesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: platformOrganizationHierarchiesPage.path,
@@ -378,6 +387,7 @@ const routeTree = rootRoute.addChildren([
         platformDashboardDashboardRoute,
         platformDataSharingDataSharingRoute,
         platformGeographyAddressSetupRoute,
+        platformIdentityProfileRoute,
         platformOrganizationHierarchiesRoute,
         platformOrganizationLegalEntitiesRoute,
         platformOrganizationOperatingUnitsRoute,

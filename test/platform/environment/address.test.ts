@@ -35,9 +35,15 @@ test('label cadangan, jenis lain, dan label berlebih tidak dikenal', () => {
         expect(parseAddress(host, base)).toEqual({ kind: 'unknown' });
 });
 
+test('domain dasar tanpa nama tenant dikenali tersendiri', () => {
+    expect(parseAddress('erp.example.test', base)).toEqual({ kind: 'base' });
+    expect(parseAddress('ERP.example.test:8443', base)).toEqual({
+        kind: 'base',
+    });
+});
+
 test('alamat di luar domain dasar, atau domain dasar kosong, tidak dirutekan', () => {
     for (const host of [
-        'erp.example.test',
         'klinikerp.example.test',
         'klinik.example.test',
         '127.0.0.1:8000',

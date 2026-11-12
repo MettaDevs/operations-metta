@@ -1,7 +1,7 @@
 import { Button } from '@operations-metta/ui/button';
 import { Input } from '@operations-metta/ui/input';
 import { Spinner } from '@operations-metta/ui/spinner';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -11,6 +11,7 @@ import { AuthCard } from './auth-layout.tsx';
 import { FormErrorHeader } from './form-error-header.tsx';
 import { definePage } from './page.ts';
 import { PasswordInput } from './password-input.tsx';
+import { ssoErrorMessage } from './sso-messages.ts';
 
 // Id route = id layout + path, seperti layout tanpa path di TanStack Router: `/_auth/login`.
 const route = getRouteApi('/_auth/login');
@@ -25,13 +26,24 @@ function destination(redirect: string | undefined): string {
 }
 
 // Layar login CoreERP di atas POST /login yang sudah ada. Yang belum dipindah di server, dan karena itu tidak
-// ditampilkan: lupa kata sandi, daftar, tetap masuk, SSO, passkey, dan verifikasi dua langkah.
+// ditampilkan: lupa kata sandi, daftar, tetap masuk, passkey, dan verifikasi dua langkah. "Masuk dengan SSO" tampil
+// hanya bila SSO disetel di server dan alamat ini milik sebuah ruang kerja.
 function LoginPage(): ReactNode {
-    const { redirect } = route.useSearch();
+    const { redirect, sso_error: ssoError } = route.useSearch();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [errors, setErrors] = useState<Record<string, string[]>>({});
-    const [message, setMessage] = useState<string | null>(null);
+    const [message, setMessage] = useState<string | null>(() =>
+        ssoErrorMessage(
+            ssoError,
+            'Belum berhasil masuk dengan SSO. Silakan ulangi.',
+        ),
+    );
+    const sso = useQuery(
+        orpc.ssoOptions.queryOptions({
+            select: (response) => response.body.enabled,
+        }),
+    );
     const login = useMutation(
         orpc.login.mutationOptions({
             onMutate: () => {
@@ -115,6 +127,20 @@ function LoginPage(): ReactNode {
                         {login.isPending && <Spinner />}
                         Masuk
                     </Button>
+                    {sso.data && (
+                        <Button
+                            asChild
+                            variant="outline"
+                            className="w-full"
+                            data-test="sso-login-button"
+                        >
+                            <a
+                                href={`/sso/start?redirect=${encodeURIComponent(destination(redirect))}`}
+                            >
+                                Masuk dengan SSO
+                            </a>
+                        </Button>
+                    )}
                 </div>
             </form>
         </AuthCard>
@@ -125,6 +151,9 @@ export const page = definePage({
     path: '/login',
     layout: 'auth',
     title: 'Masuk',
-    validateSearch: z.object({ redirect: z.string().optional() }),
+    validateSearch: z.object({
+        redirect: z.string().optional(),
+        sso_error: z.string().optional(),
+    }),
     component: LoginPage,
 });

@@ -33,6 +33,8 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                 headers?: Record<string, string>;
                 // Mengirim cookie peramban ini ke alamat lain, seperti penyerang yang memutar ulang cookie curian.
                 host?: string;
+                // Body application/x-www-form-urlencoded, misalnya logout token dari penyedia SSO.
+                form?: Record<string, string>;
             } = {},
         ): Promise<Response> {
             const xsrf = cookies.get('XSRF-TOKEN');
@@ -44,6 +46,12 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                         ...(options.body === undefined
                             ? {}
                             : { 'content-type': 'application/json' }),
+                        ...(options.form === undefined
+                            ? {}
+                            : {
+                                  'content-type':
+                                      'application/x-www-form-urlencoded',
+                              }),
                         ...(cookies.size
                             ? {
                                   cookie: [...cookies]
@@ -59,9 +67,11 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                         ...options.headers,
                     },
                     body:
-                        options.body === undefined
-                            ? undefined
-                            : JSON.stringify(options.body),
+                        options.form !== undefined
+                            ? new URLSearchParams(options.form).toString()
+                            : options.body === undefined
+                              ? undefined
+                              : JSON.stringify(options.body),
                 }),
                 address,
             );

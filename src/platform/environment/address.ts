@@ -9,6 +9,8 @@ export const reservedLabels = new Set(['admin', 'www', 'api', 'registry']);
 
 export type Address =
     | { kind: 'unrouted' }
+    // Domain dasar itu sendiri, tanpa nama tenant: hanya alamat balik dan back-channel logout SSO yang ada di sana.
+    | { kind: 'base' }
     | { kind: 'unknown' }
     | { kind: 'environment'; tenantSlug: string; environment: EnvironmentKind };
 
@@ -17,6 +19,7 @@ export type Address =
 export function parseAddress(host: string, baseDomain: string): Address {
     if (!baseDomain) return { kind: 'unrouted' };
     const name = host.toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
+    if (name === baseDomain) return { kind: 'base' };
     const suffix = `.${baseDomain}`;
     if (!name.endsWith(suffix)) return { kind: 'unrouted' };
     const labels = name.slice(0, -suffix.length).split('.');

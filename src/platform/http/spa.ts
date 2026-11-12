@@ -72,7 +72,9 @@ export function clientBuild(directory: string) {
             if (request.method !== 'GET' && request.method !== 'HEAD')
                 return null;
             const { pathname } = new URL(request.url);
-            if (isApiPath(pathname)) return null;
+            // /sso/* milik server: pintu masuk SSO dan serah sesi, bukan layar.
+            if (isApiPath(pathname) || pathname.startsWith('/sso/'))
+                return null;
             const build = await current();
             if (pathname.startsWith(clientAssetPrefix)) {
                 const name = decodeURIComponent(
