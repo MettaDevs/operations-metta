@@ -28,7 +28,6 @@ test('any field the clerk fills or picks makes the form dirty', () => {
         { sectionId: 'sec1' },
         { scheduleId: 'sch1' },
         { pregnant: true },
-        { lifeCycleId: 'l1' },
     ];
     for (const change of changes)
         expect(isDraftDirty({ ...emptyDraft, ...change })).toBe(true);

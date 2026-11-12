@@ -21,8 +21,6 @@ export type Draft = {
     sectionId: string | null;
     scheduleId: string | null;
     pregnant: boolean;
-    // Pilihan petugas; null mengikuti siklus hidup hasil hitungan server.
-    lifeCycleId: string | null;
 };
 
 export const emptyDraft: Draft = {
@@ -36,7 +34,6 @@ export const emptyDraft: Draft = {
     sectionId: null,
     scheduleId: null,
     pregnant: false,
-    lifeCycleId: null,
 };
 
 // Isian berubah dari form kosong: petugas sudah mengisi atau memilih sesuatu. Centang yang dipilih lalu dilepas lagi
@@ -52,7 +49,6 @@ export function isDraftDirty(draft: Draft): boolean {
         draft.kind !== emptyDraft.kind ||
         draft.sectionId !== emptyDraft.sectionId ||
         draft.scheduleId !== emptyDraft.scheduleId ||
-        draft.pregnant !== emptyDraft.pregnant ||
-        draft.lifeCycleId !== emptyDraft.lifeCycleId
+        draft.pregnant !== emptyDraft.pregnant
     );
 }

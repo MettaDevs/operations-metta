@@ -20,8 +20,6 @@ export const visitInputSchema = z.object({
     practice_schedule_id: optionalText,
     // Ditanyakan hanya bila siklus hidup bersyarat hamil dapat berlaku untuk pasien; bawaannya tidak hamil.
     pregnant: z.boolean().optional(),
-    // Pilihan petugas yang menggantikan siklus hidup hasil hitungan. Klaster mengikuti siklus hidup ini.
-    life_cycle_id: optionalText,
 });
 export type VisitInput = z.infer<typeof visitInputSchema>;
 

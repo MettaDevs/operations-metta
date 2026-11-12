@@ -125,7 +125,6 @@ function draftOf(visit: Visit, metadata: Metadata): Draft {
         sectionId: destination?.section_id ?? null,
         scheduleId: destination?.practice_schedule_id ?? null,
         pregnant: visit.pregnant,
-        lifeCycleId: visit.life_cycle_id,
     };
 }
 
@@ -725,70 +724,21 @@ function VisitPanel({
                         />
                     </FormControl>
                 )}
-                {lifeCycleText ? (
-                    <FormControl>
-                        <Input
-                            label="Siklus hidup"
-                            value={lifeCycleText.lifeCycle}
-                            readOnly
-                        />
-                    </FormControl>
-                ) : (
-                    !locked && (
-                        <FormControl
-                            error={
-                                error('life_cycle_id') ??
-                                lifeCycleMessage ??
-                                undefined
-                            }
-                            hint="Terisi dari umur, jenis kelamin, dan status hamil pasien. Ganti bila pasien perlu dicatat di siklus hidup lain."
-                        >
-                            <InlineLookup<LifeCycle>
-                                label="Siklus hidup"
-                                required
-                                items={metadata.life_cycles}
-                                value={lifeCycle}
-                                onValueChange={(item) =>
-                                    set('lifeCycleId', item.id)
-                                }
-                                getItemValue={(item) => item.id}
-                                getItemLabel={(item) => item.name}
-                                getSearchText={(item) =>
-                                    `${item.code} ${item.name} ${item.cluster_code} ${item.cluster_name}`
-                                }
-                                placeholder="Pilih pasien dulu"
-                                emptyMessage="Siklus hidup tidak ditemukan. Tambahkan di Siklus hidup."
-                                columns={[
-                                    {
-                                        id: 'name',
-                                        header: 'Siklus hidup',
-                                        cell: (item) => item.name,
-                                    },
-                                    {
-                                        id: 'cluster',
-                                        header: 'Klaster',
-                                        cell: (item) =>
-                                            `${item.cluster_code} ${item.cluster_name}`,
-                                    },
-                                ]}
-                                showDetails={false}
-                            />
-                        </FormControl>
-                    )
+                {/* Klaster dan siklus hidup tidak pernah dipilih: server menghitungnya dari umur, jenis kelamin, dan status hamil
+                    (aplikasi lama: Registrations.php create). Hasilnya hanya ditampilkan. */}
+                {(lifeCycleText ?? lifeCycle) && (
+                    <p className="text-sm text-muted-foreground">
+                        {lifeCycleText
+                            ? `${lifeCycleText.cluster} · ${lifeCycleText.lifeCycle}`
+                            : lifeCycle
+                              ? `${lifeCycle.cluster_code} ${lifeCycle.cluster_name} · ${lifeCycle.name}`
+                              : ''}
+                    </p>
                 )}
-                {(lifeCycleText !== null || !locked) && (
-                    <FormControl>
-                        <Input
-                            label="Klaster"
-                            value={
-                                lifeCycleText?.cluster ??
-                                (lifeCycle
-                                    ? `${lifeCycle.cluster_code} ${lifeCycle.cluster_name}`
-                                    : '')
-                            }
-                            readOnly
-                        />
-                    </FormControl>
+                {!locked && (error('life_cycle_id') ?? lifeCycleMessage) && (
+                    <p className="text-sm text-destructive">
+                        {error('life_cycle_id') ?? lifeCycleMessage}
+                    </p>
                 )}
             </FormGrid>
             <FormGrid columns={1}>
@@ -1631,12 +1581,7 @@ export function VisitRegistration({
     const asksPregnancy = visit
         ? visit.pregnant
         : (classification.data?.asks_pregnancy ?? false);
-    const lifeCycle =
-        (draft.lifeCycleId
-            ? metadata.life_cycles.find((item) => item.id === draft.lifeCycleId)
-            : undefined) ??
-        classification.data?.life_cycle ??
-        null;
+    const lifeCycle = classification.data?.life_cycle ?? null;
     const clusterId = visit
         ? visit.cluster_id
         : (lifeCycle?.cluster_id ?? null);
@@ -1667,7 +1612,6 @@ export function VisitRegistration({
             ...current,
             payer: null,
             pregnant: false,
-            lifeCycleId: null,
         }));
         setErrors(({ patient_id: _, ...rest }) => rest);
         setPatientPicked(true);
@@ -1713,7 +1657,6 @@ export function VisitRegistration({
                     section_id: section?.id ?? '',
                     practice_schedule_id: draft.scheduleId,
                     pregnant: asksPregnancy && draft.pregnant,
-                    life_cycle_id: draft.lifeCycleId,
                 },
                 headers: { 'idempotency-key': idempotencyKey },
             });
@@ -1916,10 +1859,7 @@ export function VisitRegistration({
                                                 : null
                                         }
                                         lifeCycleMessage={
-                                            draft.lifeCycleId
-                                                ? null
-                                                : (classification.data
-                                                      ?.message ?? null)
+                                            classification.data?.message ?? null
                                         }
                                         error={error}
                                         set={set}
@@ -1928,7 +1868,6 @@ export function VisitRegistration({
                                             setDraft((current) => ({
                                                 ...current,
                                                 pregnant,
-                                                lifeCycleId: null,
                                             }));
                                             setErrors(
                                                 ({
