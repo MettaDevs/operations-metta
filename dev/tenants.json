@@ -106,6 +106,405 @@
                         "default": true
                     }
                 ]
+            },
+            "workspace": { "legal_entity": "KCS", "unit": "KCS-01" },
+            "inventory": {
+                "tracking_codes": [
+                    {
+                        "code": "OBAT",
+                        "name": "Obat: batch dan kedaluwarsa",
+                        "batch_required": true,
+                        "expiry_required": true,
+                        "strict_expiry": true
+                    }
+                ],
+                "item_categories": [
+                    { "code": "OBAT", "name": "Obat", "tracking_code": "OBAT" }
+                ],
+                "units_of_measure": [
+                    { "code": "TAB", "name": "Tablet" },
+                    { "code": "KAP", "name": "Kapsul" },
+                    { "code": "SAC", "name": "Sachet" }
+                ],
+                "funding_sources": [
+                    { "code": "APBD", "name": "APBD" },
+                    { "code": "KAPITASI", "name": "Dana kapitasi JKN" },
+                    { "code": "PROGRAM", "name": "Program kesehatan" }
+                ],
+                "procurement_programs": [
+                    { "code": "PKD", "name": "Pelayanan kesehatan dasar" }
+                ],
+                "vendors": [{ "name": "PBF Contoh Farma" }],
+                "locations": [
+                    {
+                        "code": "GUDANG",
+                        "name": "Gudang Obat",
+                        "unit": "KCS-01"
+                    },
+                    { "code": "FARMASI", "name": "Farmasi", "unit": "KCS-01" },
+                    {
+                        "code": "PUSLING",
+                        "name": "Farmasi Pusling",
+                        "unit": "KCS-01"
+                    }
+                ],
+                "receipt": {
+                    "vendor": "PBF Contoh Farma",
+                    "location": "GUDANG",
+                    "vendor_document_number": "SJ-CONTOH-0001",
+                    "description": "Penerimaan obat contoh",
+                    "budget_year": 2026
+                },
+                "transfers": [
+                    {
+                        "description": "Amprah contoh gudang ke farmasi",
+                        "from": "GUDANG",
+                        "to": "FARMASI"
+                    },
+                    {
+                        "description": "Amprah contoh gudang ke pusling",
+                        "from": "GUDANG",
+                        "to": "PUSLING"
+                    }
+                ],
+                "drugs": [
+                    {
+                        "code": "PCT-500",
+                        "name": "Parasetamol 500 mg",
+                        "unit": "TAB",
+                        "category": "OBAT",
+                        "drug_class": "BEBAS",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "PCT2703A",
+                                "expiry_date": "2027-03-31",
+                                "quantity": 200,
+                                "unit_cost": 120,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "PCT2809B",
+                                "expiry_date": "2028-09-30",
+                                "quantity": 500,
+                                "unit_cost": 110,
+                                "funding_source": "KAPITASI"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 300, "PUSLING": 60 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 100, "maximum": 500 }
+                        }
+                    },
+                    {
+                        "code": "AMX-500",
+                        "name": "Amoksisilin 500 mg",
+                        "unit": "KAP",
+                        "category": "OBAT",
+                        "drug_class": "KERAS",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "AMX2706A",
+                                "expiry_date": "2027-06-30",
+                                "quantity": 150,
+                                "unit_cost": 450,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "AMX2812B",
+                                "expiry_date": "2028-12-31",
+                                "quantity": 300,
+                                "unit_cost": 420,
+                                "funding_source": "KAPITASI"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 200, "PUSLING": 45 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 60, "maximum": 300 }
+                        }
+                    },
+                    {
+                        "code": "CTM-4",
+                        "name": "Klorfeniramin maleat 4 mg",
+                        "unit": "TAB",
+                        "category": "OBAT",
+                        "drug_class": "BEBAS-TERBATAS",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "CTM2705A",
+                                "expiry_date": "2027-05-31",
+                                "quantity": 100,
+                                "unit_cost": 60,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "CTM2811B",
+                                "expiry_date": "2028-11-30",
+                                "quantity": 300,
+                                "unit_cost": 55,
+                                "funding_source": "PROGRAM",
+                                "procurement_program": "PKD"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 150, "PUSLING": 30 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 50, "maximum": 250 }
+                        }
+                    },
+                    {
+                        "code": "ANT-DOEN",
+                        "name": "Antasida DOEN tablet kunyah",
+                        "unit": "TAB",
+                        "category": "OBAT",
+                        "drug_class": "BEBAS",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "ANT2704A",
+                                "expiry_date": "2027-04-30",
+                                "quantity": 100,
+                                "unit_cost": 90,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "ANT2810B",
+                                "expiry_date": "2028-10-31",
+                                "quantity": 200,
+                                "unit_cost": 85,
+                                "funding_source": "KAPITASI"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 150, "PUSLING": 30 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 40, "maximum": 200 }
+                        }
+                    },
+                    {
+                        "code": "ORS-200",
+                        "name": "Oralit 200 ml",
+                        "unit": "SAC",
+                        "category": "OBAT",
+                        "drug_class": "BEBAS",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "ORS2708A",
+                                "expiry_date": "2027-08-31",
+                                "quantity": 50,
+                                "unit_cost": 500,
+                                "funding_source": "PROGRAM",
+                                "procurement_program": "PKD"
+                            },
+                            {
+                                "batch_number": "ORS2902B",
+                                "expiry_date": "2029-02-28",
+                                "quantity": 150,
+                                "unit_cost": 480,
+                                "funding_source": "APBD"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 80, "PUSLING": 20 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 20, "maximum": 120 }
+                        }
+                    },
+                    {
+                        "code": "DZP-2",
+                        "name": "Diazepam 2 mg",
+                        "unit": "TAB",
+                        "category": "OBAT",
+                        "drug_class": "PSIKOTROPIKA",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "DZP2709A",
+                                "expiry_date": "2027-09-30",
+                                "quantity": 30,
+                                "unit_cost": 150,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "DZP2812B",
+                                "expiry_date": "2028-12-31",
+                                "quantity": 60,
+                                "unit_cost": 140,
+                                "funding_source": "KAPITASI"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 50 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 10, "maximum": 60 }
+                        }
+                    },
+                    {
+                        "code": "KDN-10",
+                        "name": "Kodein 10 mg",
+                        "unit": "TAB",
+                        "category": "OBAT",
+                        "drug_class": "NARKOTIKA",
+                        "generic": true,
+                        "formulary": true,
+                        "batches": [
+                            {
+                                "batch_number": "KDN2707A",
+                                "expiry_date": "2027-07-31",
+                                "quantity": 20,
+                                "unit_cost": 700,
+                                "funding_source": "APBD"
+                            },
+                            {
+                                "batch_number": "KDN2901B",
+                                "expiry_date": "2029-01-31",
+                                "quantity": 40,
+                                "unit_cost": 680,
+                                "funding_source": "KAPITASI"
+                            }
+                        ],
+                        "transfers": { "FARMASI": 30 },
+                        "stock_levels": {
+                            "FARMASI": { "minimum": 10, "maximum": 40 }
+                        }
+                    }
+                ]
+            },
+            "clinic": {
+                "rooms": [
+                    { "code": "R-UMUM", "name": "Ruang Periksa Umum" },
+                    { "code": "R-PUSLING", "name": "Ruang Pusling" }
+                ],
+                "sections": [
+                    {
+                        "name": "Poli Umum",
+                        "kind": "rawat_jalan",
+                        "queue_prefix": "A",
+                        "rooms": ["R-UMUM"]
+                    },
+                    {
+                        "name": "Pusling",
+                        "kind": "rawat_jalan",
+                        "queue_prefix": "P",
+                        "rooms": ["R-PUSLING"]
+                    }
+                ],
+                "practitioners": [
+                    {
+                        "name": "dr. Contoh Sehat",
+                        "nik": "3171010503850003",
+                        "gender": "female",
+                        "phone": "081200000101",
+                        "profession": "dokter"
+                    }
+                ],
+                "patients": [
+                    {
+                        "name": "Budi Contoh",
+                        "nationality": "ID",
+                        "nik": "3171011204800001",
+                        "gender": "male",
+                        "birth_date": "1980-04-12",
+                        "phone": "081200000111",
+                        "patient_type": "UMUM",
+                        "village": "3171011001",
+                        "street": "Jl. Contoh No. 1"
+                    },
+                    {
+                        "name": "Siti Contoh",
+                        "nationality": "ID",
+                        "nik": "3171016107920002",
+                        "gender": "female",
+                        "birth_date": "1992-07-21",
+                        "phone": "081200000112",
+                        "patient_type": "UMUM",
+                        "village": "3171011002",
+                        "street": "Jl. Contoh No. 2"
+                    }
+                ],
+                "visits": [
+                    {
+                        "patient": "3171011204800001",
+                        "section": "Poli Umum",
+                        "room": "R-UMUM",
+                        "doctor": "dr. Contoh Sehat",
+                        "condition": "sakit",
+                        "physical": {
+                            "pulse_rate": 84,
+                            "respiratory_rate": 20,
+                            "consciousness": "COMPOS MENTIS",
+                            "systolic": 120,
+                            "diastolic": 80,
+                            "height": 168,
+                            "weight": 65,
+                            "waist_circumference": 82
+                        },
+                        "prescription": [
+                            {
+                                "drug": "PCT-500",
+                                "quantity": 10,
+                                "signa": "3x1",
+                                "usage_instruction": "Setelah Makan"
+                            },
+                            {
+                                "drug": "AMX-500",
+                                "quantity": 15,
+                                "signa": "3x1",
+                                "usage_instruction": "Setelah Makan"
+                            }
+                        ]
+                    },
+                    {
+                        "patient": "3171016107920002",
+                        "section": "Pusling",
+                        "room": "R-PUSLING",
+                        "doctor": "dr. Contoh Sehat",
+                        "condition": "sakit",
+                        "physical": {
+                            "pulse_rate": 80,
+                            "respiratory_rate": 18,
+                            "consciousness": "COMPOS MENTIS",
+                            "systolic": 110,
+                            "diastolic": 70,
+                            "height": 155,
+                            "weight": 50,
+                            "waist_circumference": 70
+                        },
+                        "prescription": [
+                            {
+                                "drug": "CTM-4",
+                                "quantity": 10,
+                                "signa": "3x1",
+                                "usage_instruction": "Setelah Makan"
+                            },
+                            {
+                                "drug": "ANT-DOEN",
+                                "quantity": 10,
+                                "signa": "3x1",
+                                "usage_instruction": "Sebelum Makan"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "pharmacy": {
+                "service_locations": [
+                    {
+                        "unit": "KCS-01",
+                        "section": null,
+                        "location": "FARMASI"
+                    },
+                    {
+                        "unit": "KCS-01",
+                        "section": "Pusling",
+                        "location": "PUSLING"
+                    }
+                ]
             }
         }
     }
