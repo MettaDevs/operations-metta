@@ -260,6 +260,73 @@ export const sysAdminArea: NavigationAreaEntry = {
                 },
             ],
         },
+        {
+            id: 'inventory',
+            label: 'Persediaan',
+            icon: 'package',
+            items: [
+                {
+                    id: 'items',
+                    label: 'Barang',
+                    href: '/sysadmin/inventory/items',
+                    permission: 'core.inventory-item.read',
+                },
+                {
+                    id: 'adjustments',
+                    label: 'Penyesuaian stok',
+                    href: '/sysadmin/inventory/adjustments',
+                    permission: 'core.inventory-adjustment.read',
+                },
+                {
+                    id: 'item-ledger-entries',
+                    label: 'Kartu stok',
+                    href: '/sysadmin/inventory/item-ledger-entries',
+                    permission: 'core.inventory-stock.read',
+                },
+                {
+                    id: 'setup',
+                    label: 'Setelan persediaan',
+                    href: '/sysadmin/inventory/setup',
+                    section: 'Setup',
+                    permission: 'core.inventory-setup.read',
+                },
+                {
+                    id: 'locations',
+                    label: 'Lokasi',
+                    href: '/sysadmin/inventory/locations',
+                    section: 'Setup',
+                    permission: 'core.inventory-location.read',
+                },
+                {
+                    id: 'item-categories',
+                    label: 'Kategori barang',
+                    href: '/sysadmin/inventory/item-categories',
+                    section: 'Setup',
+                    permission: 'core.inventory-category.read',
+                },
+                {
+                    id: 'item-tracking-codes',
+                    label: 'Profil pelacakan',
+                    href: '/sysadmin/inventory/item-tracking-codes',
+                    section: 'Setup',
+                    permission: 'core.inventory-tracking.read',
+                },
+                {
+                    id: 'units-of-measure',
+                    label: 'Satuan',
+                    href: '/sysadmin/inventory/units-of-measure',
+                    section: 'Setup',
+                    permission: 'core.inventory-unit.read',
+                },
+                {
+                    id: 'reason-codes',
+                    label: 'Alasan penyesuaian',
+                    href: '/sysadmin/inventory/reason-codes',
+                    section: 'Setup',
+                    permission: 'core.inventory-reason.read',
+                },
+            ],
+        },
     ],
 };
 

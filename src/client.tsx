@@ -36,6 +36,8 @@ import { page as foundationCalendarCalendarsPage } from './foundation/calendar/c
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
+import { page as foundationInventoryCodeListReasonCodesPage } from './foundation/inventory/code-list/reason-codes.page.tsx';
+import { page as foundationInventoryCodeListUnitsOfMeasurePage } from './foundation/inventory/code-list/units-of-measure.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
 import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
@@ -449,6 +451,23 @@ const foundationInventoryCodeListProcurementProgramsRoute = createRoute({
     },
 });
 
+const foundationInventoryCodeListReasonCodesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListReasonCodesPage.path,
+    component: foundationInventoryCodeListReasonCodesPage.component,
+    validateSearch: foundationInventoryCodeListReasonCodesPage.validateSearch,
+    staticData: { title: foundationInventoryCodeListReasonCodesPage.title },
+});
+
+const foundationInventoryCodeListUnitsOfMeasureRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListUnitsOfMeasurePage.path,
+    component: foundationInventoryCodeListUnitsOfMeasurePage.component,
+    validateSearch:
+        foundationInventoryCodeListUnitsOfMeasurePage.validateSearch,
+    staticData: { title: foundationInventoryCodeListUnitsOfMeasurePage.title },
+});
+
 const foundationInventoryItemUnitItemUnitsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryItemUnitItemUnitsPage.path,
@@ -666,6 +685,8 @@ const routeTree = rootRoute.addChildren([
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,
+        foundationInventoryCodeListReasonCodesRoute,
+        foundationInventoryCodeListUnitsOfMeasureRoute,
         foundationInventoryItemUnitItemUnitsRoute,
         foundationInventoryTransferTransferOrdersRoute,
         foundationInventoryTransferTransferReceiptsRoute,

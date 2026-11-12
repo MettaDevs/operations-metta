@@ -1365,6 +1365,18 @@
             }
         }
     },
+    "inventoryLocationOperatingUnits": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/inventory/locations/operating-units",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "inventoryUnitOfMeasureList": {
         "~orpc": {
             "errorMap": {},
@@ -1816,6 +1828,18 @@
             "route": {
                 "method": "GET",
                 "path": "/api/v1/inventory/adjustments/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "inventoryAdjustmentEntries": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/inventory/adjustments/{id}/entries",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }
