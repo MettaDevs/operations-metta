@@ -1,5 +1,6 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
+import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
@@ -11,10 +12,11 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -27,15 +29,18 @@ export type CodeEntry = {
     id: string;
     code: string;
     name: string;
+    consumption?: boolean;
     version: number;
 };
 type Errors = Record<string, string[]>;
-type Fields = { code: string; name: string };
+type Fields = { code: string; name: string; consumption?: boolean };
 
 // Endpoint satu daftar kode (kode pendek yang diketik pengguna dan nama), misalnya sumber dana atau program.
 export type CodeListSource = {
     title: string;
     label: string;
+    // Daftar yang punya tanda pemakaian (alasan penyesuaian) menampilkan saklarnya di kartu.
+    consumption?: { label: string; hint: string };
     list: (
         query: {
             q: string;
@@ -71,7 +76,12 @@ export function CodeEntryCard({
     onClose: () => void;
 }): ReactNode {
     const editing = entry === null || canManage;
-    const blank = { code: entry?.code ?? '', name: entry?.name ?? '' };
+    const blank = {
+        code: entry?.code ?? '',
+        name: entry?.name ?? '',
+        consumption: entry?.consumption ?? false,
+    };
+    const idPrefix = useId();
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -91,12 +101,15 @@ export function CodeEntryCard({
         setErrors({});
         setMessage(null);
         try {
+            const fields = source.consumption
+                ? form
+                : { code: form.code, name: form.name };
             const saved = entry
                 ? await source.update(entry.id, {
-                      ...form,
+                      ...fields,
                       version: entry.version,
                   })
-                : await source.create(form);
+                : await source.create(fields);
             toast.success(
                 entry
                     ? `${source.title} diperbarui.`
@@ -217,6 +230,30 @@ export function CodeEntryCard({
                             }
                         />
                     </FormControl>
+                    {source.consumption && (
+                        <FormControl
+                            error={errors.consumption?.[0]}
+                            hint={source.consumption.hint}
+                            data-error-field="consumption"
+                        >
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id={`${idPrefix}-consumption`}
+                                    checked={form.consumption}
+                                    disabled={!editing}
+                                    onCheckedChange={(consumption) =>
+                                        setForm({ ...form, consumption })
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={`${idPrefix}-consumption`}
+                                    className="font-normal"
+                                >
+                                    {source.consumption.label}
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
+                    )}
                 </FormGrid>
             </PageDialogBody>
             {confirmation}
@@ -323,6 +360,22 @@ export function CodeListScreen({
                             ),
                             sortValue: (entry) => entry.name,
                         },
+                        ...(source.consumption
+                            ? [
+                                  {
+                                      id: 'consumption',
+                                      header: 'Pemakaian',
+                                      width: 120,
+                                      cell: (entry: CodeEntry) => (
+                                          <DataTableText>
+                                              {entry.consumption
+                                                  ? 'Ya'
+                                                  : 'Tidak'}
+                                          </DataTableText>
+                                      ),
+                                  },
+                              ]
+                            : []),
                     ]}
                 />
             </ListPageLayout>

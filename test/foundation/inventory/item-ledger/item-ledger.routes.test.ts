@@ -117,14 +117,7 @@ describe.skipIf(!process.env.DB_HOST)('inventory stock and stock card', () => {
             ]),
         ).toEqual([
             ['2026-10-03', 'penyesuaian_tambah', 'S2', '3', '8', 'penyesuaian'],
-            [
-                '2026-10-05',
-                'penyesuaian_kurang',
-                'S1',
-                '-4',
-                '4',
-                'penyesuaian',
-            ],
+            ['2026-10-05', 'pemakaian', 'S1', '-4', '4', 'penyesuaian'],
         ]);
         expect(card.data[0]?.document.number).toMatch(/^PNY-/);
     });

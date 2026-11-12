@@ -32,6 +32,7 @@ import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
 import type { Reference } from '../master-lookup.tsx';
 import { PolicySelect } from '../setup/stock-policy-options.tsx';
+import { StockkeepingUnits } from '../stockkeeping-unit/stockkeeping-units.tsx';
 import { TrackingCodeCard } from '../tracking-code/tracking-code-card.tsx';
 import { TrackingCodeLookup } from '../tracking-code/tracking-code-lookup.tsx';
 import type { Item } from './item-lookup.tsx';
@@ -614,6 +615,13 @@ export function ItemCard({
                                         />
                                     </FormControl>
                                 </FormGrid>
+                            </CollapsibleSection>
+                            <CollapsibleSection
+                                value="stockkeeping-units"
+                                title="Stok minimum dan maksimum per lokasi"
+                                summary="Stok maksimum menjadi stok optimum di LPLPO"
+                            >
+                                <StockkeepingUnits item={record} />
                             </CollapsibleSection>
                         </CollapsibleSectionGroup>
                     </FactBox>

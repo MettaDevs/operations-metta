@@ -21,6 +21,10 @@ export const unitsOfMeasure: CodeListSource = {
 export const reasonCodes: CodeListSource = {
     title: 'Alasan penyesuaian',
     label: 'alasan',
+    consumption: {
+        label: 'Dicatat sebagai pemakaian',
+        hint: 'Stok yang keluar dengan alasan ini dihitung sebagai pemakaian, misalnya di kolom pemakaian LPLPO. Matikan untuk alasan seperti pemusnahan atau kedaluwarsa, yang dihitung sebagai penyesuaian.',
+    },
     list: async (query, signal) =>
         (await api.inventoryReasonCodeList({ query }, { signal })).body,
     create: async (body) =>

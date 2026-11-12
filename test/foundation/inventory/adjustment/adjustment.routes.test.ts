@@ -312,6 +312,77 @@ describe.skipIf(!process.env.DB_HOST)('inventory adjustments', () => {
         ]);
     });
 
+    test('a reason counted as consumption posts unit use both ways, other reasons post adjustments, and the switch belongs to the reason', async () => {
+        const reason = async (code: string, consumption: boolean) =>
+            json<{
+                data: { id: string; consumption: boolean; version: number };
+            }>(
+                await business.admin.post(`${inventoryApi}/reason-codes`, {
+                    code,
+                    name: `Alasan ${code}`,
+                    consumption,
+                }),
+                201,
+            );
+        const ward = (await reason('PAKAI-POLI', true)).data;
+        const broken = (await reason('RUSAK', false)).data;
+        expect([ward.consumption, broken.consumption]).toEqual([true, false]);
+        const consumed = await business.item('PNY-PAKAI');
+        await business.posted('masuk', location.id, [
+            { item_id: consumed.id, quantity: 10, unit_cost: 100 },
+        ]);
+        const issue = async (reasonId: string, quantity: number) =>
+            json<{ data: { id: string; version: number } }>(
+                await business.post(
+                    (
+                        await json<{ data: { id: string; version: number } }>(
+                            await business.admin.post(path, {
+                                direction: 'keluar',
+                                location_id: location.id,
+                                posting_date: '2026-11-01',
+                                reason_id: reasonId,
+                                lines: [{ item_id: consumed.id, quantity }],
+                            }),
+                            201,
+                        )
+                    ).data,
+                ),
+                200,
+            );
+        const used = (await issue(ward.id, 3)).data;
+        await issue(broken.id, 2);
+        await json(await business.reverse(used), 200);
+        const kinds = await pool.unsafe<{ kind: string; quantity: string }[]>(
+            `select jenis as kind, trim_scale(jumlah)::text as quantity from gd_tr_kartu_gudang
+             where tenant_id = $1 and barang_id = $2 order by id`,
+            [business.tenantId, consumed.id],
+        );
+        expect([...kinds]).toEqual([
+            { kind: 'penyesuaian_tambah', quantity: '10' },
+            { kind: 'pemakaian', quantity: '-3' },
+            { kind: 'penyesuaian_kurang', quantity: '-2' },
+            { kind: 'pemakaian', quantity: '3' },
+        ]);
+        const turnedOff = await json<{ data: { consumption: boolean } }>(
+            await business.admin.patch(
+                `${inventoryApi}/reason-codes/${ward.id}`,
+                {
+                    code: 'PAKAI-POLI',
+                    name: 'Alasan PAKAI-POLI',
+                    consumption: false,
+                    version: ward.version,
+                },
+            ),
+            200,
+        );
+        expect(turnedOff.data.consumption).toBe(false);
+        const units = await json<{ data: Record<string, unknown>[] }>(
+            await business.admin.get(`${inventoryApi}/units-of-measure`),
+            200,
+        );
+        expect(units.data.every((unit) => !('consumption' in unit))).toBe(true);
+    });
+
     test('the list filters by stock direction and status while keeping its own sort direction', async () => {
         const inbound = await business.draft('masuk', location.id, [line(1)]);
         const outbound = await business.draft('keluar', location.id, [
