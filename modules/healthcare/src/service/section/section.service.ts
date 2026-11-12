@@ -30,6 +30,12 @@ const rowSql = `select * from (
                                                          and r.deleted_at is null
                                      where l.tenant_id = s.tenant_id and l.section_id = s.id and l.deleted_at is null),
                                     '[]'::json) as rooms,
+                           coalesce((select json_agg(json_build_object('id', k.id, 'code', k.kode, 'name', k.nama)
+                                                     order by k.urutan, k.kode)
+                                     from sim_m_section_klaster c
+                                     join sim_m_klaster k on k.tenant_id = c.tenant_id and k.id = c.klaster_id
+                                     where c.tenant_id = s.tenant_id and c.section_id = s.id and c.deleted_at is null),
+                                    '[]'::json) as clusters,
                            s.aktif as is_active, s.version
                     from sim_m_section s
                     join organizations o on o.tenant_id = s.tenant_id and o.id = s.operating_unit_id
@@ -68,6 +74,9 @@ function checked(body: unknown) {
         queueMode: data.queue_mode,
         queuePrefix,
         roomIds: data.room_ids ? [...new Set(data.room_ids)] : undefined,
+        clusterIds: data.cluster_ids
+            ? [...new Set(data.cluster_ids)]
+            : undefined,
         isActive: data.is_active ?? true,
     };
 }
@@ -109,6 +118,18 @@ export class Sections {
                     is_active: z.boolean(),
                 }),
                 `select id, operating_unit_id, kode as code, nama as name, aktif as is_active from sim_m_ruangan
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                [this.workspace.tenantId],
+            ),
+            // Klaster yang dapat dipilih untuk section. Klaster nonaktif ikut supaya pilihan tersimpan tetap terbaca.
+            clusters: await this.db.rows(
+                z.object({
+                    id: z.string(),
+                    code: z.string(),
+                    name: z.string(),
+                    is_active: z.boolean(),
+                }),
+                `select id, kode as code, nama as name, aktif as is_active from sim_m_klaster
                  where tenant_id = $1 and deleted_at is null order by urutan, kode`,
                 [this.workspace.tenantId],
             ),
@@ -193,6 +214,49 @@ export class Sections {
             });
     }
 
+    private async checkClusters(clusterIds: string[]) {
+        if (!clusterIds.length) return;
+        const ids = clusterIds.filter((id) => lookupId(id));
+        const found = ids.length
+            ? await this.db.rows(
+                  z.object({ id: z.string() }),
+                  `select id from sim_m_klaster
+                   where tenant_id = $1 and deleted_at is null
+                     and id in (${ids.map((_, index) => `$${index + 2}`).join(',')})`,
+                  [this.workspace.tenantId, ...ids],
+              )
+            : [];
+        if (found.length !== clusterIds.length)
+            validation({ cluster_ids: 'Pilih klaster dari daftar.' });
+    }
+
+    private async saveClusters(
+        sectionId: string,
+        clusterIds: string[],
+        current: string[],
+    ) {
+        const stamp = nowSql();
+        const removed = current.filter((id) => !clusterIds.includes(id));
+        if (removed.length)
+            await this.db.execute(
+                `update sim_m_section_klaster set deleted_at = $1, updated_at = $1
+                 where tenant_id = $2 and section_id = $3 and deleted_at is null
+                   and klaster_id in (${removed.map((_, index) => `$${index + 4}`).join(',')})`,
+                [stamp, this.workspace.tenantId, sectionId, ...removed],
+            );
+        for (const clusterId of clusterIds.filter(
+            (id) => !current.includes(id),
+        ))
+            await this.db.insert('sim_m_section_klaster', {
+                id: Bun.randomUUIDv7(),
+                tenant_id: this.workspace.tenantId,
+                section_id: sectionId,
+                klaster_id: clusterId,
+                created_at: stamp,
+                updated_at: stamp,
+            });
+    }
+
     private async saveRooms(
         sectionId: string,
         roomIds: string[],
@@ -228,6 +292,8 @@ export class Sections {
         );
         const roomIds = data.roomIds ?? [];
         await this.checkRooms(operatingUnitId, roomIds);
+        const clusterIds = data.clusterIds ?? [];
+        await this.checkClusters(clusterIds);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -247,6 +313,7 @@ export class Sections {
                     updated_at: stamp,
                 });
                 await this.saveRooms(id, roomIds, []);
+                await this.saveClusters(id, clusterIds, []);
             });
         } catch (error) {
             nameTaken(error);
@@ -273,6 +340,8 @@ export class Sections {
         const roomIds = data.roomIds ?? currentRooms;
         if (data.roomIds || operatingUnitId !== current.operating_unit_id)
             await this.checkRooms(operatingUnitId, roomIds);
+        const currentClusters = current.clusters.map((cluster) => cluster.id);
+        if (data.clusterIds) await this.checkClusters(data.clusterIds);
         const version = expectedVersion(request, body);
         let updated = 0;
         try {
@@ -296,8 +365,15 @@ export class Sections {
                         version,
                     ],
                 );
-                if (updated)
+                if (updated) {
                     await this.saveRooms(current.id, roomIds, currentRooms);
+                    if (data.clusterIds)
+                        await this.saveClusters(
+                            current.id,
+                            data.clusterIds,
+                            currentClusters,
+                        );
+                }
             });
         } catch (error) {
             nameTaken(error);
@@ -307,7 +383,7 @@ export class Sections {
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Section yang dihapus ikut melepas ruangannya; ruangannya sendiri tetap ada.
+    // Section yang dihapus ikut melepas ruangan dan klasternya; ruangan dan klasternya sendiri tetap ada.
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('section', 'delete');
         const current = await this.row(id);
@@ -323,11 +399,16 @@ export class Sections {
                     expectedVersion(request, body),
                 ],
             );
-            if (deleted)
+            if (deleted) {
                 await this.db.execute(
                     'update sim_m_section_ruangan set deleted_at = $1, updated_at = $1 where tenant_id = $2 and section_id = $3 and deleted_at is null',
                     [stamp, this.workspace.tenantId, current.id],
                 );
+                await this.db.execute(
+                    'update sim_m_section_klaster set deleted_at = $1, updated_at = $1 where tenant_id = $2 and section_id = $3 and deleted_at is null',
+                    [stamp, this.workspace.tenantId, current.id],
+                );
+            }
         });
         if (!deleted) coded(409, 'stale_version', staleMessage);
         return { status: 204, headers: {}, body: undefined };

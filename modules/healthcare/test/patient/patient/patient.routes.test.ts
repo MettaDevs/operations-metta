@@ -1446,6 +1446,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ['Penjaminan', 'coverage'],
             ['Pelayanan', 'service'],
             ['Tenaga kesehatan', 'practitioner'],
+            ['Klinis', 'clinical'],
         ]);
         const pages = new Map(
             pageFiles().map((file) => [readPage(file).path, file]),

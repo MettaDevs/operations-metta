@@ -96,6 +96,7 @@ function SectionCard({
         queue_mode: section?.queue_mode ?? defaultQueueMode,
         queue_prefix: section?.queue_prefix ?? '',
         room_ids: (section?.rooms ?? []).map((room) => room.id),
+        cluster_ids: (section?.clusters ?? []).map((cluster) => cluster.id),
         // Section baru langsung aktif.
         is_active: section?.is_active ?? true,
     };
@@ -119,6 +120,16 @@ function SectionCard({
             label: `${room.code} · ${room.name}${room.is_active ? '' : ' (nonaktif)'}`,
         }));
 
+    const clusters = metadata.clusters
+        .filter(
+            (cluster) =>
+                cluster.is_active || form.cluster_ids.includes(cluster.id),
+        )
+        .map((cluster) => ({
+            value: cluster.id,
+            label: `${cluster.code} ${cluster.name}${cluster.is_active ? '' : ' (nonaktif)'}`,
+        }));
+
     const save = async () => {
         setBusy(true);
         setErrors({});
@@ -132,6 +143,7 @@ function SectionCard({
             queue_mode: form.queue_mode,
             queue_prefix: form.queue_prefix || null,
             room_ids: form.room_ids,
+            cluster_ids: form.cluster_ids,
             is_active: form.is_active,
         };
         try {
@@ -401,6 +413,38 @@ function SectionCard({
                                 value={(section?.rooms ?? [])
                                     .map((room) => room.name)
                                     .join(', ')}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
+                    <FormControl
+                        error={errors.cluster_ids?.[0]}
+                        hint="Pasien hanya bisa didaftarkan ke section ini bila klasternya dipilih di sini. Kosongkan bila section melayani semua klaster."
+                    >
+                        {editing ? (
+                            <MultiSelect
+                                label="Klaster"
+                                items={clusters}
+                                value={form.cluster_ids}
+                                onValueChange={(clusterIds) =>
+                                    setForm({
+                                        ...form,
+                                        cluster_ids: clusterIds,
+                                    })
+                                }
+                                placeholder="Semua klaster"
+                                searchPlaceholder="Cari klaster"
+                                emptyMessage="Belum ada klaster. Tambahkan di layar Klaster."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Klaster"
+                                value={
+                                    (section?.clusters ?? [])
+                                        .map((cluster) => cluster.name)
+                                        .join(', ') || 'Semua klaster'
+                                }
                                 readOnly
                             />
                         )}

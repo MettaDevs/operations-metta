@@ -18,6 +18,10 @@ export const visitInputSchema = z.object({
     screening_sign_ids: z.array(z.string()).optional(),
     section_id: z.string(),
     practice_schedule_id: optionalText,
+    // Ditanyakan hanya bila siklus hidup bersyarat hamil dapat berlaku untuk pasien; bawaannya tidak hamil.
+    pregnant: z.boolean().optional(),
+    // Pilihan petugas yang menggantikan siklus hidup hasil hitungan. Klaster mengikuti siklus hidup ini.
+    life_cycle_id: optionalText,
 });
 export type VisitInput = z.infer<typeof visitInputSchema>;
 
@@ -33,7 +37,13 @@ export const visitListQuerySchema = listParametersSchema.extend({
     practitioner_id: z.string().optional(),
     patient_type_id: z.string().optional(),
     patient_id: z.string().optional(),
+    cluster_id: z.string().optional(),
     status: z.string().optional(),
+});
+
+export const visitClassificationQuerySchema = z.object({
+    patient_id: z.string(),
+    pregnant: z.enum(['true', 'false']).optional(),
 });
 
 export const visitDestinationSchema = z.object({
@@ -78,6 +88,13 @@ export const visitSchema = z.object({
     screening_category_id: z.string().nullable(),
     screening_category_name: z.string().nullable(),
     screening_category_color: z.string().nullable(),
+    pregnant: z.boolean(),
+    // Kosong untuk kunjungan yang didaftarkan sebelum klaster ILP ada.
+    life_cycle_id: z.string().nullable(),
+    life_cycle_name: z.string().nullable(),
+    cluster_id: z.string().nullable(),
+    cluster_code: z.string().nullable(),
+    cluster_name: z.string().nullable(),
     status: z.string(),
     cancelled_by_user_id: z.string().nullable(),
     cancelled_at: z.string().nullable(),
@@ -120,4 +137,8 @@ export const visitListRowSchema = z.object({
     examination_number: z.string(),
     screening_category_name: z.string().nullable(),
     screening_category_color: z.string().nullable(),
+    life_cycle_name: z.string().nullable(),
+    cluster_id: z.string().nullable(),
+    cluster_code: z.string().nullable(),
+    cluster_name: z.string().nullable(),
 });

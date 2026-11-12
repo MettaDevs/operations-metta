@@ -88,6 +88,7 @@ type PatientMetadata = ApiBody<'healthcarePatientMetadata'>;
 type PatientRow = ApiBody<'healthcarePatientList'>['data'][number];
 type Section = Metadata['sections'][number];
 type Schedule = Section['schedules'][number];
+type LifeCycle = Metadata['life_cycles'][number];
 type Errors = Record<string, string[]>;
 
 // Cara bayar kunjungan. `null` berarti mengikuti cara bayar utama pasien (atau tipe bawaan), sampai petugas
@@ -108,6 +109,9 @@ type Draft = {
     kind: string | null;
     sectionId: string | null;
     scheduleId: string | null;
+    pregnant: boolean;
+    // Pilihan petugas; null mengikuti siklus hidup hasil hitungan server.
+    lifeCycleId: string | null;
 };
 
 const emptyDraft: Draft = {
@@ -120,6 +124,8 @@ const emptyDraft: Draft = {
     kind: null,
     sectionId: null,
     scheduleId: null,
+    pregnant: false,
+    lifeCycleId: null,
 };
 
 function draftOf(visit: Visit, metadata: Metadata): Draft {
@@ -152,7 +158,19 @@ function draftOf(visit: Visit, metadata: Metadata): Draft {
         kind: null,
         sectionId: destination?.section_id ?? null,
         scheduleId: destination?.practice_schedule_id ?? null,
+        pregnant: visit.pregnant,
+        lifeCycleId: visit.life_cycle_id,
     };
+}
+
+// Section yang melayani klaster. Section tanpa klaster melayani semua klaster, dan selama klaster belum diketahui
+// semua section ditawarkan; server tetap memeriksanya saat menyimpan.
+function serves(section: Section, clusterId: string | null): boolean {
+    return (
+        clusterId === null ||
+        section.cluster_ids.length === 0 ||
+        section.cluster_ids.includes(clusterId)
+    );
 }
 
 // Tipe pasien beserta penjamin bawaannya, seperti layar lama saat tipe dipilih.
@@ -640,17 +658,28 @@ function VisitPanel({
     draft,
     payer,
     locked,
+    asksPregnancy,
+    lifeCycle,
+    lifeCycleText,
+    lifeCycleMessage,
     error,
     set,
     setPayer,
+    setPregnant,
 }: {
     metadata: Metadata;
     draft: Draft;
     payer: Payer;
     locked: boolean;
+    asksPregnancy: boolean;
+    lifeCycle: LifeCycle | null;
+    // Siklus hidup dan klaster kunjungan tersimpan, ditampilkan apa adanya.
+    lifeCycleText: { lifeCycle: string; cluster: string } | null;
+    lifeCycleMessage: string | null;
     error: (field: string) => string | undefined;
     set: <K extends keyof Draft>(field: K, value: Draft[K]) => void;
     setPayer: (payer: Payer) => void;
+    setPregnant: (pregnant: boolean) => void;
 }): ReactNode {
     const behaviors = payer.patientType?.behaviors ?? [];
     const needsGuarantor = behaviors.includes('requires_guarantor');
@@ -730,6 +759,71 @@ function VisitPanel({
                         />
                     </FormControl>
                 )}
+                {lifeCycleText ? (
+                    <FormControl>
+                        <Input
+                            label="Siklus hidup"
+                            value={lifeCycleText.lifeCycle}
+                            readOnly
+                        />
+                    </FormControl>
+                ) : (
+                    !locked && (
+                        <FormControl
+                            error={
+                                error('life_cycle_id') ??
+                                lifeCycleMessage ??
+                                undefined
+                            }
+                            hint="Terisi dari umur, jenis kelamin, dan status hamil pasien. Ganti bila pasien perlu dicatat di siklus hidup lain."
+                        >
+                            <InlineLookup<LifeCycle>
+                                label="Siklus hidup"
+                                required
+                                items={metadata.life_cycles}
+                                value={lifeCycle}
+                                onValueChange={(item) =>
+                                    set('lifeCycleId', item.id)
+                                }
+                                getItemValue={(item) => item.id}
+                                getItemLabel={(item) => item.name}
+                                getSearchText={(item) =>
+                                    `${item.code} ${item.name} ${item.cluster_code} ${item.cluster_name}`
+                                }
+                                placeholder="Pilih pasien dulu"
+                                emptyMessage="Siklus hidup tidak ditemukan. Tambahkan di Siklus hidup."
+                                columns={[
+                                    {
+                                        id: 'name',
+                                        header: 'Siklus hidup',
+                                        cell: (item) => item.name,
+                                    },
+                                    {
+                                        id: 'cluster',
+                                        header: 'Klaster',
+                                        cell: (item) =>
+                                            `${item.cluster_code} ${item.cluster_name}`,
+                                    },
+                                ]}
+                                showDetails={false}
+                            />
+                        </FormControl>
+                    )
+                )}
+                {(lifeCycleText !== null || !locked) && (
+                    <FormControl>
+                        <Input
+                            label="Klaster"
+                            value={
+                                lifeCycleText?.cluster ??
+                                (lifeCycle
+                                    ? `${lifeCycle.cluster_code} ${lifeCycle.cluster_name}`
+                                    : '')
+                            }
+                            readOnly
+                        />
+                    </FormControl>
+                )}
             </FormGrid>
             <FormGrid columns={1}>
                 <FormControl error={error('height_cm')}>
@@ -787,6 +881,47 @@ function VisitPanel({
                         </RadioGroup>
                     </FieldSet>
                 </FormControl>
+                {asksPregnancy && (
+                    <FormControl error={error('pregnant')}>
+                        <FieldSet className="gap-1.5">
+                            <FieldLegend variant="label">
+                                Status hamil
+                                <span className="text-destructive"> *</span>
+                            </FieldLegend>
+                            <RadioGroup
+                                aria-label="Status hamil"
+                                className="flex flex-wrap gap-x-6 gap-y-1.5"
+                                value={draft.pregnant ? 'yes' : 'no'}
+                                onValueChange={(value) =>
+                                    setPregnant(value === 'yes')
+                                }
+                            >
+                                {(
+                                    [
+                                        ['yes', 'Ya'],
+                                        ['no', 'Tidak'],
+                                    ] as const
+                                ).map(([value, label]) => (
+                                    <div
+                                        key={value}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <RadioGroupItem
+                                            id={`visit-pregnant-${value}`}
+                                            value={value}
+                                        />
+                                        <Label
+                                            htmlFor={`visit-pregnant-${value}`}
+                                            className="font-normal"
+                                        >
+                                            {label}
+                                        </Label>
+                                    </div>
+                                ))}
+                            </RadioGroup>
+                        </FieldSet>
+                    </FormControl>
+                )}
                 <FormControl error={error('patient_condition_ids')}>
                     <FieldSet className="gap-1.5">
                         <FieldLegend variant="label">
@@ -976,17 +1111,21 @@ function DestinationPanel({
     metadata,
     draft,
     visit,
+    clusterId,
     error,
     choose,
 }: {
     metadata: Metadata;
     draft: Draft;
     visit: Visit | null;
+    clusterId: string | null;
     error: (field: string) => string | undefined;
     choose: (next: Pick<Draft, 'kind' | 'sectionId' | 'scheduleId'>) => void;
 }): ReactNode {
     const stored = visit?.destinations[0] ?? null;
-    const sections: Section[] = [...metadata.sections];
+    const sections: Section[] = visit
+        ? [...metadata.sections]
+        : metadata.sections.filter((section) => serves(section, clusterId));
     if (
         visit &&
         stored &&
@@ -999,6 +1138,7 @@ function DestinationPanel({
             queue_mode: '',
             operating_unit_id: visit.operating_unit_id,
             operating_unit_name: visit.operating_unit_name,
+            cluster_ids: [],
             schedules: [],
         });
     const kinds = [
@@ -1048,8 +1188,9 @@ function DestinationPanel({
         return (
             <Alert>
                 <AlertDescription>
-                    Belum ada poli atau ruangan aktif di unit kerja Anda.
-                    Section diatur di Setup → Section.
+                    {metadata.sections.length
+                        ? 'Tidak ada poli atau ruangan yang melayani klaster pasien ini. Klaster yang dilayani diatur di Setup → Section.'
+                        : 'Belum ada poli atau ruangan aktif di unit kerja Anda. Section diatur di Setup → Section.'}
                 </AlertDescription>
             </Alert>
         );
@@ -1431,6 +1572,8 @@ const fieldsShownInPlace = new Set([
     'screening_sign_ids',
     'section_id',
     'practice_schedule_id',
+    'pregnant',
+    'life_cycle_id',
 ]);
 
 /**
@@ -1488,6 +1631,38 @@ export function VisitRegistration({
     });
     const patient = patientQuery.data ?? null;
     const locked = visit !== null;
+    // Siklus hidup dan klaster hasil aturan untuk pasien dan status hamil yang dipilih.
+    const classification = useQuery({
+        queryKey: [
+            'healthcare-visit-classification',
+            shownPatientId,
+            draft.pregnant,
+        ],
+        queryFn: async () => {
+            if (shownPatientId === null) throw new Error('Belum ada pasien.');
+            return (
+                await api.healthcareVisitClassification({
+                    query: {
+                        patient_id: shownPatientId,
+                        pregnant: draft.pregnant ? 'true' : 'false',
+                    },
+                })
+            ).body;
+        },
+        enabled: !locked && shownPatientId !== null,
+    });
+    const asksPregnancy = visit
+        ? visit.pregnant
+        : (classification.data?.asks_pregnancy ?? false);
+    const lifeCycle =
+        (draft.lifeCycleId
+            ? metadata.life_cycles.find((item) => item.id === draft.lifeCycleId)
+            : undefined) ??
+        classification.data?.life_cycle ??
+        null;
+    const clusterId = visit
+        ? visit.cluster_id
+        : (lifeCycle?.cluster_id ?? null);
     const payer = draft.payer ?? defaultPayer(patient, metadata);
     const payerBehaviors = payer.patientType?.behaviors ?? [];
     const set = <K extends keyof Draft>(field: K, value: Draft[K]) =>
@@ -1511,14 +1686,19 @@ export function VisitRegistration({
         void navigate({ to: '/healthcare/registration/visits/new' });
 
     const choosePatient = (id: string | null) => {
-        setDraft((current) => ({ ...current, payer: null }));
+        setDraft((current) => ({
+            ...current,
+            payer: null,
+            pregnant: false,
+            lifeCycleId: null,
+        }));
         setErrors(({ patient_id: _, ...rest }) => rest);
         onPatientChange(id);
     };
 
     const save = async () => {
         const section = metadata.sections.find(
-            (item) => item.id === draft.sectionId,
+            (item) => item.id === draft.sectionId && serves(item, clusterId),
         );
         const missing: Errors = {};
         if (shownPatientId === null)
@@ -1552,8 +1732,10 @@ export function VisitRegistration({
                     visit_condition: draft.condition,
                     patient_condition_ids: draft.conditionIds,
                     screening_sign_ids: draft.signIds,
-                    section_id: draft.sectionId ?? '',
+                    section_id: section?.id ?? '',
                     practice_schedule_id: draft.scheduleId,
+                    pregnant: asksPregnancy && draft.pregnant,
+                    life_cycle_id: draft.lifeCycleId,
                 },
                 headers: { 'idempotency-key': idempotencyKey },
             });
@@ -1742,9 +1924,41 @@ export function VisitRegistration({
                                         draft={draft}
                                         payer={payer}
                                         locked={locked}
+                                        asksPregnancy={asksPregnancy}
+                                        lifeCycle={lifeCycle}
+                                        lifeCycleText={
+                                            visit?.life_cycle_name
+                                                ? {
+                                                      lifeCycle:
+                                                          visit.life_cycle_name,
+                                                      cluster:
+                                                          `${visit.cluster_code ?? ''} ${visit.cluster_name ?? ''}`.trim(),
+                                                  }
+                                                : null
+                                        }
+                                        lifeCycleMessage={
+                                            draft.lifeCycleId
+                                                ? null
+                                                : (classification.data
+                                                      ?.message ?? null)
+                                        }
                                         error={error}
                                         set={set}
                                         setPayer={(next) => set('payer', next)}
+                                        setPregnant={(pregnant) => {
+                                            setDraft((current) => ({
+                                                ...current,
+                                                pregnant,
+                                                lifeCycleId: null,
+                                            }));
+                                            setErrors(
+                                                ({
+                                                    pregnant: _pregnant,
+                                                    life_cycle_id: _lifeCycle,
+                                                    ...rest
+                                                }) => rest,
+                                            );
+                                        }}
                                     />
                                 </CardContent>
                             </Card>
@@ -1776,6 +1990,7 @@ export function VisitRegistration({
                                         metadata={metadata}
                                         draft={draft}
                                         visit={visit}
+                                        clusterId={clusterId}
                                         error={error}
                                         choose={(next) => {
                                             setDraft((current) => ({
