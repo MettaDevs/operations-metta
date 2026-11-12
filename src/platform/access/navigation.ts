@@ -23,7 +23,8 @@ import { z } from 'zod';
 // Entri boleh membawa `section`: judul bagian di sidebar, dengan garis pemisah sebelum bagian berikutnya. Dipakai grup
 // Setup sebuah aplikasi, yang mengumpulkan halaman pengaturan dari beberapa domain dalam satu rail (pola grup Setup di
 // menu module F&O); judul bagiannya mengikuti folder domain di kode, misalnya Penjaminan untuk `coverage/`. Entri
-// berurutan dengan judul yang sama membentuk satu bagian.
+// berjudul sama dikumpulkan menjadi satu bagian di tempat judul itu pertama muncul, karena migration module menambah
+// entri di akhir grup dan tidak boleh memecah bagian yang sudah ada.
 export const navigationGroupSchema = z.object({
     id: z.string(),
     label: z.string(),
@@ -245,6 +246,14 @@ export function visibleNavigation(
                     href,
                     section: section ?? null,
                 }));
+            const sectionOrder = [
+                ...new Set(items.map((item) => item.section)),
+            ];
+            items.sort(
+                (a, b) =>
+                    sectionOrder.indexOf(a.section) -
+                    sectionOrder.indexOf(b.section),
+            );
             return items.length
                 ? [
                       {
