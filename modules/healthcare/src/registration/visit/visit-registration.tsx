@@ -25,7 +25,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@operations-metta/ui/dialog';
-import { FormControl } from '@operations-metta/ui/form-control';
+import { FieldLegend, FieldSet } from '@operations-metta/ui/field';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import {
     InputGroup,
     InputGroupAddon,
@@ -704,38 +705,8 @@ function PatientHistory({
     );
 }
 
-function MeasureInput({
-    id,
-    unit,
-    value,
-    error,
-    onChange,
-}: {
-    id: string;
-    unit: string;
-    value: string;
-    error: string | undefined;
-    onChange: (value: string) => void;
-}): ReactNode {
-    return (
-        <InputGroup className="h-8 max-w-40">
-            <InputGroupInput
-                id={id}
-                inputMode="decimal"
-                value={value}
-                aria-invalid={error ? true : undefined}
-                onChange={(event) => onChange(event.target.value)}
-            />
-            <InputGroupAddon
-                align="inline-end"
-                className="w-11 justify-center border-l border-border pr-0 pl-0"
-            >
-                {unit}
-            </InputGroupAddon>
-        </InputGroup>
-    );
-}
-
+// Isian kunjungan memakai komponen isian produk (label melayang, seperti kartu pasien). Dari layar lama hanya
+// letaknya yang dipertahankan: tipe pasien dan penjaminnya di kiri, ukuran tubuh, status, dan keadaan bertumpuk di kanan.
 function VisitPanel({
     metadata,
     draft,
@@ -757,16 +728,12 @@ function VisitPanel({
     const needsGuarantor = type?.behaviors.includes('requires_guarantor');
     const needsCard = type?.behaviors.includes('requires_card_number');
     return (
-        <div className="grid gap-x-6 md:grid-cols-2">
-            <div>
-                <Row
-                    label="Tipe pasien"
-                    required
-                    error={error('patient_type_id')}
-                >
+        <div className="grid items-start gap-x-6 gap-y-4 md:grid-cols-2">
+            <FormGrid columns={1}>
+                <FormControl error={error('patient_type_id')}>
                     <Select
-                        ariaLabel="Tipe pasien"
-                        className="h-8"
+                        label="Tipe pasien"
+                        required
                         items={metadata.patient_types.map((item) => ({
                             value: item.id,
                             label: item.name,
@@ -785,20 +752,15 @@ function VisitPanel({
                                 cardNumber: payer.cardNumber,
                             });
                         }}
-                        placeholder="Pilih tipe pasien"
                         searchPlaceholder="Cari tipe pasien"
                         emptyMessage="Tipe pasien tidak ditemukan."
                     />
-                </Row>
+                </FormControl>
                 {needsGuarantor && (
-                    <Row
-                        label="Penjamin"
-                        required
-                        error={error('guarantor_id')}
-                    >
+                    <FormControl error={error('guarantor_id')}>
                         <Select
-                            ariaLabel="Penjamin"
-                            className="h-8"
+                            label="Penjamin"
+                            required
                             items={(type?.guarantors ?? []).map((item) => ({
                                 value: item.id,
                                 label: item.name,
@@ -807,22 +769,17 @@ function VisitPanel({
                             onValueChange={(value) =>
                                 setPayer({ ...payer, guarantorId: value ?? '' })
                             }
-                            placeholder="Pilih penjamin"
                             searchPlaceholder="Cari penjamin"
                             emptyMessage="Belum ada penjamin untuk tipe pasien ini."
                         />
-                    </Row>
+                    </FormControl>
                 )}
                 {needsCard && (
-                    <Row
-                        label="No. kartu"
-                        htmlFor="visit-card-number"
-                        required
-                        error={error('card_number')}
-                    >
+                    <FormControl error={error('card_number')}>
                         <Input
                             id="visit-card-number"
-                            className="h-8"
+                            label="No. kartu"
+                            required
                             value={payer.cardNumber}
                             maxLength={50}
                             aria-invalid={
@@ -835,116 +792,113 @@ function VisitPanel({
                                 })
                             }
                         />
-                    </Row>
+                    </FormControl>
                 )}
-            </div>
-            <div>
-                <Row
-                    label="Tinggi badan"
-                    htmlFor="visit-height"
-                    error={error('height_cm')}
-                >
-                    <MeasureInput
+            </FormGrid>
+            <FormGrid columns={1}>
+                <FormControl error={error('height_cm')}>
+                    <Input
                         id="visit-height"
-                        unit="cm"
+                        label="Tinggi badan (cm)"
+                        inputMode="decimal"
                         value={draft.height}
-                        error={error('height_cm')}
-                        onChange={(value) => set('height', value)}
+                        aria-invalid={error('height_cm') ? true : undefined}
+                        onChange={(event) => set('height', event.target.value)}
                     />
-                </Row>
-                <Row
-                    label="Berat badan"
-                    htmlFor="visit-weight"
-                    error={error('weight_kg')}
-                >
-                    <MeasureInput
+                </FormControl>
+                <FormControl error={error('weight_kg')}>
+                    <Input
                         id="visit-weight"
-                        unit="kg"
+                        label="Berat badan (kg)"
+                        inputMode="decimal"
                         value={draft.weight}
-                        error={error('weight_kg')}
-                        onChange={(value) => set('weight', value)}
+                        aria-invalid={error('weight_kg') ? true : undefined}
+                        onChange={(event) => set('weight', event.target.value)}
                     />
-                </Row>
-                <Row
-                    label="Status"
-                    required
-                    align="start"
-                    error={error('visit_condition')}
-                >
-                    <RadioGroup
-                        aria-label="Status kunjungan"
-                        className="gap-1.5 py-1"
-                        value={draft.condition}
-                        onValueChange={(value) => {
-                            if (isVisitCondition(value))
-                                set('condition', value);
-                        }}
-                    >
-                        {visitConditions.map((value) => (
-                            <div
-                                key={value}
-                                className="flex items-center gap-2"
-                            >
-                                <RadioGroupItem
-                                    id={`visit-condition-${value}`}
-                                    value={value}
-                                />
-                                <Label
-                                    htmlFor={`visit-condition-${value}`}
-                                    className="font-normal"
+                </FormControl>
+                <FormControl error={error('visit_condition')}>
+                    <FieldSet className="gap-1.5">
+                        <FieldLegend variant="label">
+                            Status kunjungan
+                            <span className="text-destructive"> *</span>
+                        </FieldLegend>
+                        <RadioGroup
+                            aria-label="Status kunjungan"
+                            className="flex flex-wrap gap-x-6 gap-y-1.5"
+                            value={draft.condition}
+                            onValueChange={(value) => {
+                                if (isVisitCondition(value))
+                                    set('condition', value);
+                            }}
+                        >
+                            {visitConditions.map((value) => (
+                                <div
+                                    key={value}
+                                    className="flex items-center gap-2"
                                 >
-                                    {visitConditionLabels[value]}
-                                </Label>
-                            </div>
-                        ))}
-                    </RadioGroup>
-                </Row>
-                <Row
-                    label="Keadaan pasien"
-                    align="start"
-                    error={error('patient_condition_ids')}
-                >
-                    <div
-                        role="group"
-                        aria-label="Keadaan pasien"
-                        className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-x-3 gap-y-1.5 py-1"
-                    >
-                        {metadata.patient_conditions.map((condition) => (
-                            <div
-                                key={condition.id}
-                                className="flex items-center gap-2"
-                            >
-                                <Checkbox
-                                    id={`visit-patient-condition-${condition.id}`}
-                                    checked={draft.conditionIds.includes(
-                                        condition.id,
-                                    )}
-                                    onCheckedChange={(checked) =>
-                                        set(
-                                            'conditionIds',
-                                            checked === true
-                                                ? [
-                                                      ...draft.conditionIds,
-                                                      condition.id,
-                                                  ]
-                                                : draft.conditionIds.filter(
-                                                      (id) =>
-                                                          id !== condition.id,
-                                                  ),
-                                        )
-                                    }
-                                />
-                                <Label
-                                    htmlFor={`visit-patient-condition-${condition.id}`}
-                                    className="font-normal"
+                                    <RadioGroupItem
+                                        id={`visit-condition-${value}`}
+                                        value={value}
+                                    />
+                                    <Label
+                                        htmlFor={`visit-condition-${value}`}
+                                        className="font-normal"
+                                    >
+                                        {visitConditionLabels[value]}
+                                    </Label>
+                                </div>
+                            ))}
+                        </RadioGroup>
+                    </FieldSet>
+                </FormControl>
+                <FormControl error={error('patient_condition_ids')}>
+                    <FieldSet className="gap-1.5">
+                        <FieldLegend variant="label">
+                            Keadaan pasien
+                        </FieldLegend>
+                        <div
+                            role="group"
+                            aria-label="Keadaan pasien"
+                            className="flex flex-wrap gap-x-6 gap-y-1.5"
+                        >
+                            {metadata.patient_conditions.map((condition) => (
+                                <div
+                                    key={condition.id}
+                                    className="flex items-center gap-2"
                                 >
-                                    {condition.name}
-                                </Label>
-                            </div>
-                        ))}
-                    </div>
-                </Row>
-            </div>
+                                    <Checkbox
+                                        id={`visit-patient-condition-${condition.id}`}
+                                        checked={draft.conditionIds.includes(
+                                            condition.id,
+                                        )}
+                                        onCheckedChange={(checked) =>
+                                            set(
+                                                'conditionIds',
+                                                checked === true
+                                                    ? [
+                                                          ...draft.conditionIds,
+                                                          condition.id,
+                                                      ]
+                                                    : draft.conditionIds.filter(
+                                                          (id) =>
+                                                              id !==
+                                                              condition.id,
+                                                      ),
+                                            )
+                                        }
+                                    />
+                                    <Label
+                                        htmlFor={`visit-patient-condition-${condition.id}`}
+                                        className="font-normal"
+                                    >
+                                        {condition.name}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    </FieldSet>
+                </FormControl>
+            </FormGrid>
         </div>
     );
 }
