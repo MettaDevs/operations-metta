@@ -45,7 +45,9 @@ export class Database {
     constructor(
         private readonly sql: postgres.ReservedSql,
         private readonly traceFile: string | undefined,
-        private readonly requestId: string,
+        // Correlation id unit kerja ini: milik request di src/main.ts, diberikan pemanggil di worker dan CLI. Event yang
+        // diterbitkan lewat database ini membawanya.
+        readonly correlationId: string,
     ) {}
 
     async rows<S extends z.ZodType>(
@@ -79,7 +81,7 @@ export class Database {
                 appendFileSync(
                     this.traceFile,
                     `${JSON.stringify({
-                        request_id: this.requestId,
+                        request_id: this.correlationId,
                         sequence: ++this.queryNumber,
                         connection_role: 'shared-central-business',
                         fingerprint: createHash('sha256')

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { RedisClient } from 'bun';
 import { Elysia } from 'elysia';
@@ -26,8 +25,10 @@ import {
     base,
     bodyInput,
     clientBuild,
+    correlationHeader,
     HttpFailure,
     ok,
+    requestCorrelationId,
     typedBody,
     type Context,
 } from './platform/http/index.ts';
@@ -268,7 +269,7 @@ export function createApplication(config: Config) {
             const db = new Database(
                 connection,
                 config.TRACE_FILE,
-                randomUUID(),
+                requestCorrelationId(request),
             );
             let session: Session | undefined;
             let response: Response;
@@ -341,6 +342,7 @@ export function createApplication(config: Config) {
                 connection.release();
             }
             response.headers.set('Cache-Control', 'no-cache, private');
+            response.headers.set(correlationHeader, db.correlationId);
             return response;
         },
         close: async () => {
