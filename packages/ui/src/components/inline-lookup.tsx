@@ -1,5 +1,5 @@
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Search } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '../utils';
 import { ActionButton } from './action-button';
@@ -55,6 +55,8 @@ export type InlineLookupProps<T> = {
     popupClassName?: string;
     showDetails?: boolean;
     showFullList?: boolean;
+    /** Tombol kaca pembesar di dalam field yang langsung membuka Daftar lengkap. */
+    showFullListButton?: boolean;
     onCreate?: () => void;
     onDetails?: (item: T) => void;
     onFullList?: () => void;
@@ -84,6 +86,7 @@ export function InlineLookup<T>({
     popupClassName,
     showDetails = true,
     showFullList = true,
+    showFullListButton = false,
     onCreate,
     onDetails,
     onFullList,
@@ -134,6 +137,17 @@ export function InlineLookup<T>({
         setOpen(false);
         setQuery(undefined);
         setHighlighted(null);
+    };
+
+    const openFullList = () => {
+        closeForAction();
+
+        if (onFullList) {
+            onFullList();
+        } else {
+            setListQuery(query ?? '');
+            setListOpen(true);
+        }
     };
 
     const restoreFocus = () =>
@@ -242,6 +256,17 @@ export function InlineLookup<T>({
                                             />
                                         }
                                     />
+                                    {showFullList && showFullListButton && (
+                                        <InputGroupButton
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            aria-label={`Daftar lengkap ${label.toLowerCase()}`}
+                                            disabled={disabled}
+                                            onClick={openFullList}
+                                        >
+                                            <Search />
+                                        </InputGroupButton>
+                                    )}
                                 </ComboboxInput>
                             </div>
                             {hint && (
@@ -371,18 +396,7 @@ export function InlineLookup<T>({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => {
-                                                    closeForAction();
-
-                                                    if (onFullList) {
-                                                        onFullList();
-                                                    } else {
-                                                        setListQuery(
-                                                            query ?? '',
-                                                        );
-                                                        setListOpen(true);
-                                                    }
-                                                }}
+                                                onClick={openFullList}
                                             >
                                                 Daftar lengkap
                                             </Button>
