@@ -8,7 +8,6 @@ const reference = z.object({
 });
 
 // Stok minimum dan maksimum satu barang di satu lokasi (Stockkeeping Unit di BC). Kosong berarti tidak ditetapkan.
-// Stok maksimum menjadi stok optimum LPLPO lokasi itu.
 export const stockkeepingUnitRowSchema = z.object({
     id: z.string(),
     item_id: z.string(),

@@ -48,7 +48,6 @@ import { page as foundationInventoryItemLedgerItemLedgerEntriesPage } from './fo
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
 import { page as foundationInventoryItemItemsPage } from './foundation/inventory/item/items.page.tsx';
 import { page as foundationInventoryLocationLocationsPage } from './foundation/inventory/location/locations.page.tsx';
-import { page as foundationInventoryLplpoLplpoPage } from './foundation/inventory/lplpo/lplpo.page.tsx';
 import { page as foundationInventorySetupInventorySetupPage } from './foundation/inventory/setup/inventory-setup.page.tsx';
 import { page as foundationInventoryStockByLocationStockByLocationPage } from './foundation/inventory/stock-by-location/stock-by-location.page.tsx';
 import { page as foundationInventoryStockCountStockCountsPage } from './foundation/inventory/stock-count/stock-counts.page.tsx';
@@ -572,14 +571,6 @@ const foundationInventoryLocationLocationsRoute = createRoute({
     staticData: { title: foundationInventoryLocationLocationsPage.title },
 });
 
-const foundationInventoryLplpoLplpoRoute = createRoute({
-    getParentRoute: () => appLayoutRoute,
-    path: foundationInventoryLplpoLplpoPage.path,
-    component: foundationInventoryLplpoLplpoPage.component,
-    validateSearch: foundationInventoryLplpoLplpoPage.validateSearch,
-    staticData: { title: foundationInventoryLplpoLplpoPage.title },
-});
-
 const foundationInventorySetupInventorySetupRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventorySetupInventorySetupPage.path,
@@ -838,7 +829,6 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryItemUnitItemUnitsRoute,
         foundationInventoryItemItemsRoute,
         foundationInventoryLocationLocationsRoute,
-        foundationInventoryLplpoLplpoRoute,
         foundationInventorySetupInventorySetupRoute,
         foundationInventoryStockByLocationStockByLocationRoute,
         foundationInventoryStockCountStockCountsRoute,

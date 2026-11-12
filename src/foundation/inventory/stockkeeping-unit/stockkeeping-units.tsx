@@ -30,7 +30,7 @@ import { LocationLookup } from '../location/location-lookup.tsx';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 
 // Stok minimum dan maksimum barang per lokasi (Stockkeeping Unit di BC) sebagai bagian kartu barang. Setiap baris
-// disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC. Stok maksimum menjadi stok optimum LPLPO.
+// disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC.
 
 type Level = ApiBody<'inventoryStockkeepingUnitList'>['data'][number];
 type Errors = Record<string, string[]>;
@@ -135,7 +135,7 @@ function LevelCard({
             !(await confirm({
                 title: `Delete stok minimum dan maksimum ${item.code} di ${level.location.code}?`,
                 description:
-                    'LPLPO lokasi ini tidak lagi menampilkan stok optimum barang ini sampai diatur lagi. Stoknya tidak berubah.',
+                    'Stok minimum dan maksimum barang ini di lokasi itu menjadi kosong sampai diatur lagi. Stoknya tidak berubah.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -252,7 +252,7 @@ function LevelCard({
                         </FormControl>
                         <FormControl
                             error={errors.maximum_quantity?.[0]}
-                            hint={`Stok yang ingin dicapai di lokasi ini dalam ${item.base_unit.code}. LPLPO memakainya sebagai stok optimum.`}
+                            hint={`Stok yang ingin dicapai di lokasi ini dalam ${item.base_unit.code}.`}
                         >
                             <Input
                                 label={`Stok maksimum (${item.base_unit.code})`}

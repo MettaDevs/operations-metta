@@ -2289,18 +2289,6 @@
             }
         }
     },
-    "inventoryLplpo": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "GET",
-                "path": "/api/v1/inventory/reports/lplpo",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
     "purchasingVendorList": {
         "~orpc": {
             "errorMap": {},
