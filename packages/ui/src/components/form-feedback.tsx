@@ -391,6 +391,83 @@ export function collectFormFeedback(
     return [...unique.values()];
 }
 
+const attemptSurface = '[role="dialog"], [role="alertdialog"]';
+
+/**
+ * Simpan yang masih gagal saat ringkasan sudah tampil tidak boleh terlihat seperti tombol yang tidak bekerja:
+ * ringkasan digoyang (atau disorot bila pengguna meminta gerak dikurangi) begitu hasil percobaan itu tiba.
+ * Percobaan dikenali dari submit atau klik tombol Simpan di permukaan yang sama, bukan dari perubahan isi
+ * ringkasan, karena halaman juga mengubah isi ringkasan saat pengguna memperbaiki satu isian.
+ */
+function useRepeatedAttemptAttention(
+    summaryRef: React.RefObject<HTMLDivElement | null>,
+    entries: readonly FormFeedback[],
+) {
+    const pending = React.useRef(false);
+
+    React.useEffect(() => {
+        const attempt = (event: Event) => {
+            const summary = summaryRef.current;
+            const target = event.target;
+
+            if (
+                !summary ||
+                !(target instanceof Element) ||
+                (event.type === 'click' &&
+                    !target.closest(
+                        '[data-action="save"], button[type="submit"]',
+                    )) ||
+                target.closest(attemptSurface) !==
+                    summary.closest(attemptSurface)
+            ) {
+                return;
+            }
+
+            pending.current = true;
+        };
+        const edit = () => {
+            pending.current = false;
+        };
+        document.addEventListener('click', attempt, true);
+        document.addEventListener('submit', attempt, true);
+        document.addEventListener('input', edit, true);
+        document.addEventListener('change', edit, true);
+
+        return () => {
+            document.removeEventListener('click', attempt, true);
+            document.removeEventListener('submit', attempt, true);
+            document.removeEventListener('input', edit, true);
+            document.removeEventListener('change', edit, true);
+        };
+    }, [summaryRef]);
+
+    React.useEffect(() => {
+        const summary = summaryRef.current;
+
+        if (!pending.current || !summary) {
+            return;
+        }
+
+        pending.current = false;
+        summary.removeAttribute('data-attention');
+        summary.getBoundingClientRect();
+        summary.setAttribute(
+            'data-attention',
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                ? 'highlight'
+                : 'shake',
+        );
+        const settle = (event: Event) => {
+            if (event.target === summary) {
+                summary.removeAttribute('data-attention');
+            }
+        };
+        summary.addEventListener('animationend', settle);
+
+        return () => summary.removeEventListener('animationend', settle);
+    }, [entries, summaryRef]);
+}
+
 type FormErrorSummaryProps = {
     feedback: FormFeedbackCollection;
     scopeRef?: React.RefObject<HTMLElement | null>;
@@ -422,6 +499,7 @@ export function FormErrorSummary({
     }, [entries]);
     const summaryRef = React.useRef<HTMLDivElement>(null);
     const previousEntries = React.useRef<readonly FormFeedback[]>([]);
+    useRepeatedAttemptAttention(summaryRef, entries);
     const inlineId = React.useId();
     const [inlineFields, setInlineFields] = React.useState<{
         feedback: FormFeedback;

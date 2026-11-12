@@ -54,6 +54,24 @@ const rules: { name: string; bad: string; good: string; message: string }[] = [
         message: 'dari izin, bukan dari useState',
     },
     {
+        name: 'the form error summary stays pinned under the toolbar',
+        bad: `import { FormErrorHeader } from '@core/platform/shell'; <form noValidate><div className="pt-4"><FormErrorHeader errors={errors} /></div><FormGrid /></form>;`,
+        good: `import { FormErrorHeader } from '@core/platform/shell'; <form noValidate>{show && <FormErrorHeader className="pt-4" errors={errors} />}<FormGrid /></form>;`,
+        message: 'FormErrorHeader ditaruh langsung di antara isi form',
+    },
+    {
+        name: 'screens show form errors only through FormErrorHeader',
+        bad: `import { FormErrorSummary } from '@operations-metta/ui/form-feedback'; <FormErrorSummary feedback={null} />;`,
+        good: `import { FormErrorHeader } from '@core/platform/shell'; <><RecordActionBar title="A" /><FormErrorHeader errors={errors} /></>;`,
+        message: 'jangan memasang FormErrorSummary sendiri',
+    },
+    {
+        name: 'a save button is recognisable as a save attempt',
+        bad: `<Button type="button" onClick={save}>{busy ? 'Menyimpan…' : 'Simpan registrasi'}</Button>;`,
+        good: `<><Button type="button" data-action="save" onClick={save}>Simpan registrasi</Button><Button type="submit">Simpan</Button><Button onClick={copy}>Salin</Button></>;`,
+        message: 'Tombol Simpan memakai ActionButton',
+    },
+    {
         name: 'no HTML table',
         bad: `<table><tbody /></table>;`,
         good: `import { DataTable } from '@operations-metta/ui/data-table'; <DataTable data={[]} columns={[]} />;`,

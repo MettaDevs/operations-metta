@@ -2014,6 +2014,7 @@ export function VisitRegistration({
                                     type="button"
                                     size="lg"
                                     className="w-full"
+                                    data-action="save"
                                     disabled={busy}
                                     onClick={() => void save()}
                                 >

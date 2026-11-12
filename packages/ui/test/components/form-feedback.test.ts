@@ -10,6 +10,7 @@ import {
     validateFormSubmission,
 } from '../../src/components/form-feedback.tsx';
 import { RecordActionBar } from '../../src/components/record-action-bar.tsx';
+import { runScenario } from '../support/scenario.ts';
 
 // Kontrol tiruan hanya membawa bagian yang dibaca getFormValidationErrors, jadi bentuknya dipaksakan ke tipe DOM.
 const scope = (controls: unknown[]) =>
@@ -229,3 +230,7 @@ test('form feedback behavior', () => {
     assert.equal(prevented, 1);
     assert.equal(stopped, 1);
 });
+
+test('a repeated failing save shakes the error summary, edits do not', () => {
+    runScenario('form-error-attention');
+}, 30_000);
