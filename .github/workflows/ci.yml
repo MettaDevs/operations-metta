@@ -9,8 +9,64 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # Pemeriksaan tanpa database berjalan berbarengan dengan shard test, bukan sebelumnya.
+  static:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # src/client.tsx dan kontrak API di-commit supaya TypeScript mengenalnya; berkas yang tertinggal dari kodenya
+      # ditolak di sini, sebelum typecheck dan build memakainya.
+      - name: Check generated client files
+        run: bun run check:generated
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Aturan type-aware: nilai `any` yang bocor, promise yang tidak ditunggu, `!`, dan switch yang tidak lengkap.
+      - name: Lint
+        run: bun run lint
+
+      - name: Check formatting
+        run: bun run format:check
+
+      - name: Check boundaries
+        run: bun run check:boundaries
+
+      # Pola layar yang di CoreERP dijaga ESLint dan skrip check-*.mjs: pencarian di toolbar, filter di panel kiri,
+      # DataTable SDK, kontrol form SDK, tanpa dialog bawaan browser, dan Core netral sektor.
+      - name: Check UI rules
+        run: bun run check:ui
+
+      # Golden run dan conformance hanya bisa berjalan di lab; di sini cukup test pembanding dan pemetaan id harness.
+      - name: Test the parity harness
+        run: python3 -B -m unittest discover -s parity
+
+      # Server dan peramban, jadi halaman yang rusak gagal di sini.
+      - name: Build
+        run: bun run build
+
+  # Berkas test dibagi ke beberapa job, masing-masing dengan PostgreSQL dan Valkey sendiri, jadi tidak ada database
+  # yang dipakai dua shard. Pembagiannya mengikuti lama tiap berkas di .github/test-timings.json; berkas yang belum
+  # tercatat tetap ikut. Tambah shard hanya bila berkas terlama tidak lagi sendirian menentukan lama job.
+  test:
+    name: test ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     # Test route Core memanggil aplikasi di atas database yang sudah dimigrasi. Test sesi berjalan di PostgreSQL dan
     # di Valkey sungguhan, karena tiruan yang menjawab tetap menyembunyikan penulisan yang membuat ulang sesi.
     services:
@@ -58,42 +114,24 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # src/client.tsx dan kontrak API di-commit supaya TypeScript mengenalnya; berkas yang tertinggal dari kodenya
-      # ditolak di sini, sebelum typecheck dan build memakainya.
-      - name: Check generated client files
-        run: bun run check:generated
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      # Aturan type-aware: nilai `any` yang bocor, promise yang tidak ditunggu, `!`, dan switch yang tidak lengkap.
-      - name: Lint
-        run: bun run lint
-
-      - name: Check formatting
-        run: bun run format:check
-
-      - name: Check boundaries
-        run: bun run check:boundaries
-
-      # Pola layar yang di CoreERP dijaga ESLint dan skrip check-*.mjs: pencarian di toolbar, filter di panel kiri,
-      # DataTable SDK, kontrol form SDK, tanpa dialog bawaan browser, dan Core netral sektor.
-      - name: Check UI rules
-        run: bun run check:ui
-
-      # Golden run dan conformance hanya bisa berjalan di lab; di sini cukup test pembanding dan pemetaan id harness.
-      - name: Test the parity harness
-        run: python3 -B -m unittest discover -s parity
-
       - name: Migrate the test database
         run: bun run migrate
 
       - name: Test against the migrated database
-        run: bun run test
+        run: bun test --shard=${{ matrix.shard }}/${{ strategy.job-total }} --timings=.github/test-timings.json
 
-      # Server dan peramban, jadi halaman yang rusak gagal di sini.
-      - name: Build
-        run: bun run build
+  # Ruleset main mewajibkan status bernama `check`; job ini meneruskan hasil job di atas ke nama itu.
+  check:
+    needs: [static, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Static checks and every test shard passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do [ "$result" = success ] || exit 1; done
 
   migrations:
     runs-on: ubuntu-latest
