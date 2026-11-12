@@ -31,6 +31,12 @@ export {
     type PostingContext,
     type TransferLine,
 } from './item-ledger/item-ledger.posting.ts';
+export {
+    issuedSlices,
+    openStock,
+    type IssuedSlice,
+    type StockBatch,
+} from './item-ledger/source-entries.ts';
 export { unitConversion } from './item-unit/item-unit.service.ts';
 export {
     createItem,

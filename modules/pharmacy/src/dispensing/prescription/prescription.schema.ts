@@ -66,6 +66,15 @@ const locationSchema = z.object({
     code: z.string(),
     name: z.string(),
 });
+// Status resep di antrean: menunggu (belum disiapkan, termasuk yang drafnya sudah disimpan), lalu status penyerahannya.
+export const queueStatuses = [
+    'menunggu',
+    'disiapkan',
+    'dipanggil',
+    'diserahkan',
+] as const;
+export type QueueStatus = (typeof queueStatuses)[number];
+
 export const prescriptionRowSchema = z.object({
     id: z.string(),
     prescription_number: z.string(),
@@ -81,6 +90,14 @@ export const prescriptionRowSchema = z.object({
     location: locationSchema.nullable(),
     item_count: z.number(),
     version: z.number(),
+    queue_status: z.enum(queueStatuses),
+    dispensing_status: z
+        .enum(['draf', 'disiapkan', 'dipanggil', 'diserahkan'])
+        .nullable(),
+    dispensing_number: z.string().nullable(),
+    dispensing_version: z.number().nullable(),
+    called_at: z.string().nullable(),
+    handed_over_at: z.string().nullable(),
 });
 
 export const prescriptionLineSchema = z.object({
@@ -106,4 +123,5 @@ export const prescriptionSchema = prescriptionRowSchema.extend({
 export const prescriptionListQuerySchema = listParametersSchema.extend({
     location: z.string().max(100).optional(),
     date: z.string().max(10).optional(),
+    status: z.enum(queueStatuses).optional(),
 });

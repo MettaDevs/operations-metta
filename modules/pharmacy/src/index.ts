@@ -3,6 +3,7 @@ import {
     prescriptionIssued,
     receivePrescription,
 } from './dispensing/prescription/prescription.events.ts';
+import { dispensingRoutes } from './dispensing/dispensing/dispensing.routes.ts';
 import { prescriptionRoutes } from './dispensing/prescription/prescription.routes.ts';
 import { serviceLocationRoutes } from './dispensing/service-location/service-location.routes.ts';
 import { drugClassRoutes } from './drug/drug-class/drug-class.routes.ts';
@@ -12,6 +13,7 @@ import { moduleId } from './module.ts';
 export function pharmacyRoutes() {
     return {
         ...prescriptionRoutes(),
+        ...dispensingRoutes(),
         ...serviceLocationRoutes(),
         ...drugClassRoutes(),
         ...drugRoutes(),
