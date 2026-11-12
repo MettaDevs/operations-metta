@@ -1711,6 +1711,30 @@
             }
         }
     },
+    "healthcareScheduleParameters": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/practice-schedules/parameters",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareScheduleParametersUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PUT",
+                "path": "/api/modules/healthcare/v1/practice-schedules/parameters",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcarePracticeSchedulePractitioners": {
         "~orpc": {
             "errorMap": {},

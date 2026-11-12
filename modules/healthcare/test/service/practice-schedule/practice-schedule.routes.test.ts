@@ -219,6 +219,15 @@ describe.skipIf(!process.env.DB_HOST)('practice schedule', () => {
         ).data.id;
         for (const name of ['Dokter Ani', 'Dokter Budi', 'Dokter Citra'])
             practitioners[name] = await practitioner(name);
+        // Test di sini menyusun jadwal bertanggal tetap lewat tombol Generate; generate otomatis untuk hari ini
+        // diuji di schedule-parameter.routes.test.ts.
+        await json(
+            await admin.put(`${api}/practice-schedules/parameters`, {
+                auto_generate: false,
+                horizon_days: 7,
+            }),
+            200,
+        );
     }, 60_000);
 
     test('sessions record their hours and know when they end the next day', async () => {

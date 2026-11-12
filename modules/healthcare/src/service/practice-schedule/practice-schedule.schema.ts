@@ -124,6 +124,13 @@ export const generateInputSchema = z.object({
     section_id: z.string().nullable().optional(),
 });
 
+// Horizon dikirim sebagai teks dari form maupun angka dari klien lain; service yang memeriksanya.
+export const scheduleParameterInputSchema = z.object({
+    auto_generate: z.boolean(),
+    horizon_days: z.union([z.number(), z.string()]),
+    version: z.number().optional(),
+});
+
 // Jadwal yang ditawarkan pendaftaran kunjungan: hanya yang terjadwal, dengan nakes yang benar-benar praktik (pengganti
 // bila ada).
 export const registrationScheduleSchema = z.object({
