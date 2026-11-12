@@ -188,7 +188,6 @@ function LineField({
                 required={required}
                 readOnly={readOnly}
                 inputMode={numeric ? 'decimal' : undefined}
-                className={numeric ? 'text-right' : undefined}
                 value={textOf(value)}
                 aria-invalid={error ? true : undefined}
                 onChange={(event) => onChange?.(valueOf(event.target.value))}

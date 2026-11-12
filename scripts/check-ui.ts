@@ -187,6 +187,18 @@ for (const file of screens) {
                 element,
                 'Gunakan kontrol SDK di FormControl dan FormGrid, bukan susunan form lama.',
             );
+        // Isian form rata kiri, angka juga (keputusan pemilik produk, 13 November 2026). Rata kanan hanya untuk sel
+        // angka di tabel, yang diatur DataTable sendiri.
+        if (
+            name === 'Input' &&
+            /\btext-(right|end)\b/.test(
+                attribute(element, 'className')?.initializer?.getText() ?? '',
+            )
+        )
+            report(
+                element,
+                'Isian form rata kiri, termasuk angka; jangan beri Input text-right.',
+            );
         const type = literal(attribute(element, 'type'));
         if (type === 'date' || type === 'datetime-local')
             report(element, 'Gunakan DatePicker atau DateTimePicker SDK.');

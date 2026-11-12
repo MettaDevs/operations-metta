@@ -108,6 +108,12 @@ const rules: { name: string; bad: string; good: string; message: string }[] = [
         message: 'Gunakan kontrol SDK di FormControl dan FormGrid',
     },
     {
+        name: 'form inputs stay left-aligned, numbers too',
+        bad: `<Input label="Nadi" inputMode="decimal" className={numeric ? 'text-right' : undefined} />;`,
+        good: `<Input label="Nadi" inputMode="decimal" />;`,
+        message: 'Isian form rata kiri',
+    },
+    {
         name: 'dates use the SDK picker',
         bad: `<Input type="date" />;`,
         good: `<DatePicker label="Tanggal" />;`,

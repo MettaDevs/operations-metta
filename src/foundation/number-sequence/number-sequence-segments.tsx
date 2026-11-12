@@ -455,7 +455,6 @@ function SegmentLength({
                 <Input
                     label="Panjang"
                     inputMode="numeric"
-                    className="text-right"
                     value={String(segment.length ?? '')}
                     onChange={(event) =>
                         onChange({
