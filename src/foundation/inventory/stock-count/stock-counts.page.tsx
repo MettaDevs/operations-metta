@@ -10,29 +10,34 @@ import {
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
+import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
 import {
     api,
     definePage,
     errorText,
+    orpc,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import {
     StockCountCard,
     stockCountStatusLabels,
-    type StockCount,
     type StockCountPermissions,
 } from './stock-count-card.tsx';
 
-// Opname stok (Physical Inventory Orders di BC): draf, selesai dihitung, diposting, atau dibatalkan.
+// Opname stok (Physical Inventory Orders di BC): draf, selesai dihitung, diposting, atau dibatalkan. Dokumen dibuka
+// lewat `?document=<id>`, supaya layar lain, misalnya kartu stok, bisa menautkan opnamenya langsung.
 
 const route = getRouteApi('/_app/sysadmin/inventory/stock-counts');
 type Row = ApiBody<'inventoryStockCountList'>['data'][number];
-const searchSchema = z.object({ q: z.string().max(200).optional() });
+const searchSchema = z.object({
+    q: z.string().max(200).optional(),
+    document: z.string().max(100).optional(),
+});
+type Search = z.infer<typeof searchSchema>;
 const noPermissions: StockCountPermissions = {
     update: false,
     post: false,
@@ -43,14 +48,29 @@ function StockCountsPage(): ReactNode {
     const search = route.useSearch();
     const navigate = route.useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
-    const [open, setOpen] = useState<StockCount | 'new' | null>(null);
-    // Kartu dipasang ulang hanya saat dokumen lain dibuka; menyimpan atau memposting tetap di kartu yang sama.
-    const [opened, setOpened] = useState(0);
-    const openCard = (target: StockCount | 'new') => {
-        setOpened((count) => count + 1);
-        setOpen(target);
-    };
-    const [permissions, setPermissions] =
+    // Nomor kartu baru yang sedang terbuka; 0 berarti tidak sedang membuat opname.
+    const [creating, setCreating] = useState(0);
+    const setSearch = (next: Partial<Search>, replace = true) =>
+        navigate({
+            search: (current) =>
+                Object.fromEntries(
+                    Object.entries<string | undefined>({
+                        ...current,
+                        ...next,
+                    }).filter(
+                        ([, value]) => value !== undefined && value !== '',
+                    ),
+                ),
+            replace,
+        });
+    const opened = useQuery({
+        ...orpc.inventoryStockCountShow.queryOptions({
+            input: { params: { id: search.document ?? '' } },
+            select: (response) => response.body,
+        }),
+        enabled: search.document !== undefined && creating === 0,
+    });
+    const [listPermissions, setPermissions] =
         useState<StockCountPermissions>(noPermissions);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
@@ -76,16 +96,12 @@ function StockCountsPage(): ReactNode {
         query: search.q ?? '',
         getKey: (row) => row.id,
     });
-    const show = async (row: Row) => {
-        try {
-            const { body } = await api.inventoryStockCountShow({
-                params: { id: row.id },
-            });
-            setPermissions(body.permissions);
-            openCard(body.data);
-        } catch (caught) {
-            toast.error(errorText(caught, 'Opname belum bisa dibuka.'));
-        }
+    const permissions = opened.data?.permissions ?? listPermissions;
+    const show = (row: Row) => void setSearch({ document: row.id }, false);
+    const close = () => {
+        setCreating(0);
+        void setSearch({ document: undefined }, false);
+        list.reload();
     };
 
     return (
@@ -109,7 +125,10 @@ function StockCountsPage(): ReactNode {
                         {permissions.update && (
                             <ActionButton
                                 action="create"
-                                onClick={() => openCard('new')}
+                                onClick={() => {
+                                    void setSearch({ document: undefined });
+                                    setCreating((key) => key + 1);
+                                }}
                             />
                         )}
                     </RecordActionBar>
@@ -127,8 +146,9 @@ function StockCountsPage(): ReactNode {
                     showRowNumbers
                     actionsPlacement="inline"
                     actions={[{ id: 'open', label: 'Buka' }]}
-                    onRowAction={(_, row) => void show(row)}
-                    onRowClick={(row) => void show(row)}
+                    activeRowKey={search.document}
+                    onRowAction={(_, row) => show(row)}
+                    onRowClick={(row) => show(row)}
                     sort={list.sort}
                     onSortChange={list.onSortChange}
                     serverSort
@@ -221,11 +241,11 @@ function StockCountsPage(): ReactNode {
                     ]}
                 />
             </ListPageLayout>
-            {open && (
+            {(creating > 0 || search.document) && (
                 <PageDialog
                     open
                     onOpenChange={(next) => {
-                        if (!next) setOpen(null);
+                        if (!next) close();
                     }}
                 >
                     <PageDialogContent
@@ -241,20 +261,40 @@ function StockCountsPage(): ReactNode {
                                 event.preventDefault();
                         }}
                     >
-                        <StockCountCard
-                            key={opened}
-                            count={open === 'new' ? null : open}
-                            permissions={permissions}
-                            portalContainer={contentRef}
-                            onSaved={(count) => {
-                                setOpen(count);
-                                list.reload();
-                            }}
-                            onClose={() => {
-                                setOpen(null);
-                                list.reload();
-                            }}
-                        />
+                        {creating > 0 ? (
+                            <StockCountCard
+                                key={`baru-${creating}`}
+                                count={null}
+                                permissions={permissions}
+                                portalContainer={contentRef}
+                                onSaved={(count) => {
+                                    list.reload();
+                                    void setSearch(
+                                        { document: count.id },
+                                        false,
+                                    ).then(() => setCreating(0));
+                                }}
+                                onClose={close}
+                            />
+                        ) : opened.data ? (
+                            <StockCountCard
+                                key={opened.data.data.id}
+                                count={opened.data.data}
+                                permissions={permissions}
+                                portalContainer={contentRef}
+                                onSaved={() => list.reload()}
+                                onClose={close}
+                            />
+                        ) : (
+                            <p className="p-6 text-sm text-muted-foreground">
+                                {opened.isError
+                                    ? errorText(
+                                          opened.error,
+                                          'Opname belum bisa dibuka.',
+                                      )
+                                    : 'Memuat opname…'}
+                            </p>
+                        )}
                     </PageDialogContent>
                 </PageDialog>
             )}

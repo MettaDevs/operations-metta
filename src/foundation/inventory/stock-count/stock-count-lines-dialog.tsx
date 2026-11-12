@@ -12,8 +12,6 @@ import {
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
-import { InlineLookup } from '@operations-metta/ui/inline-lookup';
-import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Switch } from '@operations-metta/ui/switch';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -22,30 +20,13 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
-    type ApiBody,
 } from '../../../platform/shell/index.ts';
-import {
-    ItemLookup,
-    label,
-    type ItemChoice,
-    type Position,
-} from './stock-count-fields.tsx';
+import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
+import { ItemLookup } from '../item/item-lookup.tsx';
+import type { Reference } from '../master-lookup.tsx';
+import { label, type Position } from './stock-count-fields.tsx';
 
-type Category = ApiBody<'inventoryItemCategoryList'>['data'][number];
-type Reference = { id: string; code: string; name: string };
 type Errors = Record<string, string[]>;
-
-const loadCategories: LookupLoader<Category> = async ({
-    query,
-    cursor,
-    signal,
-}) => {
-    const { body } = await api.inventoryItemCategoryList(
-        { query: { q: query, ...(cursor ? { cursor } : {}) } },
-        { signal },
-    );
-    return { items: body.data, nextCursor: body.next_cursor };
-};
 
 let keys = 0;
 const nextKey = () => `saringan-${++keys}`;
@@ -65,9 +46,9 @@ export function StockCountLinesDialog({
     onCalculated: (positions: Position[]) => void;
 }): ReactNode {
     const contentRef = useRef<HTMLDivElement>(null);
-    const [category, setCategory] = useState<Category | null>(null);
+    const [category, setCategory] = useState<Reference | null>(null);
     const [items, setItems] = useState<
-        { key: string; item: ItemChoice | null }[]
+        { key: string; item: Reference | null }[]
     >([]);
     const [selected, setSelected] = useState<string[]>([]);
     const [onlyInStock, setOnlyInStock] = useState(true);
@@ -136,47 +117,21 @@ export function StockCountLinesDialog({
                 />
                 <DialogBody className="space-y-4">
                     <FormGrid>
-                        <FormControl
+                        <ItemCategoryLookup
+                            label="Kategori"
+                            field="category_id"
+                            value={category}
+                            onChange={(entry) =>
+                                setCategory({
+                                    id: entry.id,
+                                    code: entry.code,
+                                    name: entry.name,
+                                })
+                            }
                             error={errors.category_id?.join(' ')}
-                            data-error-field="category_id"
                             hint="Subkategorinya ikut dihitung."
-                        >
-                            <InlineLookup<Category>
-                                label="Kategori"
-                                loadItems={loadCategories}
-                                value={category}
-                                displayValue={category ? label(category) : ''}
-                                onValueChange={setCategory}
-                                getItemValue={(entry) => entry.id}
-                                getItemLabel={label}
-                                placeholder="Cari kode atau nama kategori…"
-                                emptyMessage="Kategori tidak ditemukan."
-                                popupClassName="w-[30rem]"
-                                showDetails={false}
-                                portalContainer={contentRef}
-                                columns={[
-                                    {
-                                        id: 'code',
-                                        header: 'Kode',
-                                        width: 110,
-                                        cell: (entry) => entry.code,
-                                    },
-                                    {
-                                        id: 'name',
-                                        header: 'Nama',
-                                        width: 200,
-                                        cell: (entry) => entry.name,
-                                    },
-                                    {
-                                        id: 'parent',
-                                        header: 'Induk',
-                                        width: 160,
-                                        cell: (entry) =>
-                                            entry.parent?.name ?? '',
-                                    },
-                                ]}
-                            />
-                        </FormControl>
+                            portalContainer={contentRef}
+                        />
                         <FormControl hint="Matikan untuk ikut mengambil barang yang tercatat kosong di lokasi ini, misalnya untuk mencatat barang temuan.">
                             <Field orientation="horizontal" className="w-auto">
                                 <Switch
@@ -232,25 +187,38 @@ export function StockCountLinesDialog({
                                 header: 'Barang',
                                 content: 'control',
                                 minWidth: 260,
-                                cell: ({ index, row }) => (
-                                    <ItemLookup
-                                        value={row.item}
-                                        field={`item_ids.${index}`}
-                                        error={errors[
-                                            `item_ids.${chosen.indexOf(row.item?.id ?? '')}`
-                                        ]?.join(' ')}
-                                        portalContainer={contentRef}
-                                        onPick={(item) =>
-                                            setItems((current) =>
-                                                current.map((entry) =>
-                                                    entry.key === row.key
-                                                        ? { ...entry, item }
-                                                        : entry,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                ),
+                                cell: ({ row }) => {
+                                    const at = chosen.indexOf(
+                                        row.item?.id ?? '',
+                                    );
+                                    return (
+                                        <ItemLookup
+                                            label="Barang"
+                                            field={`item_ids.${at}`}
+                                            value={row.item}
+                                            error={errors[
+                                                `item_ids.${at}`
+                                            ]?.join(' ')}
+                                            portalContainer={contentRef}
+                                            onChange={(item) =>
+                                                setItems((current) =>
+                                                    current.map((entry) =>
+                                                        entry.key === row.key
+                                                            ? {
+                                                                  ...entry,
+                                                                  item: {
+                                                                      id: item.id,
+                                                                      code: item.code,
+                                                                      name: item.name,
+                                                                  },
+                                                              }
+                                                            : entry,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                    );
+                                },
                             },
                         ]}
                     />

@@ -8,7 +8,9 @@ import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
+    PageDialog,
     PageDialogBody,
+    PageDialogContent,
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
@@ -31,10 +33,17 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import { ItemCard } from '../item/item-card.tsx';
+import { ItemLookup } from '../item/item-lookup.tsx';
+import { LocationCard } from '../location/location-card.tsx';
+import { LocationLookup } from '../location/location-lookup.tsx';
 import {
-    decimal,
-    ItemLookup,
+    inBase,
+    itemChoice,
     label,
+    scaled,
+    unscaled,
     type ItemChoice,
     type Position,
 } from './stock-count-fields.tsx';
@@ -44,7 +53,6 @@ import { StockCountPostingDialog } from './stock-count-posting-dialog.tsx';
 export type StockCount = ApiBody<'inventoryStockCountShow'>['data'];
 export type StockCountPermissions =
     ApiBody<'inventoryStockCountList'>['permissions'];
-type Location = ApiBody<'inventoryLocationList'>['data'][number];
 type ItemUnit = ApiBody<'inventoryItemUnitList'>['data'][number];
 type StoredLine = StockCount['lines'][number];
 type Errors = Record<string, string[]>;
@@ -67,6 +75,7 @@ type Line = {
     quantity_counted: string;
     description: string;
 };
+type Creating = { kind: 'location' } | { kind: 'item'; lineKey: string };
 type Header = {
     location: Reference | null;
     count_date: string;
@@ -83,10 +92,8 @@ export const stockCountStatusLabels: Record<StockCount['status'], string> = {
 const today = () => new Date().toLocaleDateString('sv-SE');
 let keys = 0;
 const nextKey = () => `baris-${++keys}`;
-const scale = 10_000;
-// Hitungan dalam satuan baris dikali isi satuannya, dibulatkan ke empat angka di belakang koma seperti kartu gudang.
-const inBase = (quantity: string, perUnit: string) =>
-    Math.round(Number(quantity) * Number(perUnit) * scale) / scale;
+const numberFormat =
+    'Tulis angka seperti 12.500 atau 1,5. Titik untuk ribuan, koma untuk desimal.';
 
 function headerOf(count: StockCount | null): Header {
     return {
@@ -108,7 +115,10 @@ function lineOf(line: StoredLine): Line {
         expiry_date: line.expiry_date ?? '',
         unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         expected: line.quantity_expected,
-        quantity_counted: line.quantity_counted ?? '',
+        quantity_counted:
+            line.quantity_counted === null
+                ? ''
+                : displayNumber(line.quantity_counted),
         description: line.description ?? '',
     };
 }
@@ -116,21 +126,6 @@ function lineOf(line: StoredLine): Line {
 const linesOf = (count: StockCount | null) => (count?.lines ?? []).map(lineOf);
 const positionKey = (line: { item: Reference | null; batch: Batch | null }) =>
     `${line.item?.id ?? ''}:${line.batch?.id ?? ''}`;
-
-const loadStockLocations: LookupLoader<Location> = async ({
-    query,
-    cursor,
-    signal,
-}) => {
-    const { body } = await api.inventoryLocationList(
-        { query: { q: query, ...(cursor ? { cursor } : {}) } },
-        { signal },
-    );
-    return {
-        items: body.data.filter((location) => !location.is_transit),
-        nextCursor: body.next_cursor,
-    };
-};
 
 // Satuan isian hanya dari satuan barangnya: satuan dasar dan satuan kemasannya.
 function UnitLookup({
@@ -241,6 +236,7 @@ export function StockCountCard({
     const [operation, setOperation] = useState('Opname belum disimpan');
     const [calculating, setCalculating] = useState(false);
     const [posting, setPosting] = useState(false);
+    const [creating, setCreating] = useState<Creating | null>(null);
     const { confirm, confirmation } = useConfirmation();
     const pristine =
         JSON.stringify([header, lines]) ===
@@ -286,32 +282,55 @@ export function StockCountCard({
         onSaved(next);
     };
 
-    const payload = () => ({
-        location_id: header.location?.id ?? '',
-        count_date: header.count_date,
-        posting_date: header.posting_date,
-        description: header.description || null,
-        lines: lines.map((line) => ({
-            id: line.id,
-            item_id: line.item?.id ?? '',
-            batch_id: line.batch?.id ?? null,
-            batch_number: line.batch ? null : line.batch_number || null,
-            expiry_date: line.batch ? null : line.expiry_date || null,
-            unit_id: line.unit?.id ?? '',
-            quantity_counted: line.quantity_counted,
-            description: line.description || null,
-        })),
-    });
+    // Jumlah yang tidak bisa dibaca dengan pasti ditahan di layar, karena API membaca titik sebagai tanda desimal.
+    const payload = () => {
+        const unreadable: Errors = {};
+        const body = {
+            location_id: header.location?.id ?? '',
+            count_date: header.count_date,
+            posting_date: header.posting_date,
+            description: header.description || null,
+            lines: lines.map((line, index) => {
+                const typed = line.quantity_counted.trim();
+                const counted = typed ? parseDisplayNumber(typed) : null;
+                if (typed && counted === null)
+                    unreadable[field(index, 'quantity_counted')] = [
+                        numberFormat,
+                    ];
+                return {
+                    id: line.id,
+                    item_id: line.item?.id ?? '',
+                    batch_id: line.batch?.id ?? null,
+                    batch_number: line.batch ? null : line.batch_number || null,
+                    expiry_date: line.batch ? null : line.expiry_date || null,
+                    unit_id: line.unit?.id ?? '',
+                    quantity_counted: counted,
+                    description: line.description || null,
+                };
+            }),
+        };
+        return Object.keys(unreadable).length
+            ? { readable: false as const, errors: unreadable }
+            : { readable: true as const, body };
+    };
 
     const save = async (): Promise<StockCount | null> => {
         clear();
+        const request = payload();
+        if (!request.readable) {
+            setOperation('Opname belum disimpan');
+            setErrors(request.errors);
+            return null;
+        }
         try {
             const { body } = count
                 ? await api.inventoryStockCountUpdate({
                       params: { id: count.id },
-                      body: { ...payload(), version: count.version },
+                      body: { ...request.body, version: count.version },
                   })
-                : await api.inventoryStockCountCreate({ body: payload() });
+                : await api.inventoryStockCountCreate({
+                      body: request.body,
+                  });
             return body.data;
         } catch (caught) {
             failed(caught, 'Opname belum disimpan');
@@ -428,6 +447,76 @@ export function StockCountCard({
         );
     };
 
+    const pickItem = (key: string, item: ItemChoice) =>
+        setLines((existing) =>
+            existing.map((line) =>
+                line.key === key
+                    ? {
+                          ...line,
+                          item,
+                          unit: {
+                              id: item.base_unit_id,
+                              code: item.base_unit,
+                              name: '',
+                              quantity_per_unit: '1',
+                          },
+                      }
+                    : line,
+            ),
+        );
+
+    // Kartu master yang dibuka lewat Baru pada pilihannya; record yang tersimpan langsung dipilih di opname.
+    const masterCard = (): { title: string; card: ReactNode } | null => {
+        if (!creating) return null;
+        const close = () => setCreating(null);
+        switch (creating.kind) {
+            case 'location':
+                return {
+                    title: 'Lokasi',
+                    card: (
+                        <LocationCard
+                            record={null}
+                            canManage
+                            onSaved={(location) => {
+                                close();
+                                setHeader((current) => ({
+                                    ...current,
+                                    location: {
+                                        id: location.id,
+                                        code: location.code,
+                                        name: location.name,
+                                    },
+                                }));
+                            }}
+                            onClose={close}
+                        />
+                    ),
+                };
+            case 'item':
+                return {
+                    title: 'Barang',
+                    card: (
+                        <ItemCard
+                            record={null}
+                            canManage
+                            onSaved={(item) => {
+                                close();
+                                pickItem(creating.lineKey, itemChoice(item));
+                            }}
+                            onClose={close}
+                        />
+                    ),
+                };
+            default: {
+                const unknown: never = creating;
+                throw new Error(
+                    `Unknown master to create: ${JSON.stringify(unknown)}`,
+                );
+            }
+        }
+    };
+    const master = masterCard();
+
     const addLine = () =>
         setLines((existing) => [
             ...existing,
@@ -481,7 +570,7 @@ export function StockCountCard({
     const amount = (value: string | null | undefined) =>
         value === null || value === undefined || value === ''
             ? ''
-            : decimal.format(Number(value));
+            : displayNumber(value);
     const stored = new Map<string, StoredLine>(
         (count?.lines ?? []).map((line) => [line.id, line]),
     );
@@ -492,17 +581,17 @@ export function StockCountCard({
     const difference = (line: Line) => {
         const atPosting = storedOf(line)?.quantity_expected_at_posting;
         const expected = posted ? atPosting : line.expected;
+        const counted = parseDisplayNumber(line.quantity_counted);
         if (
             expected === null ||
             expected === undefined ||
-            line.quantity_counted === '' ||
+            counted === null ||
             !line.unit
         )
             return '';
         const value =
-            inBase(line.quantity_counted, line.unit.quantity_per_unit) -
-            Number(expected);
-        return `${value > 0 ? '+' : ''}${decimal.format(Math.round(value * scale) / scale)}`;
+            inBase(counted, line.unit.quantity_per_unit) - scaled(expected);
+        return `${value > 0n ? '+' : ''}${displayNumber(unscaled(value))}`;
     };
     const batchText = (line: Line) =>
         line.batch?.batch_number ?? line.batch_number;
@@ -639,91 +728,36 @@ export function StockCountCard({
                 />
                 <PageDialogBody className="space-y-4 py-3">
                     <FormGrid>
-                        <FormControl
+                        <LocationLookup
+                            label="Lokasi"
+                            required
+                            transit={false}
+                            field="location_id"
+                            value={header.location}
+                            onChange={(location) =>
+                                setHeader({
+                                    ...header,
+                                    location: {
+                                        id: location.id,
+                                        code: location.code,
+                                        name: location.name,
+                                    },
+                                })
+                            }
+                            disabled={!editable || lines.length > 0}
                             error={error('location_id')}
-                            data-error-field="location_id"
                             hint={
                                 editable && lines.length > 0
                                     ? 'Lokasi terkunci karena opname sudah punya baris. Hapus semua baris untuk menggantinya.'
                                     : undefined
                             }
-                        >
-                            {editable && lines.length === 0 ? (
-                                <InlineLookup<Location>
-                                    label="Lokasi"
-                                    required
-                                    loadItems={loadStockLocations}
-                                    value={
-                                        header.location
-                                            ? {
-                                                  ...header.location,
-                                                  operating_unit: {
-                                                      id: '',
-                                                      name: '',
-                                                  },
-                                                  is_transit: false,
-                                                  picking_method: null,
-                                                  transfer_mode: null,
-                                                  version: 0,
-                                              }
-                                            : null
-                                    }
-                                    displayValue={
-                                        header.location
-                                            ? label(header.location)
-                                            : ''
-                                    }
-                                    onValueChange={(location) =>
-                                        setHeader({
-                                            ...header,
-                                            location: {
-                                                id: location.id,
-                                                code: location.code,
-                                                name: location.name,
-                                            },
-                                        })
-                                    }
-                                    getItemValue={(location) => location.id}
-                                    getItemLabel={label}
-                                    placeholder="Cari kode atau nama lokasi…"
-                                    emptyMessage="Lokasi tidak ditemukan."
-                                    popupClassName="w-[32rem]"
-                                    showDetails={false}
-                                    portalContainer={portalContainer}
-                                    columns={[
-                                        {
-                                            id: 'code',
-                                            header: 'Kode',
-                                            width: 110,
-                                            cell: (location) => location.code,
-                                        },
-                                        {
-                                            id: 'name',
-                                            header: 'Nama',
-                                            width: 200,
-                                            cell: (location) => location.name,
-                                        },
-                                        {
-                                            id: 'operating_unit',
-                                            header: 'Unit',
-                                            width: 160,
-                                            cell: (location) =>
-                                                location.operating_unit.name,
-                                        },
-                                    ]}
-                                />
-                            ) : (
-                                <Input
-                                    label="Lokasi"
-                                    readOnly
-                                    value={
-                                        header.location
-                                            ? label(header.location)
-                                            : ''
-                                    }
-                                />
-                            )}
-                        </FormControl>
+                            portalContainer={portalContainer}
+                            onCreate={
+                                editable
+                                    ? () => setCreating({ kind: 'location' })
+                                    : undefined
+                            }
+                        />
                         {editable ? (
                             <FormControl error={error('count_date')}>
                                 <DatePicker
@@ -861,21 +895,24 @@ export function StockCountCard({
                                 cell: ({ index, line }) =>
                                     editable && line.manual ? (
                                         <ItemLookup
+                                            label="Barang"
+                                            required
                                             value={line.item}
                                             field={field(index, 'item_id')}
                                             error={error(
                                                 field(index, 'item_id'),
                                             )}
                                             portalContainer={portalContainer}
-                                            onPick={(item) =>
-                                                change(index, {
-                                                    item,
-                                                    unit: {
-                                                        id: item.base_unit_id,
-                                                        code: item.base_unit,
-                                                        name: '',
-                                                        quantity_per_unit: '1',
-                                                    },
+                                            onChange={(item) =>
+                                                pickItem(
+                                                    line.key,
+                                                    itemChoice(item),
+                                                )
+                                            }
+                                            onCreate={() =>
+                                                setCreating({
+                                                    kind: 'item',
+                                                    lineKey: line.key,
                                                 })
                                             }
                                         />
@@ -1037,9 +1074,6 @@ export function StockCountCard({
                                         >
                                             <Input
                                                 label="Dihitung"
-                                                type="number"
-                                                min={0}
-                                                step="any"
                                                 inputMode="decimal"
                                                 data-error-field={field(
                                                     index,
@@ -1133,6 +1167,18 @@ export function StockCountCard({
                         appendPositions(positions);
                     }}
                 />
+            )}
+            {master && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setCreating(null);
+                    }}
+                >
+                    <PageDialogContent title={master.title}>
+                        {master.card}
+                    </PageDialogContent>
+                </PageDialog>
             )}
             {posting && count && (
                 <StockCountPostingDialog

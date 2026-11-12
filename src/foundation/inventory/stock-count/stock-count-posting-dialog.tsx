@@ -29,12 +29,13 @@ import {
     orpc,
 } from '../../../platform/shell/index.ts';
 import type { StockCount } from './stock-count-card.tsx';
-import { decimal, label } from './stock-count-fields.tsx';
+import { displayNumber } from '../display-number.ts';
+import { label } from './stock-count-fields.tsx';
 
 type Errors = Record<string, string[]>;
 
 const signed = (value: string) =>
-    `${Number(value) > 0 ? '+' : ''}${decimal.format(Number(value))}`;
+    `${value.startsWith('-') || value === '0' ? '' : '+'}${displayNumber(value)}`;
 
 // Konfirmasi Post: jumlah tercatat dihitung ulang sampai tanggal posting, jadi selisih yang diposting bisa berbeda dari
 // selisih saat hitung. Barang yang bergerak sesudah hitung dimulai ditandai supaya hitungannya diperiksa lagi; posting
@@ -186,7 +187,7 @@ export function StockCountPostingDialog({
                                 align: 'right',
                                 cell: (row) =>
                                     text(
-                                        `${decimal.format(Number(row.quantity_expected))} ${row.line.item.base_unit}`,
+                                        `${displayNumber(row.quantity_expected)} ${row.line.item.base_unit}`,
                                     ),
                             },
                             {
@@ -196,7 +197,7 @@ export function StockCountPostingDialog({
                                 align: 'right',
                                 cell: (row) =>
                                     text(
-                                        `${decimal.format(Number(row.quantity_counted))} ${row.line.item.base_unit}`,
+                                        `${displayNumber(row.quantity_counted)} ${row.line.item.base_unit}`,
                                     ),
                             },
                             {
@@ -218,9 +219,7 @@ export function StockCountPostingDialog({
                                     text(
                                         row.unit_cost === null
                                             ? ''
-                                            : decimal.format(
-                                                  Number(row.unit_cost),
-                                              ),
+                                            : displayNumber(row.unit_cost),
                                     ),
                             },
                             {
