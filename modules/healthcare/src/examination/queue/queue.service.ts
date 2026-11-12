@@ -443,12 +443,14 @@ export class ExaminationQueue {
                 case 'panggil_ulang':
                 case 'tidak_datang':
                     break;
-                // Pemeriksaan selesai hanya bila isian wajib periksa fisik yang tersimpan sudah terisi.
+                // Pemeriksaan selesai hanya bila isian wajib periksa fisik yang tersimpan sudah terisi, di section yang
+                // memakai Periksa fisik.
                 case 'selesai_periksa': {
                     const missing = await missingRequired(
                         this.db,
                         this.workspace.tenantId,
                         current.id,
+                        current.section_id,
                     );
                     if (Object.keys(missing).length) validation(missing);
                     break;

@@ -1,7 +1,13 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
-import { Field, FieldLabel } from '@operations-metta/ui/field';
+import { Checkbox } from '@operations-metta/ui/checkbox';
+import {
+    Field,
+    FieldLabel,
+    FieldLegend,
+    FieldSet,
+} from '@operations-metta/ui/field';
 import { FilterPane } from '@operations-metta/ui/filter-pane';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
@@ -97,6 +103,12 @@ function SectionCard({
         queue_prefix: section?.queue_prefix ?? '',
         room_ids: (section?.rooms ?? []).map((room) => room.id),
         cluster_ids: (section?.clusters ?? []).map((cluster) => cluster.id),
+        // Section baru memakai bagian pemeriksaan bawaan.
+        examination_panels:
+            section?.examination_panels ??
+            metadata.examination_panels
+                .filter((panel) => panel.by_default)
+                .map((panel) => panel.code),
         // Section baru langsung aktif.
         is_active: section?.is_active ?? true,
     };
@@ -144,6 +156,7 @@ function SectionCard({
             queue_prefix: form.queue_prefix || null,
             room_ids: form.room_ids,
             cluster_ids: form.cluster_ids,
+            examination_panels: form.examination_panels,
             is_active: form.is_active,
         };
         try {
@@ -450,6 +463,60 @@ function SectionCard({
                         )}
                     </FormControl>
                 </FormGrid>
+                <FieldSet
+                    className="mt-4 gap-2"
+                    data-error-field="examination_panels"
+                >
+                    <FieldLegend
+                        variant="label"
+                        hint="Bagian yang tampil dan diisi di halaman pemeriksaan pasien section ini. Poli gigi biasanya memakai Pemeriksaan dasar gigi tanpa Keadaan fisik dan Anatomi tubuh."
+                    >
+                        Bagian pemeriksaan
+                    </FieldLegend>
+                    <div className="gap-x-6 sm:columns-2">
+                        {metadata.examination_panels.map((panel) => (
+                            <Field
+                                key={panel.code}
+                                orientation="horizontal"
+                                className="mb-2 w-auto break-inside-avoid"
+                            >
+                                <Checkbox
+                                    id={`section-panel-${panel.code}`}
+                                    checked={form.examination_panels.includes(
+                                        panel.code,
+                                    )}
+                                    disabled={!editing}
+                                    onCheckedChange={(checked) =>
+                                        setForm({
+                                            ...form,
+                                            examination_panels:
+                                                metadata.examination_panels
+                                                    .map((item) => item.code)
+                                                    .filter((code) =>
+                                                        code === panel.code
+                                                            ? checked === true
+                                                            : form.examination_panels.includes(
+                                                                  code,
+                                                              ),
+                                                    ),
+                                        })
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={`section-panel-${panel.code}`}
+                                    className="font-normal"
+                                >
+                                    {panel.label}
+                                </FieldLabel>
+                            </Field>
+                        ))}
+                    </div>
+                    {errors.examination_panels?.[0] && (
+                        <p className="text-sm text-destructive">
+                            {errors.examination_panels[0]}
+                        </p>
+                    )}
+                </FieldSet>
             </PageDialogBody>
             {confirmation}
         </form>
