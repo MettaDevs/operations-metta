@@ -18,7 +18,7 @@ type NavigationItem = NavigationGroup['items'][number];
 // aplikasi yang sedang dibuka, satu grup per folder fitur; submenu berisi halaman grup itu. Semuanya datang dari
 // `/api/v1/shell`, sudah disaring izin anggota ini.
 // Cukup lama untuk dilewati kursor yang menyeberang serong, cukup singkat untuk terasa langsung saat kursor berhenti.
-const HOVER_INTENT_MS = 250;
+const HOVER_INTENT_MS = 125;
 
 export function AppSidebar({
     navigation,
@@ -38,6 +38,7 @@ export function AppSidebar({
     const [previewId, setPreviewId] = useState<string | null>(null);
     const [pinnedId, setPinnedId] = useState<string | null>(null);
     const [previousUrl, setPreviousUrl] = useState(url);
+    const [pointerInside, setPointerInside] = useState(false);
     // Niat hover: grup di rail baru menggantikan submenu setelah kursor diam sebentar di atasnya. Kursor yang bergerak
     // serong dari rail ke submenu melewati grup lain; tanpa jeda, submenu berpindah ke grup yang hanya dilewati itu.
     const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -55,7 +56,7 @@ export function AppSidebar({
 
     if (previousUrl !== url) {
         setPreviousUrl(url);
-        setPreviewId(null);
+        if (!pointerInside) setPreviewId(null);
         setPinnedId(null);
     }
 
@@ -82,8 +83,10 @@ export function AppSidebar({
             style={style}
             collapsible="icon"
             className="z-30 border-r border-sidebar-border bg-sidebar"
+            onMouseEnter={() => setPointerInside(true)}
             onMouseLeave={() => {
                 cancelHover();
+                setPointerInside(false);
                 setPreviewId(null);
             }}
             onBlur={(event) => {
