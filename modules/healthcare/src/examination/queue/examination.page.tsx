@@ -36,6 +36,7 @@ import {
     type MedicalRecordShown,
 } from '../medical-record/medical-record-panels.tsx';
 import { DiagnosisPanels } from '../medical-record/diagnosis-panels.tsx';
+import { OrderPanels } from '../medical-record/order-panels.tsx';
 import { ageText, DestinationStatusText, timeText } from './queue-display.tsx';
 
 // Pemeriksaan satu tujuan kunjungan: pasien dan kunjungannya, isi tab Rekam Medis poli sistem lama dengan satu Simpan
@@ -129,6 +130,10 @@ function ExaminationPage(): ReactNode {
             select: (response) => response.body,
         }),
     );
+    // Kesalahan hidup di luar form yang dipasang ulang setiap versi, supaya kegagalan sesudah Simpan berhasil (Kirim ke
+    // farmasi, Selesai periksa) tetap terlihat.
+    const [errors, setErrors] = useState<Errors>({});
+    const [message, setMessage] = useState<string | null>(null);
     const notFound =
         'Kunjungan tidak ditemukan di legal entity dan unit kerja aktif.';
     if (!entry.data)
@@ -156,6 +161,10 @@ function ExaminationPage(): ReactNode {
             shown={record.data}
             recordMetadata={recordMetadata.data}
             canManage={metadata.permissions.manage}
+            errors={errors}
+            setErrors={setErrors}
+            message={message}
+            setMessage={setMessage}
         />
     );
 }
@@ -165,11 +174,19 @@ function ExaminationRecord({
     shown,
     recordMetadata,
     canManage,
+    errors,
+    setErrors,
+    message,
+    setMessage,
 }: {
     entry: Entry;
     shown: MedicalRecordShown;
     recordMetadata: MedicalRecordMetadata;
     canManage: boolean;
+    errors: Errors;
+    setErrors: (errors: Errors) => void;
+    message: string | null;
+    setMessage: (message: string | null) => void;
 }): ReactNode {
     const navigate = route.useNavigate();
     const queryClient = useQueryClient();
@@ -179,8 +196,6 @@ function ExaminationRecord({
         }),
     );
     const [draft, setDraft] = useState<MedicalRecordDraft>(shown.data);
-    const [errors, setErrors] = useState<Errors>({});
-    const [message, setMessage] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const editable = shown.context.editable;
     const dirty =
@@ -211,6 +226,12 @@ function ExaminationRecord({
     };
 
     // Simpan seluruh tab. Berhasil memasang ulang form dari respons, sehingga Simpan berikutnya memakai versi terbaru.
+    const showRecord = (body: MedicalRecordShown) =>
+        queryClient.setQueryData(recordOptions.queryKey, {
+            status: 200,
+            headers: {},
+            body,
+        });
     const save = async (): Promise<boolean> => {
         setBusy(true);
         try {
@@ -221,15 +242,53 @@ function ExaminationRecord({
             setErrors({});
             setMessage(null);
             toast.success('Data berhasil disimpan.');
-            queryClient.setQueryData(recordOptions.queryKey, {
-                status: 200,
-                headers: {},
-                body,
-            });
+            showRecord(body);
             return true;
         } catch (caught) {
             fail(caught, 'Terjadi kesalahan saat menyimpan data.');
             return false;
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // Kirim ke farmasi menyimpan perubahan yang belum disimpan lebih dulu, termasuk draf resep yang belum punya id,
+    // lalu mengirim draf itu dengan versi pemeriksaan hasil simpan.
+    const send = async (position: number) => {
+        setBusy(true);
+        let saved: MedicalRecordShown | null = null;
+        try {
+            let current = shown;
+            if (dirty || !draft.prescriptions?.[position]?.id) {
+                ({ body: current } = await api.healthcareMedicalRecordSave({
+                    params: { id: entry.id },
+                    body: draft,
+                }));
+                saved = current;
+            }
+            const prescription = current.data.prescriptions?.find(
+                (row) => row.status === 'draf',
+            );
+            if (!prescription?.id) {
+                if (saved) showRecord(saved);
+                setErrors({ prescription: ['Resep belum berisi obat.'] });
+                setMessage(null);
+                return;
+            }
+            const { body } = await api.healthcarePrescriptionSend({
+                params: { id: entry.id, prescriptionId: prescription.id },
+                body: { version: current.data.version },
+            });
+            setErrors({});
+            setMessage(null);
+            const sent = body.data.prescriptions?.find(
+                (row) => row.id === prescription.id,
+            );
+            toast.success(`Resep ${sent?.number ?? ''} dikirim ke farmasi.`);
+            showRecord(body);
+        } catch (caught) {
+            if (saved) showRecord(saved);
+            fail(caught, 'Resep belum dikirim ke farmasi.');
         } finally {
             setBusy(false);
         }
@@ -400,6 +459,14 @@ function ExaminationRecord({
                             metadata={recordMetadata}
                             errors={errors}
                             disabled={!editable || busy}
+                        />
+                        <OrderPanels
+                            draft={draft}
+                            setDraft={setDraft}
+                            metadata={recordMetadata}
+                            errors={errors}
+                            disabled={!editable || busy}
+                            onSend={(position) => void send(position)}
                         />
                     </fieldset>
                     {editable && (

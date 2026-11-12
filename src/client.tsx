@@ -5,9 +5,15 @@ import { page as modulesHealthcareSrcClinicalClusterClustersPage } from '../modu
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/chronic-diseases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-cases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/dosage-forms.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/drug-units.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/procedure-groups.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/prognoses.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/usage-instructions.page.tsx';
+import { page as modulesHealthcareSrcClinicalDrugDrugsPage } from '../modules/healthcare/src/clinical/drug/drugs.page.tsx';
 import { page as modulesHealthcareSrcClinicalIcd10Icd10Page } from '../modules/healthcare/src/clinical/icd10/icd10.page.tsx';
 import { page as modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage } from '../modules/healthcare/src/clinical/life-cycle/life-cycles.page.tsx';
+import { page as modulesHealthcareSrcClinicalProcedureProceduresPage } from '../modules/healthcare/src/clinical/procedure/procedures.page.tsx';
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
@@ -102,6 +108,45 @@ const modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute =
         },
     });
 
+const modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage.title,
+        },
+    });
+
 const modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute =
     createRoute({
         getParentRoute: () => appLayoutRoute,
@@ -114,6 +159,27 @@ const modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute =
             title: modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.title,
         },
     });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDrugDrugsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcClinicalDrugDrugsPage.path,
+    component: modulesHealthcareSrcClinicalDrugDrugsPage.component,
+    validateSearch: modulesHealthcareSrcClinicalDrugDrugsPage.validateSearch,
+    staticData: { title: modulesHealthcareSrcClinicalDrugDrugsPage.title },
+});
 
 const modulesHealthcareSrcClinicalIcd10Icd10Route = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -131,6 +197,17 @@ const modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute = createRoute({
         modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.validateSearch,
     staticData: {
         title: modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.title,
+    },
+});
+
+const modulesHealthcareSrcClinicalProcedureProceduresRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcClinicalProcedureProceduresPage.path,
+    component: modulesHealthcareSrcClinicalProcedureProceduresPage.component,
+    validateSearch:
+        modulesHealthcareSrcClinicalProcedureProceduresPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcClinicalProcedureProceduresPage.title,
     },
 });
 
@@ -461,9 +538,15 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsRoute,
+        modulesHealthcareSrcClinicalDrugDrugsRoute,
         modulesHealthcareSrcClinicalIcd10Icd10Route,
         modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute,
+        modulesHealthcareSrcClinicalProcedureProceduresRoute,
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,

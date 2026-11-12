@@ -17,6 +17,7 @@ import { Textarea } from '@operations-metta/ui/textarea';
 import { Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ApiBody } from '@core/platform/shell/index.ts';
+import { DrugAllergyLines } from './order-panels.tsx';
 
 // Panel tab Rekam Medis poli sistem lama (rekammedis/index.php), dalam urutan dan susunan kolom aslinya: Anamnesa,
 // Riwayat penyakit dan alergi, Status fisik, Periksa fisik, Asesmen nyeri, Risiko jatuh, Pemeriksaan dasar gigi, Keadaan
@@ -47,6 +48,9 @@ type Panel = Exclude<
     | 'diagnoses'
     | 'prognosis_id'
     | 'chronic_disease_ids'
+    | 'drug_allergies'
+    | 'procedures'
+    | 'prescriptions'
 >;
 
 function numberOf(value: number | string | null): number | null {
@@ -735,6 +739,14 @@ export function MedicalRecordPanels({
                                     />
                                 </FormGrid>
                             )}
+                            <Subheading>Alergi obat pasien</Subheading>
+                            <DrugAllergyLines
+                                rows={draft.drug_allergies ?? []}
+                                setDraft={setDraft}
+                                canCreate={metadata.permissions.create_drug}
+                                errors={errors}
+                                disabled={disabled}
+                            />
                         </div>
                     </div>
                 </CollapsibleSection>

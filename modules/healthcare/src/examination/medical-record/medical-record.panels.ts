@@ -11,7 +11,7 @@ export const examinationPanels = [
     {
         code: 'history',
         label: 'Riwayat penyakit dan alergi',
-        inputs: ['history', 'allergy'],
+        inputs: ['history', 'allergy', 'drug_allergies'],
     },
     {
         code: 'status',
@@ -40,6 +40,8 @@ export const examinationPanels = [
         label: 'Prognosa',
         inputs: ['prognosis_id', 'chronic_disease_ids'],
     },
+    { code: 'procedures', label: 'Biaya Tindakan', inputs: ['procedures'] },
+    { code: 'prescriptions', label: 'E-Resep', inputs: ['prescriptions'] },
 ] as const satisfies readonly {
     code: string;
     label: string;

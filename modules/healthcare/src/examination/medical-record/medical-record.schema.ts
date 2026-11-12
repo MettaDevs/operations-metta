@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Isi tab Rekam Medis poli sistem lama, panel Anamnesa sampai Diagnosa. Satu bentuk untuk dibaca dan disimpan: layar
+// Isi tab Rekam Medis poli sistem lama, panel Anamnesa sampai E-Resep. Satu bentuk untuk dibaca dan disimpan: layar
 // mengirim kembali bentuk yang ia terima. Angka boleh datang sebagai teks dari isian; service yang memeriksanya.
 
 const text = z.string().nullable();
@@ -144,6 +144,53 @@ export const diagnosisSchema = z.object({
     tooth_position: text.optional(),
 });
 
+// Alergi obat pasien (SIMtrRiwayatAlergiObat), milik pasien seperti alergi lain. Kode dan nama hanya dibaca.
+export const drugAllergySchema = z.object({
+    drug_id: z.string(),
+    drug_code: text,
+    drug_name: z.string(),
+});
+
+// Baris Biaya Tindakan (SIMtrRJTransaksi) tanpa tarif. Satu tindakan sekali per pemeriksaan, jadi baris dikenali dari
+// tindakannya. Kode, nama, pengisi, dan jamnya hanya dibaca.
+export const procedureSchema = z.object({
+    procedure_id: text,
+    procedure_code: text,
+    procedure_name: text,
+    quantity: number,
+    doctor_id: text,
+    added_by: text,
+    added_at: text,
+});
+
+// Baris resep (SIMtrResepDetail): obat tunggal (compound kosong), kepala racikan "Racikan N" (drug_id kosong,
+// compound N), atau komponen racikan (drug_id dan compound terisi). Baris dikenali dari obatnya, atau dari nomor
+// racikannya untuk kepala racikan. Kode, nama, dan satuan obat hanya dibaca.
+export const prescriptionLineSchema = z.object({
+    drug_id: text,
+    drug_code: text,
+    drug_name: text,
+    unit_name: text,
+    compound: number,
+    quantity: number,
+    requested_quantity: number,
+    signa: text,
+    usage_instruction_id: text,
+    notes: text,
+});
+
+// Resep (SIMtrResep). Hanya draf yang diubah Simpan; nomor, status, waktu kirim, dokter, dan perawat hanya dibaca.
+export const prescriptionSchema = z.object({
+    id: text,
+    number: text,
+    status: z.enum(['draf', 'dikirim', 'dibatalkan']),
+    sent_at: text,
+    doctor_name: text,
+    nurse_name: text,
+    notes: text,
+    lines: z.array(prescriptionLineSchema),
+});
+
 // Isi rekam medis memuat panel yang dipakai section tujuan saja (medical-record.panels.ts). Panel lain tidak ada di
 // bentuk ini, dan Simpan menolaknya.
 export const medicalRecordSchema = z.object({
@@ -163,6 +210,9 @@ export const medicalRecordSchema = z.object({
     diagnoses: z.array(diagnosisSchema).optional(),
     prognosis_id: text.optional(),
     chronic_disease_ids: z.array(z.string()).optional(),
+    drug_allergies: z.array(drugAllergySchema).optional(),
+    procedures: z.array(procedureSchema).optional(),
+    prescriptions: z.array(prescriptionSchema).optional(),
 });
 export type MedicalRecord = z.infer<typeof medicalRecordSchema>;
 
@@ -184,6 +234,9 @@ export const medicalRecordInputSchema = z.object({
     diagnoses: z.array(z.unknown()).optional(),
     prognosis_id: z.unknown().optional(),
     chronic_disease_ids: z.array(z.unknown()).optional(),
+    drug_allergies: z.array(z.unknown()).optional(),
+    procedures: z.array(z.unknown()).optional(),
+    prescriptions: z.array(z.unknown()).optional(),
 });
 // Bentuk kiriman layar: angka boleh masih berupa teks isian.
 type Loose<T> = T extends number

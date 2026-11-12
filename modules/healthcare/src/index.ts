@@ -1,7 +1,9 @@
 import { clusterRoutes } from './clinical/cluster/cluster.routes.ts';
 import { diagnosisReferenceRoutes } from './clinical/diagnosis-reference/diagnosis-reference.routes.ts';
+import { drugRoutes } from './clinical/drug/drug.routes.ts';
 import { icd10Routes } from './clinical/icd10/icd10.routes.ts';
 import { lifeCycleRoutes } from './clinical/life-cycle/life-cycle.routes.ts';
+import { procedureRoutes } from './clinical/procedure/procedure.routes.ts';
 import { medicalRecordRoutes } from './examination/medical-record/medical-record.routes.ts';
 import { examinationQueueRoutes } from './examination/queue/queue.routes.ts';
 import { guarantorRoutes } from './coverage/guarantor/guarantor.routes.ts';
@@ -27,6 +29,8 @@ export function healthcareRoutes() {
         ...clusterRoutes(),
         ...lifeCycleRoutes(),
         ...icd10Routes(),
+        ...procedureRoutes(),
+        ...drugRoutes(),
         ...diagnosisReferenceRoutes(),
         ...visitRoutes(),
         ...examinationQueueRoutes(),
