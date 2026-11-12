@@ -59,14 +59,16 @@ jobs:
 
   # Berkas test dibagi ke beberapa job, masing-masing dengan PostgreSQL dan Valkey sendiri, jadi tidak ada database
   # yang dipakai dua shard. Pembagiannya mengikuti lama tiap berkas di .github/test-timings.json; berkas yang belum
-  # tercatat tetap ikut. Tambah shard hanya bila berkas terlama tidak lagi sendirian menentukan lama job.
+  # tercatat tetap ikut. Bun memotong daftar berkas yang terurut path menjadi potongan berurutan, jadi berkas yang
+  # berdampingan tidak bisa dipisah ke shard yang seimbang tanpa menambah shard. Tambah shard hanya bila berkas
+  # terlama tidak lagi sendirian menentukan lama job.
   test:
     name: test ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     # Test route Core memanggil aplikasi di atas database yang sudah dimigrasi. Test sesi berjalan di PostgreSQL dan
     # di Valkey sungguhan, karena tiruan yang menjawab tetap menyembunyikan penulisan yang membuat ulang sesi.
     services:
