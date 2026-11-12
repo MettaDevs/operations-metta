@@ -7,6 +7,7 @@ import { itemRoutes } from './item/item.routes.ts';
 import { locationRoutes } from './location/location.routes.ts';
 import { inventorySetupRoutes } from './setup/inventory-setup.routes.ts';
 import { trackingCodeRoutes } from './tracking-code/tracking-code.routes.ts';
+import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
 
 // Persediaan Core, pola Business Central: master per legal entity, satu kartu gudang dengan sisa per baris, dan satu
 // mesin posting. Module yang menggerakkan stok (farmasi, penerimaan, mutasi) memanggil postItemLines di dalam transaksi
@@ -24,7 +25,9 @@ export {
     type PostingContext,
     type TransferLine,
 } from './item-ledger/item-ledger.posting.ts';
+export { unitConversion } from './item-unit/item-unit.service.ts';
 export {
+    baseQuantity,
     decimalInput,
     fromNumeric,
     quantityScale,
@@ -42,5 +45,6 @@ export function inventoryRoutes() {
         ...itemUnitRoutes(),
         ...adjustmentRoutes(),
         ...itemLedgerRoutes(),
+        ...transferOrderRoutes(),
     };
 }

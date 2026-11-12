@@ -16,7 +16,12 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
-import { decimalInput, quantityScale, toNumeric } from '../quantity.ts';
+import {
+    decimalInput,
+    fromNumeric,
+    quantityScale,
+    toNumeric,
+} from '../quantity.ts';
 import { itemUnitInputSchema, itemUnitRowSchema } from './item-unit.schema.ts';
 
 // Satuan dasar ditulis sebagai baris pertama dengan isi 1. Satuan kemasan yang kebetulan sama dengan satuan dasar
@@ -48,6 +53,30 @@ const storedSchema = z.object({
     item_id: z.string(),
     version: z.number(),
 });
+
+// Isi satuan baris dokumen: satuan dasar barang berisi 1, satuan kemasan aktif berisi konversinya. Barang yang tidak
+// ada atau satuan yang bukan milik barang itu dijawab null.
+export async function unitConversion(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string },
+    itemId: string,
+    unitId: string,
+): Promise<bigint | null> {
+    if (!lookupId(itemId) || !lookupId(unitId)) return null;
+    const found = await db.one(
+        z.object({ conversion: z.string() }),
+        `select '1' as conversion from gd_m_barang
+         where tenant_id = $1 and legal_entity_id = $2 and id = $3 and satuan_dasar_id = $4 and deleted_at is null
+         union all
+         select k.konversi::text from gd_m_barang_satuan k
+         join gd_m_barang b on b.tenant_id = k.tenant_id and b.id = k.barang_id and b.deleted_at is null
+         where k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id = $3 and k.satuan_id = $4
+           and k.deleted_at is null
+         limit 1`,
+        [scope.tenantId, scope.legalEntityId, itemId, unitId],
+    );
+    return found ? fromNumeric(found.conversion, quantityScale) : null;
+}
 
 export class ItemUnits {
     constructor(

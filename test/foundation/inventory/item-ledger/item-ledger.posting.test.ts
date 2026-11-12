@@ -612,16 +612,15 @@ describe.skipIf(!process.env.DB_HOST)('item ledger posting', () => {
                     [business.tenantId, transit.id, `${name}:${tag}:%`],
                 )
             ).map((row) => row.id);
-        const inTransit = async () =>
-            [
-                ...(await pool.unsafe<{ source: string; open: string }[]>(
-                    `select split_part(kunci_idempoten, ':', 1) as source, trim_scale(sisa)::text as open
+        const inTransit = async () => [
+            ...(await pool.unsafe<{ source: string; open: string }[]>(
+                `select split_part(kunci_idempoten, ':', 1) as source, trim_scale(sisa)::text as open
                      from gd_tr_kartu_gudang
                      where tenant_id = $1 and lokasi_id = $2 and jumlah > 0
                      order by kunci_idempoten`,
-                    [business.tenantId, transit.id],
-                )),
-            ];
+                [business.tenantId, transit.id],
+            )),
+        ];
         const applied = await entriesOf('apply-a');
 
         expect(
