@@ -100,17 +100,29 @@ const optional = (value: string | null | undefined) => value ?? '—';
 
 // Hanya dokumen yang sudah punya layar yang ditautkan; jenis lain tetap teks.
 function DocumentNumber({ document }: { document: Entry['document'] }) {
-    if (document.type !== 'penyesuaian' || !document.number)
-        return <DataTableText>{optional(document.number)}</DataTableText>;
-    return (
-        <Link
-            to="/sysadmin/inventory/adjustments"
-            search={{ document: document.id }}
-            className="truncate text-primary underline-offset-4 hover:underline"
-        >
-            {document.number}
-        </Link>
-    );
+    const className =
+        'truncate text-primary underline-offset-4 hover:underline';
+    if (document.number && document.type === 'penyesuaian')
+        return (
+            <Link
+                to="/sysadmin/inventory/adjustments"
+                search={{ document: document.id }}
+                className={className}
+            >
+                {document.number}
+            </Link>
+        );
+    if (document.number && document.type === 'opname')
+        return (
+            <Link
+                to="/sysadmin/inventory/stock-counts"
+                search={{ document: document.id }}
+                className={className}
+            >
+                {document.number}
+            </Link>
+        );
+    return <DataTableText>{optional(document.number)}</DataTableText>;
 }
 
 // Tanggal periode tinggal di URL. Ketikan yang belum menjadi tanggal sah ditahan di sini, supaya URL tidak pernah

@@ -6,6 +6,7 @@ import { itemUnitRoutes } from './item-unit/item-unit.routes.ts';
 import { itemRoutes } from './item/item.routes.ts';
 import { locationRoutes } from './location/location.routes.ts';
 import { inventorySetupRoutes } from './setup/inventory-setup.routes.ts';
+import { stockCountRoutes } from './stock-count/stock-count.routes.ts';
 import { trackingCodeRoutes } from './tracking-code/tracking-code.routes.ts';
 import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
 
@@ -46,5 +47,6 @@ export function inventoryRoutes() {
         ...adjustmentRoutes(),
         ...itemLedgerRoutes(),
         ...transferOrderRoutes(),
+        ...stockCountRoutes(),
     };
 }

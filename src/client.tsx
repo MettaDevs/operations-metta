@@ -45,6 +45,7 @@ import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/i
 import { page as foundationInventoryItemItemsPage } from './foundation/inventory/item/items.page.tsx';
 import { page as foundationInventoryLocationLocationsPage } from './foundation/inventory/location/locations.page.tsx';
 import { page as foundationInventorySetupInventorySetupPage } from './foundation/inventory/setup/inventory-setup.page.tsx';
+import { page as foundationInventoryStockCountStockCountsPage } from './foundation/inventory/stock-count/stock-counts.page.tsx';
 import { page as foundationInventoryTrackingCodeItemTrackingCodesPage } from './foundation/inventory/tracking-code/item-tracking-codes.page.tsx';
 import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
@@ -536,6 +537,14 @@ const foundationInventorySetupInventorySetupRoute = createRoute({
     staticData: { title: foundationInventorySetupInventorySetupPage.title },
 });
 
+const foundationInventoryStockCountStockCountsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryStockCountStockCountsPage.path,
+    component: foundationInventoryStockCountStockCountsPage.component,
+    validateSearch: foundationInventoryStockCountStockCountsPage.validateSearch,
+    staticData: { title: foundationInventoryStockCountStockCountsPage.title },
+});
+
 const foundationInventoryTrackingCodeItemTrackingCodesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryTrackingCodeItemTrackingCodesPage.path,
@@ -765,6 +774,7 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryItemItemsRoute,
         foundationInventoryLocationLocationsRoute,
         foundationInventorySetupInventorySetupRoute,
+        foundationInventoryStockCountStockCountsRoute,
         foundationInventoryTrackingCodeItemTrackingCodesRoute,
         foundationInventoryTransferTransferOrdersRoute,
         foundationInventoryTransferTransferReceiptsRoute,
