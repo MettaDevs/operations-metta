@@ -1,11 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+    createBusiness,
+    inventoryApi,
+    inventoryDuties,
+    json,
+    refused,
+} from '../../../../../test/support/inventory-fixtures.ts';
+import {
     operationsTestApp,
     type Browser,
 } from '../../../../../test/support/operations-app.ts';
 import {
     createMember,
-    createTenant,
     entitle,
     grantAllOrganizations,
     recordInstallation,
@@ -13,66 +19,75 @@ import {
 
 type Drug = {
     id: string;
-    code: string | null;
+    code: string;
     name: string;
-    unit_id: string;
-    unit_name: string;
+    base_unit_id: string;
+    base_unit_name: string;
     dosage_form_id: string | null;
     dosage_form_name: string | null;
-    is_active: boolean;
+    is_prescribable: boolean;
+    is_blocked: boolean;
     version: number;
 };
 
-type Option = { id: string; code: string; name: string; active: boolean };
-
 type Metadata = {
     permissions: { create: boolean; update: boolean; delete: boolean };
-    units: Option[];
-    dosage_forms: Option[];
+    units: { id: string; code: string; name: string }[];
+    dosage_forms: { id: string; code: string; name: string; active: boolean }[];
+};
+
+type Item = {
+    id: string;
+    code: string;
+    name: string;
+    base_unit: { id: string };
+    category: { id: string } | null;
+    is_blocked: boolean;
+    version: number;
 };
 
 const api = '/api/modules/healthcare/v1';
 
-// Master obat: satuan bawaan dari pemasangan module, kode opsional tetapi unik bila diisi, satuan dan bentuk sediaan
-// aktif dari daftar pendek, Delete lunak yang ditahan bila sudah dipakai resep atau alergi pasien, izin, dan batas
-// tenant. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
+// Obat adalah barang persediaan Core dengan perluasan sim_m_obat ber-id sama: kartu obat menulis barang lewat fungsi
+// persediaan dan baris perluasannya dalam satu transaksi, mengikuti legal entity tempat kerja, membawa isian yang hanya
+// ada di kartu barang apa adanya, dan Delete-nya ditahan resep, alergi, dan gerak stok. Butuh PostgreSQL yang sudah
+// dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('drugs', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
     afterAll(close);
 
-    let tenantId: string;
+    let business: Awaited<ReturnType<typeof createBusiness>>;
     let admin: Browser;
-    let metadata: Metadata;
-    let tablet: string;
-    let bottle: string;
     let syrup: string;
 
-    async function json<T>(response: Response, status: number): Promise<T> {
-        const text = await response.text();
-        if (response.status !== status)
-            throw new Error(
-                `Expected ${status}, got ${response.status}: ${text}`,
-            );
-        return JSON.parse(text) as T;
-    }
-
-    async function refused(response: Response) {
-        return (await json<{ errors: Record<string, string[]> }>(response, 422))
-            .errors;
-    }
-
-    async function member(tenant: string, duties: string[]) {
-        const account = await createMember(pool, tenant, duties);
-        await grantAllOrganizations(pool, tenant, account.membershipId);
+    async function member(duties: string[]) {
+        const account = await createMember(pool, business.tenantId, duties);
+        await grantAllOrganizations(
+            pool,
+            business.tenantId,
+            account.membershipId,
+        );
         const session = browser();
         await session.login(account.email, account.password);
         return session;
     }
 
-    async function create(as: Browser, body: Record<string, unknown>) {
+    const body = (overrides: Record<string, unknown> = {}) => ({
+        code: `OB${Math.floor(Math.random() * 1e8)}`,
+        name: 'Obat uji',
+        base_unit_id: business.uom.id,
+        dosage_form_id: null,
+        is_prescribable: true,
+        ...overrides,
+    });
+
+    async function create(as: Browser, overrides: Record<string, unknown>) {
         return (
-            await json<{ data: Drug }>(await as.post(`${api}/drugs`, body), 201)
+            await json<{ data: Drug }>(
+                await as.post(`${api}/drugs`, body(overrides)),
+                201,
+            )
         ).data;
     }
 
@@ -94,18 +109,13 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
     }
 
     beforeAll(async () => {
-        tenantId = await createTenant(pool, 'Klinik Uji Obat');
-        await entitle(pool, tenantId, 'healthcare');
-        await recordInstallation(pool, tenantId, 'healthcare');
-        admin = await member(tenantId, ['healthcare.clinical-setup.manage']);
-        metadata = await json<Metadata>(
-            await admin.get(`${api}/drugs/metadata`),
-            200,
-        );
-        const unit = (code: string) =>
-            metadata.units.find((row) => row.code === code)!.id;
-        tablet = unit('TABLET');
-        bottle = unit('BOTOL');
+        business = await createBusiness(pool, browser, 'Klinik Uji Obat', [
+            ...inventoryDuties,
+            'healthcare.clinical-setup.manage',
+        ]);
+        await entitle(pool, business.tenantId, 'healthcare');
+        await recordInstallation(pool, business.tenantId, 'healthcare');
+        admin = business.admin;
         syrup = (
             await json<{ data: { id: string } }>(
                 await admin.post(`${api}/diagnosis-references/dosage-forms`, {
@@ -117,200 +127,188 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
         ).data.id;
     }, 60_000);
 
-    test('units are seeded when the module is installed and dosage forms start empty', () => {
+    test('a drug saved on the card is an item of the workspace legal entity that stock can be posted to', async () => {
+        const metadata = await json<Metadata>(
+            await admin.get(`${api}/drugs/metadata`),
+            200,
+        );
         expect(metadata.permissions).toEqual({
             create: true,
             update: true,
             delete: true,
         });
-        expect(metadata.units.slice(0, 3).map((row) => row.code)).toEqual([
-            'TUBE',
-            'TABLET',
-            'BOTOL',
+        expect(metadata.units).toEqual([
+            { id: business.uom.id, code: 'TAB', name: 'Tablet' },
         ]);
-        expect(metadata.units.every((row) => row.active)).toBe(true);
-    });
-
-    test('a drug is created with an optional code, found, changed, and refuses a stale version', async () => {
-        const added = await create(admin, {
-            code: ' PCT500 ',
+        const drug = await create(admin, {
+            code: ' pct500 ',
             name: 'Paracetamol 500 mg',
-            unit_id: tablet,
-        });
-        expect(added).toMatchObject({
-            code: 'PCT500',
-            name: 'Paracetamol 500 mg',
-            unit_id: tablet,
-            unit_name: 'TAB',
-            dosage_form_id: null,
-            dosage_form_name: null,
-            is_active: true,
-        });
-        const first = await create(admin, {
-            code: '',
-            name: 'Obat batuk hitam',
-            unit_id: bottle,
             dosage_form_id: syrup,
         });
-        const second = await create(admin, {
-            name: 'Obat batuk putih',
-            unit_id: bottle,
+        expect(drug).toMatchObject({
+            code: 'PCT500',
+            name: 'Paracetamol 500 mg',
+            base_unit_id: business.uom.id,
+            base_unit_name: 'Tablet',
+            dosage_form_name: 'Sirup',
+            is_prescribable: true,
+            is_blocked: false,
         });
-        expect([first.code, second.code, first.dosage_form_name]).toEqual([
-            null,
-            null,
-            'Sirup',
-        ]);
-        expect((await list(admin, 'q=batuk')).map((row) => row.id)).toEqual([
-            first.id,
-            second.id,
-        ]);
-        expect((await list(admin, 'q=pct')).map((row) => row.id)).toEqual([
-            added.id,
+        const [stored] = await pool.unsafe<
+            {
+                item_legal_entity: string;
+                drug_legal_entity: string;
+                kode: string;
+                satuan_dasar_id: string;
+            }[]
+        >(
+            `select b.legal_entity_id as item_legal_entity, o.legal_entity_id as drug_legal_entity, b.kode,
+                    b.satuan_dasar_id
+             from sim_m_obat o join gd_m_barang b on b.id = o.id
+             where o.id = $1 and o.deleted_at is null and b.deleted_at is null`,
+            [drug.id],
+        );
+        expect(stored).toEqual({
+            item_legal_entity: business.legalEntityId,
+            drug_legal_entity: business.legalEntityId,
+            kode: 'PCT500',
+            satuan_dasar_id: business.uom.id,
+        });
+        const items = (
+            await json<{ data: Item[] }>(
+                await admin.get(`${inventoryApi}/items?q=PCT500`),
+                200,
+            )
+        ).data;
+        expect(items.map((item) => [item.id, item.name])).toEqual([
+            [drug.id, 'Paracetamol 500 mg'],
         ]);
 
+        const pharmacy = await business.location('FARMASI');
+        await business.posted('masuk', pharmacy.id, [
+            { item_id: drug.id, quantity: 100, unit_cost: 250 },
+        ]);
+        expect(await business.stock(drug.id, pharmacy.id)).toEqual({
+            '-': 100,
+        });
+    });
+
+    test('Core checks the item fields and the card checks the dosage form, in one answer', async () => {
+        expect(
+            await refused(
+                await admin.post(
+                    `${api}/drugs`,
+                    body({
+                        code: ' ',
+                        name: '',
+                        base_unit_id: null,
+                        dosage_form_id: Bun.randomUUIDv7(),
+                    }),
+                ),
+            ),
+        ).toEqual({
+            code: ['Isi kode barang.'],
+            name: ['Isi nama barang.'],
+            base_unit_id: ['Pilih satuan dasar dari daftar.'],
+            dosage_form_id: ['Pilih dari daftar.'],
+        });
+        await business.item('AMX', { name: 'Amoxicillin dari persediaan' });
+        expect(
+            await refused(
+                await admin.post(`${api}/drugs`, body({ code: 'amx' })),
+            ),
+        ).toEqual({ code: ['Kode ini sudah dipakai barang lain.'] });
+        const [orphans] = await pool.unsafe<{ count: number }[]>(
+            `select count(*)::int as count from sim_m_obat o
+             where o.tenant_id = $1 and not exists (select 1 from gd_m_barang b where b.id = o.id)`,
+            [business.tenantId],
+        );
+        expect(orphans?.count).toBe(0);
+    });
+
+    test('changing a drug keeps what only the item card sets, and a blocked item is not offered to prescriptions', async () => {
+        const drug = await create(admin, { name: 'Ibuprofen 400 mg' });
+        const item = (
+            await json<{ data: Item[] }>(
+                await admin.get(`${inventoryApi}/items?q=${drug.code}`),
+                200,
+            )
+        ).data[0]!;
+        const category = await json<{ data: { id: string } }>(
+            await admin.post(`${inventoryApi}/item-categories`, {
+                code: 'OBAT',
+                name: 'Obat',
+            }),
+            201,
+        );
+        const blocked = (
+            await json<{ data: Item }>(
+                await admin.patch(`${inventoryApi}/items/${drug.id}`, {
+                    code: item.code,
+                    name: item.name,
+                    base_unit_id: business.uom.id,
+                    category_id: category.data.id,
+                    is_blocked: true,
+                    version: item.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(
+            await admin.patch(`${api}/drugs/${drug.id}`, {
+                ...body({ code: drug.code, name: 'Basi' }),
+                version: drug.version,
+            }),
+        ).toHaveProperty('status', 409);
         const changed = (
             await json<{ data: Drug }>(
-                await admin.patch(`${api}/drugs/${added.id}`, {
-                    code: null,
-                    name: 'Paracetamol 500 mg tablet',
-                    unit_id: tablet,
-                    dosage_form_id: syrup,
-                    is_active: false,
-                    version: added.version,
+                await admin.patch(`${api}/drugs/${drug.id}`, {
+                    ...body({
+                        code: drug.code,
+                        name: 'Ibuprofen 400 mg tablet',
+                        dosage_form_id: syrup,
+                        is_prescribable: true,
+                    }),
+                    version: blocked.version,
                 }),
                 200,
             )
         ).data;
         expect(changed).toMatchObject({
-            code: null,
-            name: 'Paracetamol 500 mg tablet',
-            dosage_form_id: syrup,
-            is_active: false,
+            name: 'Ibuprofen 400 mg tablet',
+            dosage_form_name: 'Sirup',
+            is_prescribable: true,
+            is_blocked: true,
         });
+        const [kept] = await pool.unsafe<
+            { kategori_id: string; diblokir: boolean }[]
+        >('select kategori_id, diblokir from gd_m_barang where id = $1', [
+            drug.id,
+        ]);
+        expect(kept).toEqual({
+            kategori_id: category.data.id,
+            diblokir: true,
+        });
+
+        const resting = await create(admin, {
+            name: 'Ibuprofen sirup',
+            is_prescribable: false,
+        });
+        const offered = await create(admin, { name: 'Ibuprofen 200 mg' });
         expect(
-            (await list(admin, 'status=inactive')).map((row) => row.id),
-        ).toEqual([added.id]);
+            (await list(admin, 'q=Ibuprofen&prescribable=true')).map(
+                (row) => row.id,
+            ),
+        ).toEqual([offered.id]);
         expect(
-            (
-                await admin.patch(`${api}/drugs/${added.id}`, {
-                    name: 'Basi',
-                    unit_id: tablet,
-                    version: added.version,
-                })
-            ).status,
-        ).toBe(409);
+            (await list(admin, 'q=Ibuprofen&prescribable=false'))
+                .map((row) => row.id)
+                .sort(),
+        ).toEqual([drug.id, resting.id].sort());
     });
 
-    test('name and unit are required, lengths are checked, and a filled code is unique regardless of case', async () => {
-        expect(
-            await refused(
-                await admin.post(`${api}/drugs`, { code: '', name: ' ' }),
-            ),
-        ).toEqual({ name: ['Isi nama obat.'], unit_id: ['Pilih satuan.'] });
-        expect(
-            await refused(
-                await admin.post(`${api}/drugs`, {
-                    code: 'X'.repeat(31),
-                    name: 'N'.repeat(201),
-                    unit_id: tablet,
-                }),
-            ),
-        ).toEqual({
-            code: ['Paling panjang 30 karakter.'],
-            name: ['Paling panjang 200 karakter.'],
-        });
-        await create(admin, {
-            code: 'AMX',
-            name: 'Amoxicillin',
-            unit_id: tablet,
-        });
-        expect(
-            await refused(
-                await admin.post(`${api}/drugs`, {
-                    code: 'amx',
-                    name: 'Amoxicillin lagi',
-                    unit_id: tablet,
-                }),
-            ),
-        ).toEqual({ code: ['Kode ini sudah ada di daftar obat.'] });
-    });
-
-    test('only active units and dosage forms are accepted, except the ones already saved on the drug', async () => {
-        for (const unitId of [Bun.randomUUIDv7(), 'bukan-id'])
-            expect(
-                await refused(
-                    await admin.post(`${api}/drugs`, {
-                        name: 'Satuan salah',
-                        unit_id: unitId,
-                        dosage_form_id: Bun.randomUUIDv7(),
-                    }),
-                ),
-            ).toEqual({
-                unit_id: ['Pilih dari daftar.'],
-                dosage_form_id: ['Pilih dari daftar.'],
-            });
-
-        const vial = metadata.units.find((row) => row.code === 'VIAL')!.id;
-        const kept = await create(admin, {
-            name: 'Injeksi',
-            unit_id: vial,
-            dosage_form_id: syrup,
-        });
-        await pool.unsafe(
-            'update sim_m_satuan_obat set aktif = false where id = $1',
-            [vial],
-        );
-        await pool.unsafe(
-            'update sim_m_bentuk_sediaan set aktif = false where id = $1',
-            [syrup],
-        );
-        try {
-            expect(
-                await refused(
-                    await admin.post(`${api}/drugs`, {
-                        name: 'Baru dengan pilihan nonaktif',
-                        unit_id: vial,
-                        dosage_form_id: syrup,
-                    }),
-                ),
-            ).toEqual({
-                unit_id: ['Pilih dari daftar.'],
-                dosage_form_id: ['Pilih dari daftar.'],
-            });
-            const changed = (
-                await json<{ data: Drug }>(
-                    await admin.patch(`${api}/drugs/${kept.id}`, {
-                        name: 'Injeksi tetap',
-                        unit_id: vial,
-                        dosage_form_id: syrup,
-                        version: kept.version,
-                    }),
-                    200,
-                )
-            ).data;
-            expect([changed.unit_id, changed.dosage_form_id]).toEqual([
-                vial,
-                syrup,
-            ]);
-        } finally {
-            await pool.unsafe(
-                'update sim_m_satuan_obat set aktif = true where id = $1',
-                [vial],
-            );
-            await pool.unsafe(
-                'update sim_m_bentuk_sediaan set aktif = true where id = $1',
-                [syrup],
-            );
-        }
-    });
-
-    test('delete is soft, frees the code, and is refused once a prescription or an allergy uses the drug', async () => {
-        const unused = await create(admin, {
-            code: 'HAPUS',
-            name: 'Dihapus',
-            unit_id: tablet,
-        });
+    test('Delete removes the drug with its item, but not while a prescription, an allergy, or stock uses it', async () => {
+        const unused = await create(admin, { name: 'Dihapus' });
         expect(
             (
                 await admin.delete(`${api}/drugs/${unused.id}`, {
@@ -318,33 +316,34 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 })
             ).status,
         ).toBe(204);
-        const [row] = await pool.unsafe<{ deleted_at: Date | null }[]>(
-            'select deleted_at from sim_m_obat where id = $1',
+        const [row] = await pool.unsafe<
+            { drug_deleted: boolean; item_deleted: boolean }[]
+        >(
+            `select o.deleted_at is not null as drug_deleted, b.deleted_at is not null as item_deleted
+             from sim_m_obat o join gd_m_barang b on b.id = o.id where o.id = $1`,
             [unused.id],
         );
-        expect(row?.deleted_at).not.toBeNull();
+        expect(row).toEqual({ drug_deleted: true, item_deleted: true });
         expect((await list(admin)).map((entry) => entry.id)).not.toContain(
             unused.id,
         );
-        await create(admin, {
-            code: 'HAPUS',
-            name: 'Kode dipakai lagi',
-            unit_id: tablet,
-        });
+        await create(admin, { code: unused.code, name: 'Kode dipakai lagi' });
 
         const usedMessage = {
             id: [
-                'Obat ini sudah dipakai di resep atau alergi pasien. Nonaktifkan saja supaya tidak dipilih lagi.',
+                'Obat ini sudah dipakai di resep atau alergi pasien. Matikan Boleh diresepkan saja supaya tidak dipilih lagi.',
             ],
         };
-        const prescribed = await create(admin, {
-            name: 'Diresepkan',
-            unit_id: tablet,
-        });
+        const prescribed = await create(admin, { name: 'Diresepkan' });
         await insertUnchecked(
             `insert into sim_tr_resep_detail (id, tenant_id, resep_id, urutan, obat_id, jumlah)
              values ($1, $2, $3, 1, $4, 10)`,
-            [Bun.randomUUIDv7(), tenantId, Bun.randomUUIDv7(), prescribed.id],
+            [
+                Bun.randomUUIDv7(),
+                business.tenantId,
+                Bun.randomUUIDv7(),
+                prescribed.id,
+            ],
         );
         expect(
             await refused(
@@ -353,15 +352,16 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 }),
             ),
         ).toEqual(usedMessage);
-
-        const allergen = await create(admin, {
-            name: 'Alergen',
-            unit_id: tablet,
-        });
+        const allergen = await create(admin, { name: 'Alergen' });
         await insertUnchecked(
             `insert into sim_m_pasien_alergi_obat (id, tenant_id, pasien_id, obat_id)
              values ($1, $2, $3, $4)`,
-            [Bun.randomUUIDv7(), tenantId, Bun.randomUUIDv7(), allergen.id],
+            [
+                Bun.randomUUIDv7(),
+                business.tenantId,
+                Bun.randomUUIDv7(),
+                allergen.id,
+            ],
         );
         expect(
             await refused(
@@ -370,12 +370,31 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 }),
             ),
         ).toEqual(usedMessage);
+
+        const stocked = await create(admin, { name: 'Punya stok' });
+        await business.posted('masuk', (await business.location('GUDANG')).id, [
+            { item_id: stocked.id, quantity: 5, unit_cost: 100 },
+        ]);
+        expect(
+            await refused(
+                await admin.delete(`${api}/drugs/${stocked.id}`, {
+                    version: stocked.version,
+                }),
+            ),
+        ).toEqual({
+            _form: [
+                'Barang ini sudah punya gerak stok, jadi tidak bisa dihapus. Blokir saja supaya tidak dipakai lagi.',
+            ],
+        });
+        const [still] = await pool.unsafe<{ deleted: boolean }[]>(
+            'select deleted_at is not null as deleted from sim_m_obat where id = $1',
+            [stocked.id],
+        );
+        expect(still?.deleted).toBe(false);
     });
 
     test('an examiner adds a drug from the prescription but cannot change or delete it', async () => {
-        const examiner = await member(tenantId, [
-            'healthcare.examination.manage',
-        ]);
+        const examiner = await member(['healthcare.examination.manage']);
         expect(
             (
                 await json<Metadata>(
@@ -384,15 +403,11 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 )
             ).permissions,
         ).toEqual({ create: true, update: false, delete: false });
-        const added = await create(examiner, {
-            name: 'Ditambah pemeriksa',
-            unit_id: tablet,
-        });
+        const added = await create(examiner, { name: 'Ditambah pemeriksa' });
         expect(
             (
                 await examiner.patch(`${api}/drugs/${added.id}`, {
-                    name: 'Diubah',
-                    unit_id: tablet,
+                    ...body({ code: added.code, name: 'Diubah' }),
                     version: added.version,
                 })
             ).status,
@@ -404,64 +419,81 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 })
             ).status,
         ).toBe(403);
-
-        const reader = await member(tenantId, [
-            'healthcare.examination.inquire',
-        ]);
+        const reader = await member(['healthcare.examination.inquire']);
         expect((await reader.get(`${api}/drugs`)).status).toBe(200);
         expect(
-            (
-                await reader.post(`${api}/drugs`, {
-                    name: 'X',
-                    unit_id: tablet,
-                })
-            ).status,
+            (await reader.post(`${api}/drugs`, body({ name: 'X' }))).status,
         ).toBe(403);
-        const outsider = await member(tenantId, ['healthcare.patient.inquire']);
+        const outsider = await member(['healthcare.patient.inquire']);
         expect((await outsider.get(`${api}/drugs`)).status).toBe(403);
     });
 
-    test('another tenant neither sees nor changes our drugs nor uses our units', async () => {
-        const ours = await create(admin, {
-            code: 'MILIK',
-            name: 'Milik kami',
-            unit_id: tablet,
-        });
-        const other = await createTenant(pool, 'Klinik Obat Lain');
-        await entitle(pool, other, 'healthcare');
-        await recordInstallation(pool, other, 'healthcare');
-        const stranger = await member(other, [
-            'healthcare.clinical-setup.manage',
-        ]);
-        expect((await list(stranger)).map((row) => row.id)).not.toContain(
-            ours.id,
+    test('drugs belong to one legal entity: another one neither sees nor changes them, and may reuse the code', async () => {
+        const ours = await create(admin, { name: 'Milik legal entity satu' });
+        const second = (
+            await json<{ data: { id: string } }>(
+                await admin.post('/api/v1/organizations', {
+                    classification: 'legal_entity',
+                    name: 'PT Klinik Uji Obat Kedua',
+                    company_code: `O${Math.floor(Math.random() * 1e6)}`,
+                    country_code: 'ID',
+                }),
+                201,
+            )
+        ).data.id;
+        await json(
+            await admin.put('/api/v1/workspace-context', {
+                membership_id: business.member.membershipId,
+                legal_entity_id: second,
+            }),
+            200,
         );
         expect(
             (
-                await stranger.patch(`${api}/drugs/${ours.id}`, {
-                    name: 'Diambil',
-                    unit_id: tablet,
+                await json<Metadata>(
+                    await admin.get(`${api}/drugs/metadata`),
+                    200,
+                )
+            ).units,
+        ).toEqual([]);
+        expect((await list(admin)).map((row) => row.id)).not.toContain(ours.id);
+        expect(
+            (
+                await admin.patch(`${api}/drugs/${ours.id}`, {
+                    ...body({ code: ours.code }),
                     version: ours.version,
                 })
             ).status,
         ).toBe(404);
         expect(
             await refused(
-                await stranger.post(`${api}/drugs`, {
-                    code: 'MILIK',
-                    name: 'Satuan tenant lain',
-                    unit_id: tablet,
-                }),
+                await admin.post(`${api}/drugs`, body({ code: ours.code })),
             ),
-        ).toEqual({ unit_id: ['Pilih dari daftar.'] });
-        const theirs = await json<Metadata>(
-            await stranger.get(`${api}/drugs/metadata`),
+        ).toEqual({ base_unit_id: ['Pilih satuan dasar dari daftar.'] });
+        const unit = (
+            await json<{ data: { id: string } }>(
+                await admin.post(`${inventoryApi}/units-of-measure`, {
+                    code: 'TAB',
+                    name: 'Tablet',
+                }),
+                201,
+            )
+        ).data.id;
+        const theirs = await create(admin, {
+            code: ours.code,
+            base_unit_id: unit,
+        });
+        const [scopes] = await pool.unsafe<{ count: number }[]>(
+            `select count(distinct legal_entity_id)::int as count from sim_m_obat where id = any($1::uuid[])`,
+            [[ours.id, theirs.id]],
+        );
+        expect(scopes?.count).toBe(2);
+        await json(
+            await admin.put('/api/v1/workspace-context', {
+                membership_id: business.member.membershipId,
+                legal_entity_id: business.legalEntityId,
+            }),
             200,
         );
-        await create(stranger, {
-            code: 'MILIK',
-            name: 'Kode sama di tenant lain',
-            unit_id: theirs.units[0]!.id,
-        });
     });
 });

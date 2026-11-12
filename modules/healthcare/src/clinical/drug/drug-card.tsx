@@ -25,7 +25,7 @@ import {
 
 export type Drug = ApiBody<'healthcareDrugList'>['data'][number];
 export type DrugPermissions = ApiBody<'healthcareDrugMetadata'>['permissions'];
-type Option = ApiBody<'healthcareDrugMetadata'>['units'][number];
+type Option = { id: string; code: string; name: string; active?: boolean };
 
 // Pilihan aktif ditambah yang tersimpan pada obat ini, dan pilihan yang sedang terpilih. Yang tersimpan tetap punya
 // nama walau metadata belum dimuat.
@@ -35,7 +35,7 @@ function choices(
     current: string | null,
 ) {
     const items = options.filter(
-        (option) => option.active || option.id === saved.id,
+        (option) => option.active !== false || option.id === saved.id,
     );
     const selected =
         items.find((option) => option.id === current) ??
@@ -50,6 +50,7 @@ function OptionLookup({
     required,
     disabled,
     choice,
+    emptyMessage = `${label} tidak ditemukan.`,
     onChange,
     portalContainer,
 }: {
@@ -57,6 +58,7 @@ function OptionLookup({
     required?: boolean;
     disabled: boolean;
     choice: ReturnType<typeof choices>;
+    emptyMessage?: string;
     onChange: (id: string) => void;
     portalContainer: RefObject<HTMLDivElement | null>;
 }): ReactNode {
@@ -73,7 +75,7 @@ function OptionLookup({
             getItemLabel={(item) => item.name}
             getSearchText={(item) => `${item.code} ${item.name}`}
             placeholder={`Cari ${label.toLowerCase()}…`}
-            emptyMessage={`${label} tidak ditemukan.`}
+            emptyMessage={emptyMessage}
             showDetails={false}
             showFullList={false}
             portalContainer={portalContainer}
@@ -95,8 +97,10 @@ function OptionLookup({
     );
 }
 
-// Kartu satu obat, dipakai daftar obat di Setup dan tombol Baru pada pilihan obat baris E-Resep pemeriksaan. Kartu
-// memuat pilihan satuan dan bentuk sediaannya sendiri supaya bisa dibuka dari mana saja.
+// Kartu satu obat, dipakai daftar obat di Setup dan tombol Baru pada pilihan obat baris E-Resep pemeriksaan. Obat
+// adalah barang persediaan: simpan di sini membuat atau mengubah barang itu, sehingga obat langsung punya kartu stok.
+// Kategori, profil pelacakan, satuan kemasan, dan blokir diatur di kartu barang persediaan. Kartu memuat pilihan
+// satuan dan bentuk sediaannya sendiri supaya bisa dibuka dari mana saja.
 export function DrugCard({
     drug,
     permissions,
@@ -112,9 +116,9 @@ export function DrugCard({
     const blank = {
         code: drug?.code ?? '',
         name: drug?.name ?? '',
-        unit_id: drug?.unit_id ?? null,
+        base_unit_id: drug?.base_unit_id ?? null,
         dosage_form_id: drug?.dosage_form_id ?? null,
-        is_active: drug?.is_active ?? true,
+        is_prescribable: drug?.is_prescribable ?? true,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -128,16 +132,18 @@ export function DrugCard({
             select: (response) => response.body,
         }),
     );
-    const title = (value: Drug) =>
-        value.code ? `${value.code} ${value.name}` : value.name;
+    const title = (value: Drug) => `${value.code} ${value.name}`;
     usePageDialogRecord({
         recordTitle: drug ? title(drug) : 'Obat baru',
         editing,
     });
     const unit = choices(
         metadata?.units ?? [],
-        { id: drug?.unit_id ?? null, name: drug?.unit_name ?? null },
-        form.unit_id,
+        {
+            id: drug?.base_unit_id ?? null,
+            name: drug?.base_unit_name ?? null,
+        },
+        form.base_unit_id,
     );
     const dosageForm = choices(
         metadata?.dosage_forms ?? [],
@@ -174,7 +180,8 @@ export function DrugCard({
         if (
             !(await confirm({
                 title: `Delete obat ${title(drug)}?`,
-                description: 'Obat ini tidak bisa dipilih lagi di resep.',
+                description:
+                    'Obat ini tidak bisa dipilih lagi di resep dan barangnya hilang dari daftar barang persediaan.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -250,7 +257,8 @@ export function DrugCard({
                         <FormControl error={errors.code?.[0]}>
                             <Input
                                 label="Kode"
-                                maxLength={30}
+                                required
+                                maxLength={20}
                                 data-error-field="code"
                                 value={form.code}
                                 readOnly={!editing}
@@ -279,16 +287,17 @@ export function DrugCard({
                             />
                         </FormControl>
                         <FormControl
-                            error={errors.unit_id?.[0]}
-                            data-error-field="unit_id"
+                            error={errors.base_unit_id?.[0]}
+                            data-error-field="base_unit_id"
                         >
                             <OptionLookup
-                                label="Satuan"
+                                label="Satuan dasar"
                                 required
                                 disabled={!editing}
                                 choice={unit}
+                                emptyMessage="Satuan tidak ditemukan. Tambahkan satuan di Persediaan, menu Satuan."
                                 onChange={(id) =>
-                                    setForm({ ...form, unit_id: id })
+                                    setForm({ ...form, base_unit_id: id })
                                 }
                                 portalContainer={portalContainer}
                             />
@@ -309,14 +318,19 @@ export function DrugCard({
                         </FormControl>
                         <Field orientation="horizontal" className="w-auto">
                             <Switch
-                                id="drug-active"
-                                checked={form.is_active}
+                                id="drug-prescribable"
+                                checked={form.is_prescribable}
                                 disabled={!editing}
                                 onCheckedChange={(checked) =>
-                                    setForm({ ...form, is_active: checked })
+                                    setForm({
+                                        ...form,
+                                        is_prescribable: checked,
+                                    })
                                 }
                             />
-                            <FieldLabel htmlFor="drug-active">Aktif</FieldLabel>
+                            <FieldLabel htmlFor="drug-prescribable">
+                                Boleh diresepkan
+                            </FieldLabel>
                         </Field>
                     </FormGrid>
                 </PageDialogBody>

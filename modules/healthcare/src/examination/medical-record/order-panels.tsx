@@ -63,7 +63,7 @@ function useDrugLoader(): LookupLoader<Drug> {
                 {
                     query: {
                         q: query,
-                        status: 'active',
+                        prescribable: 'true',
                         ...(cursor ? { cursor } : {}),
                     },
                 },
@@ -101,13 +101,14 @@ function DrugLookup({
                     value
                         ? {
                               id: value.id,
-                              code: value.code,
+                              code: value.code ?? '',
                               name: value.name,
-                              unit_id: '',
-                              unit_name: '',
+                              base_unit_id: '',
+                              base_unit_name: '',
                               dosage_form_id: null,
                               dosage_form_name: null,
-                              is_active: true,
+                              is_prescribable: true,
+                              is_blocked: false,
                               version: 0,
                           }
                         : null
@@ -129,7 +130,7 @@ function DrugLookup({
                         id: 'code',
                         header: 'Kode',
                         width: 100,
-                        cell: (drug) => drug.code ?? '',
+                        cell: (drug) => drug.code,
                     },
                     {
                         id: 'name',
@@ -141,7 +142,7 @@ function DrugLookup({
                         id: 'unit',
                         header: 'Satuan',
                         width: 100,
-                        cell: (drug) => drug.unit_name,
+                        cell: (drug) => drug.base_unit_name,
                     },
                 ]}
                 onCreate={canCreate ? () => setCreating(true) : undefined}
@@ -718,7 +719,7 @@ function PrescriptionLines({
             drug_id: drug.id,
             drug_code: drug.code,
             drug_name: drug.name,
-            unit_name: drug.unit_name,
+            unit_name: drug.base_unit_name,
         });
     };
     // Komponen dipindah ke bawah racikannya, seperti baris komponen yang menjorok di bawah "Racikan N" sistem lama.

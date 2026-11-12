@@ -1,98 +1,103 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
-import {
-    nowSql,
-    sqlErrorCode,
-    type Database,
-} from '@core/platform/database/index.ts';
+import { nowSql, type Database } from '@core/platform/database/index.ts';
 import {
     abort,
-    coded,
     expectedVersion,
     incrementalList,
     lookupId,
-    staleMessage,
     validation,
 } from '@core/platform/http/index.ts';
+import {
+    activeLegalEntity,
+    createItem,
+    deleteItem,
+    parseInput,
+    updateItem,
+    type ItemInput,
+    type ItemScope,
+} from '@core/foundation/inventory/index.ts';
 import { drugInputSchema, drugRowSchema } from './drug.schema.ts';
 
 const rowSql = `select * from (
-                    select o.id, o.kode as code, o.nama as name, o.satuan_id as unit_id, s.nama as unit_name,
-                           o.bentuk_sediaan_id as dosage_form_id, b.nama as dosage_form_name, o.aktif as is_active,
-                           o.version
+                    select o.id, b.kode as code, b.nama as name, b.satuan_dasar_id as base_unit_id,
+                           u.nama as base_unit_name, o.bentuk_sediaan_id as dosage_form_id, f.nama as dosage_form_name,
+                           o.boleh_diresepkan as is_prescribable, b.diblokir as is_blocked, b.version
                     from sim_m_obat o
-                    join sim_m_satuan_obat s on s.tenant_id = o.tenant_id and s.id = o.satuan_id
-                    left join sim_m_bentuk_sediaan b on b.tenant_id = o.tenant_id and b.id = o.bentuk_sediaan_id
-                    where o.tenant_id = $1 and o.deleted_at is null) drugs
+                    join gd_m_barang b on b.tenant_id = o.tenant_id and b.legal_entity_id = o.legal_entity_id
+                         and b.id = o.id and b.deleted_at is null
+                    join gd_m_satuan u on u.tenant_id = b.tenant_id and u.id = b.satuan_dasar_id
+                    left join sim_m_bentuk_sediaan f on f.tenant_id = o.tenant_id and f.id = o.bentuk_sediaan_id
+                    where o.tenant_id = $1 and o.legal_entity_id = $2 and o.deleted_at is null) drugs
                 where true`;
 
 const optionSchema = z.object({
     id: z.string(),
     code: z.string(),
     name: z.string(),
-    active: z.boolean(),
 });
 
-type ReferenceTable = 'sim_m_satuan_obat' | 'sim_m_bentuk_sediaan';
-
-function codeTaken(error: unknown): void {
-    if (
-        sqlErrorCode(error) === '23505' &&
-        error instanceof Error &&
-        error.message.includes('sim_m_obat_kode_unique')
-    )
-        validation({ code: 'Kode ini sudah ada di daftar obat.' });
-}
-
-// Obat milik tenant, diisi lewat Setup atau dari baris E-Resep oleh yang boleh memeriksa. Module farmasi kelak
-// mengambil alih master ini; stok belum ada.
+// Kartu obat menyimpan barang Core lewat fungsi persediaan dan baris perluasannya di transaksi yang sama, seperti
+// table extension di BC. Barang milik legal entity, jadi obat mengikuti legal entity tempat kerja pengguna; E-Resep
+// memakai obat legal entity kunjungannya, yang sama dengan tempat kerja karena kunjungan hanya terlihat di sana.
 export class Drugs {
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {}
 
-    // Pilihan nonaktif ikut, supaya obat yang sudah memegangnya tetap terbaca namanya.
-    private options(table: ReferenceTable) {
-        return this.db.rows(
-            optionSchema,
-            `select id, kode as code, nama as name, aktif as active from ${table}
-             where tenant_id = $1 and deleted_at is null order by urutan, kode`,
-            [this.workspace.tenantId],
-        );
+    private get scope(): ItemScope {
+        return {
+            tenantId: this.workspace.tenantId,
+            legalEntityId: activeLegalEntity(this.workspace),
+        };
     }
 
     async metadata() {
         this.workspace.guard('drug', 'read');
         const has = (action: string) =>
             this.workspace.permissions.has(`healthcare.drug.${action}`);
+        const scope = this.scope;
         return {
             permissions: {
                 create: has('create'),
                 update: has('update'),
                 delete: has('delete'),
             },
-            units: await this.options('sim_m_satuan_obat'),
-            dosage_forms: await this.options('sim_m_bentuk_sediaan'),
+            units: await this.db.rows(
+                optionSchema,
+                `select id, kode as code, nama as name from gd_m_satuan
+                 where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null order by kode`,
+                [scope.tenantId, scope.legalEntityId],
+            ),
+            // Pilihan nonaktif ikut, supaya obat yang sudah memegangnya tetap terbaca namanya.
+            dosage_forms: await this.db.rows(
+                optionSchema.extend({ active: z.boolean() }),
+                `select id, kode as code, nama as name, aktif as active from sim_m_bentuk_sediaan
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                [scope.tenantId],
+            ),
         };
     }
 
     async list(parameters: URLSearchParams) {
         this.workspace.guard('drug', 'read');
-        const bindings: (string | boolean)[] = [this.workspace.tenantId];
-        const status = parameters.get('status');
+        const scope = this.scope;
+        const prescribable = parameters.get('prescribable');
         const filter =
-            status === 'active' || status === 'inactive'
-                ? ` and is_active = $${bindings.push(status === 'active')}`
-                : '';
+            prescribable === 'true'
+                ? ' and is_prescribable and not is_blocked'
+                : prescribable === 'false'
+                  ? ' and not (is_prescribable and not is_blocked)'
+                  : '';
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
-            bindings,
+            bindings: [scope.tenantId, scope.legalEntityId],
             parameters,
             columns: {
                 code: 'code',
                 name: 'name',
-                unit_name: 'unit_name',
+                base_unit_name: 'base_unit_name',
                 dosage_form_name: 'dosage_form_name',
             },
             searchColumns: ['code', 'name'],
@@ -107,9 +112,11 @@ export class Drugs {
     }
 
     private async row(id: string) {
+        const scope = this.scope;
         const found = lookupId(id)
-            ? await this.db.one(drugRowSchema, `${rowSql} and drugs.id = $2`, [
-                  this.workspace.tenantId,
+            ? await this.db.one(drugRowSchema, `${rowSql} and drugs.id = $3`, [
+                  scope.tenantId,
+                  scope.legalEntityId,
                   id,
               ])
             : undefined;
@@ -117,125 +124,127 @@ export class Drugs {
         return found;
     }
 
-    // Pilihan nonaktif hanya boleh tetap dipakai obat yang sudah memegangnya.
-    private async known(
-        table: ReferenceTable,
-        id: string,
-        saved: string | null,
-    ) {
-        if (!lookupId(id)) return false;
-        const found = await this.db.one(
-            z.object({ id: z.string() }),
-            `select id from ${table}
-             where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
-            [this.workspace.tenantId, id, saved],
-        );
-        return found !== undefined;
-    }
-
-    private async checked(
+    // Isian barang diteruskan ke persediaan Core, yang memeriksanya dan melaporkan kesalahan bentuk sediaan dalam
+    // jawaban 422 yang sama. Bentuk sediaan nonaktif hanya boleh tetap dipakai obat yang sudah memegangnya.
+    private async read(
         body: unknown,
         saved: z.infer<typeof drugRowSchema> | null,
     ) {
-        const parsed = drugInputSchema.safeParse(body);
+        const data = parseInput(drugInputSchema, body, {
+            code: 'Isi kode barang.',
+            name: 'Isi nama barang.',
+            base_unit_id: 'Pilih satuan dasar dari daftar.',
+            dosage_form_id: 'Pilih dari daftar.',
+        });
         const errors: Record<string, string> = {};
-        const data = parsed.success ? parsed.data : null;
-        const code = data?.code?.trim() || null;
-        const name = data?.name.trim() ?? '';
-        const unitId = data?.unit_id?.trim() || null;
-        const dosageFormId = data?.dosage_form_id?.trim() || null;
-        if (code !== null && code.length > 30)
-            errors.code = 'Paling panjang 30 karakter.';
-        if (!name) errors.name = 'Isi nama obat.';
-        else if (name.length > 200)
-            errors.name = 'Paling panjang 200 karakter.';
-        if (unitId === null) errors.unit_id = 'Pilih satuan.';
-        else if (
-            !(await this.known(
-                'sim_m_satuan_obat',
-                unitId,
-                saved?.unit_id ?? null,
-            ))
-        )
-            errors.unit_id = 'Pilih dari daftar.';
+        const dosageFormId = data.dosage_form_id?.trim() || null;
         if (
             dosageFormId !== null &&
-            !(await this.known(
-                'sim_m_bentuk_sediaan',
-                dosageFormId,
-                saved?.dosage_form_id ?? null,
-            ))
+            !(
+                lookupId(dosageFormId) &&
+                (await this.db.one(
+                    z.object({ id: z.string() }),
+                    `select id from sim_m_bentuk_sediaan
+                     where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                    [
+                        this.workspace.tenantId,
+                        dosageFormId,
+                        saved?.dosage_form_id ?? null,
+                    ],
+                ))
+            )
         )
             errors.dosage_form_id = 'Pilih dari daftar.';
-        if (Object.keys(errors).length || !data || unitId === null)
-            validation(errors);
+        const item: ItemInput = {
+            code: data.code,
+            name: data.name,
+            base_unit_id: data.base_unit_id ?? '',
+        };
         return {
-            code,
-            name,
-            unitId,
+            item,
+            errors,
             dosageFormId,
-            isActive: data.is_active ?? true,
+            prescribable: data.is_prescribable,
         };
     }
 
     async create(body: unknown) {
         this.workspace.guard('drug', 'create');
-        const data = await this.checked(body, null);
-        const id = Bun.randomUUIDv7();
-        const stamp = nowSql();
-        try {
+        const scope = this.scope;
+        const { item, errors, dosageFormId, prescribable } = await this.read(
+            body,
+            null,
+        );
+        const id = await this.db.transaction(async () => {
+            const created = await createItem(this.db, scope, item, errors);
+            const stamp = nowSql();
             await this.db.insert('sim_m_obat', {
-                id,
-                tenant_id: this.workspace.tenantId,
-                kode: data.code,
-                nama: data.name,
-                satuan_id: data.unitId,
-                bentuk_sediaan_id: data.dosageFormId,
-                aktif: data.isActive,
+                id: created,
+                tenant_id: scope.tenantId,
+                legal_entity_id: scope.legalEntityId,
+                bentuk_sediaan_id: dosageFormId,
+                boleh_diresepkan: prescribable,
                 created_at: stamp,
                 updated_at: stamp,
             });
-        } catch (error) {
-            codeTaken(error);
-            throw error;
-        }
+            return created;
+        });
         return { status: 201, headers: {}, body: { data: await this.row(id) } };
     }
 
+    // Kategori, profil pelacakan, tolak stok minus, dan blokir tidak ada di kartu obat, jadi nilainya dibawa dari barang
+    // apa adanya.
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('drug', 'update');
+        const scope = this.scope;
         const current = await this.row(id);
-        const data = await this.checked(body, current);
-        let updated = 0;
-        try {
-            updated = await this.db.execute(
-                `update sim_m_obat set kode = $1, nama = $2, satuan_id = $3, bentuk_sediaan_id = $4, aktif = $5,
-                     updated_at = $6
-                 where tenant_id = $7 and id = $8 and version = $9 and deleted_at is null`,
+        const version = expectedVersion(request, body);
+        const { item, errors, dosageFormId, prescribable } = await this.read(
+            body,
+            current,
+        );
+        await this.db.transaction(async () => {
+            const stored = await this.db.one(
+                z.object({
+                    category_id: z.string().nullable(),
+                    tracking_code_id: z.string().nullable(),
+                    refuse_negative_stock: z.boolean().nullable(),
+                    is_blocked: z.boolean(),
+                }),
+                `select kategori_id as category_id, profil_pelacakan_id as tracking_code_id,
+                        tolak_stok_minus as refuse_negative_stock, diblokir as is_blocked from gd_m_barang
+                 where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null for update`,
+                [scope.tenantId, scope.legalEntityId, current.id],
+            );
+            if (!stored) abort(404, 'Not Found');
+            await updateItem(
+                this.db,
+                scope,
+                current.id,
+                version,
+                { ...item, ...stored },
+                errors,
+            );
+            await this.db.execute(
+                `update sim_m_obat set bentuk_sediaan_id = $1, boleh_diresepkan = $2, updated_at = $3
+                 where tenant_id = $4 and id = $5 and deleted_at is null`,
                 [
-                    data.code,
-                    data.name,
-                    data.unitId,
-                    data.dosageFormId,
-                    data.isActive,
+                    dosageFormId,
+                    prescribable,
                     nowSql(),
-                    this.workspace.tenantId,
+                    scope.tenantId,
                     current.id,
-                    expectedVersion(request, body),
                 ],
             );
-        } catch (error) {
-            codeTaken(error);
-            throw error;
-        }
-        if (!updated) coded(409, 'stale_version', staleMessage);
+        });
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Obat yang sudah dipakai resep atau dicatat sebagai alergi pasien tidak bisa dihapus; nonaktifkan supaya tidak
-    // dipilih lagi.
+    // Obat yang sudah dipakai resep atau dicatat sebagai alergi pasien tidak bisa dihapus; matikan Boleh diresepkan
+    // supaya tidak dipilih lagi. Barangnya ikut dihapus lunak lewat persediaan Core, yang menolak barang bergerak stok.
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('drug', 'delete');
+        const scope = this.scope;
         const current = await this.row(id);
         const used = await this.db.one(
             z.object({ id: z.string() }),
@@ -243,22 +252,26 @@ export class Drugs {
              union all
              select id from sim_m_pasien_alergi_obat where tenant_id = $1 and obat_id = $2 and deleted_at is null
              limit 1`,
-            [this.workspace.tenantId, current.id],
+            [scope.tenantId, current.id],
         );
         if (used)
             validation({
-                id: 'Obat ini sudah dipakai di resep atau alergi pasien. Nonaktifkan saja supaya tidak dipilih lagi.',
+                id: 'Obat ini sudah dipakai di resep atau alergi pasien. Matikan Boleh diresepkan saja supaya tidak dipilih lagi.',
             });
-        const deleted = await this.db.execute(
-            'update sim_m_obat set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
-            [
-                nowSql(),
-                this.workspace.tenantId,
+        await this.db.transaction(async () => {
+            await deleteItem(
+                this.db,
+                scope,
                 current.id,
                 expectedVersion(request, body),
-            ],
-        );
-        if (!deleted) coded(409, 'stale_version', staleMessage);
+            );
+            const stamp = nowSql();
+            await this.db.execute(
+                `update sim_m_obat set deleted_at = $1, updated_at = $1
+                 where tenant_id = $2 and id = $3 and deleted_at is null`,
+                [stamp, scope.tenantId, current.id],
+            );
+        });
         return { status: 204, headers: {}, body: undefined };
     }
 }

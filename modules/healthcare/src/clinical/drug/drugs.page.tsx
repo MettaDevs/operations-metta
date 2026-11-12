@@ -20,15 +20,22 @@ import { z } from 'zod';
 import { api, definePage, orpc } from '@core/platform/shell/index.ts';
 import { DrugCard, type Drug } from './drug-card.tsx';
 
-// Obat milik klinik, dipilih di baris E-Resep pemeriksaan.
+// Obat legal entity tempat kerja, dipilih di baris E-Resep pemeriksaan. Setiap obat adalah barang persediaan.
 
 const route = getRouteApi('/_app/healthcare/clinical/drugs');
 const ALL = 'all';
 type Search = z.infer<typeof searchSchema>;
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
-    status: z.enum(['active', 'inactive']).optional(),
+    prescribable: z.enum(['true', 'false']).optional(),
 });
+
+function status(drug: Drug): { label: string; active: boolean } {
+    if (drug.is_blocked) return { label: 'Diblokir', active: false };
+    return drug.is_prescribable
+        ? { label: 'Boleh diresepkan', active: true }
+        : { label: 'Tidak diresepkan', active: false };
+}
 
 function DrugsPage(): ReactNode {
     const { data: metadata } = useSuspenseQuery(
@@ -42,7 +49,7 @@ function DrugsPage(): ReactNode {
     const [open, setOpen] = useState<Drug | 'new' | null>(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const filterPanelId = useId();
-    const { status } = search;
+    const { prescribable } = search;
     const setSearch = (next: Partial<Search>) =>
         void navigate({
             search: (current) =>
@@ -62,7 +69,7 @@ function DrugsPage(): ReactNode {
                 {
                     query: {
                         q: query,
-                        ...(status ? { status } : {}),
+                        ...(prescribable ? { prescribable } : {}),
                         ...(cursor ? { cursor } : {}),
                         ...(sort
                             ? { sort: sort.columnId, direction: sort.direction }
@@ -73,7 +80,7 @@ function DrugsPage(): ReactNode {
             );
             return { items: body.data, nextCursor: body.next_cursor };
         },
-        [status],
+        [prescribable],
     );
     const list = useIncrementalList({
         loadItems: loader,
@@ -96,7 +103,7 @@ function DrugsPage(): ReactNode {
                         filter={{
                             open: filtersOpen,
                             onOpenChange: setFiltersOpen,
-                            active: Boolean(status),
+                            active: Boolean(prescribable),
                             controls: filterPanelId,
                         }}
                     >
@@ -127,20 +134,20 @@ function DrugsPage(): ReactNode {
                                                     label: 'Semua status',
                                                 },
                                                 {
-                                                    value: 'active',
-                                                    label: 'Aktif',
+                                                    value: 'true',
+                                                    label: 'Bisa dipilih di resep',
                                                 },
                                                 {
-                                                    value: 'inactive',
-                                                    label: 'Nonaktif',
+                                                    value: 'false',
+                                                    label: 'Tidak bisa dipilih di resep',
                                                 },
                                             ]}
-                                            value={status ?? ALL}
+                                            value={prescribable ?? ALL}
                                             onValueChange={(value) =>
                                                 setSearch({
-                                                    status:
-                                                        value === 'active' ||
-                                                        value === 'inactive'
+                                                    prescribable:
+                                                        value === 'true' ||
+                                                        value === 'false'
                                                             ? value
                                                             : undefined,
                                                 })
@@ -163,9 +170,7 @@ function DrugsPage(): ReactNode {
                 <DataTable
                     data={list.items}
                     getRowKey={(drug) => drug.id}
-                    getRowLabel={(drug) =>
-                        drug.code ? `${drug.code} ${drug.name}` : drug.name
-                    }
+                    getRowLabel={(drug) => `${drug.code} ${drug.name}`}
                     showRowNumbers
                     actionsPlacement="inline"
                     actions={[{ id: 'open', label: 'Buka' }]}
@@ -186,9 +191,9 @@ function DrugsPage(): ReactNode {
                             header: 'Kode',
                             width: 110,
                             cell: (drug) => (
-                                <DataTableText>{drug.code ?? ''}</DataTableText>
+                                <DataTableText>{drug.code}</DataTableText>
                             ),
-                            sortValue: (drug) => drug.code ?? '',
+                            sortValue: (drug) => drug.code,
                         },
                         {
                             id: 'name',
@@ -200,13 +205,15 @@ function DrugsPage(): ReactNode {
                             sortValue: (drug) => drug.name,
                         },
                         {
-                            id: 'unit_name',
-                            header: 'Satuan',
+                            id: 'base_unit_name',
+                            header: 'Satuan dasar',
                             width: 140,
                             cell: (drug) => (
-                                <DataTableText>{drug.unit_name}</DataTableText>
+                                <DataTableText>
+                                    {drug.base_unit_name}
+                                </DataTableText>
                             ),
-                            sortValue: (drug) => drug.unit_name,
+                            sortValue: (drug) => drug.base_unit_name,
                         },
                         {
                             id: 'dosage_form_name',
@@ -222,14 +229,16 @@ function DrugsPage(): ReactNode {
                         {
                             id: 'status',
                             header: 'Status',
-                            width: 110,
+                            width: 150,
                             cell: (drug) => (
                                 <Badge
                                     variant={
-                                        drug.is_active ? 'secondary' : 'outline'
+                                        status(drug).active
+                                            ? 'secondary'
+                                            : 'outline'
                                     }
                                 >
-                                    {drug.is_active ? 'Aktif' : 'Nonaktif'}
+                                    {status(drug).label}
                                 </Badge>
                             ),
                         },
