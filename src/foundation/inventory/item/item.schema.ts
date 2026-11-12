@@ -14,6 +14,9 @@ export const itemRowSchema = z.object({
     base_unit: reference,
     category: reference.nullable(),
     tracking_code: reference.nullable(),
+    // Dari profil pelacakan, supaya dokumen tahu kapan nomor batch dan kedaluwarsa wajib diisi.
+    batch_required: z.boolean(),
+    expiry_required: z.boolean(),
     refuse_negative_stock: z.boolean().nullable(),
     is_blocked: z.boolean(),
     version: z.number(),

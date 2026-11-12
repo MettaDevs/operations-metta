@@ -31,9 +31,12 @@ export const unitsOfMeasure: CodeList = {
     resource: 'inventory-unit',
     label: 'satuan',
     usage: {
-        sql: 'select 1 as found from gd_m_barang where tenant_id = $1 and satuan_dasar_id = $2 and deleted_at is null limit 1',
+        sql: `select 1 as found from gd_m_barang where tenant_id = $1 and satuan_dasar_id = $2 and deleted_at is null
+              union all
+              select 1 from gd_m_barang_satuan where tenant_id = $1 and satuan_id = $2 and deleted_at is null
+              limit 1`,
         message:
-            'Satuan ini masih menjadi satuan dasar barang. Ganti satuan barang itu lebih dulu.',
+            'Satuan ini masih menjadi satuan dasar atau satuan kemasan barang. Ganti satuan barang itu lebih dulu.',
     },
 };
 
@@ -47,6 +50,29 @@ export const reasonCodes: CodeList = {
         message:
             'Alasan ini sudah dipakai dokumen penyesuaian, jadi tidak bisa dihapus.',
     },
+};
+
+// Sumber dana dan program pengadaan melekat pada stok yang masuk (kartu gudang) dan pada baris penerimaan.
+const fundingUsage = (column: string, label: string) => ({
+    sql: `select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and ${column} = $2
+          union all
+          select 1 from bl_tr_penerimaan_detail where tenant_id = $1 and ${column} = $2 and deleted_at is null
+          limit 1`,
+    message: `${label} ini sudah dipakai penerimaan barang atau stok, jadi tidak bisa dihapus.`,
+});
+
+export const fundingSources: CodeList = {
+    table: 'gd_m_sumber_dana',
+    resource: 'inventory-funding-source',
+    label: 'sumber dana',
+    usage: fundingUsage('sumber_dana_id', 'Sumber dana'),
+};
+
+export const procurementPrograms: CodeList = {
+    table: 'gd_m_program_pengadaan',
+    resource: 'inventory-procurement-program',
+    label: 'program',
+    usage: fundingUsage('program_pengadaan_id', 'Program'),
 };
 
 export class CodeLists {

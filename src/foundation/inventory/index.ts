@@ -2,6 +2,7 @@ import { adjustmentRoutes } from './adjustment/adjustment.routes.ts';
 import { codeListRoutes } from './code-list/code-list.routes.ts';
 import { itemCategoryRoutes } from './item-category/item-category.routes.ts';
 import { itemLedgerRoutes } from './item-ledger/item-ledger.routes.ts';
+import { itemUnitRoutes } from './item-unit/item-unit.routes.ts';
 import { itemRoutes } from './item/item.routes.ts';
 import { locationRoutes } from './location/location.routes.ts';
 import { inventorySetupRoutes } from './setup/inventory-setup.routes.ts';
@@ -10,6 +11,8 @@ import { trackingCodeRoutes } from './tracking-code/tracking-code.routes.ts';
 // Persediaan Core, pola Business Central: master per legal entity, satu kartu gudang dengan sisa per baris, dan satu
 // mesin posting. Module yang menggerakkan stok (farmasi, penerimaan, mutasi) memanggil postItemLines di dalam transaksi
 // dokumennya sendiri dan reverseItemEntries untuk membatalkan posting dokumen itu; module tidak menulis tabel gd_*.
+export { activeLegalEntity, exists, parseInput } from './inventory.service.ts';
+export { type Funding } from './item-ledger/allocation.ts';
 export {
     entryKinds,
     postItemLines,
@@ -21,6 +24,12 @@ export {
     type PostingContext,
     type TransferLine,
 } from './item-ledger/item-ledger.posting.ts';
+export {
+    decimalInput,
+    fromNumeric,
+    quantityScale,
+    toNumeric,
+} from './quantity.ts';
 
 export function inventoryRoutes() {
     return {
@@ -30,6 +39,7 @@ export function inventoryRoutes() {
         ...trackingCodeRoutes(),
         ...itemCategoryRoutes(),
         ...itemRoutes(),
+        ...itemUnitRoutes(),
         ...adjustmentRoutes(),
         ...itemLedgerRoutes(),
     };

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
     allocate,
     candidates,
+    noFunding,
 } from '../../../../src/foundation/inventory/item-ledger/allocation.ts';
 import {
     resolveStockPolicy,
@@ -100,6 +101,7 @@ describe('allocation', () => {
         expiry: null,
         open,
         unitCost: 0n,
+        funding: noFunding,
     });
 
     test('takes open entries in the given order and reports what is left over', () => {
