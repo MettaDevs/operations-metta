@@ -40,7 +40,20 @@ const sourceType = 'penyesuaian';
 const numberReference = 'core.inventory-adjustment-number';
 
 type Direction = (typeof adjustmentDirections)[number];
-type Status = (typeof adjustmentStatuses)[number];
+
+// Dua perpindahan status yang sah, beserta kolom yang mencatat kapan dan oleh siapa.
+const transitions = {
+    post: {
+        from: 'draf',
+        to: 'diposting',
+        stamp: 'diposting_pada = $1, diposting_oleh_user_id = $2',
+    },
+    reverse: {
+        from: 'diposting',
+        to: 'dibatalkan',
+        stamp: 'dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2',
+    },
+} as const;
 
 type LineDraft = {
     id: string | null;
@@ -334,20 +347,7 @@ export class Adjustments {
                     draft.batchId = line.batch_id ?? null;
                     if (
                         draft.batchId !== null &&
-                        !(
-                            lookupId(draft.batchId) &&
-                            (await this.db.one(
-                                z.object({ id: z.string() }),
-                                `select id from gd_m_batch
-                                 where tenant_id = $1 and legal_entity_id = $2 and id = $3 and barang_id = $4`,
-                                [
-                                    this.scope.tenantId,
-                                    this.scope.legalEntityId,
-                                    draft.batchId,
-                                    line.item_id,
-                                ],
-                            ))
-                        )
+                        !(await this.batchOf(draft.batchId, line.item_id))
                     )
                         errors[`${field}.batch_id`] = messages.batch_id;
                     break;
@@ -367,6 +367,23 @@ export class Adjustments {
             reasonId: data.reason_id,
             lines,
         };
+    }
+
+    private async batchOf(batchId: string, itemId: string) {
+        if (!lookupId(batchId) || !lookupId(itemId)) return false;
+        return (
+            (await this.db.one(
+                z.object({ id: z.string() }),
+                `select id from gd_m_batch
+                 where tenant_id = $1 and legal_entity_id = $2 and id = $3 and barang_id = $4`,
+                [
+                    this.scope.tenantId,
+                    this.scope.legalEntityId,
+                    batchId,
+                    itemId,
+                ],
+            )) !== undefined
+        );
     }
 
     private async saveLines(documentId: string, lines: LineDraft[]) {
@@ -556,14 +573,9 @@ export class Adjustments {
     private async transition(
         id: string,
         version: number,
-        from: Status,
-        to: Status,
+        move: keyof typeof transitions,
     ) {
-        const stamp = nowSql();
-        const stampColumns =
-            to === 'diposting'
-                ? 'diposting_pada = $1, diposting_oleh_user_id = $2'
-                : 'dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2';
+        const { from, to, stamp } = transitions[move];
         const claimed = await this.db.one(
             z.object({
                 number: z.string(),
@@ -571,12 +583,12 @@ export class Adjustments {
                 posting_date: z.string(),
                 location_id: z.string(),
             }),
-            `update gd_tr_penyesuaian set status = $3, ${stampColumns}, updated_at = $1
+            `update gd_tr_penyesuaian set status = $3, ${stamp}, updated_at = $1
              where tenant_id = $4 and legal_entity_id = $5 and id = $6 and status = $7 and version = $8
                and deleted_at is null
              returning nomor as number, arah as direction, tanggal::text as posting_date, lokasi_id as location_id`,
             [
-                stamp,
+                nowSql(),
                 this.workspace.userId,
                 to,
                 this.scope.tenantId,
@@ -601,12 +613,7 @@ export class Adjustments {
         const current = await this.header(id);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {
-            const claimed = await this.transition(
-                current.id,
-                version,
-                'draf',
-                'diposting',
-            );
+            const claimed = await this.transition(current.id, version, 'post');
             if (!claimed) return;
             const location = await this.db.one(
                 z.object({ transit: z.boolean() }),
@@ -671,8 +678,7 @@ export class Adjustments {
             const claimed = await this.transition(
                 current.id,
                 version,
-                'diposting',
-                'dibatalkan',
+                'reverse',
             );
             if (!claimed) return;
             await reverseItemEntries(
