@@ -127,6 +127,46 @@ test('entries the member lacks the permission for are hidden, and an emptied gro
     ).toBe('/sysadmin/organization/hierarchies');
 });
 
+test('entries with the same section title are kept together where the title first appears', () => {
+    const entry = (id: string, section: string) => ({
+        id,
+        label: id,
+        href: `/clinic/${id}`,
+        section,
+        permission: 'clinic.read',
+    });
+    const [area] = visibleNavigation(
+        [
+            {
+                id: 'clinic',
+                label: 'Klinik',
+                icon: null,
+                groups: [
+                    {
+                        id: 'setup',
+                        label: 'Setup',
+                        items: [
+                            entry('sections', 'Pelayanan'),
+                            entry('practitioners', 'Tenaga kesehatan'),
+                            entry('sessions', 'Pelayanan'),
+                            entry('clusters', 'Klinis'),
+                        ],
+                    },
+                ],
+            },
+        ],
+        new Set(['clinic.read']),
+    );
+    expect(
+        area?.groups[0]?.items.map((item) => [item.section, item.id]),
+    ).toEqual([
+        ['Pelayanan', 'sections'],
+        ['Pelayanan', 'sessions'],
+        ['Tenaga kesehatan', 'practitioners'],
+        ['Klinis', 'clusters'],
+    ]);
+});
+
 test('an entry carries its sidebar section title, and the title goes with the entry when a sibling is filtered out', () => {
     const setup = [
         {
