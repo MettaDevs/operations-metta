@@ -37,6 +37,7 @@ import {
     registerOrganizationDefaults,
 } from './foundation/number-sequence/index.ts';
 import { calendarRoutes } from './foundation/calendar/index.ts';
+import { inventoryRoutes } from './foundation/inventory/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import { dataSharingRoutes } from './platform/data-sharing/index.ts';
 import {
@@ -126,6 +127,7 @@ export const router = {
     ...numberSequenceRoutes(),
     ...dataSharingRoutes(),
     ...calendarRoutes(),
+    ...inventoryRoutes(),
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
 };
