@@ -3,17 +3,22 @@ import {
     FormErrorSummary,
     useFormValidation,
 } from '@operations-metta/ui/form-feedback';
+import { cn } from '@operations-metta/ui/utils';
 import { useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 
 // Ringkasan kesalahan di atas form, dipindah dari form-error-header CoreERP: pesan server, error per field, dan
-// kesalahan isian yang ditemukan browser sebelum dikirim.
+// kesalahan isian yang ditemukan browser sebelum dikirim. Ia melekat di bawah toolbar: di luar area gulir ia diam
+// di tempatnya, di dalam area gulir `sticky` menahannya di tepi atas sehingga tetap terlihat saat isi digulir.
+// Karena itu ia harus berada langsung di antara isi form, bukan di dalam pembungkus yang hanya berisi dirinya.
 export function FormErrorHeader({
+    className,
     errors,
     message,
     operation = 'Perubahan belum disimpan',
     scopeRef,
 }: {
+    className?: string;
     errors?: Record<string, string | string[]>;
     message?: string | null;
     operation?: string;
@@ -52,7 +57,10 @@ export function FormErrorHeader({
     return (
         <div
             data-slot="form-error-header"
-            className="w-full empty:hidden"
+            className={cn(
+                'sticky top-0 z-10 w-full bg-background empty:hidden',
+                className,
+            )}
             ref={(element) => {
                 ownScope.current =
                     element?.closest<HTMLElement>(

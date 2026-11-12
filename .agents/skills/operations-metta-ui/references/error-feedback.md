@@ -13,7 +13,7 @@ Gunakan saat merancang kegagalan form, upload, dan proses beberapa record. Pedom
 
 ## Tempatkan pada pekerjaan yang gagal
 
-- Untuk form, ringkasan menetap di bawah header/baris aksi form aktif. Field bermasalah juga mendapat pesan melalui `FormControl.error`, `aria-invalid`, dan hubungan `aria-describedby`. Toast sudut layar tidak cukup sebagai satu-satunya tanda Simpan gagal.
+- Untuk form, ringkasan menetap di bawah header/baris aksi form aktif dan tetap melekat di sana saat isi form digulir. Simpan yang masih gagal menggoyangnya. Aturan penempatannya ada di bagian *Ringkasan kesalahan form* skill `operations-metta-page-standard`. Field bermasalah juga mendapat pesan melalui `FormControl.error`, `aria-invalid`, dan hubungan `aria-describedby`. Toast sudut layar tidak cukup sebagai satu-satunya tanda Simpan gagal.
 - Ringkasan membaca state error yang sama dengan field. Identitas error rincian mencakup baris dan field yang benar. Klik masalah membuka tab/bagian yang tertutup, menggulir container form, lalu memfokuskan kontrol sesudah render.
 - Fokuskan ringkasan saat submit ditolak dan umumkan pesan secara aksesibel. Jangan memindahkan fokus pada setiap ketikan atau mengandalkan warna saja.
 - Isolasi state per form/record. Popup anak tidak mengganti error atau draft induk. Memperbaiki satu field tidak menghapus error lain. Bersihkan error yang telah tervalidasi atau setelah operasi terkait berhasil.
@@ -21,7 +21,7 @@ Gunakan saat merancang kegagalan form, upload, dan proses beberapa record. Pedom
 
 ## Pilih tindakan yang bisa menyelesaikan masalah
 
-Komponen bersama di CoreERP adalah `FormErrorSummary`, `createSaveFeedback`, dan `focusFeedbackField` dari `form-feedback`. Pakai versi `@operations-metta/ui/form-feedback` bila sudah ada di `packages/ui`. `RecordActionBar` menerima slot `feedback` di bawah tombol. Pada `PageDialog`, letakkan ringkasan di bawah toolbar dan di luar body yang bergulir. Jangan menambahkan engine toast pengganti atau state error global.
+Komponen bersama di CoreERP adalah `FormErrorSummary`, `createSaveFeedback`, dan `focusFeedbackField` dari `form-feedback`. Pakai versi `@operations-metta/ui/form-feedback` bila sudah ada di `packages/ui`. Layar memasangnya lewat `FormErrorHeader` dari `src/platform/shell/`, yang melekat di bawah toolbar. Pada `PageDialog`, letakkan ringkasan di bawah toolbar dan di luar body yang bergulir. Jangan menambahkan engine toast pengganti atau state error global.
 
 Pisahkan state umpan balik untuk setiap form atau popup, gunakan identitas record sebagai scope saat record dapat berganti tanpa unmount, dan destructure hasil hook agar referensi DOM tidak dibaca sebagai objek state saat render. Hubungkan field melalui `name` atau `data-error-field` yang persis sama dengan key validasi. Untuk section yang belum mounted, pemilik form membuka section sebelum memanggil `focusFeedbackField`. Jangan menjanjikan navigasi field tanpa target yang nyata.
 

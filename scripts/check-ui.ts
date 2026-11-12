@@ -86,6 +86,19 @@ function elementsUnder(node: ts.Node): Element[] {
     return found;
 }
 
+function elementText(node: ts.Node): string[] {
+    const found: string[] = [];
+    const visit = (child: ts.Node) => {
+        if (ts.isJsxText(child) && child.text.trim())
+            found.push(child.text.trim());
+        if (ts.isStringLiteral(child) && !ts.isJsxAttribute(child.parent))
+            found.push(child.text);
+        ts.forEachChild(child, visit);
+    };
+    ts.forEachChild(node, visit);
+    return found;
+}
+
 // Isian yang bila ditaruh di slot `filters` berarti filter keluar dari panel kiri.
 const filterControls = new Set([
     'Input',
@@ -196,6 +209,57 @@ for (const file of screens) {
                     'Gaya tabel milik SDK; className DataTable hanya untuk layout.',
                 );
         }
+    }
+
+    for (const element of elements) {
+        const imported = imports.get(element.tagName.getText())?.imported;
+        if (
+            imported === 'FormErrorSummary' &&
+            !file.endsWith('form-error-header.tsx')
+        )
+            report(
+                element,
+                'Ringkasan kesalahan form ditampilkan lewat FormErrorHeader, yang melekat di bawah toolbar; jangan memasang FormErrorSummary sendiri.',
+            );
+        // Ringkasan kesalahan mengenali percobaan Simpan dari `submit` atau tombol bertanda `data-action="save"`;
+        // tombol Simpan tanpa tanda itu membuat Simpan yang masih gagal tampak tidak bekerja.
+        if (
+            ['Button', 'button'].includes(element.tagName.getText()) &&
+            ts.isJsxOpeningElement(element) &&
+            literal(attribute(element, 'type')) !== 'submit' &&
+            !attribute(element, 'data-action') &&
+            elementText(element.parent).some((text) =>
+                text.startsWith('Simpan'),
+            )
+        )
+            report(
+                element,
+                'Tombol Simpan memakai ActionButton action="save", type="submit", atau data-action="save" supaya ringkasan kesalahan mengenali percobaan simpan.',
+            );
+        if (imported !== 'FormErrorHeader') continue;
+        // `sticky` hanya menahan elemen selama induknya masih terlihat. Pembungkus yang isinya hanya ringkasan
+        // ikut tergulir keluar bersama ringkasannya, jadi ringkasan harus bersaudara langsung dengan isi form.
+        let container: ts.Node = ts.isJsxOpeningElement(element)
+            ? element.parent
+            : element;
+        while (
+            !ts.isJsxElement(container.parent) &&
+            !ts.isJsxFragment(container.parent) &&
+            !ts.isSourceFile(container.parent)
+        )
+            container = container.parent;
+        const wrapper = container.parent;
+        if (
+            ts.isJsxElement(wrapper) &&
+            /^[a-z]/.test(wrapper.openingElement.tagName.getText()) &&
+            wrapper.children.filter(
+                (child) => !ts.isJsxText(child) || child.text.trim(),
+            ).length === 1
+        )
+            report(
+                element,
+                'FormErrorHeader ditaruh langsung di antara isi form sesudah toolbar, bukan di pembungkus yang hanya berisi dirinya; pembungkus itu membuatnya ikut tergulir keluar. Pakai className untuk jarak.',
+            );
     }
 
     for (const list of lists) {

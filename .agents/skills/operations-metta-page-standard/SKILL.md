@@ -69,6 +69,17 @@ Alur record baru adalah **Baru → isi identitas dan rincian → Simpan sekali**
 - Bila Simpan gagal, pertahankan semua isian dan baris, tampilkan kesalahan pada bagian yang tepat, lalu izinkan pengguna memperbaiki dan mencoba lagi. Keberhasilan harus menampilkan record dan rincian hasil simpan; pengguna tidak perlu mengisi ulang atau melakukan Simpan kedua.
 - Saat memindahkan layar CoreERP, audit seluruh alur Baru, Detail, dan Ubah, termasuk bagian yang ditampilkan bersyarat dan empty state. Jangan sekadar mengganti teks “simpan dahulu” atau menyembunyikan bagian. Alur baru memerlukan dukungan draft pada UI dan penyimpanan rincian bersama induknya. Nyatakan halaman yang belum mengikuti alur ini; perubahan SDK tidak otomatis memigrasikan logika halaman.
 
+## Ringkasan kesalahan form
+
+Keputusan pemilik produk, 12 November 2026: ringkasan kesalahan form ("Periksa N isian yang perlu diperbaiki" beserta daftar pesannya) **melekat di bawah toolbar**. Pengguna yang menggulir ke bawah tetap melihatnya. Simpan yang masih gagal **menggoyang** ringkasan itu, supaya terlihat bahwa Simpan berjalan dan masih ada kesalahan tersisa.
+
+- Ringkasan hanya dipasang lewat `FormErrorHeader` dari `src/platform/shell/`. Komponen itu sendiri yang melekat (`sticky top-0`), jadi halaman tidak menulis kelas posisi apa pun. Jangan memasang `FormErrorSummary` langsung dan jangan membuat banner kesalahan sendiri untuk hasil Simpan.
+- Letakkan `FormErrorHeader` langsung sesudah toolbar. Pada `PageDialog` ia berada di antara `PageDialogToolbar`/`RecordActionBar` dan `PageDialogBody`, di luar body yang bergulir. Pada halaman penuh ia menjadi anak pertama isi yang bergulir (di dalam `<form>` bila ada), bersaudara langsung dengan isi form.
+- Jangan membungkusnya dengan elemen yang hanya berisi dirinya, misalnya `<div className="px-6 pt-4"><FormErrorHeader /></div>`. `sticky` hanya menahan elemen selama induknya masih terlihat, jadi pembungkus itu ikut tergulir keluar bersama ringkasannya. Jarak ditulis lewat `className` pada `FormErrorHeader`. `bun run check:ui` menolak pembungkus itu dan menolak `FormErrorSummary` di layar.
+- Tingginya dibatasi SDK dan daftarnya bergulir sendiri bila panjang. Ringkas (^) dan sembunyikan (×) tetap berlaku. Klik satu pesan memfokuskan dan menggulir ke isiannya.
+- Goyangan dipicu SDK, bukan halaman. Percobaan Simpan dikenali dari `submit` atau klik tombol `ActionButton action="save"`/`type="submit"` di dialog yang sama. Bila ringkasan sudah tampil saat itu dan hasil Simpan masih membawa kesalahan, ringkasan digoyang sekitar 360 ms dan dibuka lagi bila sedang diringkas. Pengguna yang meminta gerak dikurangi (`prefers-reduced-motion`) mendapat sorotan singkat, bukan goyangan. Memperbaiki isian tidak menggoyangnya.
+- Syaratnya hanya satu: setiap Simpan yang gagal mengisi ulang state error dengan objek baru (`setErrors(caught.errors)`, `setErrors(missing)`), seperti yang sudah dilakukan semua halaman. Simpan yang gagal tanpa mengubah state error tidak terlihat oleh ringkasan.
+
 ## Setelah menyimpan master
 
 - Respons `POST`/`PATCH` yang berhasil harus mengembalikan record lengkap yang baru disimpan, sekurangnya `id`, `kode`, `nama`, dan status. Teruskan record itu ke state halaman; jangan hanya meneruskan `id` lalu berharap pemuatan ulang daftar mengisi form.

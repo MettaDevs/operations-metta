@@ -401,6 +401,36 @@
     }
 }
 
+/* Simpan yang masih gagal saat ringkasan kesalahan sudah tampil; pemicunya di FormErrorSummary. */
+@keyframes form-error-shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    20%,
+    60% {
+        transform: translateX(-6px);
+    }
+    40%,
+    80% {
+        transform: translateX(6px);
+    }
+}
+@keyframes form-error-highlight {
+    from {
+        box-shadow: 0 0 0 3px var(--destructive);
+    }
+    to {
+        box-shadow: 0 0 0 3px transparent;
+    }
+}
+[data-slot='form-error-summary'][data-attention='shake'] {
+    animation: form-error-shake 360ms ease-in-out;
+}
+[data-slot='form-error-summary'][data-attention='highlight'] {
+    animation: form-error-highlight 900ms ease-out;
+}
+
 /* Command density belongs to the bar; form and authentication buttons keep their size. */
 [data-command-bar]
     :is(

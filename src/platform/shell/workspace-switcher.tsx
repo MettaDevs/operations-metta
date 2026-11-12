@@ -123,14 +123,13 @@ export function WorkspaceSwitcher({
                     </SheetDescription>
                 </SheetHeader>
                 {(error || Object.keys(fieldErrors).length > 0) && (
-                    <div className="px-6 pt-4">
-                        <FormErrorHeader
-                            scopeRef={contentRef}
-                            message={error}
-                            errors={fieldErrors}
-                            operation="Tempat kerja belum berubah"
-                        />
-                    </div>
+                    <FormErrorHeader
+                        className="px-6 pt-4"
+                        scopeRef={contentRef}
+                        message={error}
+                        errors={fieldErrors}
+                        operation="Tempat kerja belum berubah"
+                    />
                 )}
                 <form
                     noValidate
