@@ -185,6 +185,24 @@ export const sysAdminArea: NavigationAreaEntry = {
             icon: 'boxes',
             items: [
                 {
+                    id: 'items',
+                    label: 'Barang',
+                    href: '/sysadmin/inventory/items',
+                    permission: 'core.inventory-item.read',
+                },
+                {
+                    id: 'item-units',
+                    label: 'Satuan barang',
+                    href: '/sysadmin/inventory/item-units',
+                    permission: 'core.inventory-item.read',
+                },
+                {
+                    id: 'adjustments',
+                    label: 'Penyesuaian stok',
+                    href: '/sysadmin/inventory/adjustments',
+                    permission: 'core.inventory-adjustment.read',
+                },
+                {
                     id: 'transfer-orders',
                     label: 'Amprah',
                     href: '/sysadmin/inventory/transfer-orders',
@@ -201,81 +219,6 @@ export const sysAdminArea: NavigationAreaEntry = {
                     label: 'Penerimaan mutasi',
                     href: '/sysadmin/inventory/transfer-receipts',
                     permission: 'core.inventory-transfer.read',
-                },
-                {
-                    id: 'item-units',
-                    label: 'Satuan barang',
-                    href: '/sysadmin/inventory/item-units',
-                    permission: 'core.inventory-item.read',
-                },
-                {
-                    id: 'funding-sources',
-                    label: 'Sumber dana',
-                    href: '/sysadmin/inventory/funding-sources',
-                    permission: 'core.inventory-funding-source.read',
-                },
-                {
-                    id: 'procurement-programs',
-                    label: 'Program pengadaan',
-                    href: '/sysadmin/inventory/procurement-programs',
-                    permission: 'core.inventory-procurement-program.read',
-                },
-            ],
-        },
-        {
-            id: 'purchasing',
-            label: 'Pembelian',
-            icon: 'truck',
-            items: [
-                {
-                    id: 'receipts',
-                    label: 'Penerimaan barang',
-                    href: '/sysadmin/purchasing/receipts',
-                    permission: 'core.purchase-receipt.read',
-                },
-                {
-                    id: 'vendors',
-                    label: 'Vendor',
-                    href: '/sysadmin/purchasing/vendors',
-                    permission: 'core.vendor.read',
-                },
-            ],
-        },
-        {
-            id: 'calendar',
-            label: 'Kalender',
-            icon: 'calendar',
-            items: [
-                {
-                    id: 'calendars',
-                    label: 'Kalender',
-                    href: '/sysadmin/calendar/calendars',
-                    permission: 'core.calendar.read',
-                },
-                {
-                    id: 'working-time-templates',
-                    label: 'Template jam kerja',
-                    href: '/sysadmin/calendar/working-time-templates',
-                    permission: 'core.calendar.read',
-                },
-            ],
-        },
-        {
-            id: 'inventory',
-            label: 'Persediaan',
-            icon: 'package',
-            items: [
-                {
-                    id: 'items',
-                    label: 'Barang',
-                    href: '/sysadmin/inventory/items',
-                    permission: 'core.inventory-item.read',
-                },
-                {
-                    id: 'adjustments',
-                    label: 'Penyesuaian stok',
-                    href: '/sysadmin/inventory/adjustments',
-                    permission: 'core.inventory-adjustment.read',
                 },
                 {
                     id: 'item-ledger-entries',
@@ -324,6 +267,58 @@ export const sysAdminArea: NavigationAreaEntry = {
                     href: '/sysadmin/inventory/reason-codes',
                     section: 'Setup',
                     permission: 'core.inventory-reason.read',
+                },
+                {
+                    id: 'funding-sources',
+                    label: 'Sumber dana',
+                    href: '/sysadmin/inventory/funding-sources',
+                    section: 'Setup',
+                    permission: 'core.inventory-funding-source.read',
+                },
+                {
+                    id: 'procurement-programs',
+                    label: 'Program pengadaan',
+                    href: '/sysadmin/inventory/procurement-programs',
+                    section: 'Setup',
+                    permission: 'core.inventory-procurement-program.read',
+                },
+            ],
+        },
+        {
+            id: 'purchasing',
+            label: 'Pembelian',
+            icon: 'truck',
+            items: [
+                {
+                    id: 'receipts',
+                    label: 'Penerimaan barang',
+                    href: '/sysadmin/purchasing/receipts',
+                    permission: 'core.purchase-receipt.read',
+                },
+                {
+                    id: 'vendors',
+                    label: 'Vendor',
+                    href: '/sysadmin/purchasing/vendors',
+                    permission: 'core.vendor.read',
+                },
+            ],
+        },
+        {
+            id: 'calendar',
+            label: 'Kalender',
+            icon: 'calendar',
+            items: [
+                {
+                    id: 'calendars',
+                    label: 'Kalender',
+                    href: '/sysadmin/calendar/calendars',
+                    permission: 'core.calendar.read',
+                },
+                {
+                    id: 'working-time-templates',
+                    label: 'Template jam kerja',
+                    href: '/sysadmin/calendar/working-time-templates',
+                    permission: 'core.calendar.read',
                 },
             ],
         },

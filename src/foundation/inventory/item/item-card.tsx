@@ -25,7 +25,8 @@ import {
     errorText,
     FormErrorHeader,
 } from '../../../platform/shell/index.ts';
-import { CodeListCard, unitsOfMeasure } from '../code-list/code-list-card.tsx';
+import { CodeEntryCard } from '../code-list/code-list-screen.tsx';
+import { unitsOfMeasure } from '../code-list/code-list-sources.ts';
 import { UnitOfMeasureLookup } from '../code-list/code-list-lookup.tsx';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
@@ -230,8 +231,8 @@ export function ItemCard({
                 return {
                     title: unitsOfMeasure.title,
                     card: (
-                        <CodeListCard
-                            kind={unitsOfMeasure}
+                        <CodeEntryCard
+                            source={unitsOfMeasure}
                             entry={null}
                             canManage
                             onSaved={(unit) => {

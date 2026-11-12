@@ -9,6 +9,7 @@ import {
 } from '../../../platform/http/index.ts';
 import { legalEntitySequences } from '../../number-sequence/index.ts';
 import { adjustmentNumberReference } from '../adjustment/adjustment.service.ts';
+import { transferNumberReferences } from '../transfer/transfer-order.service.ts';
 import type { PickingMethod } from '../item-ledger/stock-policy.ts';
 import {
     activeLegalEntity,
@@ -39,7 +40,12 @@ type UnitChange = {
 };
 
 // Nomor dokumen persediaan yang tampil di bagian Penomoran. Reference baru ditambahkan di sini bersama dokumennya.
-const numberReferences = [adjustmentNumberReference];
+const numberReferences = [
+    adjustmentNumberReference,
+    transferNumberReferences.order,
+    transferNumberReferences.shipment,
+    transferNumberReferences.receipt,
+];
 
 // Baris parameter lahir bersama legal entity (trigger gd_isi_acuan di migration 0024), jadi di sini hanya dibaca dan
 // diubah.

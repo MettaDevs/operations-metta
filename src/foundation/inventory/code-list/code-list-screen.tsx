@@ -76,6 +76,7 @@ export function CodeEntryCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
+    const [operation, setOperation] = useState('belum disimpan');
     const { confirm, confirmation } = useConfirmation();
     usePageDialogRecord({
         recordTitle: entry
@@ -85,6 +86,7 @@ export function CodeEntryCard({
     });
 
     const save = async () => {
+        setOperation('belum disimpan');
         setBusy(true);
         setErrors({});
         setMessage(null);
@@ -123,8 +125,10 @@ export function CodeEntryCard({
             }))
         )
             return;
+        setOperation('belum dihapus');
         setBusy(true);
         setErrors({});
+        setMessage(null);
         try {
             await source.remove(entry.id, entry.version);
             toast.success(`${source.title} dihapus.`);
@@ -183,7 +187,7 @@ export function CodeEntryCard({
             <FormErrorHeader
                 errors={errors}
                 message={message}
-                operation={`${source.title} belum disimpan`}
+                operation={`${source.title} ${operation}`}
             />
             <PageDialogBody className="py-3">
                 <FormGrid>

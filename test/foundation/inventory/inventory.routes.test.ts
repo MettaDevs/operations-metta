@@ -340,7 +340,7 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
         ).toEqual(['expiry_required']);
     });
 
-    test('the setup shows the number format of the adjustment document', async () => {
+    test('the setup shows the number format of every inventory document', async () => {
         const setup = await json<{
             numbering: {
                 reference: { code: string };
@@ -348,19 +348,28 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
             }[];
             can_open_numbering: boolean;
         }>(await business.admin.get(`${inventoryApi}/setup`), 200);
-        expect(setup.numbering).toEqual([
-            {
-                reference: expect.objectContaining({
-                    code: 'core.inventory-adjustment-number',
-                }),
-                sequences: [
-                    expect.objectContaining({
-                        format: 'PNY-########',
-                        status: 'active',
-                    }),
-                ],
-            },
+        expect(
+            setup.numbering.map((entry) => entry.reference.code).sort(),
+        ).toEqual([
+            'core.inventory-adjustment-number',
+            'core.inventory-transfer-order-number',
+            'core.inventory-transfer-receipt-number',
+            'core.inventory-transfer-shipment-number',
         ]);
+        expect(
+            setup.numbering.find(
+                (entry) =>
+                    entry.reference.code === 'core.inventory-adjustment-number',
+            )?.sequences,
+        ).toEqual([
+            expect.objectContaining({
+                format: 'PNY-########',
+                status: 'active',
+            }),
+        ]);
+        expect(
+            setup.numbering.every((entry) => entry.sequences.length === 1),
+        ).toBe(true);
     });
 
     test('categories list as a tree, parents before children and siblings by code, across batches', async () => {

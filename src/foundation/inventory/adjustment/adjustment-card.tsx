@@ -31,7 +31,8 @@ import {
     errorText,
     FormErrorHeader,
 } from '../../../platform/shell/index.ts';
-import { CodeListCard, reasonCodes } from '../code-list/code-list-card.tsx';
+import { CodeEntryCard } from '../code-list/code-list-screen.tsx';
+import { reasonCodes } from '../code-list/code-list-sources.ts';
 import { ReasonCodeLookup } from '../code-list/code-list-lookup.tsx';
 import { ItemCard } from '../item/item-card.tsx';
 import { LocationCard } from '../location/location-card.tsx';
@@ -416,8 +417,8 @@ function AdjustmentForm({
                 return {
                     title: reasonCodes.title,
                     card: (
-                        <CodeListCard
-                            kind={reasonCodes}
+                        <CodeEntryCard
+                            source={reasonCodes}
                             entry={null}
                             canManage
                             onSaved={(reason) => {

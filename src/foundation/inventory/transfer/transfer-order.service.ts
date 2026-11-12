@@ -46,6 +46,13 @@ import {
     shipmentSource,
 } from './transfer.posting.ts';
 
+// Reference nomor amprah, mutasi, dan penerimaan mutasi; juga tampil di bagian Penomoran setelan persediaan.
+export const transferNumberReferences = {
+    order: 'core.inventory-transfer-order-number',
+    shipment: 'core.inventory-transfer-shipment-number',
+    receipt: 'core.inventory-transfer-receipt-number',
+} as const;
+
 const one = 10n ** BigInt(quantityScale);
 
 type Status = (typeof transferOrderStatuses)[number];
@@ -489,7 +496,7 @@ export class TransferOrders {
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
             const number = await this.issue(
-                'core.inventory-transfer-order-number',
+                transferNumberReferences.order,
                 `amprahan:${id}`,
                 data.postingDate,
             );
@@ -910,7 +917,7 @@ export class TransferOrders {
             }
             const shipmentId = Bun.randomUUIDv7();
             const number = await this.issue(
-                'core.inventory-transfer-shipment-number',
+                transferNumberReferences.shipment,
                 `${shipmentSource}:${shipmentId}`,
                 postingDate,
             );
@@ -1016,7 +1023,7 @@ export class TransferOrders {
             );
             const receiptId = Bun.randomUUIDv7();
             const number = await this.issue(
-                'core.inventory-transfer-receipt-number',
+                transferNumberReferences.receipt,
                 `${receiptSource}:${receiptId}`,
                 postingDate,
             );
