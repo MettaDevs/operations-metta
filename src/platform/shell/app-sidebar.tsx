@@ -6,7 +6,7 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ShellData } from './api.ts';
-import { areaOf, underMenu } from './home.ts';
+import { activeMenuHref, areaOf, underMenu } from './home.ts';
 import { navigationIcon } from './navigation-icons.ts';
 import { ProductLauncher } from './product-launcher.tsx';
 import { ShellLink } from './shell-link.tsx';
@@ -66,13 +66,16 @@ export function AppSidebar({
         groups.find((group) =>
             group.items.some((item) => underMenu(item.href, path)),
         ) ?? groups[0];
-    const isItemActive = (item: NavigationItem) =>
-        url === item.href ||
-        (!item.href.includes('?') && underMenu(item.href, path));
     const displayedGroup =
         groups.find((group) => group.id === previewId) ??
         (open ? groups.find((group) => group.id === pinnedId) : undefined) ??
         selectedGroup;
+    const activeHref = activeMenuHref(
+        displayedGroup?.items.map((item) => item.href) ?? [],
+        url,
+        path,
+    );
+    const isItemActive = (item: NavigationItem) => item.href === activeHref;
     const showItems = isMobile || open || previewId !== null;
     const closeMobile = () => {
         if (isMobile) setOpenMobile(false);

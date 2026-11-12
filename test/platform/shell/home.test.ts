@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test';
-import { areaOf, homePath } from '../../../src/platform/shell/home.ts';
+import {
+    activeMenuHref,
+    areaOf,
+    homePath,
+} from '../../../src/platform/shell/home.ts';
 
 const area = (id: string, ...hrefs: string[]) => ({
     id,
@@ -40,4 +44,24 @@ test('the open area is found from the page address, ignoring search params in th
     expect(
         areaOf([sysAdmin, clinic], '/clinic/patient/patientsx'),
     ).toBeUndefined();
+});
+
+test('the lit menu entry is the exact address, else the deepest entry holding the page', () => {
+    const list = '/healthcare/registration/visits';
+    const create = '/healthcare/registration/visits/new';
+    const menu = [list, create];
+    expect(activeMenuHref(menu, list, list)).toBe(list);
+    expect(activeMenuHref(menu, create, create)).toBe(create);
+    expect(activeMenuHref(menu, `${create}?patient=p1`, create)).toBe(create);
+    // Halaman satu kunjungan dibuka dari daftar.
+    expect(activeMenuHref(menu, `${list}/0193`, `${list}/0193`)).toBe(list);
+    expect(
+        activeMenuHref(menu, '/healthcare/dashboard', '/healthcare/dashboard'),
+    ).toBeUndefined();
+    // Entri bersearch params hanya menyala pada alamat persisnya.
+    const sections = ['/page?section=a', '/page?section=b'];
+    expect(activeMenuHref(sections, '/page?section=b', '/page')).toBe(
+        '/page?section=b',
+    );
+    expect(activeMenuHref(sections, '/page', '/page')).toBeUndefined();
 });
