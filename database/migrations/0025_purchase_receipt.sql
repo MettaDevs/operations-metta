@@ -5,9 +5,10 @@
 --
 -- 1. Satuan kemasan barang (Item Unit of Measure): satuan selain satuan dasar beserta isinya dalam satuan dasar.
 -- 2. Sumber dana dan program pengadaan (mSumberDana, mProgramPengadaan): daftar kode per legal entity.
--- 3. Sumber dana, program, dan tahun anggaran di kartu gudang. Di Kuta 1, 6 dari 13 batch yang diterima lebih dari
---    sekali datang dengan sumber dana berbeda, jadi ketiganya melekat pada baris masuk, bukan pada gd_m_batch seperti
---    rencana di 0024. Baris keluar dan mutasi mewarisinya dari baris masuk yang diambil, sama dengan batch dan harga.
+-- 3. Sumber dana, program, dan tahun anggaran di kartu gudang. Di data sistem lama, 6 dari 13 batch yang diterima
+--    lebih dari sekali datang dengan sumber dana berbeda, jadi ketiganya melekat pada baris masuk, bukan pada gd_m_batch
+--    seperti rencana di 0024. Baris keluar dan mutasi mewarisinya dari baris masuk yang diambil, sama dengan batch dan
+--    harga.
 -- 4. Vendor per legal entity: nomornya unik per legal entity, seperti company di BC.
 -- 5. Dokumen penerimaan dan barisnya.
 -- 6. Reference nomor penerimaan dan nomor vendor per legal entity.
