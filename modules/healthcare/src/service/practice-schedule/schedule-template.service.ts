@@ -100,8 +100,9 @@ export async function schedulePractitioners(
     workspace.guard('practice-schedule', 'read');
     const batch = await incrementalList(db, {
         query: `select * from (
-                    select n.id, p.name, n.profesi as profession from sim_m_nakes n
+                    select n.id, p.name, pr.nama as profession from sim_m_nakes n
                     join parties p on p.tenant_id = n.tenant_id and p.id = n.party_id
+                    join sim_m_profesi pr on pr.tenant_id = n.tenant_id and pr.id = n.profesi_id
                     where n.tenant_id = $1 and n.deleted_at is null and n.aktif) practitioners
                 where true`,
         bindings: [workspace.tenantId],

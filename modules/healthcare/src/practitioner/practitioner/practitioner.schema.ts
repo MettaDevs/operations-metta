@@ -6,8 +6,8 @@ export const practitionerRowSchema = z.object({
     id: z.string(),
     party_id: z.string(),
     name: z.string(),
-    // Kode dari katalog practitioner.professions.ts.
-    profession: z.string(),
+    profession_id: z.string(),
+    profession_name: z.string(),
     specialization: z.string().nullable(),
     license_number: z.string().nullable(),
     license_valid_until: z.string().nullable(),
@@ -19,7 +19,7 @@ export const practitionerRowSchema = z.object({
 });
 
 export const practitionerListQuerySchema = listParametersSchema.extend({
-    profession: z.string().optional(),
+    profession_id: z.string().optional(),
     status: z.enum(['active', 'inactive']).optional(),
 });
 
@@ -33,7 +33,7 @@ export const practitionerInputSchema = z.object({
     nik: z.string().nullable().optional(),
     gender: z.string().nullable().optional(),
     phone: z.string().nullable().optional(),
-    profession: z.string().nullable().optional(),
+    profession_id: z.string().nullable().optional(),
     specialization: z.string().nullable().optional(),
     license_number: z.string().nullable().optional(),
     license_valid_until: z.string().nullable().optional(),

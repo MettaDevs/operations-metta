@@ -367,6 +367,40 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         expect(
             (await refused(await act(admin, second.id, 'skip'))).errors.status,
         ).toEqual(['Pasien ini sedang diperiksa.']);
+        // Selesai periksa menunggu isian wajib periksa fisik tersimpan.
+        expect(
+            Object.keys(
+                (await refused(await act(admin, second.id, 'finish'))).errors,
+            ),
+        ).toContain('physical.pulse_rate');
+        const record = await json<{
+            data: Record<string, unknown> & { physical: object };
+        }>(
+            await admin.get(
+                `${api}/examination/destinations/${second.id}/medical-record`,
+            ),
+            200,
+        );
+        await json(
+            await admin.put(
+                `${api}/examination/destinations/${second.id}/medical-record`,
+                {
+                    ...record.data,
+                    physical: {
+                        ...record.data.physical,
+                        pulse_rate: 80,
+                        respiratory_rate: 20,
+                        consciousness: 'COMPOS MENTIS',
+                        systolic: 120,
+                        diastolic: 80,
+                        height: 160,
+                        weight: 55,
+                        waist_circumference: 70,
+                    },
+                },
+            ),
+            200,
+        );
         const finished = await entry(await act(admin, second.id, 'finish'));
         expect([finished.status, finished.visit_status]).toEqual([
             'selesai',

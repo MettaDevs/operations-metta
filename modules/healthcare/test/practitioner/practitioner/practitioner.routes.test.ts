@@ -15,7 +15,7 @@ type Practitioner = {
     id: string;
     party_id: string;
     name: string;
-    profession: string;
+    profession_id: string;
     specialization: string | null;
     license_number: string | null;
     license_valid_until: string | null;
@@ -32,11 +32,21 @@ const nik = () =>
 const api = '/api/modules/healthcare/v1/practitioners';
 
 // Master tenaga kesehatan: party orang berperan nakes, dibuat baru atau dipakai ulang dari buku alamat, dengan profesi
-// dari katalog kode. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
+// dari master profesi tenant. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
     afterAll(close);
+
+    // Profesi bawaan tenant dari migration 0022, menurut kodenya.
+    const professions: Record<string, string> = {};
+    async function loadProfessions() {
+        for (const row of await pool.unsafe<{ kode: string; id: string }[]>(
+            'select kode, id from sim_m_profesi where tenant_id = $1 and deleted_at is null',
+            [tenantId],
+        ))
+            professions[row.kode] = row.id;
+    }
 
     let tenantId: string;
     let admin: Browser;
@@ -74,6 +84,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         tenantId = await createTenant(pool, 'Klinik Uji Nakes');
         await entitle(pool, tenantId, 'healthcare');
         await recordInstallation(pool, tenantId, 'healthcare');
+        await loadProfessions();
         const owner = await createMember(pool, tenantId, [
             'core.organization.manage',
             'healthcare.practitioner.manage',
@@ -100,7 +111,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             nik: number,
             gender: 'female',
             phone: '081200000001',
-            profession: 'dokter',
+            profession_id: professions.dokter,
             specialization: 'Penyakit dalam',
             license_number: 'SIP-UJI-001',
             // SIP yang sudah lewat masa berlakunya hanya dicatat, tidak ditolak.
@@ -111,7 +122,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         expect(practitioner).toEqual(
             expect.objectContaining({
                 name: 'Dokter Uji',
-                profession: 'dokter',
+                profession_id: professions.dokter,
                 specialization: 'Penyakit dalam',
                 license_number: 'SIP-UJI-001',
                 license_valid_until: '2020-01-31',
@@ -165,20 +176,20 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         const practitioner = await created({
             party_id: person,
             name: 'Diabaikan',
-            profession: 'bidan',
+            profession_id: professions.bidan,
         });
         expect(practitioner).toEqual(
             expect.objectContaining({
                 party_id: person,
                 name: 'Bidan Buku Alamat',
-                profession: 'bidan',
+                profession_id: professions.bidan,
             }),
         );
         expect(
             await errors(
                 await admin.post(api, {
                     party_id: person,
-                    profession: 'bidan',
+                    profession_id: professions.bidan,
                 }),
             ),
         ).toEqual({
@@ -198,30 +209,32 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             await errors(
                 await admin.post(api, {
                     party_id: organization,
-                    profession: 'dokter',
+                    profession_id: professions.dokter,
                 }),
             ),
         ).toEqual({ party_id: ['Pilih orang dari buku alamat.'] });
     }, 30_000);
 
-    test('profession comes from the catalog, and the date and login account are checked', async () => {
+    test('profession comes from the tenant profession master, and the date and login account are checked', async () => {
         const outsider = await createMember(pool, await createTenant(pool));
         expect(
             await errors(
                 await admin.post(api, {
                     name: 'Nakes Salah',
-                    profession: 'dukun',
+                    profession_id: Bun.randomUUIDv7(),
                     license_valid_until: '31-01-2026',
                     user_id: outsider.userId,
                 }),
             ),
         ).toEqual({
-            profession: ['Pilih profesi dari daftar.'],
+            profession_id: ['Pilih profesi dari daftar.'],
             license_valid_until: ['Isi tanggal yang sah.'],
             user_id: ['Pilih akun dari daftar.'],
         });
         expect(
-            await errors(await admin.post(api, { profession: 'perawat' })),
+            await errors(
+                await admin.post(api, { profession_id: professions.perawat }),
+            ),
         ).toEqual({ name: ['Isi nama tenaga kesehatan.'] });
         const [count] = await pool.unsafe<{ count: number }[]>(
             "select count(*)::int as count from parties where tenant_id = $1 and name = 'Nakes Salah'",
@@ -233,12 +246,12 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
     test('changing a practitioner keeps the person, rejects a stale version, and delete archives the row', async () => {
         const practitioner = await created({
             name: 'Perawat Uji',
-            profession: 'perawat',
+            profession_id: professions.perawat,
         });
         const changed = (
             await json<{ data: Practitioner }>(
                 await admin.patch(`${api}/${practitioner.id}`, {
-                    profession: 'bidan',
+                    profession_id: professions.bidan,
                     license_number: 'SIP-UJI-002',
                     is_active: false,
                     version: practitioner.version,
@@ -250,7 +263,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             expect.objectContaining({
                 party_id: practitioner.party_id,
                 name: 'Perawat Uji',
-                profession: 'bidan',
+                profession_id: professions.bidan,
                 license_number: 'SIP-UJI-002',
                 is_active: false,
                 version: practitioner.version + 1,
@@ -259,7 +272,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         expect(
             (
                 await admin.patch(`${api}/${practitioner.id}`, {
-                    profession: 'perawat',
+                    profession_id: professions.perawat,
                     version: practitioner.version,
                 })
             ).status,
@@ -279,7 +292,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         // Orang yang catatan nakesnya dihapus boleh dicatat lagi.
         const again = await created({
             party_id: practitioner.party_id,
-            profession: 'perawat',
+            profession_id: professions.perawat,
         });
         expect(again.id).not.toBe(practitioner.id);
     }, 30_000);
@@ -287,7 +300,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
     test('the list searches name and license number and filters profession and status', async () => {
         await created({
             name: 'Apoteker Cari',
-            profession: 'apoteker',
+            profession_id: professions.apoteker,
             license_number: 'SIP-CARI-77',
         });
         const list = async (query: string) =>
@@ -299,7 +312,9 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             ).data.map((row) => row.name);
         expect(await list('q=apoteker%20cari')).toEqual(['Apoteker Cari']);
         expect(await list('q=SIP-CARI-77')).toEqual(['Apoteker Cari']);
-        expect(await list('profession=apoteker')).toEqual(['Apoteker Cari']);
+        expect(await list(`profession_id=${professions.apoteker}`)).toEqual([
+            'Apoteker Cari',
+        ]);
         expect(await list('status=inactive')).not.toContain('Apoteker Cari');
         const metadata = await json<{
             genders: { code: string }[];
@@ -335,7 +350,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             (
                 await reader.post(api, {
                     name: 'Tidak boleh',
-                    profession: 'dokter',
+                    profession_id: professions.dokter,
                 })
             ).status,
         ).toBe(403);
@@ -363,7 +378,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         expect(
             (
                 await session.patch(`${api}/${mine?.id}`, {
-                    profession: 'dokter',
+                    profession_id: professions.dokter,
                     version: mine?.version,
                 })
             ).status,

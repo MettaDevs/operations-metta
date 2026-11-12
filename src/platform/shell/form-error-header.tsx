@@ -10,7 +10,8 @@ import type { RefObject } from 'react';
 // Ringkasan kesalahan di atas form, dipindah dari form-error-header CoreERP: pesan server, error per field, dan
 // kesalahan isian yang ditemukan browser sebelum dikirim. Ia melekat di bawah toolbar: di luar area gulir ia diam
 // di tempatnya, di dalam area gulir `sticky` menahannya di tepi atas sehingga tetap terlihat saat isi digulir.
-// Karena itu ia harus berada langsung di antara isi form, bukan di dalam pembungkus yang hanya berisi dirinya.
+// Karena itu ia harus berada langsung di antara isi form, bukan di dalam pembungkus yang hanya berisi dirinya. z-20
+// menaruhnya di atas label mengambang isian (z-10) yang tergulir di bawahnya.
 export function FormErrorHeader({
     className,
     errors,
@@ -58,7 +59,7 @@ export function FormErrorHeader({
         <div
             data-slot="form-error-header"
             className={cn(
-                'sticky top-0 z-10 w-full bg-background empty:hidden',
+                'sticky top-0 z-20 w-full bg-background empty:hidden',
                 className,
             )}
             ref={(element) => {
