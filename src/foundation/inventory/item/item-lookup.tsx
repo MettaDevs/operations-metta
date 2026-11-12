@@ -10,31 +10,39 @@ import {
 
 export type Item = ApiBody<'inventoryItemList'>['data'][number];
 
-// Barang yang diblokir tidak ditawarkan, karena posting menolaknya.
-const loadItems = async ({ query, cursor, signal }: LookupRequest) => {
-    const { body } = await api.inventoryItemList(
-        {
-            query: {
-                q: query,
-                blocked: 'false',
-                ...(cursor ? { cursor } : {}),
+// Barang yang diblokir tidak ditawarkan di dokumen, karena posting menolaknya. Saringan kartu stok tetap menawarkannya,
+// karena riwayat barang yang sudah diblokir tetap perlu dibaca.
+const itemLoader =
+    (includeBlocked: boolean) =>
+    async ({ query, cursor, signal }: LookupRequest) => {
+        const { body } = await api.inventoryItemList(
+            {
+                query: {
+                    q: query,
+                    ...(includeBlocked ? {} : { blocked: 'false' as const }),
+                    ...(cursor ? { cursor } : {}),
+                },
             },
-        },
-        { signal },
-    );
-    return {
-        items: body.data,
-        nextCursor: body.next_cursor,
-        canCreate: body.can_manage,
+            { signal },
+        );
+        return {
+            items: body.data,
+            nextCursor: body.next_cursor,
+            canCreate: body.can_manage,
+        };
     };
-};
+const activeItems = itemLoader(false);
+const allItems = itemLoader(true);
 
-export function ItemLookup(props: MasterLookupProps<Item>): ReactNode {
+export function ItemLookup({
+    includeBlocked = false,
+    ...props
+}: MasterLookupProps<Item> & { includeBlocked?: boolean }): ReactNode {
     return (
         <MasterLookup
             {...props}
             noun="Barang"
-            load={loadItems}
+            load={includeBlocked ? allItems : activeItems}
             display={(item) => `${item.code} · ${item.name}`}
             columns={[
                 codeColumn(),

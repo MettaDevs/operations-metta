@@ -66,7 +66,7 @@ export const adjustmentRowSchema = z.object({
 
 export const adjustmentListQuerySchema = listParametersSchema.extend({
     status: z.enum(adjustmentStatuses).optional(),
-    direction: z.enum(adjustmentDirections).optional(),
+    stock_direction: z.enum(adjustmentDirections).optional(),
 });
 
 // Baris kartu gudang yang ditulis posting dokumen ini, termasuk baris pembalik bila postingnya dibatalkan. Stok keluar

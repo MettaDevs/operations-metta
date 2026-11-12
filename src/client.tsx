@@ -34,12 +34,15 @@ import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/hea
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
+import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
 import { page as foundationInventoryCodeListReasonCodesPage } from './foundation/inventory/code-list/reason-codes.page.tsx';
 import { page as foundationInventoryCodeListUnitsOfMeasurePage } from './foundation/inventory/code-list/units-of-measure.page.tsx';
 import { page as foundationInventoryItemCategoryItemCategoriesPage } from './foundation/inventory/item-category/item-categories.page.tsx';
+import { page as foundationInventoryItemLedgerItemLedgerEntriesPage } from './foundation/inventory/item-ledger/item-ledger-entries.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
+import { page as foundationInventoryItemItemsPage } from './foundation/inventory/item/items.page.tsx';
 import { page as foundationInventoryLocationLocationsPage } from './foundation/inventory/location/locations.page.tsx';
 import { page as foundationInventorySetupInventorySetupPage } from './foundation/inventory/setup/inventory-setup.page.tsx';
 import { page as foundationInventoryTrackingCodeItemTrackingCodesPage } from './foundation/inventory/tracking-code/item-tracking-codes.page.tsx';
@@ -435,6 +438,14 @@ const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
     staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
 });
 
+const foundationInventoryAdjustmentAdjustmentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryAdjustmentAdjustmentsPage.path,
+    component: foundationInventoryAdjustmentAdjustmentsPage.component,
+    validateSearch: foundationInventoryAdjustmentAdjustmentsPage.validateSearch,
+    staticData: { title: foundationInventoryAdjustmentAdjustmentsPage.title },
+});
+
 const foundationInventoryCodeListFundingSourcesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryCodeListFundingSourcesPage.path,
@@ -483,12 +494,31 @@ const foundationInventoryItemCategoryItemCategoriesRoute = createRoute({
     },
 });
 
+const foundationInventoryItemLedgerItemLedgerEntriesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemLedgerItemLedgerEntriesPage.path,
+    component: foundationInventoryItemLedgerItemLedgerEntriesPage.component,
+    validateSearch:
+        foundationInventoryItemLedgerItemLedgerEntriesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryItemLedgerItemLedgerEntriesPage.title,
+    },
+});
+
 const foundationInventoryItemUnitItemUnitsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryItemUnitItemUnitsPage.path,
     component: foundationInventoryItemUnitItemUnitsPage.component,
     validateSearch: foundationInventoryItemUnitItemUnitsPage.validateSearch,
     staticData: { title: foundationInventoryItemUnitItemUnitsPage.title },
+});
+
+const foundationInventoryItemItemsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemItemsPage.path,
+    component: foundationInventoryItemItemsPage.component,
+    validateSearch: foundationInventoryItemItemsPage.validateSearch,
+    staticData: { title: foundationInventoryItemItemsPage.title },
 });
 
 const foundationInventoryLocationLocationsRoute = createRoute({
@@ -724,12 +754,15 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServiceSectionSectionsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
+        foundationInventoryAdjustmentAdjustmentsRoute,
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,
         foundationInventoryCodeListReasonCodesRoute,
         foundationInventoryCodeListUnitsOfMeasureRoute,
         foundationInventoryItemCategoryItemCategoriesRoute,
+        foundationInventoryItemLedgerItemLedgerEntriesRoute,
         foundationInventoryItemUnitItemUnitsRoute,
+        foundationInventoryItemItemsRoute,
         foundationInventoryLocationLocationsRoute,
         foundationInventorySetupInventorySetupRoute,
         foundationInventoryTrackingCodeItemTrackingCodesRoute,

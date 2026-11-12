@@ -174,7 +174,7 @@ export class Adjustments {
             filter += ` and status = $${bindings.push(status.data)}`;
         const direction = z
             .enum(adjustmentDirections)
-            .safeParse(parameters.get('direction'));
+            .safeParse(parameters.get('stock_direction'));
         if (direction.success)
             filter += ` and direction = $${bindings.push(direction.data)}`;
         const batch = await incrementalList(this.db, {

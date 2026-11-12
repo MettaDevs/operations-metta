@@ -312,6 +312,32 @@ describe.skipIf(!process.env.DB_HOST)('inventory adjustments', () => {
         ]);
     });
 
+    test('the list filters by stock direction and status while keeping its own sort direction', async () => {
+        const inbound = await business.draft('masuk', location.id, [line(1)]);
+        const outbound = await business.draft('keluar', location.id, [
+            { item_id: item.id, quantity: 1 },
+        ]);
+        const numbers = async (query: string) =>
+            (
+                await json<{ data: { number: string; direction: string }[] }>(
+                    await business.admin.get(`${path}?${query}`),
+                    200,
+                )
+            ).data.map((row) => [row.number, row.direction]);
+        const outboundDrafts = await numbers(
+            'stock_direction=keluar&status=draf&sort=number&direction=desc',
+        );
+        expect(outboundDrafts).toContainEqual([outbound.number, 'keluar']);
+        expect(
+            outboundDrafts.every(([, direction]) => direction === 'keluar'),
+        ).toBe(true);
+        expect(outboundDrafts.map(([number]) => number)).not.toContain(
+            inbound.number,
+        );
+        const sorted = outboundDrafts.map(([number]) => number);
+        expect(sorted).toEqual([...sorted].sort().reverse());
+    });
+
     test('lines are checked against the direction of the document', async () => {
         const transit = await business.location('TRANSIT', {
             is_transit: true,

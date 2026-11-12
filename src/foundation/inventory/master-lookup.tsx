@@ -49,6 +49,7 @@ export function MasterLookup<Row extends Reference>({
     columns,
     display = (reference) => reference.name,
     noun,
+    placeholder = 'Cari kode atau nama…',
 }: MasterLookupProps<Row> & {
     load: (request: LookupRequest) => Promise<{
         items: Row[];
@@ -58,6 +59,7 @@ export function MasterLookup<Row extends Reference>({
     columns: DataTableColumn<Row>[];
     display?: (reference: Reference) => string;
     noun: string;
+    placeholder?: string;
 }): ReactNode {
     const rows = useRef(new Map<string, Row>());
     const [canCreate, setCanCreate] = useState(false);
@@ -94,7 +96,7 @@ export function MasterLookup<Row extends Reference>({
                 loadItems={loadItems}
                 getItemValue={(item) => item.id}
                 getItemLabel={display}
-                placeholder="Cari kode atau nama…"
+                placeholder={placeholder}
                 emptyMessage={
                     create
                         ? `${noun} tidak ditemukan. Pilih Baru untuk menambahkan.`
