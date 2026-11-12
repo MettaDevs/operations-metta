@@ -236,14 +236,6 @@ export const sysAdminArea: NavigationAreaEntry = {
                     id: 'stock-by-location',
                     label: 'Stok per lokasi',
                     href: '/sysadmin/inventory/stock-by-location',
-                    section: 'Laporan',
-                    permission: 'core.inventory-report.read',
-                },
-                {
-                    id: 'lplpo',
-                    label: 'LPLPO',
-                    href: '/sysadmin/inventory/lplpo',
-                    section: 'Laporan',
                     permission: 'core.inventory-report.read',
                 },
                 {

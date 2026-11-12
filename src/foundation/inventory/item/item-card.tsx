@@ -619,7 +619,6 @@ export function ItemCard({
                             <CollapsibleSection
                                 value="stockkeeping-units"
                                 title="Stok minimum dan maksimum per lokasi"
-                                summary="Stok maksimum menjadi stok optimum di LPLPO"
                             >
                                 <StockkeepingUnits item={record} />
                             </CollapsibleSection>

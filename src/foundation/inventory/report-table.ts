@@ -1,4 +1,4 @@
-// Tabel laporan persediaan sebagai teks yang tampil di layar. Layar menggambar baris ini apa adanya dan unduhan CSV
+// Tabel tanya-jawab persediaan sebagai teks yang tampil di layar. Layar menggambar baris ini apa adanya dan unduhan CSV
 // menulis baris yang sama, jadi isi CSV selalu sama dengan yang dilihat pengguna. Berkas ini tidak menyentuh server.
 
 export type ReportColumn = {
