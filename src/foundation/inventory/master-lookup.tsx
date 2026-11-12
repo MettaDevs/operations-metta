@@ -2,11 +2,12 @@ import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
 // Pilihan master persediaan di form: ketik untuk mencari di server, gulir untuk memuat berikutnya, Baru di kiri bawah
-// bila pemanggil boleh membuat, dan Daftar lengkap di kanan bawah. Field memegang rujukan yang tersimpan (id, kode,
+// bila pemanggil membuka kartu barunya dan daftar master itu menyatakan pengguna boleh mengubahnya (can_manage), dan
+// Daftar lengkap di kanan bawah. Field memegang rujukan yang tersimpan (id, kode,
 // nama); baris lengkap dari server diteruskan ke onChange, supaya pemanggil bisa memakai isian lainnya (misalnya
 // satuan atau profil pelacakan barang) tanpa memuat ulang.
 
@@ -49,22 +50,27 @@ export function MasterLookup<Row extends Reference>({
     display = (reference) => reference.name,
     noun,
 }: MasterLookupProps<Row> & {
-    load: (
-        request: LookupRequest,
-    ) => Promise<{ items: Row[]; nextCursor: string | null }>;
+    load: (request: LookupRequest) => Promise<{
+        items: Row[];
+        nextCursor: string | null;
+        canCreate?: boolean;
+    }>;
     columns: DataTableColumn<Row>[];
     display?: (reference: Reference) => string;
     noun: string;
 }): ReactNode {
     const rows = useRef(new Map<string, Row>());
+    const [canCreate, setCanCreate] = useState(false);
     const loadItems = useCallback<LookupLoader<Reference>>(
         async (request) => {
             const batch = await load(request);
             for (const row of batch.items) rows.current.set(row.id, row);
-            return batch;
+            setCanCreate(batch.canCreate ?? false);
+            return { items: batch.items, nextCursor: batch.nextCursor };
         },
         [load],
     );
+    const create = canCreate ? onCreate : undefined;
     const shown = columns.map((column): DataTableColumn<Reference> => ({
         ...column,
         sortValue: undefined,
@@ -90,14 +96,14 @@ export function MasterLookup<Row extends Reference>({
                 getItemLabel={display}
                 placeholder="Cari kode atau nama…"
                 emptyMessage={
-                    onCreate
+                    create
                         ? `${noun} tidak ditemukan. Pilih Baru untuk menambahkan.`
                         : `${noun} tidak ditemukan.`
                 }
                 showDetails={false}
                 portalContainer={portalContainer}
                 columns={shown}
-                onCreate={onCreate}
+                onCreate={create}
             />
         </FormControl>
     );

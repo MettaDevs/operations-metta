@@ -38,7 +38,11 @@ import { page as foundationInventoryCodeListFundingSourcesPage } from './foundat
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
 import { page as foundationInventoryCodeListReasonCodesPage } from './foundation/inventory/code-list/reason-codes.page.tsx';
 import { page as foundationInventoryCodeListUnitsOfMeasurePage } from './foundation/inventory/code-list/units-of-measure.page.tsx';
+import { page as foundationInventoryItemCategoryItemCategoriesPage } from './foundation/inventory/item-category/item-categories.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
+import { page as foundationInventoryLocationLocationsPage } from './foundation/inventory/location/locations.page.tsx';
+import { page as foundationInventorySetupInventorySetupPage } from './foundation/inventory/setup/inventory-setup.page.tsx';
+import { page as foundationInventoryTrackingCodeItemTrackingCodesPage } from './foundation/inventory/tracking-code/item-tracking-codes.page.tsx';
 import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
 import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
@@ -468,12 +472,49 @@ const foundationInventoryCodeListUnitsOfMeasureRoute = createRoute({
     staticData: { title: foundationInventoryCodeListUnitsOfMeasurePage.title },
 });
 
+const foundationInventoryItemCategoryItemCategoriesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemCategoryItemCategoriesPage.path,
+    component: foundationInventoryItemCategoryItemCategoriesPage.component,
+    validateSearch:
+        foundationInventoryItemCategoryItemCategoriesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryItemCategoryItemCategoriesPage.title,
+    },
+});
+
 const foundationInventoryItemUnitItemUnitsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryItemUnitItemUnitsPage.path,
     component: foundationInventoryItemUnitItemUnitsPage.component,
     validateSearch: foundationInventoryItemUnitItemUnitsPage.validateSearch,
     staticData: { title: foundationInventoryItemUnitItemUnitsPage.title },
+});
+
+const foundationInventoryLocationLocationsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryLocationLocationsPage.path,
+    component: foundationInventoryLocationLocationsPage.component,
+    validateSearch: foundationInventoryLocationLocationsPage.validateSearch,
+    staticData: { title: foundationInventoryLocationLocationsPage.title },
+});
+
+const foundationInventorySetupInventorySetupRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventorySetupInventorySetupPage.path,
+    component: foundationInventorySetupInventorySetupPage.component,
+    staticData: { title: foundationInventorySetupInventorySetupPage.title },
+});
+
+const foundationInventoryTrackingCodeItemTrackingCodesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryTrackingCodeItemTrackingCodesPage.path,
+    component: foundationInventoryTrackingCodeItemTrackingCodesPage.component,
+    validateSearch:
+        foundationInventoryTrackingCodeItemTrackingCodesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryTrackingCodeItemTrackingCodesPage.title,
+    },
 });
 
 const foundationInventoryTransferTransferOrdersRoute = createRoute({
@@ -687,7 +728,11 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryCodeListProcurementProgramsRoute,
         foundationInventoryCodeListReasonCodesRoute,
         foundationInventoryCodeListUnitsOfMeasureRoute,
+        foundationInventoryItemCategoryItemCategoriesRoute,
         foundationInventoryItemUnitItemUnitsRoute,
+        foundationInventoryLocationLocationsRoute,
+        foundationInventorySetupInventorySetupRoute,
+        foundationInventoryTrackingCodeItemTrackingCodesRoute,
         foundationInventoryTransferTransferOrdersRoute,
         foundationInventoryTransferTransferReceiptsRoute,
         foundationInventoryTransferTransferShipmentsRoute,

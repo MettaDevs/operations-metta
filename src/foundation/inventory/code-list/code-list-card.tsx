@@ -93,6 +93,7 @@ export function CodeListCard({
     const [form, setForm] = useState(saved);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [operation, setOperation] = useState('belum disimpan');
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
     usePageDialogRecord({
@@ -103,6 +104,7 @@ export function CodeListCard({
     });
 
     const save = async () => {
+        setOperation('belum disimpan');
         setBusy(true);
         setErrors({});
         setMessage(null);
@@ -136,6 +138,7 @@ export function CodeListCard({
             }))
         )
             return;
+        setOperation('belum dihapus');
         setBusy(true);
         setErrors({});
         setMessage(null);
@@ -198,7 +201,7 @@ export function CodeListCard({
             <FormErrorHeader
                 errors={errors}
                 message={message}
-                operation={`${kind.title} belum disimpan`}
+                operation={`${kind.title} ${operation}`}
             />
             <PageDialogBody className="py-3">
                 <FormGrid>

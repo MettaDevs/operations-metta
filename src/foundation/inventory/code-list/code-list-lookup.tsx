@@ -17,7 +17,11 @@ const loadUnits = async ({ query, cursor, signal }: LookupRequest) => {
         { query: { q: query, ...(cursor ? { cursor } : {}) } },
         { signal },
     );
-    return { items: body.data, nextCursor: body.next_cursor };
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
 };
 
 const loadReasons = async ({ query, cursor, signal }: LookupRequest) => {
@@ -25,7 +29,11 @@ const loadReasons = async ({ query, cursor, signal }: LookupRequest) => {
         { query: { q: query, ...(cursor ? { cursor } : {}) } },
         { signal },
     );
-    return { items: body.data, nextCursor: body.next_cursor };
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
 };
 
 // Satuan tampil dengan kodenya, karena kode seperti TAB atau BOX yang dikenal orang di gudang.

@@ -15,7 +15,11 @@ const loadTrackingCodes = async ({ query, cursor, signal }: LookupRequest) => {
         { query: { q: query, ...(cursor ? { cursor } : {}) } },
         { signal },
     );
-    return { items: body.data, nextCursor: body.next_cursor };
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
 };
 
 const yesNo = (value: boolean) => (value ? 'Ya' : 'Tidak');

@@ -22,7 +22,11 @@ const loadItems = async ({ query, cursor, signal }: LookupRequest) => {
         },
         { signal },
     );
-    return { items: body.data, nextCursor: body.next_cursor };
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
 };
 
 export function ItemLookup(props: MasterLookupProps<Item>): ReactNode {

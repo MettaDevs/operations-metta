@@ -15,7 +15,11 @@ const loadCategories = async ({ query, cursor, signal }: LookupRequest) => {
         { query: { q: query, ...(cursor ? { cursor } : {}) } },
         { signal },
     );
-    return { items: body.data, nextCursor: body.next_cursor };
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
 };
 
 // Urutan pohon dari server; induk ikut tampil supaya kategori bernama sama di cabang berbeda bisa dibedakan.

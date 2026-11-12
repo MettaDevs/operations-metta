@@ -34,7 +34,11 @@ export function LocationLookup({
                 },
                 { signal },
             );
-            return { items: body.data, nextCursor: body.next_cursor };
+            return {
+                items: body.data,
+                nextCursor: body.next_cursor,
+                canCreate: body.can_manage,
+            };
         },
         [transit],
     );
