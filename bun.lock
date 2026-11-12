@@ -46,6 +46,9 @@
     "modules/healthcare": {
       "name": "@operations-metta/healthcare",
     },
+    "modules/pharmacy": {
+      "name": "@operations-metta/pharmacy",
+    },
     "packages/ui": {
       "name": "@operations-metta/ui",
       "dependencies": {
@@ -205,6 +208,8 @@
     "@operations-metta/asset-management": ["@operations-metta/asset-management@workspace:modules/asset-management"],
 
     "@operations-metta/healthcare": ["@operations-metta/healthcare@workspace:modules/healthcare"],
+
+    "@operations-metta/pharmacy": ["@operations-metta/pharmacy@workspace:modules/pharmacy"],
 
     "@operations-metta/ui": ["@operations-metta/ui@workspace:packages/ui"],
 

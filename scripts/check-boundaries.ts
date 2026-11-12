@@ -188,10 +188,12 @@ for (const file of checked) {
                 `${found}; ${ownAudience} files must not import ${targetAudience} files.`,
             );
     }
-    // Awalan tabel setiap module: aset_ milik asset-management, sim_ milik healthcare (pola legacy: lalu m_ untuk master
-    // dan tr_ untuk transaksi).
+    // Awalan tabel setiap module: aset_ milik asset-management, sim_ milik healthcare, far_ beserta bill_farmasi dan
+    // retur_farmasi (nama legacy) milik pharmacy (pola legacy: lalu m_ untuk master dan tr_ untuk transaksi).
     if (inCore)
-        for (const match of text.matchAll(/aset_|(?<![a-z])sim_/g))
+        for (const match of text.matchAll(
+            /aset_|(?<![a-z])sim_|(?<![a-z])far_|bill_farmasi|retur_farmasi/g,
+        ))
             violations.push(
                 `${name}:${lineOf(match.index)} contains "${match[0]}"; module tables belong under modules/.`,
             );

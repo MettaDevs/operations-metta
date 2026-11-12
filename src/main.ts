@@ -4,6 +4,10 @@ import { Elysia } from 'elysia';
 import type { z } from 'zod';
 import { assetManagementRoutes } from '../modules/asset-management/src/index.ts';
 import { healthcareRoutes } from '../modules/healthcare/src/index.ts';
+import {
+    pharmacyRoutes,
+    registerPharmacyEventHandlers,
+} from '../modules/pharmacy/src/index.ts';
 import type { workspaceSelectionSchema } from './platform/access/index.ts';
 import {
     accessRoutes,
@@ -58,6 +62,7 @@ import {
 import { organizationRoutes } from './platform/organization/index.ts';
 
 registerOrganizationDefaults();
+registerPharmacyEventHandlers();
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {
@@ -132,6 +137,7 @@ export const router = {
     ...purchasingRoutes(),
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
+    ...pharmacyRoutes(),
 };
 export type Router = typeof router;
 
