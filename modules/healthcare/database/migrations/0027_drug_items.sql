@@ -4,7 +4,7 @@
 -- dasar, satuan kemasan, pelacakan, dan blokir milik barang Core. FK baris resep dan alergi obat tetap ke sim_m_obat,
 -- yang id-nya kini sama dengan id barang.
 --
--- Core 0027 sudah menyalin obat dan satuan obat E3 ke gd_m_barang dan gd_m_satuan dengan id yang sama, di legal entity
+-- Core 0028 sudah menyalin obat dan satuan obat E3 ke gd_m_barang dan gd_m_satuan dengan id yang sama, di legal entity
 -- yang kunjungannya paling banyak di tenant itu. Migration ini:
 -- 1. sim_m_obat mengikuti legal entity barangnya, lalu FK (tenant_id, legal_entity_id, id) ke gd_m_barang. aktif menjadi
 --    boleh_diresepkan, supaya tidak tertukar dengan blokir barang. Kolom kembar kode, nama, dan satuan_id dibuang
