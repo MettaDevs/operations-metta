@@ -90,6 +90,22 @@ export const fallRiskSchema = z.object({
     uses_support: flag,
 });
 
+// Pemeriksaan Dasar Gigi: Extraoral (bengkak sampai suhu kulit) lalu Intraoral, seperti PemeriksaanGigiDasar.php.
+export const dentalSchema = z.object({
+    swelling: text,
+    consistency: text,
+    skin_color: text,
+    skin_temperature: text,
+    mobility: text,
+    gum_color: text,
+    caries: text,
+    intraoral_swelling: text,
+    percussion: text,
+    pressure: text,
+    palpation: text,
+    caries_status: text,
+});
+
 export const otherSchema = z.object({
     drug_therapy: text,
     non_drug_therapy: text,
@@ -115,7 +131,8 @@ export const anatomySchema = z.object({
 });
 
 // Baris diagnosa (SIMtrRJDiagnosaAwal). Satu kode ICD-10 sekali per pemeriksaan, jadi baris dikenali dari kodenya.
-// Kode dan nama ICD-10 hanya dibaca, untuk label pilihan.
+// Kode dan nama ICD-10 hanya dibaca, untuk label pilihan. Posisi gigi hanya ada bila section memakai Pemeriksaan dasar
+// gigi, seperti kolom Posisi Gigi sistem lama.
 export const diagnosisSchema = z.object({
     icd10_id: text,
     icd10_code: text,
@@ -124,24 +141,28 @@ export const diagnosisSchema = z.object({
     case_id: text,
     doctor_id: text,
     nurse_id: text,
+    tooth_position: text.optional(),
 });
 
+// Isi rekam medis memuat panel yang dipakai section tujuan saja (medical-record.panels.ts). Panel lain tidak ada di
+// bentuk ini, dan Simpan menolaknya.
 export const medicalRecordSchema = z.object({
     id: text,
     version: number,
-    anamnesis: anamnesisSchema,
-    history: historySchema,
-    allergy: allergySchema,
-    status: statusSchema,
-    physical: physicalSchema,
-    pain: painSchema,
-    fall_risk: fallRiskSchema,
-    findings: z.array(findingSchema),
-    anatomy: z.array(anatomySchema),
-    other: otherSchema,
-    diagnoses: z.array(diagnosisSchema),
-    prognosis_id: text,
-    chronic_disease_ids: z.array(z.string()),
+    anamnesis: anamnesisSchema.optional(),
+    history: historySchema.optional(),
+    allergy: allergySchema.optional(),
+    status: statusSchema.optional(),
+    physical: physicalSchema.optional(),
+    pain: painSchema.optional(),
+    fall_risk: fallRiskSchema.optional(),
+    dental: dentalSchema.optional(),
+    findings: z.array(findingSchema).optional(),
+    anatomy: z.array(anatomySchema).optional(),
+    other: otherSchema.optional(),
+    diagnoses: z.array(diagnosisSchema).optional(),
+    prognosis_id: text.optional(),
+    chronic_disease_ids: z.array(z.string()).optional(),
 });
 export type MedicalRecord = z.infer<typeof medicalRecordSchema>;
 
@@ -156,6 +177,7 @@ export const medicalRecordInputSchema = z.object({
     physical: panel,
     pain: panel,
     fall_risk: panel,
+    dental: panel,
     findings: z.array(z.unknown()).optional(),
     anatomy: z.array(z.unknown()).optional(),
     other: panel,

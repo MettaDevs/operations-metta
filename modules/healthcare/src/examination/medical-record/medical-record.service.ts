@@ -29,8 +29,14 @@ import {
     type PanelName,
 } from './medical-record.fields.ts';
 import {
+    examinationPanels,
+    sectionPanels,
+    type ExaminationPanel,
+} from './medical-record.panels.ts';
+import {
     allergySchema,
     anamnesisSchema,
+    dentalSchema,
     fallRiskSchema,
     historySchema,
     medicalRecordInputSchema,
@@ -54,6 +60,7 @@ const panelSchemas = {
     physical: physicalSchema,
     pain: painSchema,
     fall_risk: fallRiskSchema,
+    dental: dentalSchema,
     other: otherSchema,
 } satisfies Record<PanelName, z.ZodObject>;
 
@@ -185,6 +192,7 @@ function readPanel(
 const destinationSchema = z.object({
     id: z.string(),
     status: z.string(),
+    section_id: z.string(),
     visit_id: z.string(),
     patient_id: z.string(),
     practitioner_id: z.string().nullable(),
@@ -237,13 +245,16 @@ const diagnosisRowSchema = z.object({
     case_id: z.string(),
     doctor_id: z.string().nullable(),
     nurse_id: z.string().nullable(),
+    tooth_position: z.string().nullable(),
 });
+// tooth_position undefined: section ini tidak memakai Pemeriksaan dasar gigi, jadi posisi gigi tersimpan dibiarkan.
 type Diagnosis = {
     icd10_id: string;
     type_id: string;
     case_id: string;
     doctor_id: string | null;
     nurse_id: string | null;
+    tooth_position: string | null | undefined;
 };
 
 const historyRowSchema = z.object({
@@ -326,13 +337,35 @@ async function requiredErrors(
     return errors;
 }
 
+// Bagian yang tidak dipakai section tetapi dikirim. Sistem lama tidak pernah merender panel itu, jadi kirimannya
+// ditolak, tidak diabaikan diam-diam: layar yang masih memuat susunan lama perlu dimuat ulang.
+function inactivePanelErrors(
+    active: readonly ExaminationPanel[],
+    input: Record<string, unknown>,
+): Errors {
+    const errors: Errors = {};
+    for (const panel of examinationPanels)
+        if (!active.includes(panel.code))
+            for (const key of panel.inputs)
+                if (input[key] !== undefined)
+                    add(
+                        errors,
+                        key,
+                        `Bagian ${panel.label} tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.`,
+                    );
+    return errors;
+}
+
 // Isian wajib yang belum terisi pada pemeriksaan tersimpan satu tujuan. Dipakai Selesai periksa, yang menolak
-// menyelesaikan pemeriksaan yang belum lengkap.
+// menyelesaikan pemeriksaan yang belum lengkap. Section yang tidak memakai Periksa fisik tidak punya isian wajib.
 export async function missingRequired(
     db: Database,
     tenantId: string,
     destinationId: string,
+    sectionId: string,
 ): Promise<Errors> {
+    if (!(await sectionPanels(db, tenantId, sectionId)).includes('physical'))
+        return {};
     const fields = panels.physical.fields;
     const physical = await db.one(
         z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
@@ -547,32 +580,45 @@ export class MedicalRecords {
                 validation({ status: finishedMessage });
             if (destination.status !== 'diperiksa')
                 validation({ status: notStartedMessage });
+            const active = await sectionPanels(
+                this.db,
+                this.workspace.tenantId,
+                destination.section_id,
+            );
+            const uses = (panel: ExaminationPanel) => active.includes(panel);
+            const errors: Errors = inactivePanelErrors(active, input);
             const options = await this.optionSets();
             const header = await this.header(destination.id, true);
-            const errors: Errors = {};
-            const anamnesis = readPanel(
-                anamnesisFields,
-                input.anamnesis,
-                'anamnesis',
-                errors,
-                options,
-            );
-            const doctorId = await this.practitioner(
-                input.anamnesis?.doctor_id,
-                'isi_tenaga_medis',
-                header?.doctor_id ?? null,
-                'anamnesis.doctor_id',
-                errors,
-            );
-            const nurseId = await this.practitioner(
-                input.anamnesis?.nurse_id,
-                'isi_perawat',
-                header?.nurse_id ?? null,
-                'anamnesis.nurse_id',
-                errors,
-            );
+            const anamnesis = uses('anamnesis')
+                ? readPanel(
+                      anamnesisFields,
+                      input.anamnesis,
+                      'anamnesis',
+                      errors,
+                      options,
+                  )
+                : null;
+            const doctorId = uses('anamnesis')
+                ? await this.practitioner(
+                      input.anamnesis?.doctor_id,
+                      'isi_tenaga_medis',
+                      header?.doctor_id ?? null,
+                      'anamnesis.doctor_id',
+                      errors,
+                  )
+                : null;
+            const nurseId = uses('anamnesis')
+                ? await this.practitioner(
+                      input.anamnesis?.nurse_id,
+                      'isi_perawat',
+                      header?.nurse_id ?? null,
+                      'anamnesis.nurse_id',
+                      errors,
+                  )
+                : null;
+            const usedPanels = panelNames.filter((name) => uses(name));
             const values = Object.fromEntries(
-                panelNames.map((name) => [
+                usedPanels.map((name) => [
                     name,
                     readPanel(
                         panels[name].fields,
@@ -583,45 +629,66 @@ export class MedicalRecords {
                     ),
                 ]),
             );
-            const allergy = await this.readAllergy(input.allergy, errors);
-            const findings = await this.readFindings(input.findings, errors);
-            const anatomy = this.readAnatomy(input.anatomy, errors);
-            const diagnoses = await this.readDiagnoses(
-                input.diagnoses,
-                header?.id ?? null,
-                errors,
-            );
-            const prognosisId = await this.reference(
-                'prognoses',
-                input.prognosis_id,
-                header?.prognosis_id ?? null,
-                'prognosis_id',
-                errors,
-            );
-            const chronicDiseaseIds = await this.readChronicDiseases(
-                input.chronic_disease_ids,
-                header?.id ?? null,
-                errors,
-            );
-            const required = await requiredErrors(
-                this.db,
-                this.workspace.tenantId,
-                values.physical,
-            );
-            for (const [field, messages] of Object.entries(required))
-                for (const message of messages) add(errors, field, message);
+            const allergy = uses('history')
+                ? await this.readAllergy(input.allergy, errors)
+                : null;
+            const findings = uses('findings')
+                ? await this.readFindings(input.findings, errors)
+                : null;
+            const anatomy = uses('anatomy')
+                ? this.readAnatomy(input.anatomy, errors)
+                : null;
+            const diagnoses = uses('diagnoses')
+                ? await this.readDiagnoses(
+                      input.diagnoses,
+                      header?.id ?? null,
+                      uses('dental'),
+                      errors,
+                  )
+                : null;
+            const prognosisId = uses('prognosis')
+                ? await this.reference(
+                      'prognoses',
+                      input.prognosis_id,
+                      header?.prognosis_id ?? null,
+                      'prognosis_id',
+                      errors,
+                  )
+                : null;
+            const chronicDiseaseIds = uses('prognosis')
+                ? await this.readChronicDiseases(
+                      input.chronic_disease_ids,
+                      header?.id ?? null,
+                      errors,
+                  )
+                : null;
+            if (values.physical) {
+                const required = await requiredErrors(
+                    this.db,
+                    this.workspace.tenantId,
+                    values.physical,
+                );
+                for (const [field, messages] of Object.entries(required))
+                    for (const message of messages) add(errors, field, message);
+            }
             if (Object.keys(errors).length) validation(errors);
 
+            // Isi panel yang tidak dipakai section tetap seperti tersimpan.
             const stamp = nowSql();
             const headerValues: Values = {
-                dokter_id: doctorId,
-                perawat_id: nurseId,
-                keluhan_utama: anamnesis.chief_complaint ?? null,
-                keluhan_tambahan: anamnesis.additional_complaint ?? null,
-                lama_sakit_tahun: anamnesis.illness_years ?? null,
-                lama_sakit_bulan: anamnesis.illness_months ?? null,
-                lama_sakit_hari: anamnesis.illness_days ?? null,
-                prognosa_id: prognosisId,
+                ...(anamnesis
+                    ? {
+                          dokter_id: doctorId,
+                          perawat_id: nurseId,
+                          keluhan_utama: anamnesis.chief_complaint ?? null,
+                          keluhan_tambahan:
+                              anamnesis.additional_complaint ?? null,
+                          lama_sakit_tahun: anamnesis.illness_years ?? null,
+                          lama_sakit_bulan: anamnesis.illness_months ?? null,
+                          lama_sakit_hari: anamnesis.illness_days ?? null,
+                      }
+                    : {}),
+                ...(uses('prognosis') ? { prognosa_id: prognosisId } : {}),
             };
             let recordId: string;
             if (header) {
@@ -647,23 +714,30 @@ export class MedicalRecords {
                     updated_at: stamp,
                 });
             }
-            for (const name of panelNames)
+            for (const name of usedPanels)
                 await this.writePanel(
                     name,
                     recordId,
                     values[name] ?? {},
                     stamp,
                 );
-            await this.writeAllergy(
-                destination.patient_id,
-                recordId,
-                allergy,
-                stamp,
-            );
-            await this.writeFindings(recordId, findings, stamp);
-            await this.writeAnatomy(recordId, anatomy, stamp);
-            await this.writeDiagnoses(recordId, diagnoses, stamp);
-            await this.writeChronicDiseases(recordId, chronicDiseaseIds, stamp);
+            if (allergy)
+                await this.writeAllergy(
+                    destination.patient_id,
+                    recordId,
+                    allergy,
+                    stamp,
+                );
+            if (findings) await this.writeFindings(recordId, findings, stamp);
+            if (anatomy) await this.writeAnatomy(recordId, anatomy, stamp);
+            if (diagnoses)
+                await this.writeDiagnoses(recordId, diagnoses, stamp);
+            if (chronicDiseaseIds)
+                await this.writeChronicDiseases(
+                    recordId,
+                    chronicDiseaseIds,
+                    stamp,
+                );
         });
         return this.present(await this.destination(destinationId, false));
     }
@@ -678,7 +752,8 @@ export class MedicalRecords {
         const found = bindings[1]
             ? await this.db.one(
                   destinationSchema,
-                  `select d.id, d.status, r.id as visit_id, r.pasien_id as patient_id, d.nakes_id as practitioner_id,
+                  `select d.id, d.status, d.section_id, r.id as visit_id, r.pasien_id as patient_id,
+                          d.nakes_id as practitioner_id,
                           r.tinggi_badan::float8 as height, r.berat_badan::float8 as weight, p.gender,
                           rv.name as religion, oc.name as occupation, mv.name as marital_status,
                           coalesce(gp.name, t.nama) as guarantee
@@ -740,12 +815,18 @@ export class MedicalRecords {
         );
     }
 
+    // Isi rekam medis dengan panel yang dipakai section tujuan saja, dalam bentuk yang dikirim kembali saat Simpan.
     private async present(destination: Destination) {
         const tenantId = this.workspace.tenantId;
+        const active = await sectionPanels(
+            this.db,
+            tenantId,
+            destination.section_id,
+        );
+        const uses = (panel: ExaminationPanel) => active.includes(panel);
         const header = await this.header(destination.id, false);
-        const allergy = await this.allergyRow(destination.patient_id);
         const panelValues: Partial<Record<PanelName, Values>> = {};
-        for (const name of panelNames) {
+        for (const name of panelNames.filter((panel) => uses(panel))) {
             const row = header
                 ? await this.panelRow(name, header.id)
                 : undefined;
@@ -765,75 +846,29 @@ export class MedicalRecords {
             );
             const firstOf = (group: string) =>
                 first.find((row) => row.group === group)?.code ?? null;
-            panelValues.physical = {
-                ...panelValues.physical,
-                height: destination.height,
-                weight: destination.weight,
-                height_method: firstOf('cara_ukur_tinggi'),
-            };
-            panelValues.status = {
-                ...panelValues.status,
-                uses_mobility_aid: false,
-                communication_barrier: false,
-                caregiver_at_home: false,
-                needs_assistance: false,
-                emotional_expression: firstOf('ekspresi_emosi'),
-            };
+            if (panelValues.physical)
+                panelValues.physical = {
+                    ...panelValues.physical,
+                    height: destination.height,
+                    weight: destination.weight,
+                    height_method: firstOf('cara_ukur_tinggi'),
+                };
+            if (panelValues.status)
+                panelValues.status = {
+                    ...panelValues.status,
+                    uses_mobility_aid: false,
+                    communication_barrier: false,
+                    caregiver_at_home: false,
+                    needs_assistance: false,
+                    emotional_expression: firstOf('ekspresi_emosi'),
+                };
         }
-        let allergyValues: z.infer<typeof allergySchema>;
-        if (allergy) allergyValues = allergySchema.parse(allergy);
-        else {
-            const first = await this.db.rows(
-                z.object({ kind: z.string(), id: z.string() }),
-                `select distinct on (jenis) jenis as kind, id from sim_m_alergi
-                 where tenant_id = $1 and deleted_at is null and jenis in ('makanan', 'udara')
-                 order by jenis, urutan, kode`,
-                [tenantId],
-            );
-            allergyValues = {
-                none: false,
-                food_allergy_id:
-                    first.find((row) => row.kind === 'makanan')?.id ?? null,
-                airborne_allergy_id:
-                    first.find((row) => row.kind === 'udara')?.id ?? null,
-                other: null,
-            };
-        }
-        const findings = header
-            ? await this.db.rows(
-                  z.object({
-                      aspect_id: z.string(),
-                      result: z.string().nullable(),
-                  }),
-                  `select k.aspek_id as aspect_id, k.hasil as result
-                   from sim_tr_pemeriksaan_keadaan_fisik k
-                   join sim_m_keadaan_fisik_aspek a on a.tenant_id = k.tenant_id and a.id = k.aspek_id
-                   join sim_m_keadaan_fisik_bagian b on b.tenant_id = a.tenant_id and b.id = a.bagian_id
-                   where k.tenant_id = $1 and k.pemeriksaan_id = $2 and k.deleted_at is null
-                   order by b.urutan, b.kode, a.urutan, a.kode`,
-                  [tenantId, header.id],
-              )
-            : [];
-        const anatomy = header
-            ? await this.db.rows(
-                  z.object({
-                      id: z.string(),
-                      body_part: z.string(),
-                      description: z.string(),
-                  }),
-                  `select id, bagian_tubuh as body_part, keterangan as description from sim_tr_pemeriksaan_anatomi
-                   where tenant_id = $1 and pemeriksaan_id = $2 and deleted_at is null order by urutan, id`,
-                  [tenantId, header.id],
-              )
-            : [];
-        const diagnoses = header ? await this.diagnosisRows(header.id) : [];
-        const chronicDiseases = header
-            ? await this.chronicDiseaseIds(header.id)
-            : [];
         const data: MedicalRecord = {
             id: header?.id ?? null,
             version: header?.version ?? null,
-            anamnesis: anamnesisSchema.parse({
+        };
+        if (uses('anamnesis'))
+            data.anamnesis = anamnesisSchema.parse({
                 doctor_id: header
                     ? header.doctor_id
                     : destination.practitioner_id,
@@ -843,17 +878,57 @@ export class MedicalRecords {
                 illness_years: header?.illness_years ?? null,
                 illness_months: header?.illness_months ?? null,
                 illness_days: header?.illness_days ?? null,
-            }),
-            history: panelSchemas.history.parse(panelValues.history),
-            allergy: allergyValues,
-            status: panelSchemas.status.parse(panelValues.status),
-            physical: panelSchemas.physical.parse(panelValues.physical),
-            pain: panelSchemas.pain.parse(panelValues.pain),
-            fall_risk: panelSchemas.fall_risk.parse(panelValues.fall_risk),
-            findings,
-            anatomy,
-            other: panelSchemas.other.parse(panelValues.other),
-            diagnoses: diagnoses.map((row) => ({
+            });
+        if (uses('history')) {
+            data.history = panelSchemas.history.parse(panelValues.history);
+            data.allergy = await this.presentAllergy(destination.patient_id);
+        }
+        if (uses('status'))
+            data.status = panelSchemas.status.parse(panelValues.status);
+        if (uses('physical'))
+            data.physical = panelSchemas.physical.parse(panelValues.physical);
+        if (uses('pain')) data.pain = panelSchemas.pain.parse(panelValues.pain);
+        if (uses('fall_risk'))
+            data.fall_risk = panelSchemas.fall_risk.parse(
+                panelValues.fall_risk,
+            );
+        if (uses('dental'))
+            data.dental = panelSchemas.dental.parse(panelValues.dental);
+        if (uses('findings'))
+            data.findings = header
+                ? await this.db.rows(
+                      z.object({
+                          aspect_id: z.string(),
+                          result: z.string().nullable(),
+                      }),
+                      `select k.aspek_id as aspect_id, k.hasil as result
+                       from sim_tr_pemeriksaan_keadaan_fisik k
+                       join sim_m_keadaan_fisik_aspek a on a.tenant_id = k.tenant_id and a.id = k.aspek_id
+                       join sim_m_keadaan_fisik_bagian b on b.tenant_id = a.tenant_id and b.id = a.bagian_id
+                       where k.tenant_id = $1 and k.pemeriksaan_id = $2 and k.deleted_at is null
+                       order by b.urutan, b.kode, a.urutan, a.kode`,
+                      [tenantId, header.id],
+                  )
+                : [];
+        if (uses('anatomy'))
+            data.anatomy = header
+                ? await this.db.rows(
+                      z.object({
+                          id: z.string(),
+                          body_part: z.string(),
+                          description: z.string(),
+                      }),
+                      `select id, bagian_tubuh as body_part, keterangan as description from sim_tr_pemeriksaan_anatomi
+                       where tenant_id = $1 and pemeriksaan_id = $2 and deleted_at is null order by urutan, id`,
+                      [tenantId, header.id],
+                  )
+                : [];
+        if (uses('other'))
+            data.other = panelSchemas.other.parse(panelValues.other);
+        if (uses('diagnoses'))
+            data.diagnoses = (
+                header ? await this.diagnosisRows(header.id) : []
+            ).map((row) => ({
                 icd10_id: row.icd10_id,
                 icd10_code: row.icd10_code,
                 icd10_name: row.icd10_name,
@@ -861,10 +936,16 @@ export class MedicalRecords {
                 case_id: row.case_id,
                 doctor_id: row.doctor_id,
                 nurse_id: row.nurse_id,
-            })),
-            prognosis_id: header?.prognosis_id ?? null,
-            chronic_disease_ids: chronicDiseases,
-        };
+                ...(uses('dental')
+                    ? { tooth_position: row.tooth_position }
+                    : {}),
+            }));
+        if (uses('prognosis')) {
+            data.prognosis_id = header?.prognosis_id ?? null;
+            data.chronic_disease_ids = header
+                ? await this.chronicDiseaseIds(header.id)
+                : [];
+        }
         return {
             data,
             context: {
@@ -880,6 +961,30 @@ export class MedicalRecords {
                 marital_status: destination.marital_status,
                 guarantee: destination.guarantee,
             },
+        };
+    }
+
+    // Alergi pasien, atau nilai awal form sistem lama bila pasien belum punya catatan alergi: pilihan pertama alergi
+    // makanan dan udara.
+    private async presentAllergy(
+        patientId: string,
+    ): Promise<z.infer<typeof allergySchema>> {
+        const allergy = await this.allergyRow(patientId);
+        if (allergy) return allergySchema.parse(allergy);
+        const first = await this.db.rows(
+            z.object({ kind: z.string(), id: z.string() }),
+            `select distinct on (jenis) jenis as kind, id from sim_m_alergi
+             where tenant_id = $1 and deleted_at is null and jenis in ('makanan', 'udara')
+             order by jenis, urutan, kode`,
+            [this.workspace.tenantId],
+        );
+        return {
+            none: false,
+            food_allergy_id:
+                first.find((row) => row.kind === 'makanan')?.id ?? null,
+            airborne_allergy_id:
+                first.find((row) => row.kind === 'udara')?.id ?? null,
+            other: null,
         };
     }
 
@@ -1050,7 +1155,8 @@ export class MedicalRecords {
         return this.db.rows(
             diagnosisRowSchema,
             `select dg.id, dg.urutan, dg.icd10_id, i.kode as icd10_code, i.nama as icd10_name, dg.jenis_id as type_id,
-                    dg.kasus_id as case_id, dg.dokter_id as doctor_id, dg.perawat_id as nurse_id
+                    dg.kasus_id as case_id, dg.dokter_id as doctor_id, dg.perawat_id as nurse_id,
+                    dg.posisi_gigi as tooth_position
              from sim_tr_pemeriksaan_diagnosa dg
              join sim_m_icd10 i on i.tenant_id = dg.tenant_id and i.id = dg.icd10_id
              where dg.tenant_id = $1 and dg.pemeriksaan_id = $2 and dg.deleted_at is null
@@ -1100,6 +1206,7 @@ export class MedicalRecords {
     private async readDiagnoses(
         raw: unknown[] | undefined,
         recordId: string | null,
+        usesDental: boolean,
         errors: Errors,
     ): Promise<Diagnosis[]> {
         const saved = recordId ? await this.diagnosisRows(recordId) : [];
@@ -1176,6 +1283,19 @@ export class MedicalRecords {
                 field('nurse_id'),
                 errors,
             );
+            const toothPosition = readField(
+                { kind: 'text', column: 'posisi_gigi', max: 50 },
+                row.tooth_position,
+                field('tooth_position'),
+                errors,
+                new Map(),
+            );
+            if (!usesDental && toothPosition !== null)
+                add(
+                    errors,
+                    field('tooth_position'),
+                    'Posisi gigi hanya diisi di poli yang memakai Pemeriksaan dasar gigi.',
+                );
             if (icd10 && typeId && caseId)
                 rows.push({
                     icd10_id: icd10,
@@ -1183,6 +1303,11 @@ export class MedicalRecords {
                     case_id: caseId,
                     doctor_id: doctorId,
                     nurse_id: nurseId,
+                    tooth_position: usesDental
+                        ? typeof toothPosition === 'string'
+                            ? toothPosition
+                            : null
+                        : undefined,
                 });
         }
         return rows;
@@ -1369,6 +1494,9 @@ export class MedicalRecords {
                 kasus_id: row.case_id,
                 dokter_id: row.doctor_id,
                 perawat_id: row.nurse_id,
+                ...(row.tooth_position === undefined
+                    ? {}
+                    : { posisi_gigi: row.tooth_position }),
             };
             const match = existing.find(
                 (item) => item.icd10_id === row.icd10_id,
@@ -1388,7 +1516,9 @@ export class MedicalRecords {
                 match.type_id !== values.jenis_id ||
                 match.case_id !== values.kasus_id ||
                 match.doctor_id !== values.dokter_id ||
-                match.nurse_id !== values.perawat_id
+                match.nurse_id !== values.perawat_id ||
+                (row.tooth_position !== undefined &&
+                    match.tooth_position !== row.tooth_position)
             )
                 await this.update('sim_tr_pemeriksaan_diagnosa', match.id, {
                     ...values,

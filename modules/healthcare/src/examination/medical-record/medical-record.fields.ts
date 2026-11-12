@@ -1,4 +1,5 @@
 import type {
+    dentalSchema,
     fallRiskSchema,
     historySchema,
     otherSchema,
@@ -42,6 +43,18 @@ export const optionGroups = [
     'kualitas_nyeri',
     'waktu_nyeri',
     'tipe_askep',
+    'gigi_bengkak',
+    'gigi_konsistensi',
+    'gigi_warna_kulit',
+    'gigi_suhu_kulit',
+    'gigi_goyang',
+    'gigi_warna_gusi',
+    'gigi_karies',
+    'gigi_pembengkakan',
+    'gigi_perkusi',
+    'gigi_druk',
+    'gigi_palpasi',
+    'gigi_status_karies',
 ] as const;
 export type OptionGroup = (typeof optionGroups)[number];
 
@@ -150,6 +163,23 @@ export const panels = {
             unsteady_gait: flag('cara_berjalan'),
             uses_support: flag('penopang'),
         } satisfies Fields<typeof fallRiskSchema>,
+    },
+    dental: {
+        table: 'sim_tr_pemeriksaan_gigi_dasar',
+        fields: {
+            swelling: option('bengkak', 'gigi_bengkak'),
+            consistency: option('konsistensi', 'gigi_konsistensi'),
+            skin_color: option('warna_kulit', 'gigi_warna_kulit'),
+            skin_temperature: option('suhu_kulit', 'gigi_suhu_kulit'),
+            mobility: option('goyang', 'gigi_goyang'),
+            gum_color: option('warna_gusi', 'gigi_warna_gusi'),
+            caries: option('karies_gigi', 'gigi_karies'),
+            intraoral_swelling: option('pembengkakan', 'gigi_pembengkakan'),
+            percussion: option('perkusi', 'gigi_perkusi'),
+            pressure: option('druk', 'gigi_druk'),
+            palpation: option('palpasi', 'gigi_palpasi'),
+            caries_status: option('status_karies', 'gigi_status_karies'),
+        } satisfies Fields<typeof dentalSchema>,
     },
     other: {
         table: 'sim_tr_pemeriksaan_lainnya',

@@ -30,6 +30,9 @@ export const sectionRowSchema = z.object({
     clusters: z.array(
         z.object({ id: z.string(), code: z.string(), name: z.string() }),
     ),
+    // Kode panel pemeriksaan yang tampil di section ini, dalam urutan katalog (medical-record.panels.ts). Section yang
+    // belum diatur memakai bawaan katalog.
+    examination_panels: z.array(z.string()),
     is_active: z.boolean(),
     version: z.number(),
 });
@@ -53,6 +56,9 @@ export const sectionInputSchema = z.object({
     room_ids: z.array(z.string()).optional(),
     // Klaster yang dilayani, dikirim lengkap seperti room_ids. Kosong berarti semua klaster.
     cluster_ids: z.array(z.string()).optional(),
+    // Kode panel pemeriksaan yang dipakai, dikirim lengkap: panel katalog yang tidak disebut tidak dipakai. Tanpa
+    // examination_panels, pengaturan panel section tidak disentuh.
+    examination_panels: z.array(z.string()).optional(),
     is_active: z.boolean().optional(),
     version: z.number().optional(),
 });

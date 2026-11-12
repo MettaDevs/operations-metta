@@ -14,6 +14,12 @@ import {
     staleMessage,
     validation,
 } from '@core/platform/http/index.ts';
+import {
+    activePanels,
+    examinationPanels,
+    isExaminationPanel,
+    panelSettingSchema,
+} from '../../examination/medical-record/medical-record.panels.ts';
 import { activeOperatingUnit, operatingUnits } from '../room/room.service.ts';
 import { isSectionKind } from './section.kinds.ts';
 import { defaultQueueMode, isQueueMode } from './section.queue-modes.ts';
@@ -36,6 +42,10 @@ const rowSql = `select * from (
                                      join sim_m_klaster k on k.tenant_id = c.tenant_id and k.id = c.klaster_id
                                      where c.tenant_id = s.tenant_id and c.section_id = s.id and c.deleted_at is null),
                                     '[]'::json) as clusters,
+                           coalesce((select json_agg(json_build_object('code', b.panel_kode, 'active', b.aktif))
+                                     from sim_m_section_panel_pemeriksaan b
+                                     where b.tenant_id = s.tenant_id and b.section_id = s.id and b.deleted_at is null),
+                                    '[]'::json) as panel_settings,
                            s.aktif as is_active, s.version
                     from sim_m_section s
                     join organizations o on o.tenant_id = s.tenant_id and o.id = s.operating_unit_id
@@ -43,6 +53,18 @@ const rowSql = `select * from (
                 where true`;
 
 const optional = (value: string | null | undefined) => value?.trim() || null;
+
+const storedRowSchema = sectionRowSchema
+    .omit({ examination_panels: true })
+    .extend({ panel_settings: z.array(panelSettingSchema) });
+
+function sectionRow(raw: unknown) {
+    const { panel_settings: settings, ...row } = storedRowSchema.parse(raw);
+    return sectionRowSchema.parse({
+        ...row,
+        examination_panels: activePanels(settings),
+    });
+}
 
 function checked(body: unknown) {
     const parsed = sectionInputSchema.safeParse(body);
@@ -64,6 +86,8 @@ function checked(body: unknown) {
         errors.queue_mode = 'Pilih cara antrean dari daftar.';
     if (queuePrefix && queuePrefix.length > 5)
         errors.queue_prefix = 'Paling panjang 5 karakter.';
+    if (data?.examination_panels?.some((code) => !isExaminationPanel(code)))
+        errors.examination_panels = 'Pilih bagian pemeriksaan dari daftar.';
     if (Object.keys(errors).length || !data) validation(errors);
     return {
         operatingUnitId: data.operating_unit_id,
@@ -76,6 +100,9 @@ function checked(body: unknown) {
         roomIds: data.room_ids ? [...new Set(data.room_ids)] : undefined,
         clusterIds: data.cluster_ids
             ? [...new Set(data.cluster_ids)]
+            : undefined,
+        examinationPanels: data.examination_panels
+            ? new Set(data.examination_panels)
             : undefined,
         isActive: data.is_active ?? true,
     };
@@ -133,6 +160,12 @@ export class Sections {
                  where tenant_id = $1 and deleted_at is null order by urutan, kode`,
                 [this.workspace.tenantId],
             ),
+            // Katalog panel pemeriksaan untuk pilihan Bagian pemeriksaan di kartu section.
+            examination_panels: examinationPanels.map((panel) => ({
+                code: panel.code,
+                label: panel.label,
+                by_default: activePanels([]).includes(panel.code),
+            })),
             permissions: {
                 create: this.workspace.permissions.has(
                     'healthcare.section.create',
@@ -178,7 +211,7 @@ export class Sections {
             defaultDirection: 'asc',
         });
         return {
-            data: batch.data.map((row) => sectionRowSchema.parse(row)),
+            data: batch.data.map(sectionRow),
             next_cursor: batch.next_cursor,
         };
     }
@@ -186,13 +219,45 @@ export class Sections {
     private async row(id: string) {
         const found = lookupId(id)
             ? await this.db.one(
-                  sectionRowSchema,
+                  storedRowSchema,
                   `${rowSql} and sections.id = $2`,
                   [this.workspace.tenantId, id],
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
-        return found;
+        return sectionRow(found);
+    }
+
+    // Satu baris per panel katalog: panel yang dikirim aktif, sisanya nonaktif. Baris yang nilainya sudah sama tidak
+    // disentuh.
+    private async savePanels(sectionId: string, chosen: ReadonlySet<string>) {
+        const stamp = nowSql();
+        const current = await this.db.rows(
+            z.object({ id: z.string(), code: z.string(), active: z.boolean() }),
+            `select id, panel_kode as code, aktif as active from sim_m_section_panel_pemeriksaan
+             where tenant_id = $1 and section_id = $2 and deleted_at is null`,
+            [this.workspace.tenantId, sectionId],
+        );
+        for (const panel of examinationPanels) {
+            const active = chosen.has(panel.code);
+            const row = current.find((item) => item.code === panel.code);
+            if (!row)
+                await this.db.insert('sim_m_section_panel_pemeriksaan', {
+                    id: Bun.randomUUIDv7(),
+                    tenant_id: this.workspace.tenantId,
+                    section_id: sectionId,
+                    panel_kode: panel.code,
+                    aktif: active,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+            else if (row.active !== active)
+                await this.db.execute(
+                    `update sim_m_section_panel_pemeriksaan set aktif = $1, updated_at = $2
+                     where tenant_id = $3 and id = $4`,
+                    [active, stamp, this.workspace.tenantId, row.id],
+                );
+        }
     }
 
     // Ruangan section harus ruangan unit section itu sendiri.
@@ -314,6 +379,8 @@ export class Sections {
                 });
                 await this.saveRooms(id, roomIds, []);
                 await this.saveClusters(id, clusterIds, []);
+                if (data.examinationPanels)
+                    await this.savePanels(id, data.examinationPanels);
             });
         } catch (error) {
             nameTaken(error);
@@ -373,6 +440,11 @@ export class Sections {
                             data.clusterIds,
                             currentClusters,
                         );
+                    if (data.examinationPanels)
+                        await this.savePanels(
+                            current.id,
+                            data.examinationPanels,
+                        );
                 }
             });
         } catch (error) {
@@ -383,7 +455,8 @@ export class Sections {
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Section yang dihapus ikut melepas ruangan dan klasternya; ruangan dan klasternya sendiri tetap ada.
+    // Section yang dihapus ikut melepas ruangan, klaster, dan pengaturan panel pemeriksaannya; ruangan dan klasternya
+    // sendiri tetap ada.
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('section', 'delete');
         const current = await this.row(id);
@@ -406,6 +479,10 @@ export class Sections {
                 );
                 await this.db.execute(
                     'update sim_m_section_klaster set deleted_at = $1, updated_at = $1 where tenant_id = $2 and section_id = $3 and deleted_at is null',
+                    [stamp, this.workspace.tenantId, current.id],
+                );
+                await this.db.execute(
+                    'update sim_m_section_panel_pemeriksaan set deleted_at = $1, updated_at = $1 where tenant_id = $2 and section_id = $3 and deleted_at is null',
                     [stamp, this.workspace.tenantId, current.id],
                 );
             }
