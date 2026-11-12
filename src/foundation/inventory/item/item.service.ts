@@ -64,13 +64,219 @@ function codeTaken(error: unknown): void {
         validation({ code: 'Kode ini sudah dipakai barang lain.' });
 }
 
+export type ItemScope = { tenantId: string; legalEntityId: string };
+export type ItemInput = z.input<typeof itemInputSchema>;
+
+// errors memegang kesalahan isian pemanggil di luar barang (misalnya bentuk sediaan di kartu obat), supaya pengguna
+// melihat semuanya dalam satu jawaban 422.
+async function checked(
+    db: Database,
+    scope: ItemScope,
+    body: unknown,
+    errors: Record<string, string>,
+) {
+    const data = parseInput(itemInputSchema, body, {
+        ...codeAndNameMessages('barang'),
+        base_unit_id: 'Pilih satuan dasar dari daftar.',
+        category_id: 'Pilih kategori dari daftar.',
+        tracking_code_id: 'Pilih profil pelacakan dari daftar.',
+    });
+    const { code, name } = codeAndName(data, errors, 'barang', {
+        code: 20,
+        name: 200,
+    });
+    if (!(await exists(db, 'gd_m_satuan', scope, data.base_unit_id)))
+        errors.base_unit_id = 'Pilih satuan dasar dari daftar.';
+    const categoryId = data.category_id ?? null;
+    if (
+        categoryId !== null &&
+        !(await exists(db, 'gd_m_kategori', scope, categoryId))
+    )
+        errors.category_id = 'Pilih kategori dari daftar.';
+    const trackingCodeId = data.tracking_code_id;
+    if (
+        typeof trackingCodeId === 'string' &&
+        !(await exists(db, 'gd_m_profil_pelacakan', scope, trackingCodeId))
+    )
+        errors.tracking_code_id = 'Pilih profil pelacakan dari daftar.';
+    if (Object.keys(errors).length) validation(errors);
+    return {
+        code,
+        name,
+        baseUnitId: data.base_unit_id,
+        categoryId,
+        trackingCodeId,
+        refuseNegative: data.refuse_negative_stock ?? null,
+        isBlocked: data.is_blocked ?? false,
+    };
+}
+
+async function posted(
+    db: Database,
+    scope: ItemScope,
+    itemId: string,
+    openOnly: boolean,
+) {
+    return (
+        (await db.one(
+            z.object({ found: z.number() }),
+            `select 1 as found from gd_tr_kartu_gudang
+             where tenant_id = $1 and barang_id = $2${openOnly ? ' and sisa <> 0' : ''} limit 1`,
+            [scope.tenantId, itemId],
+        )) !== undefined
+    );
+}
+
+// Pintu tulis barang untuk kartu barang Core dan untuk module yang memperluas barang, seperti table extension di BC:
+// kartu obat layanan kesehatan menulis barisnya sendiri dan barangnya lewat fungsi ini dalam satu transaksi. Izin
+// diperiksa pemanggil. Mengembalikan id barang baru.
+export async function createItem(
+    db: Database,
+    scope: ItemScope,
+    body: unknown,
+    errors: Record<string, string> = {},
+): Promise<string> {
+    const data = await checked(db, scope, body, errors);
+    const trackingCodeId =
+        data.trackingCodeId === undefined && data.categoryId !== null
+            ? ((
+                  await db.one(
+                      z.object({ id: z.string().nullable() }),
+                      'select profil_pelacakan_id as id from gd_m_kategori where tenant_id = $1 and id = $2',
+                      [scope.tenantId, data.categoryId],
+                  )
+              )?.id ?? null)
+            : (data.trackingCodeId ?? null);
+    const id = Bun.randomUUIDv7();
+    const stamp = nowSql();
+    try {
+        await db.insert('gd_m_barang', {
+            id,
+            tenant_id: scope.tenantId,
+            legal_entity_id: scope.legalEntityId,
+            kode: data.code,
+            nama: data.name,
+            satuan_dasar_id: data.baseUnitId,
+            kategori_id: data.categoryId,
+            profil_pelacakan_id: trackingCodeId,
+            tolak_stok_minus: data.refuseNegative,
+            diblokir: data.isBlocked,
+            created_at: stamp,
+            updated_at: stamp,
+        });
+    } catch (error) {
+        codeTaken(error);
+        throw error;
+    }
+    return id;
+}
+
+// Profil pelacakan terkunci begitu barang punya kartu gudang, dan satuan dasar selama masih ada baris terbuka,
+// sama dengan Item di BC (TestNoEntriesExist dan TestNoOpenEntriesExist). Baris barang dikunci lebih dulu; mesin
+// posting membacanya dengan `for share`, jadi posting pertama dan perubahan ini tidak bisa saling menyalip.
+export async function updateItem(
+    db: Database,
+    scope: ItemScope,
+    id: string,
+    version: number,
+    body: unknown,
+    errors: Record<string, string> = {},
+): Promise<void> {
+    const data = await checked(db, scope, body, errors);
+    let updated = 0;
+    try {
+        await db.transaction(async () => {
+            const stored = lookupId(id)
+                ? await db.one(
+                      storedSchema,
+                      `select id, satuan_dasar_id, profil_pelacakan_id from gd_m_barang
+                       where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
+                       for update`,
+                      [scope.tenantId, scope.legalEntityId, id],
+                  )
+                : undefined;
+            if (!stored) abort(404, 'Not Found');
+            const trackingCodeId =
+                data.trackingCodeId === undefined
+                    ? stored.profil_pelacakan_id
+                    : data.trackingCodeId;
+            const locked: Record<string, string> = {};
+            if (
+                trackingCodeId !== stored.profil_pelacakan_id &&
+                (await posted(db, scope, stored.id, false))
+            )
+                locked.tracking_code_id =
+                    'Barang ini sudah punya gerak stok, jadi profil pelacakannya tidak bisa diubah.';
+            if (
+                data.baseUnitId !== stored.satuan_dasar_id &&
+                (await posted(db, scope, stored.id, true))
+            )
+                locked.base_unit_id =
+                    'Barang ini masih punya stok atau kekurangan stok yang belum tertutup, jadi satuan dasarnya tidak bisa diubah.';
+            if (Object.keys(locked).length) validation(locked);
+            updated = await db.execute(
+                `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
+                        profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, updated_at = $8
+                 where tenant_id = $9 and id = $10 and version = $11 and deleted_at is null`,
+                [
+                    data.code,
+                    data.name,
+                    data.baseUnitId,
+                    data.categoryId,
+                    trackingCodeId,
+                    data.refuseNegative,
+                    data.isBlocked,
+                    nowSql(),
+                    scope.tenantId,
+                    stored.id,
+                    version,
+                ],
+            );
+        });
+    } catch (error) {
+        codeTaken(error);
+        throw error;
+    }
+    if (!updated) coded(409, 'stale_version', staleMessage);
+}
+
+export async function deleteItem(
+    db: Database,
+    scope: ItemScope,
+    id: string,
+    version: number,
+): Promise<void> {
+    await inUse(
+        db,
+        [
+            {
+                sql: 'select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and barang_id = $2 limit 1',
+                message:
+                    'Barang ini sudah punya gerak stok, jadi tidak bisa dihapus. Blokir saja supaya tidak dipakai lagi.',
+            },
+            {
+                sql: 'select 1 as found from gd_tr_penyesuaian_detail where tenant_id = $1 and barang_id = $2 and deleted_at is null limit 1',
+                message:
+                    'Barang ini dipakai dokumen penyesuaian, jadi tidak bisa dihapus.',
+            },
+        ],
+        [scope.tenantId, id],
+    );
+    const deleted = await db.execute(
+        `update gd_m_barang set deleted_at = $1, updated_at = $1
+         where tenant_id = $2 and legal_entity_id = $3 and id = $4 and version = $5 and deleted_at is null`,
+        [nowSql(), scope.tenantId, scope.legalEntityId, id, version],
+    );
+    if (!deleted) coded(409, 'stale_version', staleMessage);
+}
+
 export class Items {
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {}
 
-    private get scope() {
+    private get scope(): ItemScope {
         return {
             tenantId: this.workspace.tenantId,
             legalEntityId: activeLegalEntity(this.workspace),
@@ -121,197 +327,34 @@ export class Items {
         return found;
     }
 
-    private async checked(body: unknown) {
-        const data = parseInput(itemInputSchema, body, {
-            ...codeAndNameMessages('barang'),
-            base_unit_id: 'Pilih satuan dasar dari daftar.',
-            category_id: 'Pilih kategori dari daftar.',
-            tracking_code_id: 'Pilih profil pelacakan dari daftar.',
-        });
-        const errors: Record<string, string> = {};
-        const { code, name } = codeAndName(data, errors, 'barang', {
-            code: 20,
-            name: 200,
-        });
-        if (
-            !(await exists(
-                this.db,
-                'gd_m_satuan',
-                this.scope,
-                data.base_unit_id,
-            ))
-        )
-            errors.base_unit_id = 'Pilih satuan dasar dari daftar.';
-        const categoryId = data.category_id ?? null;
-        if (
-            categoryId !== null &&
-            !(await exists(this.db, 'gd_m_kategori', this.scope, categoryId))
-        )
-            errors.category_id = 'Pilih kategori dari daftar.';
-        const trackingCodeId = data.tracking_code_id;
-        if (
-            typeof trackingCodeId === 'string' &&
-            !(await exists(
-                this.db,
-                'gd_m_profil_pelacakan',
-                this.scope,
-                trackingCodeId,
-            ))
-        )
-            errors.tracking_code_id = 'Pilih profil pelacakan dari daftar.';
-        if (Object.keys(errors).length) validation(errors);
-        return {
-            code,
-            name,
-            baseUnitId: data.base_unit_id,
-            categoryId,
-            trackingCodeId,
-            refuseNegative: data.refuse_negative_stock ?? null,
-            isBlocked: data.is_blocked ?? false,
-        };
-    }
-
     async create(body: unknown) {
         this.workspace.guard('inventory-item', 'update');
-        const data = await this.checked(body);
-        const trackingCodeId =
-            data.trackingCodeId === undefined && data.categoryId !== null
-                ? ((
-                      await this.db.one(
-                          z.object({ id: z.string().nullable() }),
-                          'select profil_pelacakan_id as id from gd_m_kategori where tenant_id = $1 and id = $2',
-                          [this.scope.tenantId, data.categoryId],
-                      )
-                  )?.id ?? null)
-                : (data.trackingCodeId ?? null);
-        const id = Bun.randomUUIDv7();
-        const stamp = nowSql();
-        try {
-            await this.db.insert('gd_m_barang', {
-                id,
-                tenant_id: this.scope.tenantId,
-                legal_entity_id: this.scope.legalEntityId,
-                kode: data.code,
-                nama: data.name,
-                satuan_dasar_id: data.baseUnitId,
-                kategori_id: data.categoryId,
-                profil_pelacakan_id: trackingCodeId,
-                tolak_stok_minus: data.refuseNegative,
-                diblokir: data.isBlocked,
-                created_at: stamp,
-                updated_at: stamp,
-            });
-        } catch (error) {
-            codeTaken(error);
-            throw error;
-        }
+        const id = await createItem(this.db, this.scope, body);
         return { status: 201, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Profil pelacakan terkunci begitu barang punya kartu gudang, dan satuan dasar selama masih ada baris terbuka,
-    // sama dengan Item di BC (TestNoEntriesExist dan TestNoOpenEntriesExist). Baris barang dikunci lebih dulu; mesin
-    // posting membacanya dengan `for share`, jadi posting pertama dan perubahan ini tidak bisa saling menyalip.
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-item', 'update');
         const current = await this.row(id);
-        const data = await this.checked(body);
-        const version = expectedVersion(request, body);
-        let updated = 0;
-        try {
-            await this.db.transaction(async () => {
-                const stored = await this.db.one(
-                    storedSchema,
-                    `select id, satuan_dasar_id, profil_pelacakan_id from gd_m_barang
-                     where tenant_id = $1 and id = $2 for update`,
-                    [this.scope.tenantId, current.id],
-                );
-                if (!stored) abort(404, 'Not Found');
-                const trackingCodeId =
-                    data.trackingCodeId === undefined
-                        ? stored.profil_pelacakan_id
-                        : data.trackingCodeId;
-                const errors: Record<string, string> = {};
-                if (
-                    trackingCodeId !== stored.profil_pelacakan_id &&
-                    (await this.posted(stored.id, false))
-                )
-                    errors.tracking_code_id =
-                        'Barang ini sudah punya gerak stok, jadi profil pelacakannya tidak bisa diubah.';
-                if (
-                    data.baseUnitId !== stored.satuan_dasar_id &&
-                    (await this.posted(stored.id, true))
-                )
-                    errors.base_unit_id =
-                        'Barang ini masih punya stok atau kekurangan stok yang belum tertutup, jadi satuan dasarnya tidak bisa diubah.';
-                if (Object.keys(errors).length) validation(errors);
-                updated = await this.db.execute(
-                    `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
-                            profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, updated_at = $8
-                     where tenant_id = $9 and id = $10 and version = $11 and deleted_at is null`,
-                    [
-                        data.code,
-                        data.name,
-                        data.baseUnitId,
-                        data.categoryId,
-                        trackingCodeId,
-                        data.refuseNegative,
-                        data.isBlocked,
-                        nowSql(),
-                        this.scope.tenantId,
-                        stored.id,
-                        version,
-                    ],
-                );
-            });
-        } catch (error) {
-            codeTaken(error);
-            throw error;
-        }
-        if (!updated) coded(409, 'stale_version', staleMessage);
-        return { status: 200, headers: {}, body: { data: await this.row(id) } };
-    }
-
-    private async posted(itemId: string, openOnly: boolean) {
-        return (
-            (await this.db.one(
-                z.object({ found: z.number() }),
-                `select 1 as found from gd_tr_kartu_gudang
-                 where tenant_id = $1 and barang_id = $2${openOnly ? ' and sisa <> 0' : ''} limit 1`,
-                [this.scope.tenantId, itemId],
-            )) !== undefined
+        await updateItem(
+            this.db,
+            this.scope,
+            current.id,
+            expectedVersion(request, body),
+            body,
         );
+        return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-item', 'update');
         const current = await this.row(id);
-        await inUse(
+        await deleteItem(
             this.db,
-            [
-                {
-                    sql: 'select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and barang_id = $2 limit 1',
-                    message:
-                        'Barang ini sudah punya gerak stok, jadi tidak bisa dihapus. Blokir saja supaya tidak dipakai lagi.',
-                },
-                {
-                    sql: 'select 1 as found from gd_tr_penyesuaian_detail where tenant_id = $1 and barang_id = $2 and deleted_at is null limit 1',
-                    message:
-                        'Barang ini dipakai dokumen penyesuaian, jadi tidak bisa dihapus.',
-                },
-            ],
-            [this.scope.tenantId, current.id],
+            this.scope,
+            current.id,
+            expectedVersion(request, body),
         );
-        const deleted = await this.db.execute(
-            `update gd_m_barang set deleted_at = $1, updated_at = $1
-             where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,
-            [
-                nowSql(),
-                this.scope.tenantId,
-                current.id,
-                expectedVersion(request, body),
-            ],
-        );
-        if (!deleted) coded(409, 'stale_version', staleMessage);
         return { status: 204, headers: {}, body: undefined };
     }
 

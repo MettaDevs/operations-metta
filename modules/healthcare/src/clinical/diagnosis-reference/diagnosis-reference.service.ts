@@ -48,11 +48,6 @@ const tables = {
         usedIn: 'sim_m_tindakan',
         usedBy: 'kelompok_id',
     },
-    'drug-units': {
-        table: 'sim_m_satuan_obat',
-        usedIn: 'sim_m_obat',
-        usedBy: 'satuan_id',
-    },
     'dosage-forms': {
         table: 'sim_m_bentuk_sediaan',
         usedIn: 'sim_m_obat',

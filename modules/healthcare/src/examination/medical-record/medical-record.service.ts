@@ -196,6 +196,7 @@ const destinationSchema = z.object({
     status: z.string(),
     section_id: z.string(),
     visit_id: z.string(),
+    legal_entity_id: z.string(),
     patient_id: z.string(),
     practitioner_id: z.string().nullable(),
     referral_note: z.string().nullable(),
@@ -700,6 +701,7 @@ export class MedicalRecords {
                 ? await this.orders.readPrescriptions(
                       input.prescriptions,
                       header?.id ?? null,
+                      destination.legal_entity_id,
                       new Set(
                           drugAllergies ??
                               (
@@ -867,7 +869,7 @@ export class MedicalRecords {
         const found = bindings[1]
             ? await this.db.one(
                   destinationSchema,
-                  `select d.id, d.status, d.section_id, r.id as visit_id, r.pasien_id as patient_id,
+                  `select d.id, d.status, d.section_id, r.id as visit_id, r.legal_entity_id, r.pasien_id as patient_id,
                           d.nakes_id as practitioner_id, d.catatan_rujukan as referral_note,
                           r.tinggi_badan::float8 as height, r.berat_badan::float8 as weight, p.gender,
                           rv.name as religion, oc.name as occupation, mv.name as marital_status,

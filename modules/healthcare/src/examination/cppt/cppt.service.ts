@@ -166,8 +166,8 @@ export class Cppts {
                                         'requested_quantity', rd.jumlah_permintaan::float8, 'signa', rd.signa,
                                         'usage_instruction', ap.nama, 'notes', rd.keterangan) order by rd.urutan)
                                     from sim_tr_resep_detail rd
-                                    left join sim_m_obat ob on ob.tenant_id = rd.tenant_id and ob.id = rd.obat_id
-                                    left join sim_m_satuan_obat so on so.tenant_id = ob.tenant_id and so.id = ob.satuan_id
+                                    left join gd_m_barang ob on ob.tenant_id = rd.tenant_id and ob.id = rd.obat_id
+                                    left join gd_m_satuan so on so.tenant_id = ob.tenant_id and so.id = ob.satuan_dasar_id
                                     left join sim_m_aturan_pakai ap
                                          on ap.tenant_id = rd.tenant_id and ap.id = rd.aturan_pakai_id
                                     where rd.tenant_id = rs.tenant_id and rd.resep_id = rs.id

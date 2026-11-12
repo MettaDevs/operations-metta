@@ -12,6 +12,7 @@ import {
     procedureDuplicateMessage,
 } from './medical-record.messages.ts';
 import type { MedicalRecord } from './medical-record.schema.ts';
+import { publishPrescriptionIssued } from './prescription.events.ts';
 
 // Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama, beserta alergi obat pasien yang diperiksa resep.
 // Ditulis di dalam Simpan rekam medis yang sama; Kirim ke farmasi menutup draf resep.
@@ -197,16 +198,17 @@ export class ExaminationOrders {
                 drug_code: z.string().nullable(),
                 drug_name: z.string(),
             }),
-            `select a.obat_id as drug_id, o.kode as drug_code, o.nama as drug_name
+            `select a.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name
              from sim_m_pasien_alergi_obat a
-             join sim_m_obat o on o.tenant_id = a.tenant_id and o.id = a.obat_id
+             join gd_m_barang b on b.tenant_id = a.tenant_id and b.id = a.obat_id
              where a.tenant_id = $1 and a.pasien_id = $2 and a.deleted_at is null
-             order by o.nama, o.id`,
+             order by b.nama, b.id`,
             [this.tenantId, patientId],
         );
     }
 
-    // Obat yang dikirim di daftar alergi obat. Obat nonaktif tetap boleh dicatat; yang ganda dihitung sekali.
+    // Obat yang dikirim di daftar alergi obat. Alergi milik pasien, dan pasien bisa dibagi antar legal entity, jadi obat
+    // legal entity mana pun di tenant ini diterima, termasuk yang tidak boleh diresepkan; yang ganda dihitung sekali.
     async readDrugAllergies(
         raw: unknown[] | undefined,
         errors: Errors,
@@ -218,7 +220,9 @@ export class ExaminationOrders {
             const found = id
                 ? await this.db.one(
                       z.object({ id: z.string() }),
-                      'select id from sim_m_obat where tenant_id = $1 and id = $2 and deleted_at is null',
+                      `select o.id from sim_m_obat o
+                       join gd_m_barang b on b.tenant_id = o.tenant_id and b.id = o.id and b.deleted_at is null
+                       where o.tenant_id = $1 and o.id = $2 and o.deleted_at is null`,
                       [this.tenantId, id],
                   )
                 : undefined;
@@ -428,13 +432,13 @@ export class ExaminationOrders {
     private async savedLines(prescriptionId: string): Promise<SavedLine[]> {
         return this.db.rows(
             savedLineSchema,
-            `select d.id, d.urutan, d.obat_id as drug_id, o.kode as drug_code, o.nama as drug_name,
+            `select d.id, d.urutan, d.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name,
                     s.nama as unit_name, d.racikan_ke as compound, d.jumlah::float8 as quantity,
                     d.jumlah_permintaan::float8 as requested_quantity, d.signa,
                     d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes
              from sim_tr_resep_detail d
-             left join sim_m_obat o on o.tenant_id = d.tenant_id and o.id = d.obat_id
-             left join sim_m_satuan_obat s on s.tenant_id = o.tenant_id and s.id = o.satuan_id
+             left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
+             left join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.tenantId, prescriptionId],
@@ -456,10 +460,11 @@ export class ExaminationOrders {
 
     // Draf resep yang dikirim layar. Resep yang sudah dikirim ke farmasi hanya dibaca: kirimannya dilewati, dan versi
     // pemeriksaan (Kirim ke farmasi menaikkannya) menolak layar yang belum memuat status terbarunya. Paling banyak satu
-    // draf per pemeriksaan.
+    // draf per pemeriksaan. Obatnya barang legal entity kunjungan, karena farmasi mengeluarkan stok dari sana.
     async readPrescriptions(
         raw: unknown[] | undefined,
         recordId: string | null,
+        legalEntityId: string,
         allergies: ReadonlySet<string>,
         errors: Errors,
     ): Promise<PrescriptionDraft[]> {
@@ -491,6 +496,7 @@ export class ExaminationOrders {
             const lines = await this.readLines(
                 Array.isArray(row.lines) ? row.lines : [],
                 before ? await this.savedLines(before.id) : [],
+                legalEntityId,
                 allergies,
                 field('lines'),
                 errors,
@@ -503,6 +509,7 @@ export class ExaminationOrders {
     private async readLines(
         raw: unknown[],
         saved: SavedLine[],
+        legalEntityId: string,
         allergies: ReadonlySet<string>,
         prefix: string,
         errors: Errors,
@@ -567,12 +574,16 @@ export class ExaminationOrders {
             const id =
                 typeof row.drug_id === 'string' ? lookupId(row.drug_id) : null;
             const wasSaved = saved.some((line) => line.drug_id === id);
+            // Obat yang sudah tersimpan di baris ini tetap diterima walau sejak itu tidak boleh diresepkan atau diblokir.
             const drug = id
                 ? await this.db.one(
                       z.object({ id: z.string(), name: z.string() }),
-                      `select id, nama as name from sim_m_obat
-                       where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or $3)`,
-                      [this.tenantId, id, wasSaved],
+                      `select o.id, b.nama as name from sim_m_obat o
+                       join gd_m_barang b on b.tenant_id = o.tenant_id and b.legal_entity_id = o.legal_entity_id
+                            and b.id = o.id and b.deleted_at is null
+                       where o.tenant_id = $1 and o.id = $2 and o.legal_entity_id = $3 and o.deleted_at is null
+                         and ((o.boleh_diresepkan and not b.diblokir) or $4)`,
+                      [this.tenantId, id, legalEntityId, wasSaved],
                   )
                 : undefined;
             if (!drug) {
@@ -751,7 +762,9 @@ export class ExaminationOrders {
 
     // Kirim ke farmasi: draf menjadi dikirim, diberi nomor resep dari number sequence unit kunjungan, dan tidak dapat
     // diubah lagi. Dokter dan perawat diambil dari Anamnesa saat itu. Pemanggil sudah mengunci tujuan dan memastikan
-    // pemeriksaan sedang berjalan. Farmasi belum ada, jadi belum ada event yang diterbitkan.
+    // pemeriksaan sedang berjalan, jadi Kirim yang diulang menemukan resep yang sudah dikirim dan ditolak tanpa
+    // menerbitkan event kedua. healthcare.prescription.issued.v1 terbit di transaksi yang sama: gagal sesudahnya
+    // membatalkan keduanya.
     async send(
         recordId: string,
         prescriptionId: string,
@@ -800,5 +813,6 @@ export class ExaminationOrders {
         await this.update('sim_tr_pemeriksaan', recordId, {
             updated_at: stamp,
         });
+        await publishPrescriptionIssued(this.db, this.tenantId, id, stamp);
     }
 }

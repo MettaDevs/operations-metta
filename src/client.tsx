@@ -7,7 +7,6 @@ import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPag
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/discharge-statuses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/dosage-forms.page.tsx';
-import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/drug-units.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/procedure-groups.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/prognoses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/usage-instructions.page.tsx';
@@ -150,19 +149,6 @@ const modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute =
             modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.title,
-        },
-    });
-
-const modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsRoute =
-    createRoute({
-        getParentRoute: () => appLayoutRoute,
-        path: modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.path,
-        component:
-            modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.component,
-        validateSearch:
-            modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.validateSearch,
-        staticData: {
-            title: modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsPage.title,
         },
     });
 
@@ -736,7 +722,6 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute,
-        modulesHealthcareSrcClinicalDiagnosisReferenceDrugUnitsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsRoute,

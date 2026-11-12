@@ -55,15 +55,12 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
             code: 'T01',
             name: 'Nebulisasi',
         });
-        const units = (
-            await json<{ units: Reference[] }>(
-                await clinic.admin.get(`${api}/drugs/metadata`),
-                200,
-            )
-        ).units;
         const drug = await created(`${api}/drugs`, {
+            code: 'PCT500',
             name: 'Parasetamol 500 mg',
-            unit_id: units.find((row) => row.code === 'TABLET')!.id,
+            base_unit_id: clinic.unitTab,
+            dosage_form_id: null,
+            is_prescribable: true,
         });
         const metadata = await json<{
             diagnosis_types: Reference[];
@@ -221,7 +218,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                             {
                                 compound: null,
                                 drug_name: 'Parasetamol 500 mg',
-                                unit_name: 'TAB',
+                                unit_name: 'Tablet',
                                 quantity: 10,
                                 signa: '3x1',
                                 usage_instruction: 'Setelah Makan',

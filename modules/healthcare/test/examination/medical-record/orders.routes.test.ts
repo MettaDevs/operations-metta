@@ -1,4 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { onEvent } from '../../../../../src/platform/events/index.ts';
+import {
+    eventContract,
+    outboxEnvelopes,
+} from '../../../../../test/support/event-contracts.ts';
 import {
     operationsTestApp,
     type Browser,
@@ -80,9 +85,18 @@ const finished =
     'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.';
 
 // Panel Biaya Tindakan dan E-Resep halaman pemeriksaan: data acuan dari sistem lama, pesan sistem lama untuk tindakan
-// ganda, obat ganda, obat alergi, dan racikan tidak valid, baris diubah di tempat dan dihapus lunak, Kirim ke farmasi
-// dengan nomor resep, batas ubah, bagian per section, batas tenant, dan izin. Butuh PostgreSQL yang sudah dimigrasi;
-// dilewati bila DB_HOST kosong.
+// ganda, obat ganda, obat alergi, dan racikan tidak valid, baris diubah di tempat dan dihapus lunak, obat dari legal
+// entity kunjungan yang boleh diresepkan, Kirim ke farmasi dengan nomor resep dan event
+// healthcare.prescription.issued.v1 di transaksi yang sama, batas ubah, bagian per section, batas tenant, dan izin.
+// Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
+const issued = 'healthcare.prescription.issued.v1';
+// Penerima uji yang gagal hanya untuk tenant yang disebut, dipakai untuk membuktikan event dan resep batal bersama.
+const failingTenants = new Set<string>();
+onEvent(issued, 'healthcare', (_db, envelope) =>
+    failingTenants.has(envelope.tenant_id)
+        ? Promise.reject(new Error('Penerima uji gagal.'))
+        : Promise.resolve(),
+);
 describe.skipIf(!process.env.DB_HOST)(
     'examination procedures and prescriptions',
     () => {
@@ -100,7 +114,9 @@ describe.skipIf(!process.env.DB_HOST)(
         let doctor: string;
         let nurse: string;
         let unitTab: string;
+        let legalEntityId: string;
         let metadata: Metadata;
+        let drugCount = 0;
 
         async function json<T>(response: Response, status: number): Promise<T> {
             const text = await response.text();
@@ -216,11 +232,24 @@ describe.skipIf(!process.env.DB_HOST)(
             );
         }
 
-        async function drug(name: string, as = admin) {
-            return created<{ id: string; name: string }>(as, `${api}/drugs`, {
-                name,
-                unit_id: unitTab,
-            });
+        async function drug(
+            name: string,
+            as = admin,
+            overrides: Record<string, unknown> = {},
+        ) {
+            drugCount += 1;
+            return created<{ id: string; code: string; name: string }>(
+                as,
+                `${api}/drugs`,
+                {
+                    code: `RSP${drugCount}`,
+                    name,
+                    base_unit_id: unitTab,
+                    dosage_form_id: null,
+                    is_prescribable: true,
+                    ...overrides,
+                },
+            );
         }
 
         const single = (
@@ -258,6 +287,8 @@ describe.skipIf(!process.env.DB_HOST)(
             await recordInstallation(pool, tenantId, 'healthcare');
             admin = await login(tenantId, [
                 'core.organization.manage',
+                'core.inventory-setup.manage',
+                'core.inventory-item.manage',
                 'healthcare.patient.manage',
                 'healthcare.payment-setup.manage',
                 'healthcare.service-setup.manage',
@@ -266,12 +297,14 @@ describe.skipIf(!process.env.DB_HOST)(
                 'healthcare.examination.manage',
                 'healthcare.clinical-setup.manage',
             ]);
-            await created(admin, '/api/v1/organizations', {
-                classification: 'legal_entity',
-                name: 'PT Klinik Uji Resep',
-                company_code: `KR${Date.now() % 100000}`,
-                country_code: 'ID',
-            });
+            legalEntityId = (
+                await created(admin, '/api/v1/organizations', {
+                    classification: 'legal_entity',
+                    name: 'PT Klinik Uji Resep',
+                    company_code: `KR${Date.now() % 100000}`,
+                    country_code: 'ID',
+                })
+            ).id;
             unit = (
                 await created(admin, '/api/v1/organizations', {
                     classification: 'operating_unit',
@@ -344,14 +377,14 @@ describe.skipIf(!process.env.DB_HOST)(
                 200,
             );
             unitTab = (
-                await json<{ units: Reference[] }>(
-                    await admin.get(`${api}/drugs/metadata`),
-                    200,
-                )
-            ).units.find((row) => row.code === 'TABLET')!.id;
+                await created(admin, '/api/v1/inventory/units-of-measure', {
+                    code: 'TAB',
+                    name: 'Tablet',
+                })
+            ).id;
         }, 120_000);
 
-        test('aturan pakai and satuan obat are seeded from the old system, and both panels are on by default', async () => {
+        test('aturan pakai is seeded from the old system, drug units are not, and both panels are on by default', async () => {
             expect(metadata.usage_instructions.map((row) => row.name)).toEqual([
                 'Sebelum Makan',
                 'Setelah Makan',
@@ -359,12 +392,14 @@ describe.skipIf(!process.env.DB_HOST)(
                 'Jika Diperlukan',
                 'Saat Makan',
             ]);
-            const [units] = await pool.unsafe<{ count: number; tab: string }[]>(
-                `select count(*)::int as count, max(nama) filter (where kode = 'TABLET') as tab
-             from sim_m_satuan_obat where tenant_id = $1`,
+            const [units] = await pool.unsafe<
+                { core: number; module: number }[]
+            >(
+                `select (select count(*)::int from gd_m_satuan where tenant_id = $1) as core,
+                        (select count(*)::int from sim_m_satuan_obat where tenant_id = $1) as module`,
                 [tenantId],
             );
-            expect(units).toEqual({ count: 70, tab: 'TAB' });
+            expect(units).toEqual({ core: 1, module: 0 });
             const id = await visit();
             const shown = await show(admin, id);
             expect(shown.data.procedures).toEqual([]);
@@ -605,7 +640,7 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(prescription!.lines).toMatchObject([
                 {
                     drug_name: 'Paracetamol 500 mg',
-                    unit_name: 'TAB',
+                    unit_name: 'Tablet',
                     quantity: 10,
                 },
                 {
@@ -691,7 +726,7 @@ describe.skipIf(!process.env.DB_HOST)(
             expect((await show(admin, next)).data.drug_allergies).toEqual([
                 {
                     drug_id: ibuprofen.id,
-                    drug_code: null,
+                    drug_code: ibuprofen.code,
                     drug_name: 'Ibuprofen 400 mg',
                 },
             ]);
@@ -910,9 +945,16 @@ describe.skipIf(!process.env.DB_HOST)(
             await entitle(pool, other, 'healthcare');
             await recordInstallation(pool, other, 'healthcare');
             const outsider = await login(other, [
+                'core.organization.manage',
                 'healthcare.examination.manage',
                 'healthcare.clinical-setup.manage',
             ]);
+            await created(outsider, '/api/v1/organizations', {
+                classification: 'legal_entity',
+                name: 'PT Klinik Lain Resep',
+                company_code: `KL${Date.now() % 100000}`,
+                country_code: 'ID',
+            });
             expect((await outsider.get(path(id))).status).toBe(404);
             const list = await json<{ data: { id: string }[] }>(
                 await outsider.get(`${api}/drugs?q=Milik`),
@@ -966,6 +1008,287 @@ describe.skipIf(!process.env.DB_HOST)(
                     ),
                 ),
             ).toBe(false);
+        });
+        test('E-Resep offers and accepts only prescribable, unblocked drugs of the visit legal entity', async () => {
+            const offered = await drug('Cetirizine 10 mg');
+            const resting = await drug('Cetirizine sirup', admin, {
+                is_prescribable: false,
+            });
+            const blocked = await drug('Cetirizine tetes');
+            const item = (
+                await json<{
+                    data: {
+                        id: string;
+                        code: string;
+                        name: string;
+                        version: number;
+                    }[];
+                }>(
+                    await admin.get(
+                        `/api/v1/inventory/items?q=${blocked.code}`,
+                    ),
+                    200,
+                )
+            ).data[0]!;
+            await json(
+                await admin.patch(`/api/v1/inventory/items/${blocked.id}`, {
+                    code: item.code,
+                    name: item.name,
+                    base_unit_id: unitTab,
+                    is_blocked: true,
+                    version: item.version,
+                }),
+                200,
+            );
+            const elsewhere = (
+                await created(admin, '/api/v1/organizations', {
+                    classification: 'legal_entity',
+                    name: 'PT Klinik Uji Resep Kedua',
+                    company_code: `KS${Date.now() % 100000}`,
+                    country_code: 'ID',
+                })
+            ).id;
+            const workspace = async (legalEntity: string) => {
+                const [membership] = await pool.unsafe<{ id: string }[]>(
+                    `select m.id from tenant_memberships m join users u on u.id = m.user_id
+                     where m.tenant_id = $1 order by m.created_at limit 1`,
+                    [tenantId],
+                );
+                await json(
+                    await admin.put('/api/v1/workspace-context', {
+                        membership_id: membership!.id,
+                        legal_entity_id: legalEntity,
+                    }),
+                    200,
+                );
+            };
+            await workspace(elsewhere);
+            const otherUnit = (
+                await created(admin, '/api/v1/inventory/units-of-measure', {
+                    code: 'TAB',
+                    name: 'Tablet',
+                })
+            ).id;
+            const foreign = await drug('Cetirizine kedua', admin, {
+                base_unit_id: otherUnit,
+            });
+            await workspace(legalEntityId);
+
+            const lookup = await json<{ data: { id: string }[] }>(
+                await admin.get(`${api}/drugs?q=Cetirizine&prescribable=true`),
+                200,
+            );
+            expect(lookup.data.map((row) => row.id)).toEqual([offered.id]);
+
+            const id = await started();
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                single(offered.id),
+                                single(resting.id),
+                                single(blocked.id),
+                                single(foreign.id),
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.drug_id': ['Pilih obat dari daftar.'],
+                'prescriptions.0.lines.2.drug_id': ['Pilih obat dari daftar.'],
+                'prescriptions.0.lines.3.drug_id': ['Pilih obat dari daftar.'],
+            });
+            await json(
+                await save(admin, id, {
+                    prescriptions: [draft([single(offered.id)])],
+                }),
+                200,
+            );
+        });
+
+        test('Kirim ke farmasi writes one issued event with the prescription snapshot, matching its contract', async () => {
+            const id = await started();
+            const amoxicillin = await drug('Amoxicillin 500 mg kapsul');
+            const ctm = await drug('CTM 4 mg tablet');
+            await json(
+                await save(admin, id, {
+                    anamnesis: {
+                        ...((await show(admin, id)).data.anamnesis as Record<
+                            string,
+                            unknown
+                        >),
+                        doctor_id: doctor,
+                        nurse_id: nurse,
+                    },
+                    prescriptions: [
+                        draft(
+                            [
+                                single(amoxicillin.id, '15'),
+                                {
+                                    drug_id: null,
+                                    compound: 1,
+                                    quantity: null,
+                                    requested_quantity: '10',
+                                    signa: '3x1 bungkus',
+                                    usage_instruction_id: null,
+                                    notes: 'Puyer',
+                                },
+                                {
+                                    drug_id: ctm.id,
+                                    compound: 1,
+                                    quantity: '2.5',
+                                    signa: null,
+                                    usage_instruction_id: null,
+                                    notes: null,
+                                },
+                            ],
+                            'Habiskan antibiotik',
+                        ),
+                    ],
+                }),
+                200,
+            );
+            const before = await outboxEnvelopes(pool, tenantId, issued);
+            const sentShown = await json<Shown>(await send(admin, id), 200);
+            const sent = sentShown.data.prescriptions!.find(
+                (row) => row.status === 'dikirim',
+            )!;
+            const events = (
+                await outboxEnvelopes(pool, tenantId, issued)
+            ).filter((row) => !before.some((old) => old.id === row.id));
+            expect(events).toHaveLength(1);
+            const [event] = events;
+            const contract = await eventContract(issued);
+            expect(contract.safeParse(event).error).toBeUndefined();
+
+            const [visit] = await pool.unsafe<
+                {
+                    registration_number: string;
+                    operating_unit_id: string;
+                    nrm: string;
+                }[]
+            >(
+                `select g.no_reg as registration_number, g.operating_unit_id, k.nrm
+                 from sim_tr_registrasi_tujuan t
+                 join sim_tr_registrasi g on g.id = t.registrasi_id
+                 join sim_m_pasien k on k.id = g.pasien_id
+                 where t.id = $1`,
+                [id],
+            );
+            expect(event).toMatchObject({
+                legal_entity_id: legalEntityId,
+                org_unit_id: visit!.operating_unit_id,
+                data: {
+                    prescription_id: sent.id,
+                    prescription_number: sent.number,
+                    registration_number: visit!.registration_number,
+                    notes: 'Habiskan antibiotik',
+                    patient: {
+                        id: patientId,
+                        medical_record_number: visit!.nrm,
+                        name: 'Pasien Resep',
+                        birth_date: '1985-02-03',
+                    },
+                    doctor: { id: doctor, name: 'Dokter Resep' },
+                    section: { id: section.id, name: 'Poli Umum Resep' },
+                    lines: [
+                        {
+                            order: 1,
+                            item: {
+                                id: amoxicillin.id,
+                                code: amoxicillin.code,
+                                name: 'Amoxicillin 500 mg kapsul',
+                            },
+                            compound: null,
+                            quantity: '15',
+                            unit: { id: unitTab, code: 'TAB', name: 'Tablet' },
+                            requested_quantity: null,
+                            signa: '3x1',
+                            usage_instruction: 'Setelah Makan',
+                            notes: null,
+                        },
+                        {
+                            order: 2,
+                            item: null,
+                            compound: 1,
+                            quantity: null,
+                            unit: null,
+                            requested_quantity: '10',
+                            signa: '3x1 bungkus',
+                            usage_instruction: null,
+                            notes: 'Puyer',
+                        },
+                        {
+                            order: 3,
+                            item: {
+                                id: ctm.id,
+                                code: ctm.code,
+                                name: 'CTM 4 mg tablet',
+                            },
+                            compound: 1,
+                            quantity: '2.5',
+                            requested_quantity: null,
+                            signa: null,
+                        },
+                    ],
+                },
+            });
+        });
+
+        test('a double Kirim publishes once, and a failure after publishing keeps neither the event nor the sent status', async () => {
+            const twice = await started();
+            const zinc = await drug('Zinc sirup');
+            await json(
+                await save(admin, twice, {
+                    prescriptions: [draft([single(zinc.id)])],
+                }),
+                200,
+            );
+            const before = (await outboxEnvelopes(pool, tenantId, issued))
+                .length;
+            const shown = await show(admin, twice);
+            const pending = shown.data.prescriptions![0]!;
+            const click = () =>
+                admin.post(
+                    `${api}/examination/destinations/${twice}/prescriptions/${pending.id}/send`,
+                    { version: shown.data.version },
+                );
+            const clicks = await Promise.all([click(), click()]);
+            expect(clicks.map((response) => response.status).sort()).toEqual([
+                200, 409,
+            ]);
+            expect((await outboxEnvelopes(pool, tenantId, issued)).length).toBe(
+                before + 1,
+            );
+
+            const failing = await started();
+            await json(
+                await save(admin, failing, {
+                    prescriptions: [draft([single(zinc.id)])],
+                }),
+                200,
+            );
+            failingTenants.add(tenantId);
+            try {
+                expect((await send(admin, failing)).status).toBe(500);
+            } finally {
+                failingTenants.delete(tenantId);
+            }
+            const [kept] = await pool.unsafe<
+                { status: string; nomor: string | null }[]
+            >(
+                `select status, nomor from sim_tr_resep where pemeriksaan_id = $1 and deleted_at is null`,
+                [await recordId(failing)],
+            );
+            expect(kept).toEqual({ status: 'draf', nomor: null });
+            expect((await outboxEnvelopes(pool, tenantId, issued)).length).toBe(
+                before + 1,
+            );
+            expect((await send(admin, failing)).status).toBe(200);
+            expect((await outboxEnvelopes(pool, tenantId, issued)).length).toBe(
+                before + 2,
+            );
         });
     },
 );

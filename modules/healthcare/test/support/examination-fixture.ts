@@ -38,6 +38,7 @@ export async function refused(response: Response) {
 
 export const fullDuties = [
     'core.organization.manage',
+    'core.inventory-setup.manage',
     'healthcare.patient.manage',
     'healthcare.payment-setup.manage',
     'healthcare.service-setup.manage',
@@ -109,6 +110,13 @@ export async function createClinic(
                 operating_unit_number: number,
             })
         ).id;
+    // Satuan obat milik persediaan Core per legal entity; module tidak lagi mengisi satuan bawaan.
+    const unitTab = (
+        await created('/api/v1/inventory/units-of-measure', {
+            code: 'TAB',
+            name: 'Tablet',
+        })
+    ).id;
     const unit = (
         await created('/api/v1/organizations', {
             classification: 'operating_unit',
@@ -254,6 +262,7 @@ export async function createClinic(
         tenantId,
         admin,
         legalEntityId,
+        unitTab,
         unit,
         otherUnit,
         otherRoom,
