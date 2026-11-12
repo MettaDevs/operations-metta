@@ -59,6 +59,12 @@ const environmentSchema = z.object({
     SENTRY_DSN: z.url().optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),
     SENTRY_RELEASE: z.string().min(1).optional(),
+    // Masuk lewat SSO perusahaan (penyedia OIDC). Isi ketiganya, atau kosongkan ketiganya untuk mematikan SSO: rute
+    // /sso/* lalu dijawab 404 dan halaman masuk hanya menampilkan kata sandi. Alamat balik tidak disetel, karena
+    // diturunkan dari BASE_DOMAIN: https://<BASE_DOMAIN>/sso/callback.
+    SSO_ISSUER: z.url().optional(),
+    SSO_CLIENT_ID: z.string().min(1).optional(),
+    SSO_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 // Cukup untuk membuka koneksi database, tanpa APP_KEY dan setelan server: dipakai migrate dan dev:setup.
@@ -81,7 +87,32 @@ export function loadConfig(
     if (key.length !== 32) {
         throw new Error('APP_KEY must contain a 32-byte AES-256 key.');
     }
-    return { ...values, key };
+    return { ...values, key, sso: ssoSettings(values) };
+}
+
+export type SsoSettings = {
+    issuer: string;
+    clientId: string;
+    clientSecret: string;
+};
+
+function ssoSettings(
+    values: z.infer<typeof environmentSchema>,
+): SsoSettings | null {
+    const { SSO_ISSUER, SSO_CLIENT_ID, SSO_CLIENT_SECRET } = values;
+    if (!SSO_ISSUER && !SSO_CLIENT_ID && !SSO_CLIENT_SECRET) return null;
+    if (!SSO_ISSUER || !SSO_CLIENT_ID || !SSO_CLIENT_SECRET)
+        throw new Error(
+            'Isi SSO_ISSUER, SSO_CLIENT_ID, dan SSO_CLIENT_SECRET bersamaan, atau kosongkan ketiganya.',
+        );
+    // Alamat balik diturunkan dari domain dasar, jadi SSO tanpa domain dasar tidak punya alamat balik.
+    if (!values.BASE_DOMAIN)
+        throw new Error('SSO membutuhkan BASE_DOMAIN untuk alamat baliknya.');
+    return {
+        issuer: SSO_ISSUER,
+        clientId: SSO_CLIENT_ID,
+        clientSecret: SSO_CLIENT_SECRET,
+    };
 }
 
 export type Config = ReturnType<typeof loadConfig>;

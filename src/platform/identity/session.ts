@@ -47,12 +47,18 @@ const userSchema = z.object({
     id: idSchema,
     name: z.string(),
     email: z.string(),
-    password: z.string(),
+    // Kosong untuk pengguna yang hanya masuk lewat SSO.
+    password: z.string().nullable(),
     account_type: z.literal('person'),
     must_change_password: z.boolean(),
     two_factor_secret: z.string().nullable(),
     two_factor_confirmed_at: z.string().nullable(),
+    sessions_revoked_epoch: z.number().nullable(),
 });
+export type SessionUser = z.infer<typeof userSchema>;
+// Setiap pembacaan pengguna sesi membawa waktu pencabutan sesinya (back-channel logout) dalam detik epoch.
+const userColumns =
+    '*,extract(epoch from sessions_revoked_at)::float8 as sessions_revoked_epoch';
 
 export function randomToken(): string {
     return randomBytes(48)
@@ -197,9 +203,14 @@ export class Session {
         if (principal.success)
             user = await db.one(
                 userSchema,
-                "select * from users where id=$1 and account_type='person' limit 1",
+                `select ${userColumns} from users where id=$1 and account_type='person' limit 1`,
                 [principal.data],
             );
+        // Sesi yang login sebelum sesi pengguna itu dicabut dibaca sebagai belum login.
+        if (user && !Session.loggedInAfterRevocation(data, user)) {
+            user = undefined;
+            data[guardKey] = null;
+        }
         if (user) await db.actor(user.id);
         return new Session(
             db,
@@ -213,6 +224,17 @@ export class Session {
             data,
             user ?? null,
             environment,
+        );
+    }
+
+    private static loggedInAfterRevocation(
+        data: z.infer<typeof sessionSchema>,
+        user: SessionUser,
+    ): boolean {
+        if (user.sessions_revoked_epoch === null) return true;
+        const loginAt = data.login_at;
+        return (
+            typeof loginAt === 'number' && loginAt > user.sessions_revoked_epoch
         );
     }
 
@@ -327,12 +349,15 @@ export class Session {
         const find = () =>
             this.db.one(
                 userSchema,
-                "select * from users where email=$1 and account_type='person' limit 1",
+                `select ${userColumns} from users where email=$1 and account_type='person' limit 1`,
                 [email],
             );
+        // Pengguna tanpa kata sandi (hanya SSO) ditolak dengan pesan yang sama dengan kata sandi salah.
+        const matches = async (user: SessionUser | undefined) =>
+            user?.password != null &&
+            (await Bun.password.verify(password, user.password));
         const first = await find();
-        const verified =
-            first && (await Bun.password.verify(password, first.password));
+        const verified = first && (await matches(first));
         if (!verified) {
             await limiter.hit(throttleKey);
             validation({
@@ -345,29 +370,55 @@ export class Session {
             return { two_factor: true };
         }
         const second = await find();
-        if (
-            !second ||
-            !(await Bun.password.verify(password, second.password))
-        ) {
+        if (!second || !(await matches(second))) {
             await limiter.hit(throttleKey);
             validation({
                 email: 'Email atau kata sandi salah.',
             });
         }
-        await this.forget();
-        this.id = randomToken();
-        this.data[guardKey] = second.id;
-        this.data.password_hash_web = second.password;
-        this.data._token = randomToken();
-        this.user = second;
-        await this.db.execute(
-            'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1',
-            [second.id],
-        );
-        await this.db.actor(second.id);
-        this.id = randomToken();
+        await this.signIn(second);
         await limiter.clear(throttleKey);
         return { two_factor: false };
+    }
+
+    // Sesi baru untuk pengguna yang sudah dibuktikan, lewat kata sandi atau lewat SSO. Id sesi diganti supaya id sebelum
+    // login tidak pernah menjadi sesi yang sudah login.
+    private async signIn(user: SessionUser): Promise<void> {
+        await this.forget();
+        this.id = randomToken();
+        this.data[guardKey] = user.id;
+        this.data.password_hash_web = user.password;
+        this.data.login_at = Date.now() / 1000;
+        this.data._token = randomToken();
+        this.user = user;
+        await this.db.execute(
+            'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1',
+            [user.id],
+        );
+        await this.db.actor(user.id);
+        this.id = randomToken();
+    }
+
+    // Masuk lewat SSO: identitasnya sudah dibuktikan penyedia dan tautannya sudah diperiksa. false bila pengguna itu
+    // tidak ada lagi.
+    async signInVerified(userId: string): Promise<boolean> {
+        const user = await this.db.one(
+            userSchema,
+            `select ${userColumns} from users where id=$1 and account_type='person' limit 1`,
+            [userId],
+        );
+        if (!user) return false;
+        await this.signIn(user);
+        return true;
+    }
+
+    // Kata sandi pengguna yang sedang masuk diketik ulang, misalnya sebelum menautkan akun SSO.
+    async confirmPassword(password: string): Promise<boolean> {
+        const user = this.requireUser();
+        return (
+            user.password !== null &&
+            (await Bun.password.verify(password, user.password))
+        );
     }
 
     async logout(input: unknown): Promise<void> {

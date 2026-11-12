@@ -46,7 +46,12 @@ import {
 } from './platform/environment/index.ts';
 import { geographyRoutes } from './platform/geography/index.ts';
 import type { loginInputSchema } from './platform/identity/index.ts';
-import { Session, ValkeySessions } from './platform/identity/index.ts';
+import {
+    profileRoutes,
+    Session,
+    Sso,
+    ValkeySessions,
+} from './platform/identity/index.ts';
 import { organizationRoutes } from './platform/organization/index.ts';
 
 registerOrganizationDefaults();
@@ -112,6 +117,7 @@ export const router = {
             );
         }),
     ...shellRoutes(),
+    ...profileRoutes(),
     ...accessRoutes(),
     ...organizationRoutes(),
     ...geographyRoutes(),
@@ -129,17 +135,48 @@ export function createApplication(config: Config) {
     // database sendiri mendapat pool-nya saat pertama kali dibuka.
     const pool = createPool(config);
     const environmentPools = new Map<string, ReturnType<typeof createPool>>();
-    function poolFor(route: EnvironmentRoute | null) {
-        if (!route?.database_name) return pool;
-        let environmentPool = environmentPools.get(route.database_name);
+    function poolForDatabase(databaseName: string | null) {
+        if (!databaseName) return pool;
+        let environmentPool = environmentPools.get(databaseName);
         if (!environmentPool) {
             environmentPool = createPool({
                 ...config,
-                DB_DATABASE: route.database_name,
+                DB_DATABASE: databaseName,
             });
-            environmentPools.set(route.database_name, environmentPool);
+            environmentPools.set(databaseName, environmentPool);
         }
         return environmentPool;
+    }
+    const poolFor = (route: EnvironmentRoute | null) =>
+        poolForDatabase(route?.database_name ?? null);
+    const sso = config.sso
+        ? new Sso(config.sso, config, pool, poolForDatabase)
+        : null;
+    const json = (status: number, body: object) =>
+        Response.json(body, {
+            status,
+            headers: { 'Cache-Control': 'no-cache, private' },
+        });
+    // Domain dasar tanpa nama tenant hanya melayani dua alamat yang didaftarkan di penyedia SSO. Request lain ke sana
+    // diperlakukan seperti alamat yang tidak dikenal.
+    async function serveBaseHost(
+        request: Request,
+        pathname: string,
+    ): Promise<Response | null> {
+        if (!sso) return null;
+        try {
+            if (pathname === '/sso/callback' && request.method === 'GET')
+                return await sso.callback(request);
+            if (
+                pathname === '/sso/backchannel-logout' &&
+                request.method === 'POST'
+            )
+                return await sso.backchannelLogout(request);
+        } catch (error) {
+            reportError(error, { method: request.method, path: pathname });
+            return json(500, { message: 'Server Error' });
+        }
+        return null;
     }
     // Alamat di bawah domain dasar yang tidak menunjuk lingkungan tercatat dijawab 404, begitu pula alamat lain saat
     // domain dasar diisi, supaya tidak ada request yang jatuh ke database runtime tanpa tenant.
@@ -153,6 +190,8 @@ export function createApplication(config: Config) {
         switch (address.kind) {
             case 'unrouted':
                 return config.BASE_DOMAIN ? 'not-found' : null;
+            case 'base':
+                return 'not-found';
             case 'unknown':
                 return 'not-found';
             case 'environment':
@@ -180,6 +219,21 @@ export function createApplication(config: Config) {
             request: Request,
             clientAddress: string,
         ): Promise<Response> {
+            const { pathname } = new URL(request.url);
+            const ssoPath = pathname.startsWith('/sso/');
+            if (ssoPath) {
+                // SSO yang tidak disetel tidak punya satu pun alamat /sso/*.
+                if (!sso) return json(404, { message: 'Not Found' });
+                const host = parseAddress(
+                    request.headers.get('host') ?? new URL(request.url).host,
+                    config.BASE_DOMAIN,
+                );
+                if (host.kind === 'base')
+                    return (
+                        (await serveBaseHost(request, pathname)) ??
+                        json(404, { message: 'Not Found' })
+                    );
+            }
             // Berkas build dan dokumen layar tidak membuka sesi maupun koneksi database.
             const served = await client.serve(request);
             if (served) return served;
@@ -230,10 +284,17 @@ export function createApplication(config: Config) {
                 const context: Context = {
                     db,
                     session,
+                    sso,
                     request,
                     errorHeaders: {},
                 };
-                const result = await handler.handle(request, { context });
+                const ssoResponse =
+                    ssoPath && sso
+                        ? await sso.handleEnvironment(db, session, request)
+                        : null;
+                const result = ssoPath
+                    ? { response: ssoResponse ?? undefined }
+                    : await handler.handle(request, { context });
                 response =
                     result.response ??
                     Response.json({ message: 'Not Found' }, { status: 404 });

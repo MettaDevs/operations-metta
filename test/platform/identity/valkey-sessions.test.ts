@@ -31,6 +31,7 @@ const user = {
     must_change_password: false,
     two_factor_secret: null,
     two_factor_confirmed_at: null,
+    sessions_revoked_epoch: null,
 };
 
 function harness(failing = false, principal: string | number = user.id) {
@@ -57,7 +58,9 @@ function harness(failing = false, principal: string | number = user.id) {
     const unsafe = (query: string, parameters: Bind[]) => {
         statements.push(query);
         const rows =
-            query.startsWith('select * from users') && parameters[0] === user.id
+            query.startsWith(
+                'select *,extract(epoch from sessions_revoked_at)::float8 as sessions_revoked_epoch from users',
+            ) && parameters[0] === user.id
                 ? [user]
                 : [];
         return Promise.resolve(Object.assign(rows, { count: rows.length }));
@@ -106,7 +109,7 @@ test('logout deletes the old key and saves the new session with the lifetime TTL
         Buffer.from(store.get(prefix + session.id)!, 'base64').toString(),
     );
     expect(saved).toEqual({ _token: session.data._token });
-    expect(statements.some((query) => query.includes('sessions'))).toBe(false);
+    expect(statements.some((query) => /\bsessions\b/.test(query))).toBe(false);
 });
 
 test('a session saved before user ids became uuid opens logged out without querying users', async () => {

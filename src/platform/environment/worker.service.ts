@@ -16,6 +16,10 @@ import {
     syncEntitlements,
     syncEntitlementsRequestSchema,
 } from './sync-entitlements.service.ts';
+import {
+    syncIdentities,
+    syncIdentitiesRequestSchema,
+} from './sync-identities.service.ts';
 
 const knownOperations = [
     'provision',
@@ -25,6 +29,7 @@ const knownOperations = [
     'restore',
     'purge',
     'sync_entitlements',
+    'sync_identities',
 ] as const;
 type KnownOperation = (typeof knownOperations)[number];
 
@@ -152,6 +157,21 @@ export async function runOperation(
                         `Parameter sync_entitlements tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
                     );
                 await syncEntitlements(settings, source, request.data, step);
+                await client.report(claimed.id, {
+                    status: 'succeeded',
+                    step: 'done',
+                });
+                return 'succeeded';
+            }
+            case 'sync_identities': {
+                const request = syncIdentitiesRequestSchema.safeParse(
+                    claimed.parameters,
+                );
+                if (!request.success)
+                    throw new Error(
+                        `Parameter sync_identities tidak sah: ${request.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}.`,
+                    );
+                await syncIdentities(settings, request.data, step);
                 await client.report(claimed.id, {
                     status: 'succeeded',
                     step: 'done',

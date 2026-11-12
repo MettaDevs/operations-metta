@@ -55,5 +55,10 @@ export {
     type CatalogModule,
     type SyncEntitlementsRequest,
 } from './sync-entitlements.service.ts';
+export {
+    syncIdentities,
+    syncIdentitiesRequestSchema,
+    type SyncIdentitiesRequest,
+} from './sync-identities.service.ts';
 export { findRoute, type EnvironmentRoute } from './route.service.ts';
 export { runOperation } from './worker.service.ts';

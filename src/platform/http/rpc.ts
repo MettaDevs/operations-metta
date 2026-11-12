@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { type Database, sqlErrorCode } from '../database/index.ts';
 import { reportError } from '../error-reporting/index.ts';
 import { HttpFailure } from './errors.ts';
-import type { Session } from '../identity/index.ts';
+import type { Session, Sso } from '../identity/index.ts';
 
 export type Context = {
     db: Database;
     session: Session;
+    // Masuk lewat SSO; null bila SSO tidak disetel.
+    sso: Sso | null;
     request: Request;
     errorHeaders: Record<string, string>;
 };
