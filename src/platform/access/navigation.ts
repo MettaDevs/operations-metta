@@ -221,6 +221,12 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.inventory-transfer.read',
                 },
                 {
+                    id: 'stock-counts',
+                    label: 'Opname stok',
+                    href: '/sysadmin/inventory/stock-counts',
+                    permission: 'core.inventory-count.read',
+                },
+                {
                     id: 'item-ledger-entries',
                     label: 'Kartu stok',
                     href: '/sysadmin/inventory/item-ledger-entries',
