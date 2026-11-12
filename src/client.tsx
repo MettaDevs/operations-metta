@@ -6,6 +6,9 @@ import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from 
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
+import { page as modulesHealthcareSrcRegistrationVisitVisitNewPage } from '../modules/healthcare/src/registration/visit/visit-new.page.tsx';
+import { page as modulesHealthcareSrcRegistrationVisitVisitPage } from '../modules/healthcare/src/registration/visit/visit.page.tsx';
+import { page as modulesHealthcareSrcRegistrationVisitVisitsPage } from '../modules/healthcare/src/registration/visit/visits.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage } from '../modules/healthcare/src/service/practice-schedule/practice-schedules.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage } from '../modules/healthcare/src/service/practice-schedule/practice-sessions.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage } from '../modules/healthcare/src/service/practice-schedule/schedule-templates.page.tsx';
@@ -88,6 +91,37 @@ const modulesHealthcareSrcPractitionerPractitionerPractitionersRoute =
             title: modulesHealthcareSrcPractitionerPractitionerPractitionersPage.title,
         },
     });
+
+const modulesHealthcareSrcRegistrationVisitVisitNewRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcRegistrationVisitVisitNewPage.path,
+    component: modulesHealthcareSrcRegistrationVisitVisitNewPage.component,
+    validateSearch:
+        modulesHealthcareSrcRegistrationVisitVisitNewPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcRegistrationVisitVisitNewPage.title,
+    },
+});
+
+const modulesHealthcareSrcRegistrationVisitVisitRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcRegistrationVisitVisitPage.path,
+    component: modulesHealthcareSrcRegistrationVisitVisitPage.component,
+    validateSearch:
+        modulesHealthcareSrcRegistrationVisitVisitPage.validateSearch,
+    staticData: { title: modulesHealthcareSrcRegistrationVisitVisitPage.title },
+});
+
+const modulesHealthcareSrcRegistrationVisitVisitsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcRegistrationVisitVisitsPage.path,
+    component: modulesHealthcareSrcRegistrationVisitVisitsPage.component,
+    validateSearch:
+        modulesHealthcareSrcRegistrationVisitVisitsPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcRegistrationVisitVisitsPage.title,
+    },
+});
 
 const modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesRoute =
     createRoute({
@@ -285,6 +319,9 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcDashboardDashboardRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
+        modulesHealthcareSrcRegistrationVisitVisitNewRoute,
+        modulesHealthcareSrcRegistrationVisitVisitRoute,
+        modulesHealthcareSrcRegistrationVisitVisitsRoute,
         modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesRoute,
         modulesHealthcareSrcServicePracticeSchedulePracticeSessionsRoute,
         modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesRoute,

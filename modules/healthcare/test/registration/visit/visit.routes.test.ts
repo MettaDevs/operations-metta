@@ -67,7 +67,14 @@ type Metadata = {
     permissions: { create: boolean; cancel: boolean };
 };
 type Listing = {
-    data: { id: string; registration_number: string; status: string }[];
+    data: {
+        id: string;
+        registration_number: string;
+        status: string;
+        patient_id: string;
+        visit_condition: string;
+        address: string | null;
+    }[];
     next_cursor: string | null;
     counts: {
         waiting: number;
@@ -800,6 +807,23 @@ describe.skipIf(!process.env.DB_HOST)('visit registration', () => {
             200,
         );
         expect(yesterday.counts.total).toBe(0);
+        // Riwayat kunjungan satu pasien di layar pendaftaran membaca saringan pasien.
+        const own = all.data[0]!;
+        const byPatient = await json<Listing>(
+            await admin.get(
+                `${api}/visits?patient_id=${own.patient_id}&per_page=100`,
+            ),
+            200,
+        );
+        expect(byPatient.data.map((row) => row.id)).toEqual(
+            all.data
+                .filter((row) => row.patient_id === own.patient_id)
+                .map((row) => row.id),
+        );
+        expect(byPatient.data.map((row) => row.visit_condition)).toContain(
+            'sakit',
+        );
+        expect(own.address).toContain('Jl. Kunjungan No. 1');
     }, 30_000);
 
     test('a clerk only registers and sees visits of the units granted to them', async () => {

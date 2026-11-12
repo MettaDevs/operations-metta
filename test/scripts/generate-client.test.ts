@@ -25,8 +25,9 @@ test('the route tree imports every page, and each import resolves', async () => 
         (match) => Bun.resolveSync(match[1]!, dirname(clientEntry)),
     );
     expect(imported.sort()).toEqual([...pages].sort());
+    // Segmen huruf kecil, atau satu parameter route TanStack (`$visitId`) untuk halaman satu record.
     for (const page of pages.map(readPage))
-        expect(page.path).toMatch(/^\/[a-z0-9/-]*$/);
+        expect(page.path).toMatch(/^(\/([a-z0-9-]+|\$[a-zA-Z]+))*\/?$/);
 });
 
 test('a page must declare its path and layout as literals through definePage', async () => {

@@ -6,7 +6,7 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ShellData } from './api.ts';
-import { areaOf } from './home.ts';
+import { areaOf, underMenu } from './home.ts';
 import { navigationIcon } from './navigation-icons.ts';
 import { ProductLauncher } from './product-launcher.tsx';
 import { ShellLink } from './shell-link.tsx';
@@ -63,10 +63,11 @@ export function AppSidebar({
     const groups = activeProduct?.groups ?? [];
     const selectedGroup =
         groups.find((group) =>
-            group.items.some((item) => path === item.href.split('?')[0]),
+            group.items.some((item) => underMenu(item.href, path)),
         ) ?? groups[0];
     const isItemActive = (item: NavigationItem) =>
-        url === item.href || (!item.href.includes('?') && path === item.href);
+        url === item.href ||
+        (!item.href.includes('?') && underMenu(item.href, path));
     const displayedGroup =
         groups.find((group) => group.id === previewId) ??
         (open ? groups.find((group) => group.id === pinnedId) : undefined) ??

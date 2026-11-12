@@ -32,6 +32,7 @@ export const visitListQuerySchema = listParametersSchema.extend({
     section_id: z.string().optional(),
     practitioner_id: z.string().optional(),
     patient_type_id: z.string().optional(),
+    patient_id: z.string().optional(),
     status: z.string().optional(),
 });
 
@@ -101,7 +102,13 @@ export const visitListRowSchema = z.object({
     patient_name: z.string(),
     gender: z.string().nullable(),
     birth_date: z.string().nullable(),
+    birth_place: z.string().nullable(),
     age_years: z.number().nullable(),
+    nik: z.string().nullable(),
+    document_number: z.string().nullable(),
+    old_number: z.string().nullable(),
+    address: z.string().nullable(),
+    visit_condition: z.string(),
     patient_type_name: z.string(),
     guarantor_name: z.string().nullable(),
     card_number: z.string().nullable(),
@@ -111,5 +118,6 @@ export const visitListRowSchema = z.object({
     practitioner_name: z.string().nullable(),
     queue_code: z.string(),
     examination_number: z.string(),
+    screening_category_name: z.string().nullable(),
     screening_category_color: z.string().nullable(),
 });

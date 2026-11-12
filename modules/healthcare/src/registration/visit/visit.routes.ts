@@ -47,8 +47,15 @@ export function visitRoutes() {
             .handler(async ({ context, input }) =>
                 ok(await (await visits(context)).show(input.params.id)),
             ),
+        // Layar mengirim Idempotency-Key per isian, jadi simpan ulang setelah jaringan putus tidak mendaftarkan dua kali.
         healthcareVisitCreate: route('POST')
-            .input(typedBody<z.input<typeof visitInputSchema>>())
+            .input(
+                typedBody<z.input<typeof visitInputSchema>>().extend({
+                    headers: z
+                        .object({ 'idempotency-key': z.string().optional() })
+                        .optional(),
+                }),
+            )
             .handler(async ({ context, input }) =>
                 (await visits(context, input.body)).create(
                     context.request,
