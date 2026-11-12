@@ -178,6 +178,8 @@ export const prescriptionLineSchema = z.object({
     signa: text,
     usage_instruction_id: text,
     notes: text,
+    // Jumlah yang diserahkan farmasi; hanya dibaca, dan kosong selama belum diserahkan.
+    dispensed_quantity: number.optional(),
 });
 
 // Resep (SIMtrResep). Hanya draf yang diubah Simpan; nomor, status, waktu kirim, dokter, dan perawat hanya dibaca.
@@ -186,6 +188,9 @@ export const prescriptionSchema = z.object({
     number: text,
     status: z.enum(['draf', 'dikirim', 'dibatalkan']),
     sent_at: text,
+    // Waktu dan nomor penyerahan dari farmasi; hanya dibaca.
+    dispensed_at: text.optional(),
+    dispensing_number: text.optional(),
     doctor_name: text,
     nurse_name: text,
     notes: text,
