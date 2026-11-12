@@ -14,7 +14,7 @@ import {
     CollapsibleSection,
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
-import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
+import { DataTable } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
 import {
     Dialog,
@@ -25,13 +25,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@operations-metta/ui/dialog';
-import { FormControl } from '@operations-metta/ui/form-control';
-import {
-    InputGroup,
-    InputGroupAddon,
-    InputGroupButton,
-    InputGroupInput,
-} from '@operations-metta/ui/input-group';
+import { FieldLegend, FieldSet } from '@operations-metta/ui/field';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
+import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { Label } from '@operations-metta/ui/label';
 import {
@@ -40,15 +37,12 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { RadioGroup, RadioGroupItem } from '@operations-metta/ui/radio-group';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { Textarea } from '@operations-metta/ui/textarea';
-import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import { useRecordTransition } from '@operations-metta/ui/use-record-transition';
-import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { cn } from '@operations-metta/ui/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Ban, CheckCircle2, Save, Search, UserPlus, X } from 'lucide-react';
+import { Ban, CheckCircle2, Save, UserPlus } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -60,7 +54,12 @@ import {
     orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
-import { ageOf, PatientCard } from '../../patient/patient/patient-card.tsx';
+import {
+    ageOf,
+    GuarantorLookup,
+    PatientCard,
+    PatientTypeLookup,
+} from '../../patient/patient/patient-card.tsx';
 import {
     isSectionKind,
     sectionKinds,
@@ -93,7 +92,11 @@ type Errors = Record<string, string[]>;
 
 // Cara bayar kunjungan. `null` berarti mengikuti cara bayar utama pasien (atau tipe bawaan), sampai petugas
 // mengubahnya.
-type Payer = { patientTypeId: string; guarantorId: string; cardNumber: string };
+type Payer = {
+    patientType: { id: string; name: string; behaviors: string[] } | null;
+    guarantor: { id: string; name: string } | null;
+    cardNumber: string;
+};
 
 type Draft = {
     payer: Payer | null;
@@ -119,12 +122,24 @@ const emptyDraft: Draft = {
     scheduleId: null,
 };
 
-function draftOf(visit: Visit): Draft {
+function draftOf(visit: Visit, metadata: Metadata): Draft {
     const destination = visit.destinations[0];
+    const behaviors = metadata.patient_types.find(
+        (type) => type.id === visit.patient_type_id,
+    )?.behaviors ?? [
+        ...(visit.guarantor_id ? ['requires_guarantor'] : []),
+        ...(visit.card_number ? ['requires_card_number'] : []),
+    ];
     return {
         payer: {
-            patientTypeId: visit.patient_type_id,
-            guarantorId: visit.guarantor_id ?? '',
+            patientType: {
+                id: visit.patient_type_id,
+                name: visit.patient_type_name,
+                behaviors,
+            },
+            guarantor: visit.guarantor_id
+                ? { id: visit.guarantor_id, name: visit.guarantor_name ?? '' }
+                : null,
             cardNumber: visit.card_number ?? '',
         },
         height: visit.height_cm === null ? '' : String(visit.height_cm),
@@ -140,6 +155,23 @@ function draftOf(visit: Visit): Draft {
     };
 }
 
+// Tipe pasien beserta penjamin bawaannya, seperti layar lama saat tipe dipilih.
+function payerOf(
+    type: Metadata['patient_types'][number] | undefined,
+    cardNumber: string,
+): Payer {
+    const guarantor = type?.guarantors.find((item) => item.is_default);
+    return {
+        patientType: type
+            ? { id: type.id, name: type.name, behaviors: type.behaviors }
+            : null,
+        guarantor: guarantor
+            ? { id: guarantor.id, name: guarantor.name }
+            : null,
+        cardNumber,
+    };
+}
+
 function defaultPayer(patient: Patient | null, metadata: Metadata): Payer {
     const primary =
         patient?.payment_methods.find((method) => method.is_primary) ??
@@ -151,20 +183,24 @@ function defaultPayer(patient: Patient | null, metadata: Metadata): Payer {
         )
     )
         return {
-            patientTypeId: primary.patient_type_id,
-            guarantorId: primary.guarantor_id ?? '',
+            patientType: {
+                id: primary.patient_type_id,
+                name: primary.patient_type_name,
+                behaviors: primary.behaviors,
+            },
+            guarantor: primary.guarantor_id
+                ? {
+                      id: primary.guarantor_id,
+                      name: primary.guarantor_name ?? '',
+                  }
+                : null,
             cardNumber: primary.card_number ?? '',
         };
-    const type =
+    return payerOf(
         metadata.patient_types.find((item) => item.is_default) ??
-        metadata.patient_types[0];
-    return {
-        patientTypeId: type?.id ?? '',
-        guarantorId:
-            type?.guarantors.find((guarantor) => guarantor.is_default)?.id ??
-            '',
-        cardNumber: '',
-    };
+            metadata.patient_types[0],
+        '',
+    );
 }
 
 export function notFound(caught: unknown): boolean {
@@ -188,63 +224,18 @@ function scheduleLabel(schedule: Schedule): string {
 // Satu baris gaya aplikasi lama: label, titik dua, nilai, dengan garis tipis di bawahnya.
 function Row({
     label,
-    htmlFor,
-    required = false,
-    error,
-    align = 'center',
     children,
 }: {
     label: string;
-    htmlFor?: string;
-    required?: boolean;
-    error?: string | undefined;
-    align?: 'center' | 'start';
     children: ReactNode;
 }): ReactNode {
-    const labelClass = cn(
-        'font-normal text-muted-foreground',
-        align === 'start' && 'pt-1.5',
-    );
-    const text = (
-        <>
-            {label}
-            {required && (
-                <span aria-hidden="true" className="text-destructive">
-                    {' '}
-                    *
-                </span>
-            )}
-        </>
-    );
     return (
-        <div
-            className={cn(
-                'grid min-h-9 grid-cols-[7.5rem_0.5rem_minmax(0,1fr)] gap-x-2 border-b border-border/70 py-1 text-sm sm:grid-cols-[9rem_0.5rem_minmax(0,1fr)]',
-                align === 'center' ? 'items-center' : 'items-start',
-            )}
-        >
-            {htmlFor ? (
-                <Label htmlFor={htmlFor} className={labelClass}>
-                    {text}
-                </Label>
-            ) : (
-                <span className={labelClass}>{text}</span>
-            )}
-            <span
-                aria-hidden="true"
-                className={cn(
-                    'text-muted-foreground',
-                    align === 'start' && 'pt-1.5',
-                )}
-            >
+        <div className="grid min-h-9 grid-cols-[7.5rem_0.5rem_minmax(0,1fr)] items-center gap-x-2 border-b border-border/70 py-1 text-sm sm:grid-cols-[9rem_0.5rem_minmax(0,1fr)]">
+            <span className="font-normal text-muted-foreground">{label}</span>
+            <span aria-hidden="true" className="text-muted-foreground">
                 :
             </span>
-            <div className="min-w-0">
-                {children}
-                {error && (
-                    <p className="pt-1 text-xs text-destructive">{error}</p>
-                )}
-            </div>
+            <div className="min-w-0">{children}</div>
         </div>
     );
 }
@@ -319,29 +310,26 @@ function patientRows(
     ];
 }
 
-// Cari pasien lewat API pasien (NRM, nama, NIK, no. penjamin, tanggal lahir). Satu hasil langsung dipilih; lebih dari
-// satu ditampilkan sebagai daftar yang dimuat bertahap.
-function PatientSearch({
-    patientNrm,
+// Cari pasien lewat API pasien (NRM, nama, NIK): hasil dimuat saat mengetik dan bertambah saat digulir. Kaca pembesar
+// membuka daftar lengkap; Baru membuka kartu pasien baru, sama dengan aksi Pasien baru di toolbar.
+function PatientLookup({
+    patient,
     error,
     onPick,
-    onClear,
+    onCreate,
 }: {
-    patientNrm: string | null;
+    patient: Patient | null;
     error: string | undefined;
     onPick: (patient: PatientRow) => void;
-    onClear: () => void;
+    onCreate: (() => void) | undefined;
 }): ReactNode {
-    const [text, setText] = useState('');
-    const [query, setQuery] = useState<string | null>(null);
-    const [searching, setSearching] = useState(false);
-    const shown = patientNrm !== null && query === null ? patientNrm : text;
-    const loader = useCallback<ListLoader<PatientRow>>(
-        async ({ query: needle, cursor, signal }) => {
+    const [picked, setPicked] = useState<PatientRow | null>(null);
+    const loader = useCallback<LookupLoader<PatientRow>>(
+        async ({ query, cursor, signal }) => {
             const { body } = await api.healthcarePatientList(
                 {
                     query: {
-                        q: needle,
+                        q: query,
                         status: 'active',
                         per_page: 20,
                         ...(cursor ? { cursor } : {}),
@@ -353,124 +341,63 @@ function PatientSearch({
         },
         [],
     );
-    const results = useIncrementalList({
-        loadItems: loader,
-        query: query ?? '',
-        active: query !== null,
-        getKey: (row) => row.id,
-    });
-    const pick = (row: PatientRow) => {
-        setQuery(null);
-        setText(row.nrm);
-        onPick(row);
-    };
-    // Satu pasien yang cocok langsung dipilih; selain itu hasilnya ditampilkan sebagai daftar.
-    const search = async () => {
-        const needle = shown.trim();
-        if (!needle) return;
-        setSearching(true);
-        try {
-            const { body } = await api.healthcarePatientList({
-                query: { q: needle, status: 'active', per_page: 2 },
-            });
-            const only = body.data.length === 1 ? body.data[0] : undefined;
-            if (only) pick(only);
-            else setQuery(needle);
-        } catch {
-            setQuery(needle);
-        } finally {
-            setSearching(false);
-        }
-    };
     return (
-        <>
-            <Row label="NRM" htmlFor="visit-patient-search" error={error}>
-                <InputGroup className="h-8">
-                    <InputGroupInput
-                        id="visit-patient-search"
-                        value={shown}
-                        placeholder="Cari NRM, nama, atau NIK"
-                        aria-invalid={error ? true : undefined}
-                        onChange={(event) => {
-                            setText(event.target.value);
-                            setQuery(null);
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                                event.preventDefault();
-                                void search();
-                            }
-                        }}
-                    />
-                    <InputGroupAddon align="inline-end">
-                        <InputGroupButton
-                            size="icon-xs"
-                            aria-label="Cari pasien"
-                            disabled={searching}
-                            onClick={() => void search()}
-                        >
-                            <Search />
-                        </InputGroupButton>
-                        <InputGroupButton
-                            size="icon-xs"
-                            aria-label="Kosongkan pasien"
-                            disabled={!shown && patientNrm === null}
-                            onClick={() => {
-                                setText('');
-                                setQuery(null);
-                                onClear();
-                            }}
-                        >
-                            <X />
-                        </InputGroupButton>
-                    </InputGroupAddon>
-                </InputGroup>
-            </Row>
-            {query !== null && (
-                <div className="max-h-72 border-b border-border/70 py-1.5">
-                    <DataTable
-                        data={results.items}
-                        getRowKey={(row) => row.id}
-                        getRowLabel={(row) => `${row.nrm} ${row.name}`}
-                        scrollMode="inline"
-                        showRowNumbers={false}
-                        rowActivation="single-click"
-                        onRowClick={pick}
-                        incremental={results}
-                        emptyMessage="Pasien tidak ditemukan. Pilih Buat pasien baru bila pasien belum pernah datang."
-                        columns={[
-                            {
-                                id: 'nrm',
-                                header: 'NRM',
-                                width: 100,
-                                cell: (row) => row.nrm,
-                            },
-                            {
-                                id: 'name',
-                                header: 'Nama',
-                                width: 180,
-                                cell: (row) => (
-                                    <DataTableText>
-                                        <span className="font-medium">
-                                            {row.name}
-                                        </span>
-                                    </DataTableText>
-                                ),
-                            },
-                            {
-                                id: 'birth',
-                                header: 'Tgl. lahir',
-                                width: 100,
-                                cell: (row) =>
-                                    row.birth_date
-                                        ? displayDate(row.birth_date)
-                                        : '—',
-                            },
-                        ]}
-                    />
-                </div>
-            )}
-        </>
+        <FormControl error={error}>
+            <InlineLookup
+                label="Pasien"
+                required
+                loadItems={loader}
+                value={
+                    picked !== null && picked.id === patient?.id ? picked : null
+                }
+                displayValue={patient ? `${patient.nrm} · ${patient.name}` : ''}
+                onValueChange={(row) => {
+                    setPicked(row);
+                    onPick(row);
+                }}
+                getItemValue={(row) => row.id}
+                getItemLabel={(row) => `${row.nrm} · ${row.name}`}
+                placeholder="Cari NRM, nama, atau NIK…"
+                emptyMessage="Pasien tidak ditemukan. Pilih Baru bila pasien belum pernah datang."
+                popupClassName="w-[48rem]"
+                columns={[
+                    {
+                        id: 'nrm',
+                        header: 'NRM',
+                        width: 100,
+                        cell: (row) => row.nrm,
+                    },
+                    {
+                        id: 'name',
+                        header: 'Nama',
+                        width: 180,
+                        cell: (row) => row.name,
+                    },
+                    {
+                        id: 'nik',
+                        header: 'NIK',
+                        width: 150,
+                        cell: (row) => row.nik ?? '—',
+                    },
+                    {
+                        id: 'birth',
+                        header: 'Tgl. lahir',
+                        width: 100,
+                        cell: (row) =>
+                            row.birth_date ? displayDate(row.birth_date) : '—',
+                    },
+                    {
+                        id: 'address',
+                        header: 'Alamat',
+                        width: 220,
+                        cell: (row) => row.address ?? '—',
+                    },
+                ]}
+                showDetails={false}
+                showFullListButton
+                onCreate={onCreate}
+            />
+        </FormControl>
     );
 }
 
@@ -483,7 +410,7 @@ function PatientPanel({
     searchable,
     error,
     onPick,
-    onClear,
+    onCreate,
 }: {
     patient: Patient | null;
     patientNrm: string | null;
@@ -493,17 +420,19 @@ function PatientPanel({
     searchable: boolean;
     error: string | undefined;
     onPick: (patient: PatientRow) => void;
-    onClear: () => void;
+    onCreate: (() => void) | undefined;
 }): ReactNode {
     return (
         <div>
             {searchable ? (
-                <PatientSearch
-                    patientNrm={patientNrm}
-                    error={error}
-                    onPick={onPick}
-                    onClear={onClear}
-                />
+                <div className="pb-2">
+                    <PatientLookup
+                        patient={patient}
+                        error={error}
+                        onPick={onPick}
+                        onCreate={onCreate}
+                    />
+                </div>
             ) : (
                 <Row label="NRM">
                     <span className="font-medium tabular-nums">
@@ -704,42 +633,13 @@ function PatientHistory({
     );
 }
 
-function MeasureInput({
-    id,
-    unit,
-    value,
-    error,
-    onChange,
-}: {
-    id: string;
-    unit: string;
-    value: string;
-    error: string | undefined;
-    onChange: (value: string) => void;
-}): ReactNode {
-    return (
-        <InputGroup className="h-8 max-w-40">
-            <InputGroupInput
-                id={id}
-                inputMode="decimal"
-                value={value}
-                aria-invalid={error ? true : undefined}
-                onChange={(event) => onChange(event.target.value)}
-            />
-            <InputGroupAddon
-                align="inline-end"
-                className="w-11 justify-center border-l border-border pr-0 pl-0"
-            >
-                {unit}
-            </InputGroupAddon>
-        </InputGroup>
-    );
-}
-
+// Isian kunjungan memakai komponen isian produk (label melayang, seperti kartu pasien). Dari layar lama hanya
+// letaknya yang dipertahankan: tipe pasien dan penjaminnya di kiri, ukuran tubuh, status, dan keadaan bertumpuk di kanan.
 function VisitPanel({
     metadata,
     draft,
     payer,
+    locked,
     error,
     set,
     setPayer,
@@ -747,82 +647,75 @@ function VisitPanel({
     metadata: Metadata;
     draft: Draft;
     payer: Payer;
+    locked: boolean;
     error: (field: string) => string | undefined;
     set: <K extends keyof Draft>(field: K, value: Draft[K]) => void;
     setPayer: (payer: Payer) => void;
 }): ReactNode {
-    const type = metadata.patient_types.find(
-        (item) => item.id === payer.patientTypeId,
-    );
-    const needsGuarantor = type?.behaviors.includes('requires_guarantor');
-    const needsCard = type?.behaviors.includes('requires_card_number');
+    const behaviors = payer.patientType?.behaviors ?? [];
+    const needsGuarantor = behaviors.includes('requires_guarantor');
+    const needsCard = behaviors.includes('requires_card_number');
     return (
-        <div className="grid gap-x-6 md:grid-cols-2">
-            <div>
-                <Row
-                    label="Tipe pasien"
-                    required
-                    error={error('patient_type_id')}
-                >
-                    <Select
-                        ariaLabel="Tipe pasien"
-                        className="h-8"
-                        items={metadata.patient_types.map((item) => ({
-                            value: item.id,
-                            label: item.name,
-                        }))}
-                        value={payer.patientTypeId || null}
-                        onValueChange={(value) => {
-                            const next = metadata.patient_types.find(
-                                (item) => item.id === value,
-                            );
-                            setPayer({
-                                patientTypeId: next?.id ?? '',
-                                guarantorId:
-                                    next?.guarantors.find(
-                                        (guarantor) => guarantor.is_default,
-                                    )?.id ?? '',
-                                cardNumber: payer.cardNumber,
-                            });
-                        }}
-                        placeholder="Pilih tipe pasien"
-                        searchPlaceholder="Cari tipe pasien"
-                        emptyMessage="Tipe pasien tidak ditemukan."
-                    />
-                </Row>
-                {needsGuarantor && (
-                    <Row
-                        label="Penjamin"
-                        required
-                        error={error('guarantor_id')}
-                    >
-                        <Select
-                            ariaLabel="Penjamin"
-                            className="h-8"
-                            items={(type?.guarantors ?? []).map((item) => ({
-                                value: item.id,
-                                label: item.name,
-                            }))}
-                            value={payer.guarantorId || null}
-                            onValueChange={(value) =>
-                                setPayer({ ...payer, guarantorId: value ?? '' })
-                            }
-                            placeholder="Pilih penjamin"
-                            searchPlaceholder="Cari penjamin"
-                            emptyMessage="Belum ada penjamin untuk tipe pasien ini."
+        <div className="grid items-start gap-x-6 gap-y-4 md:grid-cols-2">
+            <FormGrid columns={1}>
+                {locked ? (
+                    <FormControl>
+                        <Input
+                            label="Tipe pasien"
+                            required
+                            value={payer.patientType?.name ?? ''}
+                            readOnly
                         />
-                    </Row>
+                    </FormControl>
+                ) : (
+                    <PatientTypeLookup
+                        value={payer.patientType}
+                        error={error('patient_type_id')}
+                        onChange={(type) =>
+                            setPayer(
+                                payerOf(
+                                    metadata.patient_types.find(
+                                        (item) => item.id === type.id,
+                                    ) ?? { ...type, guarantors: [] },
+                                    payer.cardNumber,
+                                ),
+                            )
+                        }
+                    />
                 )}
+                {needsGuarantor &&
+                    payer.patientType &&
+                    (locked ? (
+                        <FormControl>
+                            <Input
+                                label="Perusahaan"
+                                required
+                                value={payer.guarantor?.name ?? ''}
+                                readOnly
+                            />
+                        </FormControl>
+                    ) : (
+                        <GuarantorLookup
+                            patientTypeId={payer.patientType.id}
+                            value={payer.guarantor}
+                            error={error('guarantor_id')}
+                            onChange={(guarantor) =>
+                                setPayer({
+                                    ...payer,
+                                    guarantor: {
+                                        id: guarantor.id,
+                                        name: guarantor.name,
+                                    },
+                                })
+                            }
+                        />
+                    ))}
                 {needsCard && (
-                    <Row
-                        label="No. kartu"
-                        htmlFor="visit-card-number"
-                        required
-                        error={error('card_number')}
-                    >
+                    <FormControl error={error('card_number')}>
                         <Input
                             id="visit-card-number"
-                            className="h-8"
+                            label="No. kartu"
+                            required
                             value={payer.cardNumber}
                             maxLength={50}
                             aria-invalid={
@@ -835,116 +728,113 @@ function VisitPanel({
                                 })
                             }
                         />
-                    </Row>
+                    </FormControl>
                 )}
-            </div>
-            <div>
-                <Row
-                    label="Tinggi badan"
-                    htmlFor="visit-height"
-                    error={error('height_cm')}
-                >
-                    <MeasureInput
+            </FormGrid>
+            <FormGrid columns={1}>
+                <FormControl error={error('height_cm')}>
+                    <Input
                         id="visit-height"
-                        unit="cm"
+                        label="Tinggi badan (cm)"
+                        inputMode="decimal"
                         value={draft.height}
-                        error={error('height_cm')}
-                        onChange={(value) => set('height', value)}
+                        aria-invalid={error('height_cm') ? true : undefined}
+                        onChange={(event) => set('height', event.target.value)}
                     />
-                </Row>
-                <Row
-                    label="Berat badan"
-                    htmlFor="visit-weight"
-                    error={error('weight_kg')}
-                >
-                    <MeasureInput
+                </FormControl>
+                <FormControl error={error('weight_kg')}>
+                    <Input
                         id="visit-weight"
-                        unit="kg"
+                        label="Berat badan (kg)"
+                        inputMode="decimal"
                         value={draft.weight}
-                        error={error('weight_kg')}
-                        onChange={(value) => set('weight', value)}
+                        aria-invalid={error('weight_kg') ? true : undefined}
+                        onChange={(event) => set('weight', event.target.value)}
                     />
-                </Row>
-                <Row
-                    label="Status"
-                    required
-                    align="start"
-                    error={error('visit_condition')}
-                >
-                    <RadioGroup
-                        aria-label="Status kunjungan"
-                        className="gap-1.5 py-1"
-                        value={draft.condition}
-                        onValueChange={(value) => {
-                            if (isVisitCondition(value))
-                                set('condition', value);
-                        }}
-                    >
-                        {visitConditions.map((value) => (
-                            <div
-                                key={value}
-                                className="flex items-center gap-2"
-                            >
-                                <RadioGroupItem
-                                    id={`visit-condition-${value}`}
-                                    value={value}
-                                />
-                                <Label
-                                    htmlFor={`visit-condition-${value}`}
-                                    className="font-normal"
+                </FormControl>
+                <FormControl error={error('visit_condition')}>
+                    <FieldSet className="gap-1.5">
+                        <FieldLegend variant="label">
+                            Status kunjungan
+                            <span className="text-destructive"> *</span>
+                        </FieldLegend>
+                        <RadioGroup
+                            aria-label="Status kunjungan"
+                            className="flex flex-wrap gap-x-6 gap-y-1.5"
+                            value={draft.condition}
+                            onValueChange={(value) => {
+                                if (isVisitCondition(value))
+                                    set('condition', value);
+                            }}
+                        >
+                            {visitConditions.map((value) => (
+                                <div
+                                    key={value}
+                                    className="flex items-center gap-2"
                                 >
-                                    {visitConditionLabels[value]}
-                                </Label>
-                            </div>
-                        ))}
-                    </RadioGroup>
-                </Row>
-                <Row
-                    label="Keadaan pasien"
-                    align="start"
-                    error={error('patient_condition_ids')}
-                >
-                    <div
-                        role="group"
-                        aria-label="Keadaan pasien"
-                        className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-x-3 gap-y-1.5 py-1"
-                    >
-                        {metadata.patient_conditions.map((condition) => (
-                            <div
-                                key={condition.id}
-                                className="flex items-center gap-2"
-                            >
-                                <Checkbox
-                                    id={`visit-patient-condition-${condition.id}`}
-                                    checked={draft.conditionIds.includes(
-                                        condition.id,
-                                    )}
-                                    onCheckedChange={(checked) =>
-                                        set(
-                                            'conditionIds',
-                                            checked === true
-                                                ? [
-                                                      ...draft.conditionIds,
-                                                      condition.id,
-                                                  ]
-                                                : draft.conditionIds.filter(
-                                                      (id) =>
-                                                          id !== condition.id,
-                                                  ),
-                                        )
-                                    }
-                                />
-                                <Label
-                                    htmlFor={`visit-patient-condition-${condition.id}`}
-                                    className="font-normal"
+                                    <RadioGroupItem
+                                        id={`visit-condition-${value}`}
+                                        value={value}
+                                    />
+                                    <Label
+                                        htmlFor={`visit-condition-${value}`}
+                                        className="font-normal"
+                                    >
+                                        {visitConditionLabels[value]}
+                                    </Label>
+                                </div>
+                            ))}
+                        </RadioGroup>
+                    </FieldSet>
+                </FormControl>
+                <FormControl error={error('patient_condition_ids')}>
+                    <FieldSet className="gap-1.5">
+                        <FieldLegend variant="label">
+                            Keadaan pasien
+                        </FieldLegend>
+                        <div
+                            role="group"
+                            aria-label="Keadaan pasien"
+                            className="flex flex-wrap gap-x-6 gap-y-1.5"
+                        >
+                            {metadata.patient_conditions.map((condition) => (
+                                <div
+                                    key={condition.id}
+                                    className="flex items-center gap-2"
                                 >
-                                    {condition.name}
-                                </Label>
-                            </div>
-                        ))}
-                    </div>
-                </Row>
-            </div>
+                                    <Checkbox
+                                        id={`visit-patient-condition-${condition.id}`}
+                                        checked={draft.conditionIds.includes(
+                                            condition.id,
+                                        )}
+                                        onCheckedChange={(checked) =>
+                                            set(
+                                                'conditionIds',
+                                                checked === true
+                                                    ? [
+                                                          ...draft.conditionIds,
+                                                          condition.id,
+                                                      ]
+                                                    : draft.conditionIds.filter(
+                                                          (id) =>
+                                                              id !==
+                                                              condition.id,
+                                                      ),
+                                            )
+                                        }
+                                    />
+                                    <Label
+                                        htmlFor={`visit-patient-condition-${condition.id}`}
+                                        className="font-normal"
+                                    >
+                                        {condition.name}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    </FieldSet>
+                </FormControl>
+            </FormGrid>
         </div>
     );
 }
@@ -1565,7 +1455,7 @@ export function VisitRegistration({
     const topRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState<Draft>(() =>
-        visit ? draftOf(visit) : emptyDraft,
+        visit ? draftOf(visit, metadata) : emptyDraft,
     );
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -1599,9 +1489,7 @@ export function VisitRegistration({
     const patient = patientQuery.data ?? null;
     const locked = visit !== null;
     const payer = draft.payer ?? defaultPayer(patient, metadata);
-    const selectedType = metadata.patient_types.find(
-        (type) => type.id === payer.patientTypeId,
-    );
+    const payerBehaviors = payer.patientType?.behaviors ?? [];
     const set = <K extends keyof Draft>(field: K, value: Draft[K]) =>
         setDraft((current) => ({ ...current, [field]: value }));
     const error = (field: string) => errors[field]?.[0];
@@ -1652,15 +1540,11 @@ export function VisitRegistration({
             const { body } = await api.healthcareVisitCreate({
                 body: {
                     patient_id: shownPatientId,
-                    patient_type_id: payer.patientTypeId,
-                    guarantor_id: selectedType?.behaviors.includes(
-                        'requires_guarantor',
-                    )
-                        ? payer.guarantorId || null
+                    patient_type_id: payer.patientType?.id ?? '',
+                    guarantor_id: payerBehaviors.includes('requires_guarantor')
+                        ? (payer.guarantor?.id ?? null)
                         : null,
-                    card_number: selectedType?.behaviors.includes(
-                        'requires_card_number',
-                    )
+                    card_number: payerBehaviors.includes('requires_card_number')
                         ? payer.cardNumber.trim() || null
                         : null,
                     height_cm: draft.height.trim() || null,
@@ -1711,6 +1595,11 @@ export function VisitRegistration({
         }
     };
 
+    const openNewPatient =
+        !locked && patientMetadata.data?.permissions.create
+            ? () => setCreatingPatient(true)
+            : undefined;
+
     const canCancel =
         visit !== null &&
         visit.status === 'terdaftar' &&
@@ -1744,6 +1633,18 @@ export function VisitRegistration({
                     </>
                 ) : (
                     <>
+                        {openNewPatient && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="command"
+                                disabled={busy}
+                                onClick={openNewPatient}
+                            >
+                                <UserPlus aria-hidden="true" />
+                                Pasien baru
+                            </Button>
+                        )}
                         <ActionButton
                             action="save"
                             type="button"
@@ -1790,24 +1691,6 @@ export function VisitRegistration({
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Data pasien</CardTitle>
-                                    {!locked &&
-                                        patientMetadata.data?.permissions
-                                            .create && (
-                                            <CardAction align="end">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-primary"
-                                                    onClick={() =>
-                                                        setCreatingPatient(true)
-                                                    }
-                                                >
-                                                    <UserPlus aria-hidden="true" />
-                                                    Buat pasien baru
-                                                </Button>
-                                            </CardAction>
-                                        )}
                                 </CardHeader>
                                 <CardContent>
                                     <PatientPanel
@@ -1832,7 +1715,7 @@ export function VisitRegistration({
                                         searchable={!locked}
                                         error={error('patient_id')}
                                         onPick={(row) => choosePatient(row.id)}
-                                        onClear={() => choosePatient(null)}
+                                        onCreate={openNewPatient}
                                     />
                                 </CardContent>
                             </Card>
@@ -1858,6 +1741,7 @@ export function VisitRegistration({
                                         metadata={metadata}
                                         draft={draft}
                                         payer={payer}
+                                        locked={locked}
                                         error={error}
                                         set={set}
                                         setPayer={(next) => set('payer', next)}

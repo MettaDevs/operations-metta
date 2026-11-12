@@ -343,7 +343,7 @@ function addressErrors(errors: Errors, prefix: string): Errors {
     );
 }
 
-function PatientTypeLookup({
+export function PatientTypeLookup({
     value,
     onChange,
     portalContainer,
@@ -351,7 +351,7 @@ function PatientTypeLookup({
 }: {
     value: Payment['patient_type'];
     onChange: (type: PatientType) => void;
-    portalContainer: RefObject<HTMLElement | null>;
+    portalContainer?: RefObject<HTMLElement | null>;
     error?: string;
 }): ReactNode {
     const loader = useCallback<LookupLoader<PatientType>>(
@@ -404,7 +404,7 @@ function PatientTypeLookup({
     );
 }
 
-function GuarantorLookup({
+export function GuarantorLookup({
     patientTypeId,
     value,
     onChange,
@@ -414,7 +414,7 @@ function GuarantorLookup({
     patientTypeId: string;
     value: Payment['guarantor'];
     onChange: (guarantor: Guarantor) => void;
-    portalContainer: RefObject<HTMLElement | null>;
+    portalContainer?: RefObject<HTMLElement | null>;
     error?: string;
 }): ReactNode {
     // Penjamin disaring per tipe pasien, seperti pilihan Perusahaan form lama.
