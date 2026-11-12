@@ -64,6 +64,9 @@ export type OutboundLine = LineBase & {
     entryKind: EntryKind;
     locationId: string;
     batchId: string | null;
+    // Mengurangi tepat satu posisi stok: batch ini saja, atau stok tanpa batch bila batchId kosong. Setelan pengambilan
+    // dan penolakan batch kedaluwarsa tidak berlaku, karena opname mengoreksi barang yang memang sudah tidak ada.
+    exactBatch?: boolean;
 };
 export type TransferLine = LineBase & {
     kind: 'transfer';
@@ -212,8 +215,9 @@ function openEntry(row: z.infer<typeof openSchema>): OpenEntry {
 }
 
 // Satu penulis per barang dan lokasi. Kunci diambil berurutan menurut teksnya, jadi dua dokumen berbaris banyak yang
-// menyentuh barang yang sama tidak pernah saling menunggu dalam urutan terbalik.
-async function lock(
+// menyentuh barang yang sama tidak pernah saling menunggu dalam urutan terbalik. Dokumen yang membaca stok sebelum
+// memposting, seperti opname, mengambil kunci yang sama lebih dulu; kunci advisory transaksi boleh diambil ulang.
+export async function lockItemLocations(
     db: Database,
     tenantId: string,
     pairs: { itemId: string; locationId: string }[],
@@ -363,7 +367,7 @@ export async function postItemLines(
         );
     if (!lines.length) return;
     const prepared = await prepare(db, context, lines);
-    await lock(
+    await lockItemLocations(
         db,
         context.tenantId,
         lines.flatMap((line) =>
@@ -689,8 +693,13 @@ function checkChosen(
     postingDate: string,
 ): Batch | null {
     const field = `${line.field}.batch_id`;
+    const exact = line.kind === 'outbound' && line.exactBatch === true;
     if (line.batchId === null) {
-        if (policy.picking === 'manual' && policy.tracking.batchRequired)
+        if (
+            !exact &&
+            policy.picking === 'manual' &&
+            policy.tracking.batchRequired
+        )
             errors[field] =
                 'Pilih batch yang diambil. Lokasi ini mengambil stok dari batch yang dipilih.';
         return null;
@@ -701,6 +710,7 @@ function checkChosen(
         return null;
     }
     if (
+        !exact &&
         policy.tracking.strictExpiry &&
         batch.expiry !== null &&
         batch.expiry < postingDate
@@ -826,7 +836,12 @@ async function issue(
     const appliesTo = line.kind === 'transfer' ? line.appliesTo : undefined;
     const plan: Candidates = appliesTo
         ? { batch: { kind: 'any' }, order: 'posting' }
-        : candidates(policy.picking, line.batchId);
+        : line.kind === 'outbound' && line.exactBatch
+          ? {
+                batch: { kind: 'exactly', batchId: line.batchId },
+                order: 'posting',
+            }
+          : candidates(policy.picking, line.batchId);
     const skipExpired =
         !appliesTo && policy.tracking.strictExpiry && plan.batch.kind === 'any';
     const open = (
@@ -1040,7 +1055,7 @@ export async function reverseItemEntries(
         `select distinct barang_id as item_id, lokasi_id as location_id from gd_tr_kartu_gudang where ${scope}`,
         parameters,
     );
-    await lock(
+    await lockItemLocations(
         db,
         tenantId,
         touched.map((pair) => ({
