@@ -185,6 +185,24 @@ export const sysAdminArea: NavigationAreaEntry = {
             icon: 'boxes',
             items: [
                 {
+                    id: 'transfer-orders',
+                    label: 'Amprah',
+                    href: '/sysadmin/inventory/transfer-orders',
+                    permission: 'core.inventory-transfer.read',
+                },
+                {
+                    id: 'transfer-shipments',
+                    label: 'Mutasi',
+                    href: '/sysadmin/inventory/transfer-shipments',
+                    permission: 'core.inventory-transfer.read',
+                },
+                {
+                    id: 'transfer-receipts',
+                    label: 'Penerimaan mutasi',
+                    href: '/sysadmin/inventory/transfer-receipts',
+                    permission: 'core.inventory-transfer.read',
+                },
+                {
                     id: 'item-units',
                     label: 'Satuan barang',
                     href: '/sysadmin/inventory/item-units',
