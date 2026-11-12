@@ -14,11 +14,13 @@ import type {
     practiceScheduleListQuerySchema,
     practiceSessionInputSchema,
     practiceSessionListQuerySchema,
+    scheduleParameterInputSchema,
     scheduleTemplateInputSchema,
     scheduleTemplateListQuerySchema,
 } from './practice-schedule.schema.ts';
 import { PracticeSchedules } from './practice-schedule.service.ts';
 import { PracticeSessions } from './practice-session.service.ts';
+import { ScheduleParameters } from './schedule-parameter.service.ts';
 import {
     practiceScheduleMetadata,
     schedulePractitioners,
@@ -43,7 +45,7 @@ const recordBody = <T>() =>
 export function practiceScheduleRoutes() {
     const root = `/api/modules/${moduleId}/v1`;
     const route = (
-        method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+        method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
         path: `/${string}`,
     ) =>
         base.route({
@@ -58,6 +60,11 @@ export function practiceScheduleRoutes() {
         new ScheduleTemplates(context.db, await moduleWorkspace(context, body));
     const schedules = async (context: Context, body?: unknown) =>
         new PracticeSchedules(context.db, await moduleWorkspace(context, body));
+    const parameters = async (context: Context, body?: unknown) =>
+        new ScheduleParameters(
+            context.db,
+            await moduleWorkspace(context, body),
+        );
     return {
         healthcarePracticeScheduleMetadata: route(
             'GET',
@@ -70,6 +77,24 @@ export function practiceScheduleRoutes() {
                 ),
             ),
         ),
+        healthcareScheduleParameters: route(
+            'GET',
+            '/practice-schedules/parameters',
+        ).handler(async ({ context }) =>
+            ok(await (await parameters(context)).show()),
+        ),
+        healthcareScheduleParametersUpdate: route(
+            'PUT',
+            '/practice-schedules/parameters',
+        )
+            .input(typedBody<z.input<typeof scheduleParameterInputSchema>>())
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await parameters(context, input.body)
+                    ).update(context.request, input.body),
+                ),
+            ),
         healthcarePracticeSchedulePractitioners: route(
             'GET',
             '/practice-schedules/practitioners',

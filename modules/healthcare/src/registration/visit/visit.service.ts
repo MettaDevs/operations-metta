@@ -24,7 +24,10 @@ import {
     grantsUnit,
     PatientSharing,
 } from '../../patient/patient-sharing/patient-sharing.service.ts';
-import { schedulesForRegistration } from '../../service/practice-schedule/practice-schedule.service.ts';
+import {
+    ensurePracticeSchedule,
+    schedulesForRegistration,
+} from '../../service/practice-schedule/practice-schedule.service.ts';
 import {
     isQueueMode,
     type QueueMode,
@@ -215,6 +218,10 @@ export class Visits {
         this.workspace.guard('visit', 'read');
         const date = await this.today();
         const tenantId = this.workspace.tenantId;
+        await ensurePracticeSchedule(this.db, {
+            tenantId,
+            legalEntityId: this.workspace.legalEntityId,
+        });
         const units = grantedUnits(this.workspace);
         const sections =
             units !== null && !units.length

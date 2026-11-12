@@ -11,6 +11,7 @@ import { page as modulesHealthcareSrcRegistrationVisitVisitPage } from '../modul
 import { page as modulesHealthcareSrcRegistrationVisitVisitsPage } from '../modules/healthcare/src/registration/visit/visits.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesPage } from '../modules/healthcare/src/service/practice-schedule/practice-schedules.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage } from '../modules/healthcare/src/service/practice-schedule/practice-sessions.page.tsx';
+import { page as modulesHealthcareSrcServicePracticeScheduleScheduleParametersPage } from '../modules/healthcare/src/service/practice-schedule/schedule-parameters.page.tsx';
 import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage } from '../modules/healthcare/src/service/practice-schedule/schedule-templates.page.tsx';
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
@@ -146,6 +147,17 @@ const modulesHealthcareSrcServicePracticeSchedulePracticeSessionsRoute =
             modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcServicePracticeSchedulePracticeSessionsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcServicePracticeScheduleScheduleParametersRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcServicePracticeScheduleScheduleParametersPage.path,
+        component:
+            modulesHealthcareSrcServicePracticeScheduleScheduleParametersPage.component,
+        staticData: {
+            title: modulesHealthcareSrcServicePracticeScheduleScheduleParametersPage.title,
         },
     });
 
@@ -324,6 +336,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcRegistrationVisitVisitsRoute,
         modulesHealthcareSrcServicePracticeSchedulePracticeSchedulesRoute,
         modulesHealthcareSrcServicePracticeSchedulePracticeSessionsRoute,
+        modulesHealthcareSrcServicePracticeScheduleScheduleParametersRoute,
         modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesRoute,
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,

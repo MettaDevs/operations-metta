@@ -35,6 +35,10 @@ import {
     holidayDay,
     isoDay,
 } from './practice-schedule.days.ts';
+import {
+    defaultAutoGenerate,
+    defaultHorizonDays,
+} from './schedule-parameter.service.ts';
 
 // Rentang terpanjang satu kali generate dan satu kali baca jadwal, dalam hari termasuk kedua ujungnya.
 export const maxGenerateDays = 92;
@@ -347,6 +351,73 @@ export async function generatePracticeSchedule(
     });
 }
 
+// Satu angka yang naik setiap kali master yang dibaca generate ditambah atau diubah: jumlah baris ditambah jumlah versi.
+// Hapus lunak juga menaikkan versi. Kalender libur tidak ikut; perubahannya sampai pada generate hari berikutnya.
+const masterFingerprint = [
+    'sim_m_jadwal_template',
+    'sim_m_sesi_praktik',
+    'sim_m_nakes',
+    'sim_m_section',
+]
+    .map(
+        (table) =>
+            `(select count(*) + coalesce(sum(version), 0) from ${table} where tenant_id = $1)`,
+    )
+    .join(' + ');
+
+// Generate otomatis dari parameter jadwal, dijalankan saat jadwal dibaca karena repo ini belum punya penjadwal per
+// tenant. Rentangnya hari ini (zona waktu legal entity aktif, UTC bila tidak ada) sampai horizon. Dilewati bila
+// setelannya mati, atau bila rentang itu sudah digenerate dan master belum berubah sejak itu, sehingga pada hari yang
+// sama generate hanya berjalan lagi setelah template, sesi, nakes, atau section berubah.
+export async function ensurePracticeSchedule(
+    db: Database,
+    input: { tenantId: string; legalEntityId: string | null },
+): Promise<void> {
+    const state = await db.one(
+        z.object({
+            today: z.string(),
+            enabled: z.boolean().nullable(),
+            horizon_days: z.number().nullable(),
+            generated_until: z.string().nullable(),
+            generated_fingerprint: z.string().nullable(),
+            fingerprint: z.string(),
+        }),
+        `select (now() at time zone coalesce(l.timezone, 'UTC'))::date::text as today,
+                p.generate_otomatis as enabled, p.horizon_hari as horizon_days,
+                g.tanggal_sampai::text as generated_until, g.sidik_master::text as generated_fingerprint,
+                (${masterFingerprint})::text as fingerprint
+         from (select 1) one
+         left join legal_entities l on l.tenant_id = $1 and l.organization_id = $2
+         left join sim_m_parameter_jadwal p on p.tenant_id = $1
+         left join sim_tr_jadwal_generate g on g.tenant_id = $1`,
+        [input.tenantId, input.legalEntityId],
+    );
+    if (!state || !(state.enabled ?? defaultAutoGenerate)) return;
+    const to = addDays(
+        state.today,
+        (state.horizon_days ?? defaultHorizonDays) - 1,
+    );
+    if (
+        state.generated_until !== null &&
+        state.generated_until >= to &&
+        state.generated_fingerprint === state.fingerprint
+    )
+        return;
+    await generatePracticeSchedule(db, {
+        tenantId: input.tenantId,
+        from: state.today,
+        to,
+    });
+    await db.execute(
+        `insert into sim_tr_jadwal_generate (tenant_id, tanggal_sampai, sidik_master, updated_at)
+         values ($1, $2::date, $3::bigint, $4)
+         on conflict (tenant_id) do update
+         set tanggal_sampai = excluded.tanggal_sampai, sidik_master = excluded.sidik_master,
+             updated_at = excluded.updated_at`,
+        [input.tenantId, to, state.fingerprint, nowSql()],
+    );
+}
+
 const practitionerName = (alias: string) =>
     `(select p.name from sim_m_nakes n join parties p on p.tenant_id = n.tenant_id and p.id = n.party_id
       where n.tenant_id = j.tenant_id and n.id = ${alias})`;
@@ -410,6 +481,10 @@ export class PracticeSchedules {
         checkedRange(from, to, maxReadDays);
         const sectionId = lookupId(parameters.get('section_id') ?? '');
         if (!sectionId) return { data: [] };
+        await ensurePracticeSchedule(this.db, {
+            tenantId: this.workspace.tenantId,
+            legalEntityId: this.workspace.legalEntityId,
+        });
         return {
             data: await this.db.rows(
                 practiceScheduleRowSchema,
