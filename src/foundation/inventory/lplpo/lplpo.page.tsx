@@ -29,7 +29,7 @@ import {
     type Location,
     type OperatingUnit,
 } from '../location/location-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { ReportDataTable, ReportDate } from '../report-controls.tsx';
 import { downloadCsv } from '../report-table.ts';
 import { lplpoTable } from './lplpo-table.ts';

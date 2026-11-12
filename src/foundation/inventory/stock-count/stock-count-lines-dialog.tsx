@@ -23,7 +23,7 @@ import {
 } from '../../../platform/shell/index.ts';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
 import { ItemLookup } from '../item/item-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { label, type Position } from './stock-count-fields.tsx';
 
 type Errors = Record<string, string[]>;

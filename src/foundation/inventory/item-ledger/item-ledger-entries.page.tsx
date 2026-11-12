@@ -46,7 +46,7 @@ import {
     MasterLookup,
     type LookupRequest,
     type Reference,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 
 // Kartu stok (Item Ledger Entries di BC): gerak stok satu barang dalam satu periode, langsung dari kartu gudang.
 

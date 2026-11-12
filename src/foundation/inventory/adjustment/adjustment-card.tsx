@@ -37,7 +37,7 @@ import { ReasonCodeLookup } from '../code-list/code-list-lookup.tsx';
 import { ItemCard } from '../item/item-card.tsx';
 import { LocationCard } from '../location/location-card.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { AdjustmentEntries } from './adjustment-entries.tsx';
 import {
     directionLabels,

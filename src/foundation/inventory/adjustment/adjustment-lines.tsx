@@ -16,7 +16,7 @@ import {
     MasterLookup,
     type LookupRequest,
     type Reference,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 import type { Adjustment, Direction } from './adjustment-labels.tsx';
 
 // Baris penyesuaian stok (baris Item Journal BC). Isian stok masuk (nomor batch baru, kedaluwarsa, harga satuan) dan

@@ -9,7 +9,7 @@ import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api, ApiError, type ApiBody } from '../../../platform/shell/index.ts';
 import { displayNumber } from '@operations-metta/ui/display-number';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import type { Item } from './item-lookup.tsx';
 
 type StockRow = ApiBody<'inventoryStock'>['data'][number];

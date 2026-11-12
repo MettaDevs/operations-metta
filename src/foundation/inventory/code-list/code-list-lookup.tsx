@@ -6,7 +6,7 @@ import {
     nameColumn,
     type LookupRequest,
     type MasterLookupProps,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 
 export type UnitOfMeasure =
     ApiBody<'inventoryUnitOfMeasureList'>['data'][number];

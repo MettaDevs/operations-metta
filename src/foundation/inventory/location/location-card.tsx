@@ -22,7 +22,7 @@ import {
     errorText,
     FormErrorHeader,
 } from '../../../platform/shell/index.ts';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import {
     pickingLabels,
     PolicySelect,

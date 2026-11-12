@@ -7,7 +7,7 @@ import {
     nameColumn,
     type LookupRequest,
     type MasterLookupProps,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 
 export type Item = ApiBody<'inventoryItemList'>['data'][number];
 

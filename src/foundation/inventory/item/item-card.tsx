@@ -30,7 +30,7 @@ import { unitsOfMeasure } from '../code-list/code-list-sources.ts';
 import { UnitOfMeasureLookup } from '../code-list/code-list-lookup.tsx';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { PolicySelect } from '../setup/stock-policy-options.tsx';
 import { StockkeepingUnits } from '../stockkeeping-unit/stockkeeping-units.tsx';
 import { TrackingCodeCard } from '../tracking-code/tracking-code-card.tsx';
