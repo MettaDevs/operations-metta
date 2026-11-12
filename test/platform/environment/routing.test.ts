@@ -8,6 +8,7 @@ import {
     UNKNOWN_ADDRESS_MESSAGE,
 } from '../../../src/platform/environment/index.ts';
 import { readMigrationSource } from '../../../src/platform/migration/index.ts';
+import { createMigratedEnvironmentDatabase } from '../../support/environment-database.ts';
 import { operationsTestApp } from '../../support/operations-app.ts';
 
 const base = 'uji.test';
@@ -61,6 +62,10 @@ describe.skipIf(!process.env.DB_HOST)('alamat menentukan lingkungan', () => {
                 }),
             },
         });
+        // Database lingkungan disalin dari template yang Core-nya sudah dimigrasi; jalur migration-nya diuji
+        // provision.test.ts.
+        if (database !== null)
+            await createMigratedEnvironmentDatabase(settings, source, database);
         await provisionEnvironment(settings, source, request);
         return request;
     }
