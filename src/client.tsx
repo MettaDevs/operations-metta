@@ -1,6 +1,8 @@
 // Dibuat `bun scripts/generate-client.ts` dari setiap berkas `.page.tsx`; jangan disunting tangan. `bun run build`
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
+import { page as modulesHealthcareSrcClinicalClusterClustersPage } from '../modules/healthcare/src/clinical/cluster/clusters.page.tsx';
+import { page as modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage } from '../modules/healthcare/src/clinical/life-cycle/life-cycles.page.tsx';
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
@@ -40,6 +42,28 @@ import {
     routerOptions,
     startClient,
 } from './platform/shell/index.ts';
+
+const modulesHealthcareSrcClinicalClusterClustersRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcClinicalClusterClustersPage.path,
+    component: modulesHealthcareSrcClinicalClusterClustersPage.component,
+    validateSearch:
+        modulesHealthcareSrcClinicalClusterClustersPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcClinicalClusterClustersPage.title,
+    },
+});
+
+const modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.path,
+    component: modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.component,
+    validateSearch:
+        modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.title,
+    },
+});
 
 const modulesHealthcareSrcCoverageGuarantorGuarantorsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -326,6 +350,8 @@ const platformShellLoginRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
     appLayoutRoute.addChildren([
+        modulesHealthcareSrcClinicalClusterClustersRoute,
+        modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute,
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,

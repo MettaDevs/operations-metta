@@ -26,6 +26,10 @@ export const sectionRowSchema = z.object({
     queue_prefix: z.string().nullable(),
     // Urut menurut urutan ruangan.
     rooms: z.array(sectionRoomSchema),
+    // Klaster yang dilayani section. Kosong berarti section melayani semua klaster.
+    clusters: z.array(
+        z.object({ id: z.string(), code: z.string(), name: z.string() }),
+    ),
     is_active: z.boolean(),
     version: z.number(),
 });
@@ -47,6 +51,8 @@ export const sectionInputSchema = z.object({
     // Ruangan yang melayani section, dikirim lengkap: yang tidak disebut lagi dilepas. Tanpa room_ids, ruangan
     // section tidak disentuh.
     room_ids: z.array(z.string()).optional(),
+    // Klaster yang dilayani, dikirim lengkap seperti room_ids. Kosong berarti semua klaster.
+    cluster_ids: z.array(z.string()).optional(),
     is_active: z.boolean().optional(),
     version: z.number().optional(),
 });

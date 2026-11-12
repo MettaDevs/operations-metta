@@ -49,6 +49,7 @@ const searchSchema = z.object({
     patient_type: z.string().max(100).optional(),
     practitioner: z.string().max(100).optional(),
     section: z.string().max(100).optional(),
+    cluster: z.string().max(100).optional(),
     status: z.enum(visitStatuses).optional(),
 });
 
@@ -138,7 +139,13 @@ function VisitsPage(): ReactNode {
     const filterPanelId = useId();
     const from = search.from ?? metadata.date;
     const to = search.to ?? from;
-    const { patient_type: patientType, practitioner, section, status } = search;
+    const {
+        patient_type: patientType,
+        practitioner,
+        section,
+        cluster,
+        status,
+    } = search;
     const practitioners = [
         ...new Map(
             metadata.sections
@@ -170,6 +177,7 @@ function VisitsPage(): ReactNode {
                             ? { practitioner_id: practitioner }
                             : {}),
                         ...(section ? { section_id: section } : {}),
+                        ...(cluster ? { cluster_id: cluster } : {}),
                         ...(status ? { status } : {}),
                         q: query,
                         ...(cursor ? { cursor } : {}),
@@ -180,7 +188,7 @@ function VisitsPage(): ReactNode {
             if (!cursor) setCounts(body.counts);
             return { items: body.data, nextCursor: body.next_cursor };
         },
-        [from, to, patientType, practitioner, section, status],
+        [from, to, patientType, practitioner, section, cluster, status],
     );
     const list = useIncrementalList({
         loadItems: loader,
@@ -228,6 +236,7 @@ function VisitsPage(): ReactNode {
                             patientType ||
                             practitioner ||
                             section ||
+                            cluster ||
                             status,
                         ),
                         controls: filterPanelId,
@@ -363,6 +372,31 @@ function VisitsPage(): ReactNode {
                                         }
                                         searchPlaceholder="Cari poli atau ruangan"
                                         emptyMessage="Poli atau ruangan tidak ditemukan."
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Select
+                                        label="Klaster"
+                                        items={[
+                                            {
+                                                value: ALL,
+                                                label: 'Semua klaster',
+                                            },
+                                            ...metadata.clusters.map(
+                                                (item) => ({
+                                                    value: item.id,
+                                                    label: `${item.code} ${item.name}`,
+                                                }),
+                                            ),
+                                        ]}
+                                        value={cluster ?? ALL}
+                                        onValueChange={(value) =>
+                                            setSearch({
+                                                cluster: choice(value),
+                                            })
+                                        }
+                                        searchPlaceholder="Cari klaster"
+                                        emptyMessage="Klaster tidak ditemukan."
                                     />
                                 </FormControl>
                                 <FormControl>
@@ -506,7 +540,7 @@ function VisitsPage(): ReactNode {
                     {
                         id: 'section',
                         header: 'Ruangan',
-                        width: 150,
+                        width: 190,
                         cell: (row) => (
                             <DataTableText multiline>
                                 <span className="block font-medium">
@@ -518,6 +552,12 @@ function VisitsPage(): ReactNode {
                                 <span className="block text-muted-foreground">
                                     {visitConditionLabel(row.visit_condition)}
                                 </span>
+                                {row.cluster_code && (
+                                    <span className="block text-muted-foreground">
+                                        {row.cluster_code} ·{' '}
+                                        {row.life_cycle_name}
+                                    </span>
+                                )}
                             </DataTableText>
                         ),
                     },

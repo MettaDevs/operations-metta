@@ -10,6 +10,7 @@ import {
 import { moduleId, moduleWorkspace } from '../../module.ts';
 import type {
     visitCancelInputSchema,
+    visitClassificationQuerySchema,
     visitInputSchema,
     visitListQuerySchema,
 } from './visit.schema.ts';
@@ -33,6 +34,16 @@ export function visitRoutes() {
         healthcareVisitMetadata: route('GET', '/metadata').handler(
             async ({ context }) => ok(await (await visits(context)).metadata()),
         ),
+        // Siklus hidup dan klaster yang akan dicatat untuk pasien, dan apakah status hamil perlu ditanyakan.
+        healthcareVisitClassification: route('GET', '/classification')
+            .input(typedQuery<z.input<typeof visitClassificationQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await visits(context)
+                    ).classification(new URL(context.request.url).searchParams),
+                ),
+            ),
         healthcareVisitList: route('GET')
             .input(typedQuery<z.input<typeof visitListQuerySchema>>())
             .handler(async ({ context }) =>

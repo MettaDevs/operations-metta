@@ -17,6 +17,13 @@ import {
     staleMessage,
     validation,
 } from '@core/platform/http/index.ts';
+import {
+    asksPregnancy,
+    classifyVisit,
+    undeterminedLifeCycleMessage,
+} from '../../clinical/life-cycle/life-cycle.classification.ts';
+import type { LifeCycleRow } from '../../clinical/life-cycle/life-cycle.schema.ts';
+import { activeLifeCycles } from '../../clinical/life-cycle/life-cycle.service.ts';
 import type { PatientTypeBehavior } from '../../coverage/patient-type/patient-type.behaviors.ts';
 import { moduleId } from '../../module.ts';
 import {
@@ -95,7 +102,9 @@ const headerSql = `
            r.berat_badan as weight_kg, r.status_kunjungan as visit_condition, r.umur_tahun as age_years,
            r.umur_bulan as age_months, r.umur_hari as age_days, r.jenis_kunjungan as visit_kind,
            r.kategori_skrining_id as screening_category_id, sk.nama as screening_category_name,
-           sk.warna as screening_category_color, r.status, r.batal_oleh as cancelled_by_user_id,
+           sk.warna as screening_category_color, r.status_hamil as pregnant, r.siklus_hidup_id as life_cycle_id,
+           sh.nama as life_cycle_name, r.klaster_id as cluster_id, kl.kode as cluster_code, kl.nama as cluster_name,
+           r.status, r.batal_oleh as cancelled_by_user_id,
            to_char(r.batal_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as cancelled_at, r.alasan_batal as cancel_reason,
            coalesce((select json_agg(json_build_object('id', m.id, 'name', m.nama) order by m.urutan, m.nama)
                      from sim_tr_registrasi_keadaan rk
@@ -129,7 +138,25 @@ const headerSql = `
     left join sim_m_penjamin g on g.tenant_id = r.tenant_id and g.id = r.penjamin_id
     left join parties gp on gp.tenant_id = g.tenant_id and gp.id = g.party_id
     left join sim_m_skrining_kategori sk on sk.tenant_id = r.tenant_id and sk.id = r.kategori_skrining_id
+    left join sim_m_siklus_hidup sh on sh.tenant_id = r.tenant_id and sh.id = r.siklus_hidup_id
+    left join sim_m_klaster kl on kl.tenant_id = r.tenant_id and kl.id = r.klaster_id
     where r.tenant_id = $1 and r.id = $2`;
+
+// Klaster yang dilayani section `s`. Kosong berarti section melayani semua klaster.
+const sectionClustersSql = `coalesce((select json_agg(c.klaster_id) from sim_m_section_klaster c
+                                      where c.tenant_id = s.tenant_id and c.section_id = s.id
+                                        and c.deleted_at is null), '[]'::json)`;
+
+function presentLifeCycle(rule: LifeCycleRow) {
+    return {
+        id: rule.id,
+        code: rule.code,
+        name: rule.name,
+        cluster_id: rule.cluster_id,
+        cluster_code: rule.cluster_code,
+        cluster_name: rule.cluster_name,
+    };
+}
 
 // Pendaftaran kunjungan rawat jalan: kepala kunjungan dan satu tujuan per section, dengan NoReg, NoBukti, dan nomor
 // antrean yang diterbitkan server di dalam satu transaksi. Kunjungan milik operating unit section tujuannya dan legal
@@ -234,9 +261,10 @@ export class Visits {
                           queue_mode: z.string(),
                           operating_unit_id: z.string(),
                           operating_unit_name: z.string(),
+                          cluster_ids: z.array(z.string()),
                       }),
                       `select s.id, s.nama as name, s.jenis as kind, s.mode_antrean as queue_mode,
-                              s.operating_unit_id, o.name as operating_unit_name
+                              s.operating_unit_id, o.name as operating_unit_name, ${sectionClustersSql} as cluster_ids
                        from sim_m_section s
                        join organizations o on o.tenant_id = s.tenant_id and o.id = s.operating_unit_id
                        where s.tenant_id = $1 and s.deleted_at is null and s.aktif
@@ -246,6 +274,21 @@ export class Visits {
                   );
         return {
             date,
+            // Siklus hidup yang boleh dipilih petugas, beserta klasternya.
+            life_cycles: (await activeLifeCycles(this.db, tenantId)).map(
+                presentLifeCycle,
+            ),
+            // Saringan Klaster di daftar kunjungan. Klaster nonaktif ikut, karena kunjungan lama tetap mencatatnya.
+            clusters: await this.db.rows(
+                z.object({
+                    id: z.string(),
+                    code: z.string(),
+                    name: z.string(),
+                }),
+                `select id, kode as code, nama as name from sim_m_klaster
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                [tenantId],
+            ),
             patient_types: await this.db.rows(
                 z.object({
                     id: z.string(),
@@ -365,6 +408,8 @@ export class Visits {
             filters.push(`r.tipe_pasien_id = ${bind(patientType)}`);
         const patient = lookupId(parameters.get('patient_id') ?? '');
         if (patient) filters.push(`r.pasien_id = ${bind(patient)}`);
+        const cluster = lookupId(parameters.get('cluster_id') ?? '');
+        if (cluster) filters.push(`r.klaster_id = ${bind(cluster)}`);
         const base = `
             from sim_tr_registrasi r
             join lateral (select * from sim_tr_registrasi_tujuan x
@@ -402,7 +447,9 @@ export class Visits {
                        t.nama as patient_type_name, gp.name as guarantor_name, r.no_kartu as card_number,
                        d.section_id, s.nama as section_name, d.nakes_id as practitioner_id,
                        np.name as practitioner_name, d.kode_antrean as queue_code, d.no_bukti as examination_number,
-                       sk.nama as screening_category_name, sk.warna as screening_category_color
+                       sk.nama as screening_category_name, sk.warna as screening_category_color,
+                       sh.nama as life_cycle_name, r.klaster_id as cluster_id, kl.kode as cluster_code,
+                       kl.nama as cluster_name
                 from sim_tr_registrasi r
                 join lateral (select * from sim_tr_registrasi_tujuan x
                               where x.tenant_id = r.tenant_id and x.registrasi_id = r.id and x.deleted_at is null
@@ -425,6 +472,8 @@ export class Visits {
                 left join sim_m_nakes n on n.tenant_id = d.tenant_id and n.id = d.nakes_id
                 left join parties np on np.tenant_id = n.tenant_id and np.id = n.party_id
                 left join sim_m_skrining_kategori sk on sk.tenant_id = r.tenant_id and sk.id = r.kategori_skrining_id
+                left join sim_m_siklus_hidup sh on sh.tenant_id = r.tenant_id and sh.id = r.siklus_hidup_id
+                left join sim_m_klaster kl on kl.tenant_id = r.tenant_id and kl.id = r.klaster_id
                 where ${filters.join(' and ')}${statusFilter}`,
             bindings,
             parameters,
@@ -480,9 +529,10 @@ export class Visits {
         );
     }
 
-    // Pasien yang terlihat bagi pengguna dan masih aktif, dikunci sampai transaksi selesai. Kunci ini membuat batas
-    // kunjungan per poli dan jenis kunjungan baru/lama tetap benar saat pasien yang sama didaftarkan serentak.
-    private async lockPatient(patientId: string, date: string) {
+    // Pasien yang terlihat bagi pengguna dan masih aktif. Saat mendaftar barisnya dikunci sampai transaksi selesai.
+    // Kunci ini membuat batas kunjungan per poli dan jenis kunjungan baru/lama tetap benar saat pasien yang sama
+    // didaftarkan serentak.
+    private async patient(patientId: string, date: string, lock: boolean) {
         const bindings: Bind[] = [
             this.workspace.tenantId,
             lookupId(patientId),
@@ -500,8 +550,10 @@ export class Visits {
                       age_years: z.number().nullable(),
                       age_months: z.number().nullable(),
                       age_days: z.number().nullable(),
+                      gender: z.string().nullable(),
+                      birth_date: z.string().nullable(),
                   }),
-                  `select k.id, k.aktif as is_active,
+                  `select k.id, k.aktif as is_active, p.gender, p.birth_date::text as birth_date,
                           extract(year from age($3::date, p.birth_date))::int as age_years,
                           extract(month from age($3::date, p.birth_date))::int as age_months,
                           extract(day from age($3::date, p.birth_date))::int as age_days
@@ -509,7 +561,7 @@ export class Visits {
                    join parties p on p.tenant_id = k.tenant_id and p.id = k.party_id
                    where k.tenant_id = $1 and k.id = $2 and k.deleted_at is null
                      and ${await this.sharing.visible(this.workspace, bind)}
-                   for update of k`,
+                   ${lock ? 'for update of k' : ''}`,
                   bindings,
               )
             : undefined;
@@ -517,6 +569,65 @@ export class Visits {
         if (!found.is_active)
             validation({ patient_id: 'Pasien ini tidak aktif.' });
         return found;
+    }
+
+    // Siklus hidup kunjungan: pilihan petugas bila ada, selain itu hasil aturan Siklus hidup. Status hamil hanya berlaku
+    // bila ditanyakan untuk pasien itu.
+    private async lifeCycle(
+        patient: { gender: string | null; birth_date: string | null },
+        date: string,
+        pregnant: boolean,
+        chosenId: string | null,
+    ): Promise<{ rule: LifeCycleRow; pregnant: boolean }> {
+        const rules = await activeLifeCycles(this.db, this.workspace.tenantId);
+        const subject = {
+            gender: patient.gender,
+            birthDate: patient.birth_date,
+            visitDate: date,
+        };
+        if (pregnant && !asksPregnancy(rules, subject))
+            validation({
+                pregnant: 'Status hamil tidak berlaku untuk pasien ini.',
+            });
+        if (chosenId) {
+            const chosen = rules.find((rule) => rule.id === chosenId);
+            if (!chosen)
+                validation({
+                    life_cycle_id: 'Pilih siklus hidup dari daftar.',
+                });
+            return { rule: chosen, pregnant };
+        }
+        const rule = classifyVisit(rules, { ...subject, pregnant });
+        if (!rule) validation({ life_cycle_id: undeterminedLifeCycleMessage });
+        return { rule, pregnant };
+    }
+
+    // Pratinjau pendaftaran: siklus hidup dan klaster hasil aturan untuk pasien, dan apakah status hamil ditanyakan.
+    // Hasil yang tidak dapat ditentukan dijawab sebagai pesan, bukan penolakan, karena petugas masih bisa memilih.
+    async classification(parameters: URLSearchParams) {
+        this.workspace.guard('visit', 'read');
+        const date = await this.today();
+        const patient = await this.patient(
+            parameters.get('patient_id') ?? '',
+            date,
+            false,
+        );
+        const rules = await activeLifeCycles(this.db, this.workspace.tenantId);
+        const subject = {
+            gender: patient.gender,
+            birthDate: patient.birth_date,
+            visitDate: date,
+        };
+        const asks = asksPregnancy(rules, subject);
+        const rule = classifyVisit(rules, {
+            ...subject,
+            pregnant: asks && parameters.get('pregnant') === 'true',
+        });
+        return {
+            asks_pregnancy: asks,
+            life_cycle: rule ? presentLifeCycle(rule) : null,
+            message: rule ? null : undeterminedLifeCycleMessage,
+        };
     }
 
     // Tipe pasien, penjamin, dan nomor kartu. Wajib tidaknya penjamin dan nomor kartu datang dari perilaku tipe
@@ -606,10 +717,11 @@ export class Visits {
                       queue_mode: z.string(),
                       queue_prefix: z.string().nullable(),
                       document_code: z.string().nullable(),
+                      cluster_ids: z.array(z.string()),
                   }),
-                  `select id, operating_unit_id, mode_antrean as queue_mode, awalan_antrean as queue_prefix,
-                          kode_no_bukti as document_code
-                   from sim_m_section where tenant_id = $1 and id = $2 and aktif and deleted_at is null`,
+                  `select s.id, s.operating_unit_id, s.mode_antrean as queue_mode, s.awalan_antrean as queue_prefix,
+                          s.kode_no_bukti as document_code, ${sectionClustersSql} as cluster_ids
+                   from sim_m_section s where s.tenant_id = $1 and s.id = $2 and s.aktif and s.deleted_at is null`,
                   [this.workspace.tenantId, sectionId],
               )
             : undefined;
@@ -776,7 +888,20 @@ export class Visits {
         const section = await this.section(input.section_id);
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
-            const patient = await this.lockPatient(input.patient_id, date);
+            const patient = await this.patient(input.patient_id, date, true);
+            const lifeCycle = await this.lifeCycle(
+                patient,
+                date,
+                input.pregnant === true,
+                optional(input.life_cycle_id),
+            );
+            if (
+                section.cluster_ids.length &&
+                !section.cluster_ids.includes(lifeCycle.rule.cluster_id)
+            )
+                validation({
+                    section_id: `Poli ini tidak melayani klaster ${lifeCycle.rule.cluster_name}.`,
+                });
             if (payer.maxVisits > 0) {
                 const today = await this.db.one(
                     z.object({ count: z.coerce.number() }),
@@ -861,6 +986,9 @@ export class Visits {
                 umur_hari: patient.age_days,
                 jenis_kunjungan: returning?.returning ? 'lama' : 'baru',
                 kategori_skrining_id: category?.id ?? null,
+                status_hamil: lifeCycle.pregnant,
+                siklus_hidup_id: lifeCycle.rule.id,
+                klaster_id: lifeCycle.rule.cluster_id,
                 status: 'terdaftar',
                 created_at: stamp,
                 updated_at: stamp,
