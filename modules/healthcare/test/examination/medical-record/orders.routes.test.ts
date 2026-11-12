@@ -1,0 +1,971 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+    operationsTestApp,
+    type Browser,
+} from '../../../../../test/support/operations-app.ts';
+import {
+    createMember,
+    createTenant,
+    entitle,
+    grantAllOrganizations,
+    recordInstallation,
+} from '../../../../../test/support/tenant-fixtures.ts';
+
+type ProcedureLine = {
+    procedure_id: string | null;
+    procedure_code?: string | null;
+    procedure_name?: string | null;
+    quantity: number | string | null;
+    doctor_id: string | null;
+    added_by?: string | null;
+    added_at?: string | null;
+};
+type Line = {
+    drug_id: string | null;
+    compound: number | null;
+    quantity: number | string | null;
+    requested_quantity?: number | string | null;
+    signa?: string | null;
+    usage_instruction_id?: string | null;
+    notes?: string | null;
+    drug_name?: string | null;
+    unit_name?: string | null;
+};
+type Prescription = {
+    id: string | null;
+    number?: string | null;
+    status?: string;
+    notes: string | null;
+    lines: Line[];
+    doctor_name?: string | null;
+};
+type Record_ = {
+    version: number | null;
+    physical: Record<string, number | string | null>;
+    procedures?: ProcedureLine[];
+    prescriptions?: Prescription[];
+    drug_allergies?: {
+        drug_id: string;
+        drug_code?: string | null;
+        drug_name?: string;
+    }[];
+} & Record<string, unknown>;
+type Shown = { data: Record_; context: { editable: boolean } };
+type Reference = { id: string; code: string; name: string; active: boolean };
+type Metadata = {
+    usage_instructions: Reference[];
+    permissions: { create_procedure: boolean; create_drug: boolean };
+};
+type Section = {
+    id: string;
+    operating_unit_id: string;
+    name: string;
+    kind: string;
+    version: number;
+};
+
+const api = '/api/modules/healthcare/v1';
+const vitals = {
+    pulse_rate: 88,
+    respiratory_rate: 20,
+    consciousness: 'COMPOS MENTIS',
+    systolic: 120,
+    diastolic: 80,
+    height: 158,
+    weight: 52,
+    waist_circumference: 71,
+};
+const notStarted = 'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
+const finished =
+    'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.';
+
+// Panel Biaya Tindakan dan E-Resep halaman pemeriksaan: data acuan dari sistem lama, pesan sistem lama untuk tindakan
+// ganda, obat ganda, obat alergi, dan racikan tidak valid, baris diubah di tempat dan dihapus lunak, Kirim ke farmasi
+// dengan nomor resep, batas ubah, bagian per section, batas tenant, dan izin. Butuh PostgreSQL yang sudah dimigrasi;
+// dilewati bila DB_HOST kosong.
+describe.skipIf(!process.env.DB_HOST)(
+    'examination procedures and prescriptions',
+    () => {
+        if (!process.env.DB_HOST) return;
+        const { pool, browser, close } = operationsTestApp();
+        afterAll(close);
+
+        let tenantId: string;
+        let admin: Browser;
+        let umum: string;
+        let patientId: string;
+        let unit: string;
+        let room: string;
+        let section: Section;
+        let doctor: string;
+        let nurse: string;
+        let unitTab: string;
+        let metadata: Metadata;
+
+        async function json<T>(response: Response, status: number): Promise<T> {
+            const text = await response.text();
+            if (response.status !== status)
+                throw new Error(
+                    `Expected ${status}, got ${response.status}: ${text}`,
+                );
+            return JSON.parse(text) as T;
+        }
+
+        async function refused(response: Response) {
+            return (
+                await json<{ errors: Record<string, string[]> }>(response, 422)
+            ).errors;
+        }
+
+        async function created<T = { id: string }>(
+            as: Browser,
+            path: string,
+            body: Record<string, unknown>,
+        ) {
+            return (await json<{ data: T }>(await as.post(path, body), 201))
+                .data;
+        }
+
+        async function login(tenant: string, duties: string[]) {
+            const account = await createMember(pool, tenant, duties);
+            await grantAllOrganizations(pool, tenant, account.membershipId);
+            await pool.unsafe(
+                `insert into role_assignment_data_policy_scopes
+                 (id, tenant_id, role_assignment_id, policy_code, legal_entity_id, organization_id,
+                  include_descendants, valid_from, created_at, updated_at)
+             select $1, $2, id, 'healthcare.patient-unit', null, null, false, now() - interval '1 day', now(), now()
+             from role_assignments where membership_id = $3`,
+                [Bun.randomUUIDv7(), tenant, account.membershipId],
+            );
+            const session = browser();
+            await session.login(account.email, account.password);
+            return session;
+        }
+
+        async function visit(at: Section = section) {
+            const registered = await json<{
+                data: { destinations: { id: string }[] };
+            }>(
+                await admin.post(`${api}/visits`, {
+                    patient_id: patientId,
+                    patient_type_id: umum,
+                    visit_condition: 'sakit',
+                    section_id: at.id,
+                }),
+                201,
+            );
+            return registered.data.destinations[0]!.id;
+        }
+
+        async function start(id: string) {
+            await json(
+                await admin.post(
+                    `${api}/examination/destinations/${id}/start`,
+                    {
+                        room_id: room,
+                    },
+                ),
+                200,
+            );
+        }
+
+        async function started(at: Section = section) {
+            const id = await visit(at);
+            await start(id);
+            return id;
+        }
+
+        const path = (id: string) =>
+            `${api}/examination/destinations/${id}/medical-record`;
+
+        async function show(as: Browser, id: string) {
+            return json<Shown>(await as.get(path(id)), 200);
+        }
+
+        async function save(as: Browser, id: string, data: Partial<Record_>) {
+            const current = await show(as, id);
+            return as.put(path(id), {
+                ...current.data,
+                physical: { ...current.data.physical, ...vitals },
+                ...data,
+            });
+        }
+
+        async function send(as: Browser, id: string, version?: number | null) {
+            const current = await show(as, id);
+            const draft = current.data.prescriptions?.find(
+                (row) => row.status === 'draf',
+            );
+            return as.post(
+                `${api}/examination/destinations/${id}/prescriptions/${draft?.id ?? Bun.randomUUIDv7()}/send`,
+                {
+                    version:
+                        version === undefined ? current.data.version : version,
+                },
+            );
+        }
+
+        async function procedure(code: string, name: string, as = admin) {
+            return created<{ id: string; name: string }>(
+                as,
+                `${api}/procedures`,
+                {
+                    code,
+                    name,
+                },
+            );
+        }
+
+        async function drug(name: string, as = admin) {
+            return created<{ id: string; name: string }>(as, `${api}/drugs`, {
+                name,
+                unit_id: unitTab,
+            });
+        }
+
+        const single = (
+            drugId: string,
+            quantity: number | string = 10,
+        ): Line => ({
+            drug_id: drugId,
+            compound: null,
+            quantity,
+            signa: '3x1',
+            usage_instruction_id: metadata.usage_instructions[1]!.id,
+            notes: null,
+        });
+
+        const draft = (
+            lines: Line[],
+            notes: string | null = null,
+        ): Prescription => ({
+            id: null,
+            notes,
+            lines,
+        });
+
+        async function recordId(destination: string) {
+            const [row] = await pool.unsafe<{ id: string }[]>(
+                'select id from sim_tr_pemeriksaan where tujuan_id = $1 and deleted_at is null',
+                [destination],
+            );
+            return row!.id;
+        }
+
+        beforeAll(async () => {
+            tenantId = await createTenant(pool, 'Klinik Uji Resep');
+            await entitle(pool, tenantId, 'healthcare');
+            await recordInstallation(pool, tenantId, 'healthcare');
+            admin = await login(tenantId, [
+                'core.organization.manage',
+                'healthcare.patient.manage',
+                'healthcare.payment-setup.manage',
+                'healthcare.service-setup.manage',
+                'healthcare.practitioner.manage',
+                'healthcare.visit.manage',
+                'healthcare.examination.manage',
+                'healthcare.clinical-setup.manage',
+            ]);
+            await created(admin, '/api/v1/organizations', {
+                classification: 'legal_entity',
+                name: 'PT Klinik Uji Resep',
+                company_code: `KR${Date.now() % 100000}`,
+                country_code: 'ID',
+            });
+            unit = (
+                await created(admin, '/api/v1/organizations', {
+                    classification: 'operating_unit',
+                    name: 'Puskesmas Resep',
+                    operating_unit_type: 'department',
+                    operating_unit_number: 'PR1',
+                })
+            ).id;
+            room = (
+                await created(admin, `${api}/rooms`, {
+                    operating_unit_id: unit,
+                    code: 'RR1',
+                    name: 'Ruang Resep',
+                })
+            ).id;
+            section = await created<Section>(admin, `${api}/sections`, {
+                operating_unit_id: unit,
+                name: 'Poli Umum Resep',
+                kind: 'rawat_jalan',
+                room_ids: [room],
+            });
+            umum = (
+                await created(admin, `${api}/patient-types`, {
+                    code: 'UMUM',
+                    name: 'Umum',
+                })
+            ).id;
+            patientId = (
+                await created(admin, `${api}/patients`, {
+                    name: 'Pasien Resep',
+                    nationality_country_code: 'AU',
+                    passport_number: `PR${Math.floor(Math.random() * 1e8)}`,
+                    gender: 'female',
+                    birth_date: '1985-02-03',
+                    phone: '081200000031',
+                    domicile_address: { street: 'Jl. Resep No. 1' },
+                    payment_methods: [{ patient_type_id: umum }],
+                })
+            ).id;
+            const professions = Object.fromEntries(
+                (
+                    await pool.unsafe<{ kode: string; id: string }[]>(
+                        'select kode, id from sim_m_profesi where tenant_id = $1 and deleted_at is null',
+                        [tenantId],
+                    )
+                ).map((row) => [row.kode, row.id]),
+            );
+            doctor = (
+                await created(admin, `${api}/practitioners`, {
+                    name: 'Dokter Resep',
+                    nik: String(Date.now()).slice(-12).padStart(16, '6'),
+                    gender: 'male',
+                    phone: '081200000032',
+                    profession_id: professions.dokter,
+                })
+            ).id;
+            nurse = (
+                await created(admin, `${api}/practitioners`, {
+                    name: 'Perawat Resep',
+                    nik: String(Date.now() + 7)
+                        .slice(-12)
+                        .padStart(16, '5'),
+                    gender: 'female',
+                    phone: '081200000033',
+                    profession_id: professions.perawat,
+                })
+            ).id;
+            metadata = await json<Metadata>(
+                await admin.get(`${api}/examination/medical-record/metadata`),
+                200,
+            );
+            unitTab = (
+                await json<{ units: Reference[] }>(
+                    await admin.get(`${api}/drugs/metadata`),
+                    200,
+                )
+            ).units.find((row) => row.code === 'TABLET')!.id;
+        }, 120_000);
+
+        test('aturan pakai and satuan obat are seeded from the old system, and both panels are on by default', async () => {
+            expect(metadata.usage_instructions.map((row) => row.name)).toEqual([
+                'Sebelum Makan',
+                'Setelah Makan',
+                'Pemakaian Luar',
+                'Jika Diperlukan',
+                'Saat Makan',
+            ]);
+            const [units] = await pool.unsafe<{ count: number; tab: string }[]>(
+                `select count(*)::int as count, max(nama) filter (where kode = 'TABLET') as tab
+             from sim_m_satuan_obat where tenant_id = $1`,
+                [tenantId],
+            );
+            expect(units).toEqual({ count: 70, tab: 'TAB' });
+            const id = await visit();
+            const shown = await show(admin, id);
+            expect(shown.data.procedures).toEqual([]);
+            expect(shown.data.prescriptions).toEqual([]);
+            expect(shown.data.drug_allergies).toEqual([]);
+            expect(metadata.permissions).toMatchObject({
+                create_procedure: true,
+                create_drug: true,
+            });
+        });
+
+        test('Biaya Tindakan keeps one row per procedure with the old message and updates rows in place', async () => {
+            const id = await started();
+            const injection = await procedure('J001', 'Injeksi');
+            const wound = await procedure('J002', 'Rawat Luka');
+            const line = (
+                procedureId: string,
+                quantity: number | string = 1,
+            ) => ({
+                procedure_id: procedureId,
+                quantity,
+                doctor_id: doctor,
+            });
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        procedures: [
+                            line(injection.id),
+                            line(injection.id),
+                            line(wound.id, 0),
+                            {
+                                procedure_id: null,
+                                quantity: 1,
+                                doctor_id: nurse,
+                            },
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'procedures.1.procedure_id': [
+                    'Biaya Tindakan Injeksi sudah ada pada daftar Jasa',
+                ],
+                'procedures.2.quantity': ['Isi jumlah 1 atau lebih.'],
+                'procedures.3.procedure_id': ['Pilih tindakan.'],
+                'procedures.3.doctor_id': [
+                    'Pilih tenaga kesehatan dari daftar.',
+                ],
+            });
+            const first = await json<Shown>(
+                await save(admin, id, {
+                    procedures: [line(injection.id, '2'), line(wound.id)],
+                }),
+                200,
+            );
+            expect(first.data.procedures).toMatchObject([
+                {
+                    procedure_code: 'J001',
+                    procedure_name: 'Injeksi',
+                    quantity: 2,
+                    doctor_id: doctor,
+                },
+                { procedure_code: 'J002', quantity: 1 },
+            ]);
+            expect(first.data.procedures?.[0]?.added_at).toBeTruthy();
+            const record = await recordId(id);
+            const before = await pool.unsafe<
+                { id: string; tindakan_id: string }[]
+            >(
+                'select id, tindakan_id from sim_tr_pemeriksaan_tindakan where pemeriksaan_id = $1 and deleted_at is null',
+                [record],
+            );
+            await json(
+                await save(admin, id, { procedures: [line(injection.id, 3)] }),
+                200,
+            );
+            const after = await pool.unsafe<
+                { id: string; jumlah: number; deleted_at: Date | null }[]
+            >(
+                'select id, jumlah, deleted_at from sim_tr_pemeriksaan_tindakan where pemeriksaan_id = $1 order by created_at, id',
+                [record],
+            );
+            expect(after).toHaveLength(2);
+            const kept = before.find(
+                (row) => row.tindakan_id === injection.id,
+            )!;
+            expect(after.find((row) => row.id === kept.id)).toMatchObject({
+                jumlah: 3,
+                deleted_at: null,
+            });
+            expect(after.filter((row) => row.deleted_at)).toHaveLength(1);
+            await pool.unsafe(
+                'update sim_m_tindakan set aktif = false where id = $1',
+                [injection.id],
+            );
+            await json(
+                await save(admin, id, { procedures: [line(injection.id, 4)] }),
+                200,
+            );
+            expect(
+                await refused(
+                    await save(admin, await started(), {
+                        procedures: [line(injection.id)],
+                    }),
+                ),
+            ).toEqual({
+                'procedures.0.procedure_id': ['Pilih tindakan dari daftar.'],
+            });
+        });
+
+        test('an examiner adds a procedure and a drug on the fly but cannot change the masters', async () => {
+            const examiner = await login(tenantId, [
+                'healthcare.examination.manage',
+            ]);
+            const added = await procedure('J900', 'Nebulizer', examiner);
+            const tablet = await drug('Ambroxol 30 mg', examiner);
+            expect(
+                (
+                    await examiner.patch(`${api}/procedures/${added.id}`, {
+                        code: 'J900',
+                        name: 'Ganti',
+                        version: 1,
+                    })
+                ).status,
+            ).toBe(403);
+            expect(
+                (
+                    await examiner.patch(`${api}/drugs/${tablet.id}`, {
+                        name: 'Ganti',
+                        unit_id: unitTab,
+                        version: 1,
+                    })
+                ).status,
+            ).toBe(403);
+            const reader = await login(tenantId, [
+                'healthcare.examination.inquire',
+            ]);
+            const id = await started();
+            expect(
+                (await reader.put(path(id), (await show(reader, id)).data))
+                    .status,
+            ).toBe(403);
+            expect((await send(reader, id)).status).toBe(403);
+            expect(
+                (
+                    await reader.post(`${api}/drugs`, {
+                        name: 'Tidak boleh',
+                        unit_id: unitTab,
+                    })
+                ).status,
+            ).toBe(403);
+        });
+
+        test('a prescription draft is saved with the page, rows are kept in place, and the old messages guard each line', async () => {
+            const id = await started();
+            const paracetamol = await drug('Paracetamol 500 mg');
+            const amoxicillin = await drug('Amoxicillin 500 mg');
+            const ctm = await drug('CTM 4 mg');
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                single(paracetamol.id),
+                                single(paracetamol.id),
+                                { drug_id: null, compound: null, quantity: 1 },
+                                { drug_id: ctm.id, compound: 2, quantity: 1 },
+                                {
+                                    drug_id: amoxicillin.id,
+                                    compound: null,
+                                    quantity: 0,
+                                },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.drug_id': [
+                    'Tidak dapat menambahkan obat "Paracetamol 500 mg", karena obat ini sudah ada dalam resep!',
+                ],
+                'prescriptions.0.lines.2.drug_id': [
+                    'Pilih Obat Sebelum ditambahkan kedalam resep',
+                ],
+                'prescriptions.0.lines.3.compound': ['Racikan tidak valid!'],
+                'prescriptions.0.lines.4.quantity': [
+                    'Isi jumlah lebih dari 0.',
+                ],
+            });
+            const compounded: Line[] = [
+                single(paracetamol.id, '10'),
+                {
+                    drug_id: null,
+                    compound: 1,
+                    quantity: null,
+                    requested_quantity: 10,
+                    signa: '3x1',
+                    usage_instruction_id: metadata.usage_instructions[0]!.id,
+                },
+                { drug_id: amoxicillin.id, compound: 1, quantity: 0.5 },
+                { drug_id: ctm.id, compound: 1, quantity: 1 },
+            ];
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                ...compounded.slice(0, 3),
+                                {
+                                    drug_id: ctm.id,
+                                    compound: 1,
+                                    quantity: 1,
+                                    signa: '1x1',
+                                },
+                                single(paracetamol.id),
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.3.signa': [
+                    'Signa dan aturan pakai komponen racikan diisi pada baris racikannya.',
+                ],
+                'prescriptions.0.lines.4.drug_id': [
+                    'Tidak dapat menambahkan obat "Paracetamol 500 mg", karena obat ini sudah ada dalam resep!',
+                ],
+            });
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [draft(compounded, 'Habiskan antibiotik')],
+                }),
+                200,
+            );
+            const [prescription] = saved.data.prescriptions!;
+            expect(prescription).toMatchObject({
+                number: null,
+                status: 'draf',
+                notes: 'Habiskan antibiotik',
+            });
+            expect(prescription!.lines).toMatchObject([
+                {
+                    drug_name: 'Paracetamol 500 mg',
+                    unit_name: 'TAB',
+                    quantity: 10,
+                },
+                {
+                    drug_id: null,
+                    compound: 1,
+                    requested_quantity: 10,
+                    quantity: null,
+                },
+                { drug_name: 'Amoxicillin 500 mg', compound: 1, quantity: 0.5 },
+                { drug_name: 'CTM 4 mg', compound: 1, quantity: 1 },
+            ]);
+            const rows = async () =>
+                pool.unsafe<
+                    {
+                        id: string;
+                        obat_id: string | null;
+                        deleted_at: Date | null;
+                    }[]
+                >(
+                    'select id, obat_id, deleted_at from sim_tr_resep_detail where resep_id = $1 order by created_at, id',
+                    [prescription!.id],
+                );
+            const before = await rows();
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [prescription!, draft([single(ctm.id)])],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.1.id': [
+                    'Kirim resep yang masih draf lebih dulu sebelum membuat resep baru.',
+                ],
+            });
+            await json(
+                await save(admin, id, {
+                    prescriptions: [
+                        {
+                            ...prescription!,
+                            lines: prescription!.lines.filter(
+                                (line) => line.drug_id !== ctm.id,
+                            ),
+                        },
+                    ],
+                }),
+                200,
+            );
+            const after = await rows();
+            expect(after.map((row) => row.id)).toEqual(
+                before.map((row) => row.id),
+            );
+            expect(
+                after.filter((row) => row.deleted_at).map((row) => row.obat_id),
+            ).toEqual([ctm.id]);
+        });
+
+        test('a drug allergy belongs to the patient and blocks that drug with the old message, also in the same Simpan', async () => {
+            const id = await started();
+            const ibuprofen = await drug('Ibuprofen 400 mg');
+            const aspirin = await drug('Asam Asetilsalisilat 80 mg');
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        drug_allergies: [{ drug_id: ibuprofen.id }],
+                        prescriptions: [draft([single(ibuprofen.id)])],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.0.drug_id': [
+                    'Tidak dapat menambahkan obat "Ibuprofen 400 mg", karena pasien alergi terhadap obat ini!',
+                ],
+            });
+            await json(
+                await save(admin, id, {
+                    drug_allergies: [
+                        { drug_id: ibuprofen.id },
+                        { drug_id: ibuprofen.id },
+                    ],
+                }),
+                200,
+            );
+            const next = await started();
+            expect((await show(admin, next)).data.drug_allergies).toEqual([
+                {
+                    drug_id: ibuprofen.id,
+                    drug_code: null,
+                    drug_name: 'Ibuprofen 400 mg',
+                },
+            ]);
+            expect(
+                await refused(
+                    await save(admin, next, {
+                        prescriptions: [
+                            draft([
+                                {
+                                    drug_id: null,
+                                    compound: 1,
+                                    quantity: null,
+                                },
+                                {
+                                    drug_id: ibuprofen.id,
+                                    compound: 1,
+                                    quantity: 1,
+                                },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.drug_id': [
+                    'Tidak dapat menambahkan obat "Ibuprofen 400 mg", karena pasien alergi terhadap obat ini!',
+                ],
+            });
+            await json(
+                await save(admin, next, {
+                    drug_allergies: [{ drug_id: aspirin.id }],
+                    prescriptions: [draft([single(ibuprofen.id)])],
+                }),
+                200,
+            );
+            const allergies = await pool.unsafe<
+                { obat_id: string; deleted_at: Date | null }[]
+            >(
+                'select obat_id, deleted_at from sim_m_pasien_alergi_obat where pasien_id = $1 order by created_at, id',
+                [patientId],
+            );
+            expect(
+                allergies.map((row) => [row.obat_id, row.deleted_at === null]),
+            ).toEqual([
+                [ibuprofen.id, false],
+                [aspirin.id, true],
+            ]);
+        });
+
+        test('Kirim ke farmasi numbers the prescription, locks it, and leaves room for a new draft', async () => {
+            const id = await started();
+            const vitaminC = await drug('Vitamin C 50 mg');
+            const zinc = await drug('Zinc 20 mg');
+            await json(
+                await save(admin, id, {
+                    anamnesis: {
+                        ...((await show(admin, id)).data.anamnesis as Record<
+                            string,
+                            unknown
+                        >),
+                        doctor_id: doctor,
+                        nurse_id: nurse,
+                    },
+                    prescriptions: [draft([])],
+                }),
+                200,
+            );
+            expect(await refused(await send(admin, id))).toEqual({
+                prescription: ['Resep tidak ditemukan.'],
+            });
+            const stale = (await show(admin, id)).data.version;
+            await json(
+                await save(admin, id, {
+                    prescriptions: [draft([], 'Catatan saja')],
+                }),
+                200,
+            );
+            expect((await send(admin, id, stale)).status).toBe(409);
+            expect(await refused(await send(admin, id))).toEqual({
+                prescription: ['Resep belum berisi obat.'],
+            });
+            const current = (await show(admin, id)).data.prescriptions![0]!;
+            await json(
+                await save(admin, id, {
+                    prescriptions: [
+                        { ...current, lines: [single(vitaminC.id)] },
+                    ],
+                }),
+                200,
+            );
+            const sentShown = await json<Shown>(await send(admin, id), 200);
+            const [sent] = sentShown.data.prescriptions!;
+            expect(sent).toMatchObject({
+                number: 'PR1-RSP-00000001',
+                status: 'dikirim',
+                doctor_name: 'Dokter Resep',
+            });
+            const resend = await admin.post(
+                `${api}/examination/destinations/${id}/prescriptions/${sent!.id}/send`,
+                { version: sentShown.data.version },
+            );
+            expect(await refused(resend)).toEqual({
+                prescription: ['Resep ini sudah dikirim ke farmasi.'],
+            });
+            await json(
+                await save(admin, id, {
+                    prescriptions: [
+                        { ...sent!, lines: [single(zinc.id)] },
+                        draft([single(zinc.id)]),
+                    ],
+                }),
+                200,
+            );
+            const after = (await show(admin, id)).data.prescriptions!;
+            expect(
+                after.map((row) => [
+                    row.status,
+                    row.lines.map((line) => line.drug_name),
+                ]),
+            ).toEqual([
+                ['dikirim', ['Vitamin C 50 mg']],
+                ['draf', ['Zinc 20 mg']],
+            ]);
+            expect(
+                (
+                    await json<Shown>(await send(admin, id), 200)
+                ).data.prescriptions!.map((row) => row.number),
+            ).toEqual(['PR1-RSP-00000001', 'PR1-RSP-00000002']);
+        });
+
+        test('procedures and prescriptions are locked before Mulai periksa and after Selesai periksa', async () => {
+            const id = await visit();
+            const salbutamol = await drug('Salbutamol 2 mg');
+            expect(
+                (
+                    await refused(
+                        await admin.put(path(id), {
+                            ...(await show(admin, id)).data,
+                            prescriptions: [draft([single(salbutamol.id)])],
+                        }),
+                    )
+                ).status,
+            ).toEqual([notStarted]);
+            await start(id);
+            await json(
+                await save(admin, id, {
+                    prescriptions: [draft([single(salbutamol.id)])],
+                }),
+                200,
+            );
+            await json(
+                await admin.post(
+                    `${api}/examination/destinations/${id}/finish`,
+                    {},
+                ),
+                200,
+            );
+            expect((await refused(await send(admin, id))).status).toEqual([
+                finished,
+            ]);
+            expect(
+                (await refused(await save(admin, id, { procedures: [] })))
+                    .status,
+            ).toEqual([finished]);
+        });
+
+        test('a section without the panels neither shows nor accepts them', async () => {
+            const plain = await created<Section>(admin, `${api}/sections`, {
+                operating_unit_id: unit,
+                name: 'Poli Tanpa Resep',
+                kind: 'rawat_jalan',
+                room_ids: [room],
+                examination_panels: [
+                    'anamnesis',
+                    'history',
+                    'physical',
+                    'diagnoses',
+                    'prognosis',
+                ],
+            });
+            const id = await started(plain);
+            const shown = await show(admin, id);
+            expect(shown.data.procedures).toBeUndefined();
+            expect(shown.data.prescriptions).toBeUndefined();
+            expect(
+                await refused(
+                    await admin.put(path(id), {
+                        ...shown.data,
+                        physical: { ...shown.data.physical, ...vitals },
+                        procedures: [],
+                        prescriptions: [],
+                    }),
+                ),
+            ).toEqual({
+                procedures: [
+                    'Bagian Biaya Tindakan tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
+                ],
+                prescriptions: [
+                    'Bagian E-Resep tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
+                ],
+            });
+            expect(await refused(await send(admin, id))).toEqual({
+                prescriptions: [
+                    'Bagian E-Resep tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
+                ],
+            });
+        });
+
+        test('another tenant cannot use this tenant’s drugs and procedures or see its records', async () => {
+            const id = await started();
+            const own = await drug('Obat Milik Klinik');
+            const ownProcedure = await procedure(
+                'J777',
+                'Tindakan Milik Klinik',
+            );
+            const other = await createTenant(pool, 'Klinik Lain Resep');
+            await entitle(pool, other, 'healthcare');
+            await recordInstallation(pool, other, 'healthcare');
+            const outsider = await login(other, [
+                'healthcare.examination.manage',
+                'healthcare.clinical-setup.manage',
+            ]);
+            expect((await outsider.get(path(id))).status).toBe(404);
+            const list = await json<{ data: { id: string }[] }>(
+                await outsider.get(`${api}/drugs?q=Milik`),
+                200,
+            );
+            expect(list.data).toEqual([]);
+            expect(
+                (
+                    await outsider.post(
+                        `${api}/examination/destinations/${id}/prescriptions/${Bun.randomUUIDv7()}/send`,
+                        { version: 1 },
+                    )
+                ).status,
+            ).toBe(404);
+            expect(
+                (
+                    await json<{ data: { id: string }[] }>(
+                        await outsider.get(`${api}/procedures?q=Milik`),
+                        200,
+                    )
+                ).data,
+            ).toEqual([]);
+            expect(
+                (
+                    await outsider.patch(`${api}/drugs/${own.id}`, {
+                        name: 'Diambil',
+                        unit_id: unitTab,
+                        version: 1,
+                    })
+                ).status,
+            ).toBe(404);
+            expect(
+                (
+                    await outsider.delete(
+                        `${api}/procedures/${ownProcedure.id}`,
+                        { version: 1 },
+                    )
+                ).status,
+            ).toBe(404);
+            const theirs = await json<Metadata>(
+                await outsider.get(
+                    `${api}/examination/medical-record/metadata`,
+                ),
+                200,
+            );
+            expect(theirs.usage_instructions).toHaveLength(5);
+            expect(
+                theirs.usage_instructions.some((row) =>
+                    metadata.usage_instructions.some(
+                        (mine) => mine.id === row.id,
+                    ),
+                ),
+            ).toBe(false);
+        });
+    },
+);

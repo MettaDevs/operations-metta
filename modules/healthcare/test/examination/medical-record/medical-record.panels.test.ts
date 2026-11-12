@@ -47,6 +47,8 @@ const everyPanel = [
     'other',
     'diagnoses',
     'prognosis',
+    'procedures',
+    'prescriptions',
 ];
 const defaultPanels = everyPanel.filter((panel) => panel !== 'dental');
 const dentalPanels = everyPanel.filter(
@@ -291,6 +293,7 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             'anamnesis',
             'history',
             'allergy',
+            'drug_allergies',
             'status',
             'physical',
             'pain',
@@ -301,6 +304,8 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             'diagnoses',
             'prognosis_id',
             'chronic_disease_ids',
+            'procedures',
+            'prescriptions',
         ]);
     });
 

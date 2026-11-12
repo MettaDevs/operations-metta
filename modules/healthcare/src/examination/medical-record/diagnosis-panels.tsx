@@ -88,7 +88,7 @@ function ReferenceCell({
     );
 }
 
-function PractitionerCell({
+export function PractitionerCell({
     field,
     label,
     practitioners,

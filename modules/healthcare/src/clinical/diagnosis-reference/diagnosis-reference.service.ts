@@ -21,7 +21,7 @@ import {
     type DiagnosisReferenceList,
 } from './diagnosis-reference.schema.ts';
 
-// Tabel tiap daftar dan tempat barisnya dipakai pemeriksaan, yang menahan Delete.
+// Tabel tiap daftar dan tempat barisnya dipakai, yang menahan Delete.
 const tables = {
     'diagnosis-types': {
         table: 'sim_m_diagnosa_jenis',
@@ -42,6 +42,26 @@ const tables = {
         table: 'sim_m_penyakit_kronis',
         usedIn: 'sim_tr_pemeriksaan_penyakit_kronis',
         usedBy: 'penyakit_kronis_id',
+    },
+    'procedure-groups': {
+        table: 'sim_m_tindakan_kelompok',
+        usedIn: 'sim_m_tindakan',
+        usedBy: 'kelompok_id',
+    },
+    'drug-units': {
+        table: 'sim_m_satuan_obat',
+        usedIn: 'sim_m_obat',
+        usedBy: 'satuan_id',
+    },
+    'dosage-forms': {
+        table: 'sim_m_bentuk_sediaan',
+        usedIn: 'sim_m_obat',
+        usedBy: 'bentuk_sediaan_id',
+    },
+    'usage-instructions': {
+        table: 'sim_m_aturan_pakai',
+        usedIn: 'sim_tr_resep_detail',
+        usedBy: 'aturan_pakai_id',
     },
 } satisfies Record<
     DiagnosisReferenceList,
@@ -65,8 +85,8 @@ function checked(body: unknown) {
     return { code, name, sortOrder, isActive: data.is_active ?? true };
 }
 
-// Jenis diagnosa, kasus diagnosa, prognosa, dan penyakit kronis milik tenant, diisi bawaan sistem lama oleh migration
-// 0023 dan diatur admin di Setup → Klinis.
+// Daftar pendek klinis milik tenant, diisi bawaan sistem lama oleh migration 0023 dan 0025 dan diatur admin di
+// Setup → Klinis.
 export class DiagnosisReferences {
     private readonly table: string;
     private readonly usedIn: string;
@@ -207,7 +227,7 @@ export class DiagnosisReferences {
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }
 
-    // Baris yang sudah dipakai pemeriksaan tidak bisa dihapus; nonaktifkan supaya tidak dipilih lagi.
+    // Baris yang sudah dipakai tidak bisa dihapus; nonaktifkan supaya tidak dipilih lagi.
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('diagnosis-reference', 'delete');
         const current = await this.row(id);
@@ -218,7 +238,7 @@ export class DiagnosisReferences {
         );
         if (used)
             validation({
-                id: 'Baris ini sudah dipakai di pemeriksaan. Nonaktifkan saja supaya tidak dipilih lagi.',
+                id: 'Baris ini sudah dipakai. Nonaktifkan saja supaya tidak dipilih lagi.',
             });
         const deleted = await this.db.execute(
             `update ${this.table} set deleted_at = $1, updated_at = $1

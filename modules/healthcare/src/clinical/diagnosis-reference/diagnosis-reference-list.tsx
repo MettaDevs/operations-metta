@@ -33,7 +33,7 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 
-// Daftar dan kartu yang sama untuk jenis diagnosa, kasus diagnosa, prognosa, dan penyakit kronis: kode, nama, urutan,
+// Daftar dan kartu yang sama untuk semua daftar pendek klinis (jenis diagnosa sampai aturan pakai): kode, nama, urutan,
 // dan status aktif. Tiap halaman hanya memberi nama daftarnya dan judulnya.
 
 type List = Parameters<
@@ -117,8 +117,7 @@ function EntryCard({
         if (
             !(await confirm({
                 title: `Delete ${entry.name}?`,
-                description:
-                    'Baris ini tidak bisa dipilih lagi di pemeriksaan.',
+                description: 'Baris ini tidak bisa dipilih lagi.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))

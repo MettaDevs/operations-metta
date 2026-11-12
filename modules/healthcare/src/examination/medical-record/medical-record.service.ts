@@ -28,6 +28,7 @@ import {
     type OptionGroup,
     type PanelName,
 } from './medical-record.fields.ts';
+import { ExaminationOrders, practitionerId } from './medical-record.orders.ts';
 import {
     examinationPanels,
     sectionPanels,
@@ -219,13 +220,14 @@ const headerSchema = z.object({
     prognosis_id: z.string().nullable(),
 });
 
-// Daftar pendek panel Diagnosa milik tenant. Baris nonaktif ikut dikirim supaya nilai tersimpan tetap berlabel; layar
+// Daftar pendek panel Diagnosa dan aturan pakai resep milik tenant. Baris nonaktif ikut dikirim supaya nilai tersimpan tetap berlabel; layar
 // hanya menawarkan yang aktif.
 const referenceTables = {
     diagnosis_types: 'sim_m_diagnosa_jenis',
     diagnosis_cases: 'sim_m_diagnosa_kasus',
     prognoses: 'sim_m_prognosa',
     chronic_diseases: 'sim_m_penyakit_kronis',
+    usage_instructions: 'sim_m_aturan_pakai',
 } as const;
 type ReferenceList = keyof typeof referenceTables;
 const referenceRowSchema = z.object({
@@ -381,10 +383,14 @@ export async function missingRequired(
 // Isi tab Rekam Medis satu tujuan kunjungan: dibaca siapa pun yang boleh melihat antrean pemeriksaan, diubah hanya
 // selama tujuan diperiksa (sesudah Mulai periksa, sebelum Selesai periksa) oleh yang boleh memeriksa.
 export class MedicalRecords {
+    private readonly orders: ExaminationOrders;
+
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
-    ) {}
+    ) {
+        this.orders = new ExaminationOrders(db, workspace);
+    }
 
     // Data acuan layar: pilihan isian, kode alergi, bagian keadaan fisik, isian wajib, dan tenaga kesehatan.
     async metadata() {
@@ -472,6 +478,9 @@ export class MedicalRecords {
             diagnosis_cases: await reference(referenceTables.diagnosis_cases),
             prognoses: await reference(referenceTables.prognoses),
             chronic_diseases: await reference(referenceTables.chronic_diseases),
+            usage_instructions: await reference(
+                referenceTables.usage_instructions,
+            ),
             options: Object.fromEntries(
                 optionGroups.map((group) => [
                     group,
@@ -501,6 +510,12 @@ export class MedicalRecords {
                 ),
                 create_icd10: this.workspace.permissions.has(
                     'healthcare.icd10.create',
+                ),
+                create_procedure: this.workspace.permissions.has(
+                    'healthcare.procedure.create',
+                ),
+                create_drug: this.workspace.permissions.has(
+                    'healthcare.drug.create',
                 ),
             },
         };
@@ -662,6 +677,35 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
+            const drugAllergies = uses('history')
+                ? await this.orders.readDrugAllergies(
+                      input.drug_allergies,
+                      errors,
+                  )
+                : null;
+            const procedures = uses('procedures')
+                ? await this.orders.readProcedures(
+                      input.procedures,
+                      header?.id ?? null,
+                      errors,
+                  )
+                : null;
+            // Obat yang dicatat alergi pada Simpan yang sama ikut ditolak di resep.
+            const prescriptions = uses('prescriptions')
+                ? await this.orders.readPrescriptions(
+                      input.prescriptions,
+                      header?.id ?? null,
+                      new Set(
+                          drugAllergies ??
+                              (
+                                  await this.orders.drugAllergies(
+                                      destination.patient_id,
+                                  )
+                              ).map((row) => row.drug_id),
+                      ),
+                      errors,
+                  )
+                : null;
             if (values.physical) {
                 const required = await requiredErrors(
                     this.db,
@@ -738,6 +782,62 @@ export class MedicalRecords {
                     chronicDiseaseIds,
                     stamp,
                 );
+            if (drugAllergies)
+                await this.orders.writeDrugAllergies(
+                    destination.patient_id,
+                    recordId,
+                    drugAllergies,
+                    stamp,
+                );
+            if (procedures)
+                await this.orders.writeProcedures(recordId, procedures, stamp);
+            if (prescriptions)
+                await this.orders.writePrescriptions(
+                    recordId,
+                    prescriptions,
+                    stamp,
+                );
+        });
+        return this.present(await this.destination(destinationId, false));
+    }
+
+    // Kirim ke farmasi satu draf resep. Layar menyimpan perubahan yang belum disimpan lebih dulu, lalu mengirim versi
+    // pemeriksaan yang ia pegang. Batas ubahnya sama dengan Simpan: hanya selama tujuan diperiksa.
+    async sendPrescription(
+        destinationId: string,
+        prescriptionId: string,
+        body: unknown,
+    ) {
+        this.workspace.guard('examination', 'manage');
+        const version = isRecord(body) ? body.version : undefined;
+        await this.db.transaction(async () => {
+            const destination = await this.destination(destinationId, true);
+            if (destination.status === 'selesai')
+                validation({ status: finishedMessage });
+            if (destination.status !== 'diperiksa')
+                validation({ status: notStartedMessage });
+            const active = await sectionPanels(
+                this.db,
+                this.workspace.tenantId,
+                destination.section_id,
+            );
+            if (!active.includes('prescriptions'))
+                validation({
+                    prescriptions:
+                        'Bagian E-Resep tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
+                });
+            const header = await this.header(destination.id, true);
+            if (!header) validation({ prescription: 'Resep tidak ditemukan.' });
+            if (version !== header.version)
+                coded(409, 'stale_version', staleMessage);
+            const visit = await this.db.one(
+                z.object({ operating_unit_id: z.string(), date: z.string() }),
+                `select operating_unit_id, tanggal::text as date from sim_tr_registrasi
+                 where tenant_id = $1 and id = $2`,
+                [this.workspace.tenantId, destination.visit_id],
+            );
+            if (!visit) abort(404, 'Not Found');
+            await this.orders.send(header.id, prescriptionId, visit, nowSql());
         });
         return this.present(await this.destination(destinationId, false));
     }
@@ -882,6 +982,9 @@ export class MedicalRecords {
         if (uses('history')) {
             data.history = panelSchemas.history.parse(panelValues.history);
             data.allergy = await this.presentAllergy(destination.patient_id);
+            data.drug_allergies = await this.orders.drugAllergies(
+                destination.patient_id,
+            );
         }
         if (uses('status'))
             data.status = panelSchemas.status.parse(panelValues.status);
@@ -946,6 +1049,12 @@ export class MedicalRecords {
                 ? await this.chronicDiseaseIds(header.id)
                 : [];
         }
+        if (uses('procedures'))
+            data.procedures = await this.orders.procedures(header?.id ?? null);
+        if (uses('prescriptions'))
+            data.prescriptions = await this.orders.prescriptions(
+                header?.id ?? null,
+            );
         return {
             data,
             context: {
@@ -1008,8 +1117,6 @@ export class MedicalRecords {
         return sets;
     }
 
-    // Nakes aktif yang profesinya boleh mengisi peran itu (centang di Setup → Profesi). Nakes yang sudah tersimpan di
-    // pemeriksaan ini tetap diterima walau sejak itu nonaktif atau profesinya berubah.
     private async practitioner(
         raw: unknown,
         role: 'isi_tenaga_medis' | 'isi_perawat',
@@ -1017,20 +1124,15 @@ export class MedicalRecords {
         field: string,
         errors: Errors,
     ): Promise<string | null> {
-        if (raw === null || raw === undefined || raw === '') return null;
-        const id = typeof raw === 'string' ? lookupId(raw) : null;
-        const found = id
-            ? await this.db.one(
-                  z.object({ id: z.string() }),
-                  `select n.id from sim_m_nakes n
-                   join sim_m_profesi pr on pr.tenant_id = n.tenant_id and pr.id = n.profesi_id
-                   where n.tenant_id = $1 and n.id = $2 and n.deleted_at is null
-                     and (n.id = $3 or (n.aktif and pr.${role}))`,
-                  [this.workspace.tenantId, id, saved],
-              )
-            : undefined;
-        if (!found) add(errors, field, 'Pilih tenaga kesehatan dari daftar.');
-        return found?.id ?? null;
+        return practitionerId(
+            this.db,
+            this.workspace.tenantId,
+            raw,
+            role,
+            saved,
+            field,
+            errors,
+        );
     }
 
     private async allergyId(
