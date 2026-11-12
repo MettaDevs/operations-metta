@@ -18,7 +18,11 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
-import { locationInputSchema, locationRowSchema } from './location.schema.ts';
+import {
+    locationInputSchema,
+    locationRowSchema,
+    operatingUnitRowSchema,
+} from './location.schema.ts';
 
 const rowSql = `select * from (
                     select l.id, l.kode as code, l.nama as name, l.transit as is_transit,
@@ -47,10 +51,12 @@ export class Locations {
             this.workspace.tenantId,
             activeLegalEntity(this.workspace),
         ];
+        let filter = '';
         const unit = lookupId(parameters.get('operating_unit_id') ?? '');
-        const filter = unit
-            ? ` and operating_unit_id = $${bindings.push(unit)}`
-            : '';
+        if (unit) filter += ` and operating_unit_id = $${bindings.push(unit)}`;
+        const transit = parameters.get('transit');
+        if (transit === 'true' || transit === 'false')
+            filter += ` and is_transit = ${transit}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,
@@ -71,6 +77,30 @@ export class Locations {
             can_manage: this.workspace.permissions.has(
                 'core.inventory-location.update',
             ),
+        };
+    }
+
+    // Pilihan operating unit di kartu lokasi: operating unit aktif tenant ini, sama dengan yang diterima saat menyimpan.
+    async operatingUnits(parameters: URLSearchParams) {
+        this.workspace.guard('inventory-location', 'read');
+        const batch = await incrementalList(this.db, {
+            query: `select * from (
+                        select o.id, o.name, u.number
+                        from organizations o
+                        left join operating_units u on u.tenant_id = o.tenant_id and u.organization_id = o.id
+                        where o.tenant_id = $1 and o.classification = 'operating_unit' and o.status = 'active'
+                    ) units where true`,
+            bindings: [this.workspace.tenantId],
+            parameters,
+            columns: { name: 'name', number: 'number' },
+            searchColumns: ['name', 'number'],
+            numericColumns: [],
+            defaultSort: 'name',
+            defaultDirection: 'asc',
+        });
+        return {
+            data: batch.data.map((row) => operatingUnitRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
         };
     }
 
@@ -193,7 +223,7 @@ export class Locations {
                 {
                     sql: 'select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and lokasi_id = $2 limit 1',
                     message:
-                        'Lokasi ini sudah punya kartu gudang, jadi tidak bisa dihapus.',
+                        'Lokasi ini sudah punya gerak stok, jadi tidak bisa dihapus.',
                 },
                 {
                     sql: 'select 1 as found from gd_tr_penyesuaian where tenant_id = $1 and lokasi_id = $2 and deleted_at is null limit 1',

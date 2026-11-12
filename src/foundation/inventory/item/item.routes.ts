@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { coreWorkspace } from '../../../platform/access/index.ts';
-import { ok } from '../../../platform/http/index.ts';
-import { masterRoutes, route } from '../inventory.routes.ts';
-import { itemInputSchema } from './item.schema.ts';
+import { ok, type listParametersSchema } from '../../../platform/http/index.ts';
+import { masterRoutes, route, searchParams } from '../inventory.routes.ts';
+import { itemInputSchema, itemListQuerySchema } from './item.schema.ts';
 import { Items } from './item.service.ts';
 
 export function itemRoutes() {
@@ -11,6 +11,7 @@ export function itemRoutes() {
         path,
         itemInputSchema,
         (db, workspace) => new Items(db, workspace),
+        itemListQuerySchema,
     );
     return {
         inventoryItemList: routes.list,
@@ -18,13 +19,18 @@ export function itemRoutes() {
         inventoryItemUpdate: routes.update,
         inventoryItemDelete: routes.delete,
         inventoryItemBatches: route('GET', `${path}/{id}/batches`)
-            .input(z.object({ params: z.object({ id: z.string() }) }))
+            .input(
+                z.object({
+                    params: z.object({ id: z.string() }),
+                    query: z.custom<z.input<typeof listParametersSchema>>(),
+                }),
+            )
             .handler(async ({ context, input }) =>
                 ok(
                     await new Items(
                         context.db,
                         await coreWorkspace(context),
-                    ).batches(input.params.id),
+                    ).batches(input.params.id, searchParams(context)),
                 ),
             ),
     };

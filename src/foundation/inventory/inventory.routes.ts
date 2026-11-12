@@ -34,23 +34,26 @@ type MasterService<L, C, U, D> = {
     destroy(request: Request, id: string, body: unknown): Promise<D>;
 };
 
-// Schema isian hanya memberi tipe body kepada pemanggil di layar; isian dan izinnya diperiksa service.
+// Schema isian dan saringan daftar hanya memberi tipe kepada pemanggil di layar; isian, saringan, dan izinnya diperiksa
+// service.
 export function masterRoutes<
     Input extends z.ZodType,
     L extends object,
     C extends object,
     U extends object,
     D extends object,
+    Query extends z.ZodType = typeof listParametersSchema,
 >(
     path: `/${string}`,
     _input: Input,
     open: (db: Database, workspace: Workspace) => MasterService<L, C, U, D>,
+    _query?: Query,
 ) {
     const service = async (context: Context, body?: unknown) =>
         open(context.db, await coreWorkspace(context, body));
     return {
         list: route('GET', path)
-            .input(typedQuery<z.input<typeof listParametersSchema>>())
+            .input(typedQuery<z.input<Query>>())
             .handler(async ({ context }) =>
                 ok(await (await service(context)).list(searchParams(context))),
             ),

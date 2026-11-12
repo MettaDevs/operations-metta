@@ -160,7 +160,7 @@ export class TrackingCodes {
                     if (posted)
                         validation({
                             batch_required:
-                                'Barang dengan profil ini sudah punya kartu gudang, jadi wajib batch tidak bisa diubah. Buat profil baru untuk barang lain.',
+                                'Barang dengan profil ini sudah punya gerak stok, jadi wajib batch tidak bisa diubah. Buat profil baru untuk barang lain.',
                         });
                 }
                 updated = await this.db.execute(

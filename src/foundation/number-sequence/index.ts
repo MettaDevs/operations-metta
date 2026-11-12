@@ -12,6 +12,9 @@ export {
     updateSchema as numberSequenceUpdateSchema,
     type Sequence as NumberSequence,
 } from './number-sequence.schema.ts';
-export { NumberSequences } from './number-sequence.service.ts';
+export {
+    legalEntitySequences,
+    NumberSequences,
+} from './number-sequence.service.ts';
 export { numberSequenceRoutes } from './number-sequence.routes.ts';
 export { registerOrganizationDefaults } from './organization-defaults.ts';

@@ -24,7 +24,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 const DEFAULT_WIDTH = 384;
 const MIN_WIDTH = 288;
 
-/** Wadah FactBox bersama. Grid menjaga form tetap terpasang saat panel diubah ukurannya atau layar menyempit. */
+/**
+ * Wadah FactBox bersama. Grid menjaga form tetap terpasang saat panel diubah ukurannya atau layar menyempit. Tanpa
+ * `attachments` panel hanya berisi detail, tanpa tab, untuk record yang memang belum punya lampiran.
+ */
 export function FactBox({
     children,
     details,
@@ -37,7 +40,7 @@ export function FactBox({
 }: {
     children: ReactNode;
     details: ReactNode;
-    attachments: ReactNode;
+    attachments?: ReactNode;
     attachmentCount?: number | null;
     defaultOpen?: boolean;
     className?: string;
@@ -47,6 +50,8 @@ export function FactBox({
     toolbarContainer?: HTMLElement | null;
 }) {
     const externalToolbar = toolbarContainer !== undefined;
+    const withAttachments = attachments !== undefined;
+    const contents = withAttachments ? 'detail dan lampiran' : 'detail';
     const [open, setOpen] = useState(defaultOpen);
     const [tab, setTab] = useState('details');
     const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -94,12 +99,12 @@ export function FactBox({
                     aria-label={
                         expanded
                             ? 'Kembalikan lebar panel'
-                            : 'Perlebar panel detail dan lampiran'
+                            : `Perlebar panel ${contents}`
                     }
                     title={
                         expanded
                             ? 'Kembalikan lebar panel'
-                            : 'Perlebar panel detail dan lampiran'
+                            : `Perlebar panel ${contents}`
                     }
                     onClick={() => resize(expanded ? DEFAULT_WIDTH : maxWidth)}
                 >
@@ -113,13 +118,13 @@ export function FactBox({
                     size={externalToolbar ? 'icon-sm' : 'icon'}
                     aria-label={
                         open
-                            ? 'Sembunyikan detail dan lampiran'
-                            : 'Tampilkan detail dan lampiran'
+                            ? `Sembunyikan ${contents}`
+                            : `Tampilkan ${contents}`
                     }
                     title={
                         open
-                            ? 'Sembunyikan detail dan lampiran'
-                            : 'Tampilkan detail dan lampiran'
+                            ? `Sembunyikan ${contents}`
+                            : `Tampilkan ${contents}`
                     }
                 >
                     {open ? <PanelRightClose /> : <PanelRightOpen />}
@@ -160,7 +165,7 @@ export function FactBox({
                     decorative={false}
                     orientation="vertical"
                     tabIndex={0}
-                    aria-label="Ubah lebar panel detail dan lampiran"
+                    aria-label={`Ubah lebar panel ${contents}`}
                     aria-orientation="vertical"
                     aria-controls={panelId}
                     aria-valuemin={MIN_WIDTH}
@@ -228,7 +233,7 @@ export function FactBox({
             )}
             <aside
                 id={panelId}
-                aria-label="Detail dan lampiran"
+                aria-label={withAttachments ? 'Detail dan lampiran' : 'Detail'}
                 className={cn(
                     'min-w-0 xl:sticky xl:top-0',
                     fillHeight && 'min-h-0 xl:overflow-y-auto',
@@ -241,40 +246,46 @@ export function FactBox({
                       createPortal(controls, toolbarContainer)
                     : controls}
                 <CollapsibleContent>
-                    <Tabs value={tab} onValueChange={setTab}>
+                    {withAttachments ? (
+                        <Tabs value={tab} onValueChange={setTab}>
+                            <Card>
+                                <CardHeader>
+                                    <TabsList
+                                        variant="line"
+                                        aria-label="Informasi pendamping"
+                                    >
+                                        <TabsTrigger value="details">
+                                            <Info />
+                                            Detail
+                                        </TabsTrigger>
+                                        <TabsTrigger value="attachments">
+                                            <Paperclip />
+                                            Lampiran
+                                            {attachmentCount != null
+                                                ? ` (${attachmentCount})`
+                                                : ''}
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </CardHeader>
+                                <CardContent>
+                                    <TabsContent value="details">
+                                        {details}
+                                    </TabsContent>
+                                    <TabsContent
+                                        value="attachments"
+                                        forceMount
+                                        className="data-[state=inactive]:hidden"
+                                    >
+                                        {attachments}
+                                    </TabsContent>
+                                </CardContent>
+                            </Card>
+                        </Tabs>
+                    ) : (
                         <Card>
-                            <CardHeader>
-                                <TabsList
-                                    variant="line"
-                                    aria-label="Informasi pendamping"
-                                >
-                                    <TabsTrigger value="details">
-                                        <Info />
-                                        Detail
-                                    </TabsTrigger>
-                                    <TabsTrigger value="attachments">
-                                        <Paperclip />
-                                        Lampiran
-                                        {attachmentCount != null
-                                            ? ` (${attachmentCount})`
-                                            : ''}
-                                    </TabsTrigger>
-                                </TabsList>
-                            </CardHeader>
-                            <CardContent>
-                                <TabsContent value="details">
-                                    {details}
-                                </TabsContent>
-                                <TabsContent
-                                    value="attachments"
-                                    forceMount
-                                    className="data-[state=inactive]:hidden"
-                                >
-                                    {attachments}
-                                </TabsContent>
-                            </CardContent>
+                            <CardContent>{details}</CardContent>
                         </Card>
-                    </Tabs>
+                    )}
                 </CollapsibleContent>
             </aside>
         </Collapsible>

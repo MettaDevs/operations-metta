@@ -2,7 +2,10 @@ import { z } from 'zod';
 import { coreWorkspace } from '../../../platform/access/index.ts';
 import { ok, type Context } from '../../../platform/http/index.ts';
 import { masterRoutes, record, route } from '../inventory.routes.ts';
-import { adjustmentInputSchema } from './adjustment.schema.ts';
+import {
+    adjustmentInputSchema,
+    adjustmentListQuerySchema,
+} from './adjustment.schema.ts';
 import { Adjustments } from './adjustment.service.ts';
 
 async function adjustments(context: Context, body?: unknown) {
@@ -15,6 +18,7 @@ export function adjustmentRoutes() {
         path,
         adjustmentInputSchema,
         (db, workspace) => new Adjustments(db, workspace),
+        adjustmentListQuerySchema,
     );
     return {
         inventoryAdjustmentList: routes.list,
@@ -25,6 +29,11 @@ export function adjustmentRoutes() {
             .input(z.object({ params: z.object({ id: z.string() }) }))
             .handler(async ({ context, input }) =>
                 ok(await (await adjustments(context)).show(input.params.id)),
+            ),
+        inventoryAdjustmentEntries: route('GET', `${path}/{id}/entries`)
+            .input(z.object({ params: z.object({ id: z.string() }) }))
+            .handler(async ({ context, input }) =>
+                ok(await (await adjustments(context)).entries(input.params.id)),
             ),
         inventoryAdjustmentPost: route('POST', `${path}/{id}/post`)
             .input(record<{ version: number }>())

@@ -32,6 +32,7 @@ export const ledgerQuerySchema = listParametersSchema.extend({
     item_id: z.string(),
     location_id: z.string().optional(),
     batch_id: z.string().optional(),
+    kind: z.enum(entryKinds).optional(),
     from: z.string(),
     to: z.string(),
 });
@@ -48,7 +49,10 @@ export const ledgerRowSchema = z.object({
     location: reference,
     batch,
     quantity: z.string(),
+    // Bagian baris yang belum diterapkan: stok yang masih ada pada baris masuk, atau kekurangan pada baris keluar.
+    remaining_quantity: z.string(),
     cost_amount: z.string(),
+    // Saldo berjalan sejak opening_balance atas baris yang lolos saringan.
     balance: z.string(),
     reversed_entry_id: z.string().nullable(),
 });

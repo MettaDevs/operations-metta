@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { listParametersSchema } from '../../../platform/http/index.ts';
 
 const reference = z.object({
     id: z.string(),
@@ -6,7 +7,10 @@ const reference = z.object({
     name: z.string(),
 });
 
-// refuse_negative_stock kosong berarti mengikuti parameter persediaan legal entity.
+// refuse_negative_stock kosong berarti mengikuti parameter persediaan legal entity. inventory adalah stok di semua
+// lokasi dalam satuan dasar. has_entries berarti barang sudah punya kartu gudang, sehingga profil pelacakannya terkunci.
+// has_open_entries berarti masih ada baris kartu gudang dengan sisa, sehingga satuan dasarnya terkunci; begitu semua
+// sisa tertutup, satuan dasar boleh diganti lagi.
 export const itemRowSchema = z.object({
     id: z.string(),
     code: z.string(),
@@ -19,7 +23,15 @@ export const itemRowSchema = z.object({
     expiry_required: z.boolean(),
     refuse_negative_stock: z.boolean().nullable(),
     is_blocked: z.boolean(),
+    inventory: z.string(),
+    has_entries: z.boolean(),
+    has_open_entries: z.boolean(),
     version: z.number(),
+});
+
+export const itemListQuerySchema = listParametersSchema.extend({
+    category_id: z.string().optional(),
+    blocked: z.enum(['true', 'false']).optional(),
 });
 
 // tracking_code_id yang tidak dikirim saat membuat barang disalin dari kategorinya; saat mengubah, berarti tetap.

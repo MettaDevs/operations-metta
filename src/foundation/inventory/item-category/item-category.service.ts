@@ -24,13 +24,33 @@ import {
     itemCategoryRowSchema,
 } from './item-category.schema.ts';
 
+// Urutan pohon seperti Item Categories BC: induk sebelum anaknya, saudara menurut kode. tree_key menyambung peringkat
+// enam digit setiap tingkat, jadi urutannya sama di collation apa pun dan bisa dipakai cursor daftar bertahap.
+// Kategori yang induknya sudah tidak ada ditampilkan sebagai akar.
 const rowSql = `select * from (
+                    with recursive ranked as (
+                        select k.id, k.parent_id,
+                               lpad((row_number() over (partition by k.parent_id order by k.kode, k.id))::text, 6, '0')
+                               as rank
+                        from gd_m_kategori k
+                        where k.tenant_id = $1 and k.legal_entity_id = $2 and k.deleted_at is null
+                    ), tree as (
+                        select r.id, 0 as depth, r.rank as tree_key from ranked r
+                        where r.parent_id is null or not exists (select 1 from ranked p where p.id = r.parent_id)
+                        union all
+                        select r.id, t.depth + 1, t.tree_key || r.rank from ranked r
+                        join tree t on r.parent_id = t.id
+                        where t.depth < 30
+                    )
                     select c.id, c.kode as code, c.nama as name, c.version, c.parent_id,
+                           coalesce(tree.depth, 0) as depth, coalesce(tree.tree_key, '') as tree_key,
+                           exists (select 1 from ranked child where child.parent_id = c.id) as has_children,
                            case when parent.id is null then null else json_build_object(
                                'id', parent.id, 'code', parent.kode, 'name', parent.nama) end as parent,
                            case when profile.id is null then null else json_build_object(
                                'id', profile.id, 'code', profile.kode, 'name', profile.nama) end as tracking_code
                     from gd_m_kategori c
+                    left join tree on tree.id = c.id
                     left join gd_m_kategori parent on parent.tenant_id = c.tenant_id and parent.id = c.parent_id
                     left join gd_m_profil_pelacakan profile on profile.tenant_id = c.tenant_id
                          and profile.id = c.profil_pelacakan_id
@@ -61,10 +81,10 @@ export class ItemCategories {
             query: rowSql,
             bindings: [this.scope.tenantId, this.scope.legalEntityId],
             parameters,
-            columns: { code: 'code', name: 'name' },
+            columns: { tree: 'tree_key', code: 'code', name: 'name' },
             searchColumns: ['code', 'name'],
             numericColumns: [],
-            defaultSort: 'code',
+            defaultSort: 'tree',
             defaultDirection: 'asc',
         });
         return {

@@ -33,7 +33,11 @@ export const adjustmentInputSchema = z.object({
 export const adjustmentLineRowSchema = z.object({
     id: z.string(),
     line_no: z.number(),
-    item: reference.extend({ unit: z.string() }),
+    item: reference.extend({
+        unit: z.string(),
+        batch_required: z.boolean(),
+        expiry_required: z.boolean(),
+    }),
     quantity: z.string(),
     batch_number: z.string().nullable(),
     expiry_date: z.string().nullable(),
@@ -62,5 +66,22 @@ export const adjustmentRowSchema = z.object({
 
 export const adjustmentListQuerySchema = listParametersSchema.extend({
     status: z.enum(adjustmentStatuses).optional(),
-    direction: z.enum(adjustmentDirections).optional(),
+    stock_direction: z.enum(adjustmentDirections).optional(),
+});
+
+// Baris kartu gudang yang ditulis posting dokumen ini, termasuk baris pembalik bila postingnya dibatalkan. Stok keluar
+// tanpa batch terpilih menunjukkan batch yang diambil sesuai cara pengambilan.
+export const adjustmentEntryRowSchema = z.object({
+    id: z.string(),
+    item: reference.extend({ unit: z.string() }),
+    batch: z
+        .object({
+            id: z.string(),
+            batch_number: z.string(),
+            expiry_date: z.string().nullable(),
+        })
+        .nullable(),
+    quantity: z.string(),
+    cost_amount: z.string(),
+    reversed_entry_id: z.string().nullable(),
 });

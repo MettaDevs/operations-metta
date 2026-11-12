@@ -34,9 +34,18 @@ import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/hea
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
+import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
+import { page as foundationInventoryCodeListReasonCodesPage } from './foundation/inventory/code-list/reason-codes.page.tsx';
+import { page as foundationInventoryCodeListUnitsOfMeasurePage } from './foundation/inventory/code-list/units-of-measure.page.tsx';
+import { page as foundationInventoryItemCategoryItemCategoriesPage } from './foundation/inventory/item-category/item-categories.page.tsx';
+import { page as foundationInventoryItemLedgerItemLedgerEntriesPage } from './foundation/inventory/item-ledger/item-ledger-entries.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
+import { page as foundationInventoryItemItemsPage } from './foundation/inventory/item/items.page.tsx';
+import { page as foundationInventoryLocationLocationsPage } from './foundation/inventory/location/locations.page.tsx';
+import { page as foundationInventorySetupInventorySetupPage } from './foundation/inventory/setup/inventory-setup.page.tsx';
+import { page as foundationInventoryTrackingCodeItemTrackingCodesPage } from './foundation/inventory/tracking-code/item-tracking-codes.page.tsx';
 import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
 import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
@@ -429,6 +438,14 @@ const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
     staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
 });
 
+const foundationInventoryAdjustmentAdjustmentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryAdjustmentAdjustmentsPage.path,
+    component: foundationInventoryAdjustmentAdjustmentsPage.component,
+    validateSearch: foundationInventoryAdjustmentAdjustmentsPage.validateSearch,
+    staticData: { title: foundationInventoryAdjustmentAdjustmentsPage.title },
+});
+
 const foundationInventoryCodeListFundingSourcesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryCodeListFundingSourcesPage.path,
@@ -449,12 +466,85 @@ const foundationInventoryCodeListProcurementProgramsRoute = createRoute({
     },
 });
 
+const foundationInventoryCodeListReasonCodesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListReasonCodesPage.path,
+    component: foundationInventoryCodeListReasonCodesPage.component,
+    validateSearch: foundationInventoryCodeListReasonCodesPage.validateSearch,
+    staticData: { title: foundationInventoryCodeListReasonCodesPage.title },
+});
+
+const foundationInventoryCodeListUnitsOfMeasureRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListUnitsOfMeasurePage.path,
+    component: foundationInventoryCodeListUnitsOfMeasurePage.component,
+    validateSearch:
+        foundationInventoryCodeListUnitsOfMeasurePage.validateSearch,
+    staticData: { title: foundationInventoryCodeListUnitsOfMeasurePage.title },
+});
+
+const foundationInventoryItemCategoryItemCategoriesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemCategoryItemCategoriesPage.path,
+    component: foundationInventoryItemCategoryItemCategoriesPage.component,
+    validateSearch:
+        foundationInventoryItemCategoryItemCategoriesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryItemCategoryItemCategoriesPage.title,
+    },
+});
+
+const foundationInventoryItemLedgerItemLedgerEntriesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemLedgerItemLedgerEntriesPage.path,
+    component: foundationInventoryItemLedgerItemLedgerEntriesPage.component,
+    validateSearch:
+        foundationInventoryItemLedgerItemLedgerEntriesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryItemLedgerItemLedgerEntriesPage.title,
+    },
+});
+
 const foundationInventoryItemUnitItemUnitsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryItemUnitItemUnitsPage.path,
     component: foundationInventoryItemUnitItemUnitsPage.component,
     validateSearch: foundationInventoryItemUnitItemUnitsPage.validateSearch,
     staticData: { title: foundationInventoryItemUnitItemUnitsPage.title },
+});
+
+const foundationInventoryItemItemsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemItemsPage.path,
+    component: foundationInventoryItemItemsPage.component,
+    validateSearch: foundationInventoryItemItemsPage.validateSearch,
+    staticData: { title: foundationInventoryItemItemsPage.title },
+});
+
+const foundationInventoryLocationLocationsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryLocationLocationsPage.path,
+    component: foundationInventoryLocationLocationsPage.component,
+    validateSearch: foundationInventoryLocationLocationsPage.validateSearch,
+    staticData: { title: foundationInventoryLocationLocationsPage.title },
+});
+
+const foundationInventorySetupInventorySetupRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventorySetupInventorySetupPage.path,
+    component: foundationInventorySetupInventorySetupPage.component,
+    staticData: { title: foundationInventorySetupInventorySetupPage.title },
+});
+
+const foundationInventoryTrackingCodeItemTrackingCodesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryTrackingCodeItemTrackingCodesPage.path,
+    component: foundationInventoryTrackingCodeItemTrackingCodesPage.component,
+    validateSearch:
+        foundationInventoryTrackingCodeItemTrackingCodesPage.validateSearch,
+    staticData: {
+        title: foundationInventoryTrackingCodeItemTrackingCodesPage.title,
+    },
 });
 
 const foundationInventoryTransferTransferOrdersRoute = createRoute({
@@ -664,9 +754,18 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServiceSectionSectionsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
+        foundationInventoryAdjustmentAdjustmentsRoute,
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,
+        foundationInventoryCodeListReasonCodesRoute,
+        foundationInventoryCodeListUnitsOfMeasureRoute,
+        foundationInventoryItemCategoryItemCategoriesRoute,
+        foundationInventoryItemLedgerItemLedgerEntriesRoute,
         foundationInventoryItemUnitItemUnitsRoute,
+        foundationInventoryItemItemsRoute,
+        foundationInventoryLocationLocationsRoute,
+        foundationInventorySetupInventorySetupRoute,
+        foundationInventoryTrackingCodeItemTrackingCodesRoute,
         foundationInventoryTransferTransferOrdersRoute,
         foundationInventoryTransferTransferReceiptsRoute,
         foundationInventoryTransferTransferShipmentsRoute,
