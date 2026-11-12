@@ -38,7 +38,7 @@ import {
 } from './adjustment.schema.ts';
 
 const sourceType = 'penyesuaian';
-const numberReference = 'core.inventory-adjustment-number';
+export const adjustmentNumberReference = 'core.inventory-adjustment-number';
 
 type Direction = (typeof adjustmentDirections)[number];
 
@@ -493,7 +493,7 @@ export class Adjustments {
                 tenantId: this.scope.tenantId,
                 moduleId: 'core',
             }).issue({
-                reference: numberReference,
+                reference: adjustmentNumberReference,
                 key: `${sourceType}:${id}`,
                 documentDate: data.postingDate,
                 legalEntityId: this.scope.legalEntityId,

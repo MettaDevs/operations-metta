@@ -36,7 +36,7 @@ export function AdjustmentEntries({
     return (
         <CollapsibleSection
             value="entries"
-            title="Kartu gudang"
+            title="Kartu stok"
             summary={rows ? `${rows.length} baris` : ''}
         >
             {rows ? (
@@ -45,7 +45,7 @@ export function AdjustmentEntries({
                     getRowKey={(entry) => entry.id}
                     getRowLabel={(entry) => entry.item.name}
                     scrollMode="inline"
-                    emptyMessage="Posting dokumen ini belum menulis baris kartu gudang."
+                    emptyMessage="Posting dokumen ini belum menulis baris kartu stok."
                     columns={[
                         {
                             id: 'item',
@@ -117,9 +117,7 @@ export function AdjustmentEntries({
                             width: 150,
                             cell: (entry) =>
                                 entry.reversed_entry_id ? (
-                                    <Badge variant="secondary">
-                                        Baris pembalik
-                                    </Badge>
+                                    <Badge variant="outline">Pembalik</Badge>
                                 ) : null,
                         },
                     ]}
@@ -137,9 +135,9 @@ export function AdjustmentEntries({
                         {entries.isError
                             ? errorText(
                                   entries.error,
-                                  'Kartu gudang dokumen ini belum dapat dimuat.',
+                                  'Kartu stok dokumen ini belum dapat dimuat.',
                               )
-                            : 'Memuat kartu gudang…'}
+                            : 'Memuat kartu stok…'}
                     </p>
                     {entries.isError && (
                         <Button

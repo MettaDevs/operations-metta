@@ -13,13 +13,19 @@ import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { Select } from '@operations-metta/ui/select';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
+import { useRecordTransition } from '@operations-metta/ui/use-record-transition';
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { FilterX } from 'lucide-react';
 import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
-import { api, definePage, errorText } from '../../../platform/shell/index.ts';
+import {
+    api,
+    definePage,
+    errorText,
+    useUnsavedChangesGuard,
+} from '../../../platform/shell/index.ts';
 import { displayNumber } from '../display-number.ts';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import {
@@ -58,6 +64,8 @@ function ItemsPage(): ReactNode {
     // Baris terakhir yang dibuka atau disimpan, supaya kartu tidak menunggu daftar dimuat ulang.
     const [opened, setOpened] = useState<Item | null>(null);
     const [canManage, setCanManage] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    const [busy, setBusy] = useState(false);
     const [filtersOpen, setFiltersOpen] = useState(false);
     // Nama kategori yang dipilih di filter; URL hanya menyimpan id-nya.
     const [pickedCategory, setPickedCategory] = useState<ItemCategory | null>(
@@ -65,6 +73,8 @@ function ItemsPage(): ReactNode {
     );
     const [creatingCategory, setCreatingCategory] = useState(false);
     const filterPanelId = useId();
+    const transition = useRecordTransition(dirty, busy);
+    const leaveGuard = useUnsavedChangesGuard(dirty, () => setCreating(false));
     const { category: categoryId, status, item: itemId } = search;
     const loader = useCallback<ListLoader<Item>>(
         async ({ query, cursor, sort, signal }) => {
@@ -109,9 +119,12 @@ function ItemsPage(): ReactNode {
             return body.data[0] ?? null;
         },
         enabled: Boolean(itemId) && !listed && !kept,
+        // Versi baru dari server memasang ulang kartu; memuat ulang saat jendela kembali aktif bisa membuang isian.
+        refetchOnWindowFocus: false,
     });
     const record = itemId ? (kept ?? listed ?? fetched.data ?? null) : null;
 
+    // Perubahan yang belum disimpan sudah dikonfirmasi lewat transition sebelum alamat berubah.
     const setSearch = (next: Partial<Search>, replace = true) =>
         void navigate({
             search: (current) =>
@@ -124,6 +137,7 @@ function ItemsPage(): ReactNode {
                     ),
                 ),
             replace,
+            ignoreBlocker: true,
         });
     const openItem = (item: Item) => {
         setOpened(item);
@@ -135,6 +149,12 @@ function ItemsPage(): ReactNode {
         if (itemId) setSearch({ item: undefined }, false);
         list.reload();
     };
+    const startNew = () =>
+        transition.request(() => {
+            setSearch({ item: undefined });
+            setCreateKey((key) => key + 1);
+            setCreating(true);
+        });
     const shownCategory = (): Reference | null => {
         if (!categoryId) return null;
         if (pickedCategory?.id === categoryId) return pickedCategory;
@@ -164,14 +184,7 @@ function ItemsPage(): ReactNode {
                         }}
                     >
                         {canManage && (
-                            <ActionButton
-                                action="create"
-                                onClick={() => {
-                                    setSearch({ item: undefined });
-                                    setCreateKey((key) => key + 1);
-                                    setCreating(true);
-                                }}
-                            />
+                            <ActionButton action="create" onClick={startNew} />
                         )}
                     </RecordActionBar>
                 }
@@ -346,10 +359,14 @@ function ItemsPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(next) => {
-                        if (!next) closeCard();
+                        if (!next) transition.request(closeCard);
                     }}
                 >
-                    <PageDialogContent title="Barang">
+                    <PageDialogContent
+                        title="Barang"
+                        busy={busy}
+                        onNew={canManage ? startNew : undefined}
+                    >
                         {!itemId || record ? (
                             <ItemCard
                                 key={
@@ -365,6 +382,8 @@ function ItemsPage(): ReactNode {
                                     list.reload();
                                 }}
                                 onClose={closeCard}
+                                onBusyChange={setBusy}
+                                onDirtyChange={setDirty}
                             />
                         ) : (
                             <p
@@ -388,6 +407,8 @@ function ItemsPage(): ReactNode {
                     </PageDialogContent>
                 </PageDialog>
             )}
+            {transition.confirmation}
+            {leaveGuard}
             {creatingCategory && (
                 <PageDialog
                     open

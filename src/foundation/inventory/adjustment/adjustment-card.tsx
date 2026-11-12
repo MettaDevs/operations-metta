@@ -48,7 +48,7 @@ import {
 } from './adjustment-labels.tsx';
 import {
     AdjustmentLines,
-    lineBody,
+    linesBody,
     linesOf,
     withItem,
     withoutDirectionValues,
@@ -259,16 +259,21 @@ function AdjustmentForm({
         }
     };
 
-    const save = () =>
-        run('save', async () => {
+    const save = async () => {
+        const lines = linesBody(draft.direction, draft.lines);
+        if (Object.keys(lines.errors).length) {
+            setAction('save');
+            setMessage(null);
+            setErrors(lines.errors);
+            return;
+        }
+        await run('save', async () => {
             const body = {
                 direction: draft.direction,
                 location_id: draft.location?.id ?? '',
                 posting_date: draft.postingDate,
                 reason_id: draft.reason?.id ?? '',
-                lines: draft.lines.map((line) =>
-                    lineBody(draft.direction, line),
-                ),
+                lines: lines.lines,
             };
             const { body: saved } = document
                 ? await api.inventoryAdjustmentUpdate({
@@ -283,6 +288,7 @@ function AdjustmentForm({
             );
             onSaved(saved.data);
         });
+    };
 
     const remove = async () => {
         if (!document) return;
@@ -313,7 +319,7 @@ function AdjustmentForm({
         if (
             !(await confirm({
                 title: `Posting penyesuaian ${document.number}?`,
-                description: `Stok barang di ${document.location.name} ${change} sesuai baris dokumen ini dan tercatat di kartu gudang. Setelah diposting, dokumen tidak bisa diubah atau dihapus lagi; kesalahan diperbaiki lewat Batal posting.`,
+                description: `Stok barang di ${document.location.name} ${change} sesuai baris dokumen ini dan tercatat di kartu stok. Setelah diposting, dokumen tidak bisa diubah atau dihapus lagi; kesalahan diperbaiki lewat Batal posting.`,
                 confirmLabel: 'Posting',
             }))
         )
@@ -334,7 +340,7 @@ function AdjustmentForm({
             !(await confirm({
                 title: `Batal posting ${document.number}?`,
                 description:
-                    'Kartu gudang mendapat baris pembalik yang mengembalikan stok seperti sebelum dokumen ini diposting. Dokumen ditutup sebagai dibatalkan dan tidak bisa diposting lagi; buat penyesuaian baru bila stok masih perlu disesuaikan.',
+                    'Kartu stok mendapat baris pembalik yang mengembalikan stok seperti sebelum dokumen ini diposting. Dokumen ditutup sebagai dibatalkan dan tidak bisa diposting lagi; buat penyesuaian baru bila stok masih perlu disesuaikan.',
                 confirmLabel: 'Batal posting',
                 destructive: true,
             }))
@@ -359,6 +365,21 @@ function AdjustmentForm({
         setErrors({});
         setMessage(null);
     };
+
+    // Batch yang diambil milik lokasi lama, jadi ikut kosong saat lokasi diganti, sama seperti saat arah diganti.
+    const changeLocation = (location: Reference) =>
+        setDraft((current) =>
+            current.location?.id === location.id
+                ? current
+                : {
+                      ...current,
+                      location: reference(location),
+                      lines: current.lines.map((line) => ({
+                          ...line,
+                          batch: null,
+                      })),
+                  },
+        );
 
     const changeDirection = (direction: Direction) =>
         setDraft((current) =>
@@ -385,10 +406,7 @@ function AdjustmentForm({
                             canManage
                             onSaved={(location) => {
                                 close();
-                                setDraft((current) => ({
-                                    ...current,
-                                    location: reference(location),
-                                }));
+                                changeLocation(location);
                             }}
                             onClose={close}
                         />
@@ -496,7 +514,7 @@ function AdjustmentForm({
                             title={
                                 dirty
                                     ? 'Ada perubahan yang belum disimpan. Simpan atau batalkan dulu, karena posting memakai isi dokumen yang sudah tersimpan.'
-                                    : 'Catat stok ke kartu gudang dan kunci dokumen ini.'
+                                    : 'Catat stok ke kartu stok dan kunci dokumen ini.'
                             }
                             onClick={() => void post()}
                         >
@@ -606,12 +624,7 @@ function AdjustmentForm({
                                     transit={false}
                                     field="location_id"
                                     value={draft.location}
-                                    onChange={(location) =>
-                                        setDraft((current) => ({
-                                            ...current,
-                                            location: reference(location),
-                                        }))
-                                    }
+                                    onChange={changeLocation}
                                     disabled={!editing}
                                     error={errors.location_id?.[0]}
                                     portalContainer={portalContainer}
@@ -667,6 +680,7 @@ function AdjustmentForm({
                                     editing={editing}
                                     errors={errors}
                                     locationId={draft.location?.id ?? null}
+                                    portalContainer={portalContainer}
                                     onCreateItem={
                                         editing
                                             ? (lineKey) =>

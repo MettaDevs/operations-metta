@@ -17,7 +17,6 @@ import {
 } from '@operations-metta/ui/empty';
 import { FilterPane } from '@operations-metta/ui/filter-pane';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
-import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
     PageDialog,
@@ -43,13 +42,18 @@ import { ItemCard } from '../item/item-card.tsx';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';
 import { LocationLookup, type Location } from '../location/location-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import {
+    MasterLookup,
+    type LookupRequest,
+    type Reference,
+} from '../master-lookup.tsx';
 
 // Kartu stok (Item Ledger Entries di BC): gerak stok satu barang dalam satu periode, langsung dari kartu gudang.
 
 type Entry = ApiBody<'inventoryItemLedgerEntries'>['data'][number];
 type EntryKind = Entry['kind'];
 type Batch = ApiBody<'inventoryItemBatches'>['data'][number];
+type BatchOption = Reference & { expiry_date: string | null };
 
 const kindLabels: Record<EntryKind, string> = {
     penerimaan: 'Penerimaan',
@@ -83,10 +87,14 @@ const currentMonth = () => {
     };
 };
 
-const batchLabel = (batch: Batch) =>
-    batch.expiry_date
+const batchOption = (batch: Batch): BatchOption => ({
+    id: batch.id,
+    code: batch.batch_number,
+    name: batch.expiry_date
         ? `${batch.batch_number} · ${displayDate(batch.expiry_date)}`
-        : batch.batch_number;
+        : batch.batch_number,
+    expiry_date: batch.expiry_date,
+});
 
 const optional = (value: string | null | undefined) => value ?? '—';
 
@@ -153,6 +161,7 @@ function ItemLedgerEntriesPage(): ReactNode {
     // Barang dan lokasi yang dipilih di filter; URL hanya menyimpan id-nya.
     const [pickedItem, setPickedItem] = useState<Item | null>(null);
     const [pickedLocation, setPickedLocation] = useState<Location | null>(null);
+    const [pickedBatch, setPickedBatch] = useState<BatchOption | null>(null);
     const [opening, setOpening] = useState<{
         key: string;
         balance: string;
@@ -195,14 +204,52 @@ function ItemLedgerEntriesPage(): ReactNode {
             ? pickedLocation
             : (locationQuery.data ?? null)
         : null;
-    const batches = useQuery({
-        queryKey: ['inventory-item-batches', itemId],
+    // Saringan batch hanya ditawarkan untuk barang yang memang punya batch; satu baris cukup untuk mengetahuinya.
+    const hasBatches = useQuery({
+        queryKey: ['inventory-item-batches', itemId, 'any'],
         queryFn: async () =>
-            (await api.inventoryItemBatches({ params: { id: itemId ?? '' } }))
-                .body.data,
+            (
+                await api.inventoryItemBatches({
+                    params: { id: itemId ?? '' },
+                    query: { per_page: 1 },
+                })
+            ).body.data.length > 0,
         enabled: Boolean(itemId),
     });
-    const batch = batches.data?.find((row) => row.id === batchId) ?? null;
+    const batchQuery = useQuery({
+        queryKey: ['inventory-item-batches', itemId, batchId],
+        queryFn: async () => {
+            const [found] = (
+                await api.inventoryItemBatches({
+                    params: { id: itemId ?? '' },
+                    query: { record_id: batchId ?? '' },
+                })
+            ).body.data;
+            return found ? batchOption(found) : null;
+        },
+        enabled: Boolean(itemId && batchId) && pickedBatch?.id !== batchId,
+    });
+    const batch: BatchOption | null = batchId
+        ? pickedBatch?.id === batchId
+            ? pickedBatch
+            : (batchQuery.data ?? null)
+        : null;
+    const loadBatches = useCallback(
+        async ({ query, cursor, signal }: LookupRequest) => {
+            const { body } = await api.inventoryItemBatches(
+                {
+                    params: { id: itemId ?? '' },
+                    query: { q: query, ...(cursor ? { cursor } : {}) },
+                },
+                { signal },
+            );
+            return {
+                items: body.data.map(batchOption),
+                nextCursor: body.next_cursor,
+            };
+        },
+        [itemId],
+    );
 
     const loader = useCallback<ListLoader<Entry>>(
         async ({ cursor, sort, signal }) => {
@@ -277,7 +324,7 @@ function ItemLedgerEntriesPage(): ReactNode {
                 <span className="flex min-w-0 items-center gap-2">
                     <DataTableText>{kindLabels[entry.kind]}</DataTableText>
                     {entry.reversed_entry_id && (
-                        <Badge variant="outline">Pembatalan</Badge>
+                        <Badge variant="outline">Pembalik</Badge>
                     )}
                 </span>
             ),
@@ -468,54 +515,39 @@ function ItemLedgerEntriesPage(): ReactNode {
                                         onCreate={() => setCreating('location')}
                                     />
                                     {Boolean(
-                                        itemId &&
-                                        (batchId || batches.data?.length),
+                                        itemId && (batchId || hasBatches.data),
                                     ) && (
-                                        <FormControl>
-                                            <InlineLookup<Batch>
-                                                label="Batch"
-                                                items={batches.data ?? []}
-                                                value={batch}
-                                                displayValue={
-                                                    batch
-                                                        ? batchLabel(batch)
-                                                        : ''
-                                                }
-                                                onValueChange={(next) =>
-                                                    setSearch({
-                                                        batch: next.id,
-                                                    })
-                                                }
-                                                getItemValue={(row) => row.id}
-                                                getItemLabel={batchLabel}
-                                                getSearchText={(row) =>
-                                                    row.batch_number
-                                                }
-                                                placeholder="Cari nomor batch…"
-                                                emptyMessage="Batch tidak ditemukan."
-                                                showDetails={false}
-                                                columns={[
-                                                    {
-                                                        id: 'batch_number',
-                                                        header: 'Batch',
-                                                        width: 140,
-                                                        cell: (row) =>
-                                                            row.batch_number,
-                                                    },
-                                                    {
-                                                        id: 'expiry_date',
-                                                        header: 'Kedaluwarsa',
-                                                        width: 120,
-                                                        cell: (row) =>
-                                                            row.expiry_date
-                                                                ? displayDate(
-                                                                      row.expiry_date,
-                                                                  )
-                                                                : '—',
-                                                    },
-                                                ]}
-                                            />
-                                        </FormControl>
+                                        <MasterLookup<BatchOption>
+                                            label="Batch"
+                                            field="batch"
+                                            value={batch}
+                                            onChange={(next) => {
+                                                setPickedBatch(next);
+                                                setSearch({ batch: next.id });
+                                            }}
+                                            noun="Batch"
+                                            placeholder="Cari nomor batch…"
+                                            load={loadBatches}
+                                            columns={[
+                                                {
+                                                    id: 'code',
+                                                    header: 'Batch',
+                                                    width: 140,
+                                                    cell: (row) => row.code,
+                                                },
+                                                {
+                                                    id: 'expiry_date',
+                                                    header: 'Kedaluwarsa',
+                                                    width: 120,
+                                                    cell: (row) =>
+                                                        row.expiry_date
+                                                            ? displayDate(
+                                                                  row.expiry_date,
+                                                              )
+                                                            : '—',
+                                                },
+                                            ]}
+                                        />
                                     )}
                                     <PeriodDate
                                         label="Dari tanggal"

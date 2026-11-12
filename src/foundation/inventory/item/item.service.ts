@@ -40,7 +40,10 @@ const rowSql = `select * from (
                            (select trim_scale(coalesce(sum(k.sisa), 0))::text from gd_tr_kartu_gudang k
                             where k.tenant_id = b.tenant_id and k.barang_id = b.id and k.sisa <> 0) as inventory,
                            exists (select 1 from gd_tr_kartu_gudang k
-                                   where k.tenant_id = b.tenant_id and k.barang_id = b.id) as has_entries
+                                   where k.tenant_id = b.tenant_id and k.barang_id = b.id) as has_entries,
+                           exists (select 1 from gd_tr_kartu_gudang k
+                                   where k.tenant_id = b.tenant_id and k.barang_id = b.id and k.sisa <> 0)
+                               as has_open_entries
                     from gd_m_barang b
                     join gd_m_satuan unit on unit.tenant_id = b.tenant_id and unit.id = b.satuan_dasar_id
                     left join gd_m_kategori category on category.tenant_id = b.tenant_id
@@ -233,13 +236,13 @@ export class Items {
                     (await this.posted(stored.id, false))
                 )
                     errors.tracking_code_id =
-                        'Barang ini sudah punya kartu gudang, jadi profil pelacakannya tidak bisa diubah.';
+                        'Barang ini sudah punya gerak stok, jadi profil pelacakannya tidak bisa diubah.';
                 if (
                     data.baseUnitId !== stored.satuan_dasar_id &&
                     (await this.posted(stored.id, true))
                 )
                     errors.base_unit_id =
-                        'Barang ini masih punya stok terbuka di kartu gudang, jadi satuan dasarnya tidak bisa diubah.';
+                        'Barang ini masih punya stok atau kekurangan stok yang belum tertutup, jadi satuan dasarnya tidak bisa diubah.';
                 if (Object.keys(errors).length) validation(errors);
                 updated = await this.db.execute(
                     `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
@@ -288,7 +291,7 @@ export class Items {
                 {
                     sql: 'select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and barang_id = $2 limit 1',
                     message:
-                        'Barang ini sudah punya kartu gudang, jadi tidak bisa dihapus. Blokir saja supaya tidak dipakai lagi.',
+                        'Barang ini sudah punya gerak stok, jadi tidak bisa dihapus. Blokir saja supaya tidak dipakai lagi.',
                 },
                 {
                     sql: 'select 1 as found from gd_tr_penyesuaian_detail where tenant_id = $1 and barang_id = $2 and deleted_at is null limit 1',
@@ -312,17 +315,28 @@ export class Items {
         return { status: 204, headers: {}, body: undefined };
     }
 
-    async batches(id: string) {
+    // Batch satu barang, dimuat bertahap dan dicari lewat nomornya; kedaluwarsa terdekat lebih dulu, tanpa kedaluwarsa
+    // di akhir.
+    async batches(id: string, parameters: URLSearchParams) {
         this.workspace.guard('inventory-item', 'read');
         const item = await this.row(id);
+        const batch = await incrementalList(this.db, {
+            query: `select id, no_batch as batch_number, kedaluwarsa::text as expiry_date from gd_m_batch
+                    where tenant_id = $1 and legal_entity_id = $2 and barang_id = $3`,
+            bindings: [this.scope.tenantId, this.scope.legalEntityId, item.id],
+            parameters,
+            columns: {
+                expiry_date: 'expiry_date',
+                batch_number: 'batch_number',
+            },
+            searchColumns: ['batch_number'],
+            numericColumns: [],
+            defaultSort: 'expiry_date',
+            defaultDirection: 'asc',
+        });
         return {
-            data: await this.db.rows(
-                batchRowSchema,
-                `select id, no_batch as batch_number, kedaluwarsa::text as expiry_date from gd_m_batch
-                 where tenant_id = $1 and legal_entity_id = $2 and barang_id = $3
-                 order by kedaluwarsa nulls last, no_batch`,
-                [this.scope.tenantId, this.scope.legalEntityId, item.id],
-            ),
+            data: batch.data.map((row) => batchRowSchema.parse(row)),
+            next_cursor: batch.next_cursor,
         };
     }
 }

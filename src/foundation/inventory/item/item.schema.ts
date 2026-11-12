@@ -8,8 +8,9 @@ const reference = z.object({
 });
 
 // refuse_negative_stock kosong berarti mengikuti parameter persediaan legal entity. inventory adalah stok di semua
-// lokasi dalam satuan dasar. has_entries berarti barang sudah punya kartu gudang, sehingga satuan dasar dan profil
-// pelacakannya terkunci.
+// lokasi dalam satuan dasar. has_entries berarti barang sudah punya kartu gudang, sehingga profil pelacakannya terkunci.
+// has_open_entries berarti masih ada baris kartu gudang dengan sisa, sehingga satuan dasarnya terkunci; begitu semua
+// sisa tertutup, satuan dasar boleh diganti lagi.
 export const itemRowSchema = z.object({
     id: z.string(),
     code: z.string(),
@@ -24,6 +25,7 @@ export const itemRowSchema = z.object({
     is_blocked: z.boolean(),
     inventory: z.string(),
     has_entries: z.boolean(),
+    has_open_entries: z.boolean(),
     version: z.number(),
 });
 

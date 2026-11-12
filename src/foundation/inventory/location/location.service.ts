@@ -223,7 +223,7 @@ export class Locations {
                 {
                     sql: 'select 1 as found from gd_tr_kartu_gudang where tenant_id = $1 and lokasi_id = $2 limit 1',
                     message:
-                        'Lokasi ini sudah punya kartu gudang, jadi tidak bisa dihapus.',
+                        'Lokasi ini sudah punya gerak stok, jadi tidak bisa dihapus.',
                 },
                 {
                     sql: 'select 1 as found from gd_tr_penyesuaian where tenant_id = $1 and lokasi_id = $2 and deleted_at is null limit 1',

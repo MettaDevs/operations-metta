@@ -194,7 +194,58 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
         ).toBe(204);
     });
 
-    test('the list shows stock, whether the item is locked by entries, what its profile asks for, and filters blocked items', async () => {
+    test("an item's batches load in batches, nearest expiry first and undated last, and are searched by number", async () => {
+        const item = await business.item<Item>('BATCH-1', {
+            tracking_code_id: lot.id,
+        });
+        const receipt = (batch_number: string, expiry_date: string | null) => ({
+            item_id: item.id,
+            quantity: 1,
+            unit_cost: 1,
+            batch_number,
+            expiry_date,
+        });
+        await business.posted('masuk', location.id, [
+            receipt('Z300', '2027-09-30'),
+            receipt('X100', null),
+            receipt('Y200', '2027-01-31'),
+        ]);
+        type Page = {
+            data: {
+                id: string;
+                batch_number: string;
+                expiry_date: string | null;
+            }[];
+            next_cursor: string | null;
+        };
+        const page = async (query: string) =>
+            json<Page>(
+                await business.admin.get(`${path}/${item.id}/batches?${query}`),
+                200,
+            );
+        const first = await page('per_page=2');
+        expect(first.data).toEqual([
+            {
+                id: expect.any(String),
+                batch_number: 'Y200',
+                expiry_date: '2027-01-31',
+            },
+            {
+                id: expect.any(String),
+                batch_number: 'Z300',
+                expiry_date: '2027-09-30',
+            },
+        ]);
+        expect(first.next_cursor).not.toBeNull();
+        const rest = await page(`per_page=2&cursor=${first.next_cursor ?? ''}`);
+        expect(rest.data.map((batch) => batch.batch_number)).toEqual(['X100']);
+        expect(rest.next_cursor).toBeNull();
+        expect(
+            (await page('q=z3')).data.map((batch) => batch.batch_number),
+        ).toEqual(['Z300']);
+    });
+
+    test('the list shows stock, which entries lock the item, what its profile asks for, and filters blocked items', async () => {
         const stocked = await business.item<Item>('DAFTAR-1', {
             tracking_code_id: lot.id,
         });
@@ -208,10 +259,18 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
         ]);
         const fresh = await business.item<Item>('DAFTAR-2');
         await json(await change(fresh, { is_blocked: true }), 200);
+        const emptied = await business.item<Item>('DAFTAR-3');
+        await business.posted('masuk', location.id, [
+            { item_id: emptied.id, quantity: 2, unit_cost: 1 },
+        ]);
+        await business.posted('keluar', location.id, [
+            { item_id: emptied.id, quantity: 2 },
+        ]);
         type Row = {
             code: string;
             inventory: string;
             has_entries: boolean;
+            has_open_entries: boolean;
             batch_required: boolean;
             expiry_required: boolean;
         };
@@ -225,15 +284,18 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
                 row.code,
                 row.inventory,
                 row.has_entries,
+                row.has_open_entries,
                 row.batch_required,
                 row.expiry_required,
             ]);
         expect(await list('')).toEqual([
-            ['DAFTAR-1', '7', true, true, false],
-            ['DAFTAR-2', '0', false, false, false],
+            ['DAFTAR-1', '7', true, true, true, false],
+            ['DAFTAR-2', '0', false, false, false, false],
+            ['DAFTAR-3', '0', true, false, false, false],
         ]);
         expect((await list('&blocked=false')).map(([code]) => code)).toEqual([
             'DAFTAR-1',
+            'DAFTAR-3',
         ]);
     });
 });

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { api, type ApiBody } from '../../../platform/shell/index.ts';
+import { displayNumber } from '../display-number.ts';
 import {
     codeColumn,
     MasterLookup,
@@ -58,7 +59,7 @@ export function ItemLookup({
                     header: 'Stok',
                     width: 90,
                     align: 'right',
-                    cell: (row) => row.inventory,
+                    cell: (row) => displayNumber(row.inventory),
                 },
             ]}
         />

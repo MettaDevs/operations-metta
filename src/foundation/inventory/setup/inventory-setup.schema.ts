@@ -12,14 +12,6 @@ export const inventorySetupRowSchema = z.object({
     version: z.number(),
 });
 
-export const inventorySetupInputSchema = z.object({
-    picking_method: z.enum(pickingMethods),
-    refuse_negative_stock: z.boolean(),
-    transfer_mode: z.enum(transferModes),
-    costing_method: z.enum(costingMethods).optional(),
-    version: z.number(),
-});
-
 // Timpaan per operating unit. picking_method kosong berarti mengikuti legal entity; version kosong berarti unit itu
 // belum punya baris timpaan.
 export const unitSetupRowSchema = z.object({
@@ -31,4 +23,17 @@ export const unitSetupRowSchema = z.object({
 export const unitSetupInputSchema = z.object({
     picking_method: z.enum(pickingMethods).nullable(),
     version: z.number().nullable(),
+});
+
+// units berisi operating unit yang timpaannya berubah, disimpan dalam transaksi yang sama dengan setelan umum.
+export const inventorySetupInputSchema = z.object({
+    picking_method: z.enum(pickingMethods),
+    refuse_negative_stock: z.boolean(),
+    transfer_mode: z.enum(transferModes),
+    costing_method: z.enum(costingMethods).optional(),
+    version: z.number(),
+    units: z
+        .array(unitSetupInputSchema.extend({ operating_unit_id: z.string() }))
+        .max(500)
+        .optional(),
 });

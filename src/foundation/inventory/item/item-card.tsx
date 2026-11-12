@@ -16,7 +16,7 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -50,9 +50,6 @@ const negativeStockSummary: Record<NegativeStock, string> = {
 };
 
 type Creating = 'unit' | 'category' | 'tracking';
-
-const lockedHint =
-    'Tidak bisa diganti karena barang ini sudah punya gerak stok.';
 
 const referenceOf = (row: Reference | null): Reference | null =>
     row && { id: row.id, code: row.code, name: row.name };
@@ -98,14 +95,21 @@ export function ItemCard({
     canManage,
     onSaved,
     onClose,
+    onBusyChange,
+    onDirtyChange,
 }: {
     record: Item | null;
     canManage: boolean;
     onSaved: (row: Item) => void;
     onClose: () => void;
+    // Halaman yang menjaga perubahan belum disimpan saat kartu ditutup atau berganti record.
+    onBusyChange?: (busy: boolean) => void;
+    onDirtyChange?: (dirty: boolean) => void;
 }): ReactNode {
     const editing = canManage;
-    const locked = record?.has_entries ?? false;
+    // Sama dengan server: profil pelacakan terkunci sejak gerak stok pertama, satuan dasar hanya selama masih ada sisa.
+    const trackingLocked = record?.has_entries ?? false;
+    const unitLocked = record?.has_open_entries ?? false;
     const [form, setForm] = useState(() => formOf(record));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -120,6 +124,19 @@ export function ItemCard({
     // Popup pilihan dipasang di dalam kartu, karena pemanggil tidak selalu memberi ref isi dialognya.
     const portalContainer = useRef<HTMLDivElement>(null);
     const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
+    useEffect(() => {
+        onDirtyChange?.(dirty);
+    }, [dirty, onDirtyChange]);
+    useEffect(() => {
+        onBusyChange?.(busy);
+    }, [busy, onBusyChange]);
+    useEffect(
+        () => () => {
+            onDirtyChange?.(false);
+            onBusyChange?.(false);
+        },
+        [onDirtyChange, onBusyChange],
+    );
     usePageDialogRecord({
         recordTitle: record ? `${record.code} ${record.name}` : 'Barang baru',
         editing,
@@ -395,16 +412,16 @@ export function ItemCard({
                                                 baseUnit: referenceOf(unit),
                                             })
                                         }
-                                        disabled={!editing || locked}
+                                        disabled={!editing || unitLocked}
                                         error={errors.base_unit_id?.[0]}
                                         hint={
-                                            locked
-                                                ? lockedHint
-                                                : 'Satuan untuk mencatat stok barang ini. Tidak bisa diganti lagi setelah barang punya gerak stok.'
+                                            unitLocked
+                                                ? 'Tidak bisa diganti karena barang ini masih punya stok atau kekurangan stok yang belum tertutup.'
+                                                : 'Satuan untuk mencatat stok barang ini. Tidak bisa diganti selama barang ini masih punya stok.'
                                         }
                                         portalContainer={portalContainer}
                                         onCreate={
-                                            editing && !locked
+                                            editing && !unitLocked
                                                 ? () => setCreating('unit')
                                                 : undefined
                                         }
@@ -509,8 +526,8 @@ export function ItemCard({
                                 <FormGrid>
                                     <FormControl
                                         hint={
-                                            locked
-                                                ? lockedHint
+                                            trackingLocked
+                                                ? 'Tidak bisa diganti karena barang ini sudah punya gerak stok.'
                                                 : 'Batch dan tanggal kedaluwarsa yang wajib dicatat saat stok barang ini masuk. Barang baru memakai profil kategorinya sampai Anda memilih sendiri.'
                                         }
                                     >
@@ -521,7 +538,9 @@ export function ItemCard({
                                             <Switch
                                                 id={`${idPrefix}-has-tracking`}
                                                 checked={form.hasTracking}
-                                                disabled={!editing || locked}
+                                                disabled={
+                                                    !editing || trackingLocked
+                                                }
                                                 onCheckedChange={(
                                                     hasTracking,
                                                 ) =>
@@ -556,11 +575,13 @@ export function ItemCard({
                                                     trackingChosen: true,
                                                 })
                                             }
-                                            disabled={!editing || locked}
+                                            disabled={
+                                                !editing || trackingLocked
+                                            }
                                             error={errors.tracking_code_id?.[0]}
                                             portalContainer={portalContainer}
                                             onCreate={
-                                                editing && !locked
+                                                editing && !trackingLocked
                                                     ? () =>
                                                           setCreating(
                                                               'tracking',

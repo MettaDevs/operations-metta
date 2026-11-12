@@ -40,8 +40,8 @@ import {
 } from './stock-policy-options.tsx';
 
 // Setelan persediaan per legal entity (Inventory Setup di BC): cara pengambilan, penolakan stok minus, cara mutasi,
-// nomor dokumen, dan cara pengambilan per operating unit. Satu Simpan menyimpan setelan umum lalu setiap operating unit
-// yang berubah.
+// nomor dokumen, dan cara pengambilan per operating unit. Satu Simpan mengirim setelan umum beserta operating unit yang
+// berubah dalam satu permintaan, dan server menyimpan semuanya atau tidak sama sekali.
 
 type Setup = ApiBody<'inventorySetupShow'>;
 type Numbering = Setup['numbering'][number];
@@ -69,8 +69,11 @@ const draftOf = (saved: Saved): Draft => ({
 const unitPicking = (draft: Draft, unit: UnitRow) =>
     draft.units[unit.operating_unit.id] ?? null;
 
-const unitField = (unit: UnitRow) =>
-    `units.${unit.operating_unit.id}.picking_method`;
+// Kesalahan server untuk satu operating unit berawalan units.<id>, baik untuk cara pengambilannya maupun unitnya sendiri.
+const unitField = (unit: UnitRow) => `units.${unit.operating_unit.id}`;
+const unitError = (errors: Record<string, string[]>, unit: UnitRow) =>
+    errors[`${unitField(unit)}.picking_method`]?.[0] ??
+    errors[`${unitField(unit)}.operating_unit_id`]?.[0];
 
 const formatOf = (entry: Numbering) =>
     entry.sequences.map((sequence) => sequence.format).join(', ') ||
@@ -156,7 +159,6 @@ function SetupForm({
         setBusy(true);
         setErrors({});
         setMessage(null);
-        let general: Saved['general'];
         try {
             const { body } = await api.inventorySetupUpdate({
                 body: {
@@ -164,9 +166,22 @@ function SetupForm({
                     refuse_negative_stock: draft.refuseNegative,
                     transfer_mode: draft.transferMode,
                     version: saved.general.version,
+                    units: saved.units
+                        .filter(
+                            (unit) =>
+                                unitPicking(draft, unit) !==
+                                unit.picking_method,
+                        )
+                        .map((unit) => ({
+                            operating_unit_id: unit.operating_unit.id,
+                            picking_method: unitPicking(draft, unit),
+                            version: unit.version,
+                        })),
                 },
             });
-            general = body.data;
+            setSaved({ general: body.data, units: body.units });
+            toast.success('Setelan persediaan disimpan.');
+            await onSaved();
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
                 setErrors(caught.errors);
@@ -174,46 +189,9 @@ function SetupForm({
                 setMessage(
                     errorText(caught, 'Setelan persediaan belum disimpan.'),
                 );
+        } finally {
             setBusy(false);
-            return;
         }
-        // Setiap operating unit punya versinya sendiri. Yang gagal tetap di draft, jadi Simpan berikutnya mengulanginya
-        // dengan versi setelan umum yang baru.
-        const failed: Record<string, string[]> = {};
-        const results = await Promise.all(
-            saved.units.map(async (unit) => {
-                const picking = unitPicking(draft, unit);
-                if (picking === unit.picking_method) return unit;
-                try {
-                    const { body } = await api.inventorySetupUnitUpdate({
-                        params: { id: unit.operating_unit.id },
-                        body: {
-                            picking_method: picking,
-                            version: unit.version,
-                        },
-                    });
-                    return body.data;
-                } catch (caught) {
-                    failed[unitField(unit)] = [
-                        caught instanceof ApiError && caught.status === 422
-                            ? caught.message
-                            : errorText(
-                                  caught,
-                                  `Setelan ${unit.operating_unit.name} belum disimpan.`,
-                              ),
-                    ];
-                    return unit;
-                }
-            }),
-        );
-        setSaved({ general, units: results });
-        setBusy(false);
-        if (Object.keys(failed).length) {
-            setErrors(failed);
-            return;
-        }
-        toast.success('Setelan persediaan disimpan.');
-        await onSaved();
     };
 
     return (
@@ -407,9 +385,7 @@ function SetupForm({
                                         minWidth: 280,
                                         cell: (unit) => (
                                             <FormControl
-                                                error={
-                                                    errors[unitField(unit)]?.[0]
-                                                }
+                                                error={unitError(errors, unit)}
                                                 data-error-field={unitField(
                                                     unit,
                                                 )}
@@ -451,13 +427,17 @@ function SetupForm({
 }
 
 function InventorySetupPage(): ReactNode {
+    // Data baru memasang ulang form, jadi tidak dimuat ulang saat jendela kembali aktif; isian yang belum disimpan tetap
+    // ada, dan perubahan orang lain ditolak sebagai versi basi saat Simpan.
     const [setup, units] = useSuspenseQueries({
         queries: [
             orpc.inventorySetupShow.queryOptions({
                 select: (response) => response.body,
+                refetchOnWindowFocus: false,
             }),
             orpc.inventorySetupUnitList.queryOptions({
                 select: (response) => response.body.data,
+                refetchOnWindowFocus: false,
             }),
         ],
     });

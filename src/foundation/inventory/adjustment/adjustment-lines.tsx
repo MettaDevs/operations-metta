@@ -5,9 +5,9 @@ import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { useCallback, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { api } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber, parseDisplayNumber } from '../display-number.ts';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import {
     MasterLookup,
@@ -22,7 +22,8 @@ import type { Adjustment, Direction } from './adjustment-labels.tsx';
 export type LineItem = Adjustment['lines'][number]['item'];
 type PickedBatch = NonNullable<Adjustment['lines'][number]['batch']>;
 
-// key adalah id baris tersimpan, atau kunci lokal untuk baris yang belum disimpan.
+// key adalah id baris tersimpan, atau kunci lokal untuk baris yang belum disimpan. Jumlah dan harga satuan disimpan
+// sebagai teks yang tampil di isian (12.500, 1,5) dan baru diubah ke angka API saat Simpan.
 export type LineDraft = {
     key: string;
     id: string | null;
@@ -39,10 +40,10 @@ export const linesOf = (lines: Adjustment['lines']): LineDraft[] =>
         key: line.id,
         id: line.id,
         item: line.item,
-        quantity: line.quantity,
+        quantity: displayNumber(line.quantity),
         batchNumber: line.batch_number ?? '',
         expiryDate: line.expiry_date ?? '',
-        unitCost: line.unit_cost ?? '',
+        unitCost: line.unit_cost === null ? '' : displayNumber(line.unit_cost),
         batch: line.batch,
     }));
 
@@ -81,27 +82,44 @@ export const withItem = (line: LineDraft, item: Item): LineDraft => ({
     batch: null,
 });
 
-export function lineBody(direction: Direction, line: LineDraft) {
-    const common = {
-        id: line.id,
-        item_id: line.item?.id ?? '',
-        quantity: line.quantity.trim(),
+const numberFormat =
+    'Tulis angka seperti 12.500 atau 1,5. Titik untuk ribuan, koma untuk desimal.';
+
+// Isi baris untuk API. Angka yang tidak bisa dibaca dengan pasti ditahan di layar dengan kesalahan per sel, karena API
+// membaca titik sebagai tanda desimal. Isian kosong tetap dikirim kosong, supaya pesan wajib isi datang dari server.
+export function linesBody(direction: Direction, lines: LineDraft[]) {
+    const errors: Record<string, string[]> = {};
+    const amount = (index: number, name: string, text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return '';
+        const parsed = parseDisplayNumber(trimmed);
+        if (parsed === null) errors[`lines.${index}.${name}`] = [numberFormat];
+        return parsed ?? trimmed;
     };
-    switch (direction) {
-        case 'masuk':
-            return {
-                ...common,
-                batch_number: line.batchNumber.trim() || null,
-                expiry_date: line.expiryDate || null,
-                unit_cost: line.unitCost.trim() || null,
-            };
-        case 'keluar':
-            return { ...common, batch_id: line.batch?.id ?? null };
-        default: {
-            const unknown: never = direction;
-            throw new Error(`Unknown direction: ${String(unknown)}`);
+    const body = lines.map((line, index) => {
+        const common = {
+            id: line.id,
+            item_id: line.item?.id ?? '',
+            quantity: amount(index, 'quantity', line.quantity),
+        };
+        switch (direction) {
+            case 'masuk':
+                return {
+                    ...common,
+                    batch_number: line.batchNumber.trim() || null,
+                    expiry_date: line.expiryDate || null,
+                    unit_cost:
+                        amount(index, 'unit_cost', line.unitCost) || null,
+                };
+            case 'keluar':
+                return { ...common, batch_id: line.batch?.id ?? null };
+            default: {
+                const unknown: never = direction;
+                throw new Error(`Unknown direction: ${String(unknown)}`);
+            }
         }
-    }
+    });
+    return { lines: body, errors };
 }
 
 // Kolom batch dan kedaluwarsa tampil untuk barang yang profil pelacakannya mewajibkannya, dan untuk baris yang sudah
@@ -207,7 +225,7 @@ function BatchLookup({
             }
             disabled={locationId === null}
             error={error}
-            hint="Boleh dikosongkan. Batch yang kosong diambil otomatis saat posting, menurut cara pengambilan lokasi ini."
+            hint="Boleh dikosongkan: batch diambil otomatis saat posting, menurut cara pengambilan yang berlaku di lokasi ini. Bila caranya Pilih batch manual, batch wajib dipilih di sini."
             noun="Batch"
             placeholder="Cari nomor batch…"
             load={load}
@@ -247,6 +265,7 @@ export function AdjustmentLines({
     editing,
     errors,
     locationId,
+    portalContainer,
     onCreateItem,
 }: {
     direction: Direction;
@@ -255,6 +274,7 @@ export function AdjustmentLines({
     editing: boolean;
     errors: Record<string, string[]>;
     locationId: string | null;
+    portalContainer: RefObject<HTMLElement | null>;
     // Membuka kartu barang baru untuk baris ini; tanpa ini pilihan barang tidak menawarkan Baru.
     onCreateItem?: (lineKey: string) => void;
 }): ReactNode {
@@ -289,7 +309,7 @@ export function AdjustmentLines({
                     />
                 </FormControl>
             ) : (
-                text(line.quantity ? displayNumber(line.quantity) : '')
+                text(line.quantity)
             ),
     };
     const batchNumberColumn: DataTableColumn<Row> = {
@@ -359,7 +379,7 @@ export function AdjustmentLines({
                     />
                 </FormControl>
             ) : (
-                text(line.unitCost ? displayNumber(line.unitCost) : '')
+                text(line.unitCost)
             ),
     };
     const batchColumn: DataTableColumn<Row> = {
@@ -410,6 +430,7 @@ export function AdjustmentLines({
             }
             showRowNumbers
             readOnly={!editing}
+            portalContainer={portalContainer}
             selection={
                 editing
                     ? {

@@ -122,6 +122,93 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
         ).toMatchObject({ picking_method: null, version: 2 });
     });
 
+    test('one save writes the setup and a new operating unit override together, and a stale unit version writes neither', async () => {
+        const setupPath = `${inventoryApi}/setup`;
+        const unitId = await business.operatingUnit('Unit Simpan Sekali');
+        const current = (
+            await json<{ data: Setup }>(
+                await business.admin.get(setupPath),
+                200,
+            )
+        ).data;
+        const general = {
+            picking_method: current.picking_method,
+            refuse_negative_stock: current.refuse_negative_stock,
+            transfer_mode: current.transfer_mode,
+        };
+        const saved = await json<{ data: Setup; units: UnitSetup[] }>(
+            await business.admin.put(setupPath, {
+                ...general,
+                refuse_negative_stock: !current.refuse_negative_stock,
+                version: current.version,
+                units: [
+                    {
+                        operating_unit_id: unitId,
+                        picking_method: 'manual',
+                        version: null,
+                    },
+                ],
+            }),
+            200,
+        );
+        expect(saved.data).toMatchObject({
+            refuse_negative_stock: !current.refuse_negative_stock,
+            version: current.version + 1,
+        });
+        const override = { picking_method: 'manual', version: 1 };
+        expect(
+            saved.units.find((unit) => unit.operating_unit.id === unitId),
+        ).toMatchObject(override);
+
+        for (const version of [null, 99]) {
+            const stale = await business.admin.put(setupPath, {
+                ...general,
+                version: saved.data.version,
+                units: [
+                    {
+                        operating_unit_id: unitId,
+                        picking_method: 'fifo',
+                        version,
+                    },
+                ],
+            });
+            expect(stale.status).toBe(409);
+        }
+        const missing = crypto.randomUUID();
+        expect(
+            Object.keys(
+                await refused(
+                    await business.admin.put(setupPath, {
+                        ...general,
+                        version: saved.data.version,
+                        units: [
+                            {
+                                operating_unit_id: missing,
+                                picking_method: 'fifo',
+                                version: null,
+                            },
+                        ],
+                    }),
+                ),
+            ),
+        ).toEqual([`units.${missing}.operating_unit_id`]);
+        expect(
+            (
+                await json<{ data: Setup }>(
+                    await business.admin.get(setupPath),
+                    200,
+                )
+            ).data,
+        ).toEqual(saved.data);
+        const units = await json<{ data: UnitSetup[] }>(
+            await business.admin.get(`${setupPath}/operating-units`),
+            200,
+        );
+        expect(
+            units.data.find((unit) => unit.operating_unit.id === unitId),
+        ).toMatchObject(override);
+    });
+
     test('a location needs an operating unit, a known picking method, and a code unique in the legal entity', async () => {
         const errors = await refused(
             await business.admin.post(`${inventoryApi}/locations`, {

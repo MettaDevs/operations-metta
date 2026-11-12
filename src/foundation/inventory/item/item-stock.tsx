@@ -14,16 +14,31 @@ import type { Item } from './item-lookup.tsx';
 
 type StockRow = ApiBody<'inventoryStock'>['data'][number];
 
-// Bagian "Stok per lokasi" di FactBox kartu barang. Server mengurutkan baris per lokasi lalu kedaluwarsa, jadi baris
-// satu lokasi selalu berurutan dan cukup dikelompokkan saat bertemu lokasi baru.
+// Bagian "Stok per lokasi" di FactBox kartu barang. Baris dikelompokkan per lokasi tanpa bergantung pada urutan
+// jawaban server, lalu ditampilkan menurut kode lokasi dan kedaluwarsa terdekat; batch tanpa kedaluwarsa di akhir.
+const expiryOf = (row: StockRow) => row.batch?.expiry_date ?? '9999-12-31';
+
 function byLocation(rows: StockRow[]) {
-    const groups: { location: Reference; rows: StockRow[] }[] = [];
+    const groups = new Map<string, { location: Reference; rows: StockRow[] }>();
     for (const row of rows) {
-        const last = groups.at(-1);
-        if (last?.location.id === row.location.id) last.rows.push(row);
-        else groups.push({ location: row.location, rows: [row] });
+        const group = groups.get(row.location.id);
+        if (group) group.rows.push(row);
+        else
+            groups.set(row.location.id, {
+                location: row.location,
+                rows: [row],
+            });
     }
-    return groups;
+    return [...groups.values()]
+        .sort((left, right) =>
+            left.location.code.localeCompare(right.location.code),
+        )
+        .map((group) => ({
+            ...group,
+            rows: group.rows.sort((left, right) =>
+                expiryOf(left).localeCompare(expiryOf(right)),
+            ),
+        }));
 }
 
 const batchText = (batch: StockRow['batch']) =>
