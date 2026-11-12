@@ -6,6 +6,8 @@ import { page as modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage } from '../
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
+import { page as modulesHealthcareSrcExaminationQueueExaminationPage } from '../modules/healthcare/src/examination/queue/examination.page.tsx';
+import { page as modulesHealthcareSrcExaminationQueueQueuePage } from '../modules/healthcare/src/examination/queue/queue.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitNewPage } from '../modules/healthcare/src/registration/visit/visit-new.page.tsx';
@@ -94,6 +96,24 @@ const modulesHealthcareSrcDashboardDashboardRoute = createRoute({
     path: modulesHealthcareSrcDashboardDashboardPage.path,
     component: modulesHealthcareSrcDashboardDashboardPage.component,
     staticData: { title: modulesHealthcareSrcDashboardDashboardPage.title },
+});
+
+const modulesHealthcareSrcExaminationQueueExaminationRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcExaminationQueueExaminationPage.path,
+    component: modulesHealthcareSrcExaminationQueueExaminationPage.component,
+    staticData: {
+        title: modulesHealthcareSrcExaminationQueueExaminationPage.title,
+    },
+});
+
+const modulesHealthcareSrcExaminationQueueQueueRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcExaminationQueueQueuePage.path,
+    component: modulesHealthcareSrcExaminationQueueQueuePage.component,
+    validateSearch:
+        modulesHealthcareSrcExaminationQueueQueuePage.validateSearch,
+    staticData: { title: modulesHealthcareSrcExaminationQueueQueuePage.title },
 });
 
 const modulesHealthcareSrcPatientPatientPatientsRoute = createRoute({
@@ -364,6 +384,8 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
+        modulesHealthcareSrcExaminationQueueExaminationRoute,
+        modulesHealthcareSrcExaminationQueueQueueRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
         modulesHealthcareSrcRegistrationVisitVisitNewRoute,

@@ -198,6 +198,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'healthcare.patient.manage',
             'healthcare.payment-setup.manage',
             'healthcare.visit.inquire',
+            'healthcare.examination.inquire',
             'core.data-sharing.manage',
             'core.number-sequence.inquire',
         ]);
@@ -1407,6 +1408,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ['dashboard', 'layout-dashboard'],
             ['patient', 'users'],
             ['registration', 'clipboard-list'],
+            ['examination', 'stethoscope'],
             ['setup', 'settings'],
         ]);
         expect(
@@ -1438,6 +1440,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             ['dashboard', 'Dashboard'],
             ['patient', 'Pasien'],
             ['registration', 'Pendaftaran'],
+            ['examination', 'Pemeriksaan'],
             ['setup', 'Setup'],
         ]);
         // Judul bagian yang sudah diketahui wajib menunjuk foldernya. Bagian yang ditambah migration lain cukup konsisten:
@@ -1515,6 +1518,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'dashboard',
             'patient',
             'registration',
+            'examination',
             'setup',
         ]);
         // Shell meneruskan ikon area dan grup dari data module.
@@ -1523,6 +1527,7 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
             'layout-dashboard',
             'users',
             'clipboard-list',
+            'stethoscope',
             'settings',
         ]);
         expect((await shell(admin)).uninstalled_apps).toEqual([]);

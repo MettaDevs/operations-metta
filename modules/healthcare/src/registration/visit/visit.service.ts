@@ -158,6 +158,40 @@ function presentLifeCycle(rule: LifeCycleRow) {
     };
 }
 
+// Hari ini menurut zona waktu legal entity aktif, karena klinik bekerja di jam setempat.
+export async function visitDate(
+    db: Database,
+    workspace: Workspace,
+): Promise<string> {
+    const legalEntityId = workspace.legalEntityId;
+    if (!legalEntityId)
+        validation({
+            legal_entity_id:
+                'Pilih legal entity di tempat kerja sebelum melanjutkan.',
+        });
+    const found = await db.one(
+        z.object({ date: z.string() }),
+        `select (now() at time zone l.timezone)::date::text as date from legal_entities l
+         where l.tenant_id = $1 and l.organization_id = $2`,
+        [workspace.tenantId, legalEntityId],
+    );
+    if (!found) abort(404, 'Not Found');
+    return found.date;
+}
+
+// Syarat SQL kunjungan `r` yang terlihat: legal entity aktif, lalu unit dari kebijakan data pasien. Batas
+// "seluruh organisasi" tidak membatasi unit.
+export function visitVisibility(
+    workspace: Workspace,
+    bind: (value: Bind) => string,
+): string {
+    const units = grantedUnits(workspace);
+    if (!workspace.legalEntityId || units?.length === 0) return 'false';
+    const company = `r.legal_entity_id = ${bind(workspace.legalEntityId)}`;
+    if (units === null) return company;
+    return `${company} and r.operating_unit_id in (${units.map((id) => bind(id)).join(',')})`;
+}
+
 // Pendaftaran kunjungan rawat jalan: kepala kunjungan dan satu tujuan per section, dengan NoReg, NoBukti, dan nomor
 // antrean yang diterbitkan server di dalam satu transaksi. Kunjungan milik operating unit section tujuannya dan legal
 // entity aktif pendaftar; yang melihat dan mendaftarkannya dibatasi unit yang diberikan lewat kebijakan data pasien.
@@ -171,33 +205,12 @@ export class Visits {
         this.sharing = new PatientSharing(db, workspace.tenantId);
     }
 
-    // Hari ini menurut zona waktu legal entity aktif, karena klinik bekerja di jam setempat.
     private async today(): Promise<string> {
-        const legalEntityId = this.workspace.legalEntityId;
-        if (!legalEntityId)
-            validation({
-                legal_entity_id:
-                    'Pilih legal entity di tempat kerja sebelum melanjutkan.',
-            });
-        const found = await this.db.one(
-            z.object({ date: z.string() }),
-            `select (now() at time zone l.timezone)::date::text as date from legal_entities l
-             where l.tenant_id = $1 and l.organization_id = $2`,
-            [this.workspace.tenantId, legalEntityId],
-        );
-        if (!found) abort(404, 'Not Found');
-        return found.date;
+        return visitDate(this.db, this.workspace);
     }
 
-    // Syarat SQL kunjungan `r` yang terlihat: legal entity aktif, lalu unit dari kebijakan data pasien. Batas
-    // "seluruh organisasi" tidak membatasi unit.
     private visibility(bind: (value: Bind) => string): string {
-        const units = grantedUnits(this.workspace);
-        if (!this.workspace.legalEntityId || units?.length === 0)
-            return 'false';
-        const company = `r.legal_entity_id = ${bind(this.workspace.legalEntityId)}`;
-        if (units === null) return company;
-        return `${company} and r.operating_unit_id in (${units.map((id) => bind(id)).join(',')})`;
+        return visitVisibility(this.workspace, bind);
     }
 
     private async present(id: string) {
