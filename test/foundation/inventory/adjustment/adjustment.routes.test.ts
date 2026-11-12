@@ -247,6 +247,71 @@ describe.skipIf(!process.env.DB_HOST)('inventory adjustments', () => {
         ).toEqual(['_form']);
     });
 
+    test('the entries of a document show the batches taken by its lines and the rows that reversed them', async () => {
+        const profile = await business.trackingCode('ENTRI', {
+            batch_required: true,
+            expiry_required: true,
+        });
+        const tracked = await business.item('ENTRI-1', {
+            tracking_code_id: profile.id,
+        });
+        const receive = (batch: string, expiry: string, quantity: number) => ({
+            item_id: tracked.id,
+            quantity,
+            batch_number: batch,
+            expiry_date: expiry,
+            unit_cost: 100,
+        });
+        await business.posted('masuk', location.id, [
+            receive('LAMA', '2027-12-31', 2),
+            receive('DEKAT', '2027-01-31', 2),
+        ]);
+        const issued = await business.posted('keluar', location.id, [
+            { item_id: tracked.id, quantity: 3 },
+        ]);
+        const shown = await json<{
+            data: {
+                lines: {
+                    item: { batch_required: boolean; expiry_required: boolean };
+                }[];
+            };
+        }>(await business.admin.get(`${path}/${issued.id}`), 200);
+        expect(shown.data.lines[0]?.item).toMatchObject({
+            batch_required: true,
+            expiry_required: true,
+        });
+        type Entry = {
+            batch: { batch_number: string; expiry_date: string } | null;
+            quantity: string;
+            cost_amount: string;
+            reversed_entry_id: string | null;
+        };
+        const entries = async () =>
+            (
+                await json<{ data: Entry[] }>(
+                    await business.admin.get(`${path}/${issued.id}/entries`),
+                    200,
+                )
+            ).data.map((entry) => [
+                entry.batch?.batch_number,
+                entry.batch?.expiry_date,
+                entry.quantity,
+                entry.cost_amount,
+                entry.reversed_entry_id === null,
+            ]);
+        expect(await entries()).toEqual([
+            ['DEKAT', '2027-01-31', '-2', '-200', true],
+            ['LAMA', '2027-12-31', '-1', '-100', true],
+        ]);
+        await json(await business.reverse(issued), 200);
+        expect((await entries()).map((entry) => entry.slice(0, 3))).toEqual([
+            ['DEKAT', '2027-01-31', '-2'],
+            ['LAMA', '2027-12-31', '-1'],
+            ['DEKAT', '2027-01-31', '2'],
+            ['LAMA', '2027-12-31', '1'],
+        ]);
+    });
+
     test('lines are checked against the direction of the document', async () => {
         const transit = await business.location('TRANSIT', {
             is_transit: true,

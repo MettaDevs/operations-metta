@@ -6,6 +6,7 @@ import {
     lookupId,
     staleMessage,
 } from '../../../platform/http/index.ts';
+import { legalEntitySequences } from '../../number-sequence/index.ts';
 import {
     activeLegalEntity,
     parseInput,
@@ -26,6 +27,9 @@ const messages = {
     costing_method: 'Metode harga pokok yang tersedia baru FIFO.',
     version: 'Muat ulang parameter, lalu ulangi perubahanmu.',
 };
+
+// Nomor dokumen persediaan yang tampil di bagian Penomoran. Reference baru ditambahkan di sini bersama dokumennya.
+const numberReferences = ['core.inventory-adjustment-number'];
 
 // Baris parameter lahir bersama legal entity (trigger gd_isi_acuan di migration 0024), jadi di sini hanya dibaca dan
 // diubah.
@@ -51,8 +55,17 @@ export class InventorySetup {
         this.workspace.guard('inventory-setup', 'read');
         return {
             data: await this.row(),
+            numbering: await legalEntitySequences(
+                this.db,
+                this.workspace.tenantId,
+                activeLegalEntity(this.workspace),
+                numberReferences,
+            ),
             can_manage: this.workspace.permissions.has(
                 'core.inventory-setup.update',
+            ),
+            can_open_numbering: this.workspace.permissions.has(
+                'core.number-sequence.read',
             ),
         };
     }

@@ -36,7 +36,11 @@ const rowSql = `select * from (
                            ${reference('unit')} as base_unit, ${reference('category')} as category,
                            ${reference('profile')} as tracking_code,
                            coalesce(profile.wajib_batch, false) as batch_required,
-                           coalesce(profile.wajib_kedaluwarsa, false) as expiry_required
+                           coalesce(profile.wajib_kedaluwarsa, false) as expiry_required,
+                           (select trim_scale(coalesce(sum(k.sisa), 0))::text from gd_tr_kartu_gudang k
+                            where k.tenant_id = b.tenant_id and k.barang_id = b.id and k.sisa <> 0) as inventory,
+                           exists (select 1 from gd_tr_kartu_gudang k
+                                   where k.tenant_id = b.tenant_id and k.barang_id = b.id) as has_entries
                     from gd_m_barang b
                     join gd_m_satuan unit on unit.tenant_id = b.tenant_id and unit.id = b.satuan_dasar_id
                     left join gd_m_kategori category on category.tenant_id = b.tenant_id
@@ -76,10 +80,13 @@ export class Items {
             this.scope.tenantId,
             this.scope.legalEntityId,
         ];
+        let filter = '';
         const category = lookupId(parameters.get('category_id') ?? '');
-        const filter = category
-            ? ` and category_id = $${bindings.push(category)}`
-            : '';
+        if (category)
+            filter += ` and category_id = $${bindings.push(category)}`;
+        const blocked = parameters.get('blocked');
+        if (blocked === 'true' || blocked === 'false')
+            filter += ` and is_blocked = ${blocked}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,

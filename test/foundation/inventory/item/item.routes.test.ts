@@ -193,4 +193,47 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
             ).status,
         ).toBe(204);
     });
+
+    test('the list shows stock, whether the item is locked by entries, what its profile asks for, and filters blocked items', async () => {
+        const stocked = await business.item<Item>('DAFTAR-1', {
+            tracking_code_id: lot.id,
+        });
+        await business.posted('masuk', location.id, [
+            {
+                item_id: stocked.id,
+                quantity: 7,
+                batch_number: 'D1',
+                unit_cost: 1,
+            },
+        ]);
+        const fresh = await business.item<Item>('DAFTAR-2');
+        await json(await change(fresh, { is_blocked: true }), 200);
+        type Row = {
+            code: string;
+            inventory: string;
+            has_entries: boolean;
+            batch_required: boolean;
+            expiry_required: boolean;
+        };
+        const list = async (query: string) =>
+            (
+                await json<{ data: Row[] }>(
+                    await business.admin.get(`${path}?q=DAFTAR${query}`),
+                    200,
+                )
+            ).data.map((row) => [
+                row.code,
+                row.inventory,
+                row.has_entries,
+                row.batch_required,
+                row.expiry_required,
+            ]);
+        expect(await list('')).toEqual([
+            ['DAFTAR-1', '7', true, true, false],
+            ['DAFTAR-2', '0', false, false, false],
+        ]);
+        expect((await list('&blocked=false')).map(([code]) => code)).toEqual([
+            'DAFTAR-1',
+        ]);
+    });
 });

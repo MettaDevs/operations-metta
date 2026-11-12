@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { coreWorkspace } from '../../../platform/access/index.ts';
 import { ok } from '../../../platform/http/index.ts';
 import { masterRoutes, route } from '../inventory.routes.ts';
-import { itemInputSchema } from './item.schema.ts';
+import { itemInputSchema, itemListQuerySchema } from './item.schema.ts';
 import { Items } from './item.service.ts';
 
 export function itemRoutes() {
@@ -11,6 +11,7 @@ export function itemRoutes() {
         path,
         itemInputSchema,
         (db, workspace) => new Items(db, workspace),
+        itemListQuerySchema,
     );
     return {
         inventoryItemList: routes.list,

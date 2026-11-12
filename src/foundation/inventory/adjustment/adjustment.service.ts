@@ -30,6 +30,7 @@ import {
 } from '../quantity.ts';
 import {
     adjustmentDirections,
+    adjustmentEntryRowSchema,
     adjustmentInputSchema,
     adjustmentLineRowSchema,
     adjustmentRowSchema,
@@ -228,7 +229,9 @@ export class Adjustments {
         const lines = await this.db.rows(
             adjustmentLineRowSchema,
             `select d.id, d.urutan as line_no,
-                    json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'unit', s.kode) as item,
+                    json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'unit', s.kode,
+                                      'batch_required', coalesce(p.wajib_batch, false),
+                                      'expiry_required', coalesce(p.wajib_kedaluwarsa, false)) as item,
                     trim_scale(d.jumlah)::text as quantity, d.no_batch as batch_number,
                     d.kedaluwarsa::text as expiry_date, trim_scale(d.harga_satuan)::text as unit_cost,
                     case when t.id is null then null else json_build_object(
@@ -236,6 +239,7 @@ export class Adjustments {
              from gd_tr_penyesuaian_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+             left join gd_m_profil_pelacakan p on p.tenant_id = b.tenant_id and p.id = b.profil_pelacakan_id
              left join gd_m_batch t on t.tenant_id = d.tenant_id and t.id = d.batch_id
              where d.tenant_id = $1 and d.penyesuaian_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
@@ -249,6 +253,33 @@ export class Adjustments {
         return {
             data: await this.document(id),
             permissions: this.permissions(),
+        };
+    }
+
+    async entries(id: string) {
+        this.workspace.guard('inventory-adjustment', 'read');
+        const header = await this.header(id);
+        return {
+            data: await this.db.rows(
+                adjustmentEntryRowSchema,
+                `select k.id, json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'unit', s.kode) as item,
+                        case when t.id is null then null else json_build_object(
+                            'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end as batch,
+                        trim_scale(k.jumlah)::text as quantity, trim_scale(k.nilai)::text as cost_amount,
+                        k.dibalik_dari as reversed_entry_id
+                 from gd_tr_kartu_gudang k
+                 join gd_m_barang b on b.tenant_id = k.tenant_id and b.id = k.barang_id
+                 join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+                 left join gd_m_batch t on t.tenant_id = k.tenant_id and t.id = k.batch_id
+                 where k.tenant_id = $1 and k.legal_entity_id = $2 and k.sumber_jenis = $3 and k.sumber_id = $4
+                 order by k.created_at, k.id`,
+                [
+                    this.scope.tenantId,
+                    this.scope.legalEntityId,
+                    sourceType,
+                    header.id,
+                ],
+            ),
         };
     }
 

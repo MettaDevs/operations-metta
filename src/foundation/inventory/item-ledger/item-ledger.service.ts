@@ -8,6 +8,7 @@ import {
     validation,
 } from '../../../platform/http/index.ts';
 import { activeLegalEntity } from '../inventory.service.ts';
+import { entryKinds } from './item-ledger.posting.ts';
 import { ledgerRowSchema, stockRowSchema } from './item-ledger.schema.ts';
 
 const batchJson = `case when t.id is null then null else json_build_object(
@@ -99,6 +100,9 @@ export class ItemLedger {
             filter += ` and k.lokasi_id = $${bindings.push(location)}`;
         const batchId = lookupId(parameters.get('batch_id') ?? '');
         if (batchId) filter += ` and k.batch_id = $${bindings.push(batchId)}`;
+        const kind = z.enum(entryKinds).safeParse(parameters.get('kind'));
+        if (kind.success)
+            filter += ` and k.jenis = $${bindings.push(kind.data)}`;
         const opening =
             (
                 await this.db.one(
@@ -118,7 +122,8 @@ export class ItemLedger {
                            as document,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            ${batchJson} as batch,
-                           trim_scale(k.jumlah)::text as quantity, trim_scale(k.nilai)::text as cost_amount,
+                           trim_scale(k.jumlah)::text as quantity, trim_scale(k.sisa)::text as remaining_quantity,
+                           trim_scale(k.nilai)::text as cost_amount,
                            trim_scale($${openingAt}::numeric
                                + sum(k.jumlah) over (order by k.tanggal_posting, k.id))::text as balance,
                            k.dibalik_dari as reversed_entry_id, k.sumber_nomor as document_number

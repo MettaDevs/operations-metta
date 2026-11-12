@@ -879,6 +879,41 @@ function present(row: z.infer<typeof listRowSchema>) {
     return { ...row, segments, format: pattern(segments, row.scope_code) };
 }
 
+// Pengaturan nomor beberapa reference untuk satu legal entity, untuk bagian Penomoran di layar parameter (tab Number
+// sequences pada parameter module F&O). Reference tanpa pengaturan untuk legal entity itu tetap tampil, kosong.
+export async function legalEntitySequences(
+    db: Database,
+    tenantId: string,
+    legalEntityId: string,
+    referenceCodes: string[],
+) {
+    const references = await db.rows(
+        z.object({ id: z.string(), code: z.string(), name: z.string() }),
+        `select id, code, name from app_number_sequence_references
+         where code in (select jsonb_array_elements_text($1::text::jsonb)) order by name`,
+        [JSON.stringify(referenceCodes)],
+    );
+    const sequences = (
+        await db.rows(
+            listRowSchema,
+            `${listQuery} and s.legal_entity_id = $2
+               and r.code in (select jsonb_array_elements_text($3::text::jsonb)) order by s.id`,
+            [tenantId, legalEntityId, JSON.stringify(referenceCodes)],
+        )
+    ).map(present);
+    return references.map((reference) => ({
+        reference,
+        sequences: sequences
+            .filter((sequence) => sequence.reference_id === reference.id)
+            .map(({ id, format, next_number, status }) => ({
+                id,
+                format,
+                next_number,
+                status,
+            })),
+    }));
+}
+
 // Bacaan layar Nomor dokumen: daftar, kartu, pilihan nilai scope, dan data pendukungnya.
 export class NumberSequenceDirectory {
     constructor(

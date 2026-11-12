@@ -20,6 +20,7 @@ type LedgerRow = {
     posting_date: string;
     kind: string;
     quantity: string;
+    remaining_quantity: string;
     balance: string;
     batch: { batch_number: string } | null;
     document: { type: string; number: string | null };
@@ -126,6 +127,27 @@ describe.skipIf(!process.env.DB_HOST)('inventory stock and stock card', () => {
             ],
         ]);
         expect(card.data[0]?.document.number).toMatch(/^PNY-/);
+    });
+
+    test('the stock card filters by kind and shows what is left of each row', async () => {
+        const card = await json<{ opening_balance: string; data: LedgerRow[] }>(
+            await business.admin.get(
+                `${inventoryApi}/item-ledger-entries?item_id=${item.id}&location_id=${store.id}&kind=penyesuaian_tambah&from=2026-10-01&to=2026-10-31`,
+            ),
+            200,
+        );
+        expect(card.opening_balance).toBe('0');
+        expect(
+            card.data.map((row) => [
+                row.kind,
+                row.batch?.batch_number,
+                row.quantity,
+                row.remaining_quantity,
+            ]),
+        ).toEqual([
+            ['penyesuaian_tambah', 'S1', '5', '1'],
+            ['penyesuaian_tambah', 'S2', '3', '3'],
+        ]);
     });
 
     test('stock is readable only with the stock right', async () => {
