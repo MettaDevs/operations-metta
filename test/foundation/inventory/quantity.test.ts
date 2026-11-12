@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
     amountOf,
+    baseQuantity,
     decimalInput,
     display,
     fromNumeric,
@@ -37,5 +38,13 @@ describe('inventory quantities', () => {
         ).toBe(1000100n);
         expect(amountOf([{ quantity: 10000n, unitCost: 50n }])).toBe(1n);
         expect(amountOf([{ quantity: -10000n, unitCost: 50n }])).toBe(-1n);
+    });
+
+    test('base quantity is the line quantity times the unit content, refused when it needs a fifth decimal', () => {
+        const scaled = (value: number) => BigInt(Math.round(value * 10_000));
+        expect(baseQuantity(scaled(2), scaled(100))).toBe(scaled(200));
+        expect(baseQuantity(scaled(1.5), scaled(2.5))).toBe(scaled(3.75));
+        expect(baseQuantity(scaled(0.0001), scaled(2.5))).toBeNull();
+        expect(baseQuantity(10n ** 17n, scaled(100))).toBeNull();
     });
 });

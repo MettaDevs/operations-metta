@@ -17,18 +17,18 @@ import {
 } from '../../../platform/http/index.ts';
 import {
     activeLegalEntity,
+    baseQuantity,
     decimalInput,
     exists,
-    fromNumeric,
     parseInput,
     postItemLines,
     quantityScale,
     reverseItemEntries,
     toNumeric,
+    unitConversion,
 } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
-    baseQuantity,
     receiptItemLine,
     sourceType,
     type StoredReceiptLine,
@@ -265,25 +265,6 @@ export class Receipts {
             : undefined;
     }
 
-    // Isi satuan baris: satuan dasar barang berisi 1, satuan kemasan aktif berisi konversinya. Barang yang tidak ada
-    // atau satuan yang bukan milik barang itu dijawab null.
-    private async conversion(itemId: string, unitId: string) {
-        if (!lookupId(itemId) || !lookupId(unitId)) return null;
-        const found = await this.db.one(
-            z.object({ conversion: z.string() }),
-            `select '1' as conversion from gd_m_barang
-             where tenant_id = $1 and legal_entity_id = $2 and id = $3 and satuan_dasar_id = $4 and deleted_at is null
-             union all
-             select k.konversi::text from gd_m_barang_satuan k
-             join gd_m_barang b on b.tenant_id = k.tenant_id and b.id = k.barang_id and b.deleted_at is null
-             where k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id = $3 and k.satuan_id = $4
-               and k.deleted_at is null
-             limit 1`,
-            [this.scope.tenantId, this.scope.legalEntityId, itemId, unitId],
-        );
-        return found ? fromNumeric(found.conversion, quantityScale) : null;
-    }
-
     // Isian dokumen. Kecocokan batch dan kedaluwarsa dengan profil pelacakan barang diperiksa saat posting, oleh mesin
     // posting, supaya draf boleh disimpan setengah jadi.
     private async checked(body: unknown) {
@@ -337,7 +318,9 @@ export class Receipts {
                 ))
             )
                 fail('item_id', messages.item_id);
-            const conversion = await this.conversion(
+            const conversion = await unitConversion(
+                this.db,
+                this.scope,
                 line.item_id,
                 line.unit_id,
             );

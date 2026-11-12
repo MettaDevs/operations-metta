@@ -1,20 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import {
-    baseQuantity,
-    baseUnitCost,
-} from '../../../../src/foundation/purchasing/receipt/receipt.posting.ts';
+import { baseUnitCost } from '../../../../src/foundation/purchasing/receipt/receipt.posting.ts';
 
 const scaled = (value: number) => BigInt(Math.round(value * 10_000));
 
-// Jumlah dan harga dalam satuan dasar dari baris dalam satuan kemasan.
+// Harga dalam satuan dasar dari baris dalam satuan kemasan.
 describe('receipt posting arithmetic', () => {
-    test('base quantity is the line quantity times the unit content, refused when it needs a fifth decimal', () => {
-        expect(baseQuantity(scaled(2), scaled(100))).toBe(scaled(200));
-        expect(baseQuantity(scaled(1.5), scaled(2.5))).toBe(scaled(3.75));
-        expect(baseQuantity(scaled(0.0001), scaled(2.5))).toBeNull();
-        expect(baseQuantity(10n ** 17n, scaled(100))).toBeNull();
-    });
-
     test('base unit cost is the line price after discount divided by the unit content, rounded half up to four decimals', () => {
         expect(baseUnitCost(scaled(150000), scaled(10), scaled(100))).toBe(
             scaled(1350),

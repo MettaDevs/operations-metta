@@ -48,6 +48,19 @@ export function decimalInput(raw: unknown): bigint | null {
     return value <= -limit || value >= limit ? null : value;
 }
 
+// Jumlah dalam satuan dasar: jumlah baris x isi satuannya. null bila hasilnya punya lebih dari empat angka di belakang
+// koma atau melewati batas kolom kartu gudang, karena kartu gudang tidak membulatkan jumlah.
+export function baseQuantity(
+    quantity: bigint,
+    conversion: bigint,
+): bigint | null {
+    const scale = 10n ** BigInt(quantityScale);
+    const exact = quantity * conversion;
+    if (exact % scale !== 0n) return null;
+    const base = exact / scale;
+    return base < limit ? base : null;
+}
+
 // Nilai jumlah × harga satuan, dibulatkan sekali ke dua angka di belakang koma (setengah menjauhi nol).
 export function amountOf(parts: { quantity: bigint; unitCost: bigint }[]) {
     const exact = parts.reduce(

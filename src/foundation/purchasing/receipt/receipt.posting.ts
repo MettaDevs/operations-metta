@@ -1,4 +1,5 @@
 import {
+    baseQuantity,
     fromNumeric,
     quantityScale,
     type InboundLine,
@@ -6,22 +7,8 @@ import {
 
 const scale = 10n ** BigInt(quantityScale);
 const hundredPercent = 100n * scale;
-// Batas numeric(18,4) kartu gudang, dalam nilai berskala.
-const limit = 10n ** 18n;
 
 export const sourceType = 'penerimaan';
-
-// Jumlah dalam satuan dasar: jumlah baris x isi satuannya. null bila hasilnya punya lebih dari empat angka di belakang
-// koma atau melewati batas kolom kartu gudang, karena kartu gudang tidak membulatkan jumlah.
-export function baseQuantity(
-    quantity: bigint,
-    conversion: bigint,
-): bigint | null {
-    const exact = quantity * conversion;
-    if (exact % scale !== 0n) return null;
-    const base = exact / scale;
-    return base < limit ? base : null;
-}
 
 // Harga per satuan dasar sesudah diskon baris, dibulatkan sekali ke empat angka di belakang koma (setengah menjauhi
 // nol), seperti Unit Cost (LCY) di baris pembelian BC.

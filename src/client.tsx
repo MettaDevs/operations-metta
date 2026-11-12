@@ -37,6 +37,9 @@ import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
+import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
+import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
+import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as foundationPurchasingReceiptReceiptsPage } from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
@@ -454,6 +457,37 @@ const foundationInventoryItemUnitItemUnitsRoute = createRoute({
     staticData: { title: foundationInventoryItemUnitItemUnitsPage.title },
 });
 
+const foundationInventoryTransferTransferOrdersRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryTransferTransferOrdersPage.path,
+    component: foundationInventoryTransferTransferOrdersPage.component,
+    validateSearch:
+        foundationInventoryTransferTransferOrdersPage.validateSearch,
+    staticData: { title: foundationInventoryTransferTransferOrdersPage.title },
+});
+
+const foundationInventoryTransferTransferReceiptsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryTransferTransferReceiptsPage.path,
+    component: foundationInventoryTransferTransferReceiptsPage.component,
+    validateSearch:
+        foundationInventoryTransferTransferReceiptsPage.validateSearch,
+    staticData: {
+        title: foundationInventoryTransferTransferReceiptsPage.title,
+    },
+});
+
+const foundationInventoryTransferTransferShipmentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryTransferTransferShipmentsPage.path,
+    component: foundationInventoryTransferTransferShipmentsPage.component,
+    validateSearch:
+        foundationInventoryTransferTransferShipmentsPage.validateSearch,
+    staticData: {
+        title: foundationInventoryTransferTransferShipmentsPage.title,
+    },
+});
+
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationNumberSequenceNumberSequencesPage.path,
@@ -633,6 +667,9 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,
         foundationInventoryItemUnitItemUnitsRoute,
+        foundationInventoryTransferTransferOrdersRoute,
+        foundationInventoryTransferTransferReceiptsRoute,
+        foundationInventoryTransferTransferShipmentsRoute,
         foundationNumberSequenceNumberSequencesRoute,
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingVendorVendorsRoute,

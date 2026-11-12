@@ -558,4 +558,99 @@ describe.skipIf(!process.env.DB_HOST)('item ledger posting', () => {
         expect(code).toBe('23505');
         expect(await business.stock(item.id, location.id)).toEqual({ '-': 3 });
     });
+
+    test('a transfer that applies to given entries takes only those, even when the picking order would take others first', async () => {
+        const warehouse = await business.location('APPLY-G');
+        const transit = await business.location('APPLY-T', {
+            is_transit: true,
+            picking_method: 'manual',
+        });
+        const target = await business.location('APPLY-D');
+        const item = await business.item('APPLY-1', {
+            tracking_code_id: tracked.id,
+        });
+        await business.posted(
+            'masuk',
+            warehouse.id,
+            [receipt(item.id, 9, 'same', '2027-06-30')],
+            '2026-10-01',
+        );
+        const tag = Bun.randomUUIDv7();
+        const move = (
+            name: string,
+            from: string,
+            to: string,
+            quantity: bigint,
+            appliesTo?: string[],
+        ): ItemLine => ({
+            kind: 'transfer',
+            key: `${name}:${tag}`,
+            field: 'lines.0',
+            sourceLineId: null,
+            itemId: item.id,
+            quantity,
+            fromLocationId: from,
+            toLocationId: to,
+            batchId: null,
+            ...(appliesTo ? { appliesTo } : {}),
+        });
+        await postDirect(
+            business,
+            [move('apply-b', warehouse.id, transit.id, 50000n)],
+            '2026-11-01',
+        );
+        await postDirect(
+            business,
+            [move('apply-a', warehouse.id, transit.id, 40000n)],
+            '2026-11-02',
+        );
+        const entriesOf = async (name: string) =>
+            (
+                await pool.unsafe<{ id: string }[]>(
+                    `select id from gd_tr_kartu_gudang
+                     where tenant_id = $1 and lokasi_id = $2 and jumlah > 0 and kunci_idempoten like $3`,
+                    [business.tenantId, transit.id, `${name}:${tag}:%`],
+                )
+            ).map((row) => row.id);
+        const inTransit = async () => [
+            ...(await pool.unsafe<{ source: string; open: string }[]>(
+                `select split_part(kunci_idempoten, ':', 1) as source, trim_scale(sisa)::text as open
+                     from gd_tr_kartu_gudang
+                     where tenant_id = $1 and lokasi_id = $2 and jumlah > 0
+                     order by kunci_idempoten`,
+                [business.tenantId, transit.id],
+            )),
+        ];
+        const applied = await entriesOf('apply-a');
+
+        expect(
+            Object.keys(
+                await refusedDirect(
+                    postDirect(
+                        business,
+                        [
+                            move(
+                                'apply-over',
+                                transit.id,
+                                target.id,
+                                50000n,
+                                applied,
+                            ),
+                        ],
+                        '2026-11-03',
+                    ),
+                ),
+            ),
+        ).toEqual(['lines.0.quantity']);
+        await postDirect(
+            business,
+            [move('apply-take', transit.id, target.id, 30000n, applied)],
+            '2026-11-03',
+        );
+        expect(await inTransit()).toEqual([
+            { source: 'apply-a', open: '1' },
+            { source: 'apply-b', open: '5' },
+        ]);
+        expect(await business.stock(item.id, target.id)).toEqual({ SAME: 3 });
+    });
 });
