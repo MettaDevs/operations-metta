@@ -4,6 +4,7 @@ import {
     ok,
     recordInput,
     type Context,
+    type listParametersSchema,
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
 import type { MedicalRecordInput } from './medical-record.schema.ts';
@@ -37,6 +38,25 @@ export function medicalRecordRoutes() {
             .input(recordInput)
             .handler(async ({ context, input }) =>
                 ok(await (await records(context)).show(input.params.id)),
+            ),
+        healthcareDiagnosisHistory: route(
+            'GET',
+            '/destinations/{id}/diagnosis-history',
+        )
+            .input(
+                recordInput.extend({
+                    query: z.custom<z.input<typeof listParametersSchema>>(),
+                }),
+            )
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await records(context)
+                    ).diagnosisHistory(
+                        input.params.id,
+                        new URL(context.request.url).searchParams,
+                    ),
+                ),
             ),
         healthcareMedicalRecordSave: route(
             'PUT',

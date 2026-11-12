@@ -2,6 +2,11 @@
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
 import { page as modulesHealthcareSrcClinicalClusterClustersPage } from '../modules/healthcare/src/clinical/cluster/clusters.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/chronic-diseases.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-cases.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/prognoses.page.tsx';
+import { page as modulesHealthcareSrcClinicalIcd10Icd10Page } from '../modules/healthcare/src/clinical/icd10/icd10.page.tsx';
 import { page as modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage } from '../modules/healthcare/src/clinical/life-cycle/life-cycles.page.tsx';
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
@@ -56,6 +61,66 @@ const modulesHealthcareSrcClinicalClusterClustersRoute = createRoute({
     staticData: {
         title: modulesHealthcareSrcClinicalClusterClustersPage.title,
     },
+});
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalIcd10Icd10Route = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcClinicalIcd10Icd10Page.path,
+    component: modulesHealthcareSrcClinicalIcd10Icd10Page.component,
+    validateSearch: modulesHealthcareSrcClinicalIcd10Icd10Page.validateSearch,
+    staticData: { title: modulesHealthcareSrcClinicalIcd10Icd10Page.title },
 });
 
 const modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute = createRoute({
@@ -393,6 +458,11 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     appLayoutRoute.addChildren([
         modulesHealthcareSrcClinicalClusterClustersRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute,
+        modulesHealthcareSrcClinicalIcd10Icd10Route,
         modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute,
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,

@@ -40,7 +40,13 @@ type Loose<T> = T extends number
 export type MedicalRecordDraft = Loose<RecordData>;
 type Panel = Exclude<
     keyof MedicalRecordDraft,
-    'id' | 'version' | 'findings' | 'anatomy'
+    | 'id'
+    | 'version'
+    | 'findings'
+    | 'anatomy'
+    | 'diagnoses'
+    | 'prognosis_id'
+    | 'chronic_disease_ids'
 >;
 
 function numberOf(value: number | string | null): number | null {
