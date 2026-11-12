@@ -20,6 +20,7 @@ import {
     migrate,
     readMigrationSource,
 } from '../../../src/platform/migration/index.ts';
+import { createMigratedEnvironmentDatabase } from '../../support/environment-database.ts';
 
 describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     if (!process.env.DB_HOST) return;
@@ -44,10 +45,14 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
         await runtime.end();
     }, 120_000);
 
-    async function parameters() {
+    // Database lingkungan disalin dari template yang Core-nya sudah dimigrasi, kecuali test yang menguji jalur
+    // migration-nya sendiri.
+    async function parameters({ fromTemplate = true } = {}) {
         const id = Bun.randomUUIDv7();
         const database = `${settings.DB_DATABASE.slice(0, 40)}_wk_${id.slice(-8)}`;
         databases.push(database);
+        if (fromTemplate)
+            await createMigratedEnvironmentDatabase(settings, source, database);
         return {
             environment: { kind: 'production', name: 'Produksi' },
             database,
@@ -121,7 +126,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     }, 120_000);
 
     test('operasi yang hilang di tengah jalan berhenti di antara langkah tanpa menutupnya', async () => {
-        const request = await parameters();
+        const request = await parameters({ fromTemplate: false });
         const { client, reports } = recorder('migrate');
         expect(
             await runOperation(
@@ -173,7 +178,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     });
 
     test('migrate memasang migration Core yang tertinggal dan migration module yang sudah terpasang saja', async () => {
-        const request = await parameters();
+        const request = await parameters({ fromTemplate: false });
         const asset = source.modules.get('asset-management') ?? [];
         expect(asset.length).toBeGreaterThan(1);
         // Lingkungan yang disiapkan versi kode sebelumnya: migration Core terakhir belum ada.
