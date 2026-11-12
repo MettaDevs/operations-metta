@@ -15,6 +15,7 @@ import { activeLegalEntity } from '@core/foundation/inventory/index.ts';
 import {
     prescriptionLineSchema,
     prescriptionRowSchema,
+    queueStatuses,
 } from './prescription.schema.ts';
 
 // Lokasi yang melayani resep: pilihan petugas farmasi di resep itu, lalu baris Lokasi layanan resep untuk section
@@ -42,11 +43,18 @@ const rowSql = `select * from (
                            (select count(*)::int from far_tr_resep_detail d
                             where d.tenant_id = r.tenant_id and d.resep_id = r.id and d.barang_id is not null
                               and d.deleted_at is null) as item_count,
-                           (r.diterbitkan_pada at time zone 'UTC' at time zone e.timezone)::date::text as issued_date
+                           (r.diterbitkan_pada at time zone 'UTC' at time zone e.timezone)::date::text as issued_date,
+                           case when b.status is null or b.status = 'draf' then 'menunggu' else b.status end
+                               as queue_status,
+                           b.status as dispensing_status, b.nomor as dispensing_number,
+                           b.version as dispensing_version, ${isoSql('b.dipanggil_pada')} as called_at,
+                           ${isoSql('b.diserahkan_pada')} as handed_over_at
                     from far_tr_resep r
                     join organizations u on u.tenant_id = r.tenant_id and u.id = r.operating_unit_id
                     join legal_entities e on e.tenant_id = r.tenant_id and e.organization_id = r.legal_entity_id
-                    cross join lateral (select ${servingLocationSql('r')} as lokasi_id) served
+                    left join bill_farmasi b on b.tenant_id = r.tenant_id and b.resep_id = r.id
+                         and b.deleted_at is null and b.status <> 'dibatalkan'
+                    cross join lateral (select coalesce(b.lokasi_id, ${servingLocationSql('r')}) as lokasi_id) served
                     left join gd_m_lokasi l on l.tenant_id = r.tenant_id and l.id = served.lokasi_id
                     where r.tenant_id = $1 and r.legal_entity_id = $2 and r.deleted_at is null) prescriptions
                 where true`;
@@ -86,6 +94,14 @@ export class Prescriptions {
                  order by l.kode`,
                 [scope.tenantId, scope.legalEntityId],
             ),
+            permissions: {
+                prepare: this.workspace.permissions.has(
+                    'pharmacy.dispensing.prepare',
+                ),
+                hand_over: this.workspace.permissions.has(
+                    'pharmacy.dispensing.hand-over',
+                ),
+            },
         };
     }
 
@@ -101,6 +117,18 @@ export class Prescriptions {
         const date = parameters.get('date') ?? '';
         if (dateSchema.safeParse(date).success)
             filter += ` and issued_date = $${bindings.push(date)}`;
+        // Jumlah per status mengikuti lokasi dan tanggal yang dipilih, sebelum status dan pencarian.
+        const counted = await this.db.rows(
+            z.object({ status: z.enum(queueStatuses), total: z.number() }),
+            `select queue_status as status, count(*)::int as total from (${rowSql}${filter}) counted
+             group by queue_status`,
+            bindings,
+        );
+        const status = z
+            .enum(queueStatuses)
+            .safeParse(parameters.get('status'));
+        if (status.success)
+            filter += ` and queue_status = $${bindings.push(status.data)}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,
@@ -124,6 +152,10 @@ export class Prescriptions {
         return {
             data: batch.data.map((row) => prescriptionRowSchema.parse(row)),
             next_cursor: batch.next_cursor,
+            counts: queueStatuses.map((value) => ({
+                status: value,
+                total: counted.find((row) => row.status === value)?.total ?? 0,
+            })),
         };
     }
 
