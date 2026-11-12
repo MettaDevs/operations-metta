@@ -584,13 +584,12 @@ export class Visits {
         return found;
     }
 
-    // Siklus hidup kunjungan: pilihan petugas bila ada, selain itu hasil aturan Siklus hidup. Status hamil hanya berlaku
-    // bila ditanyakan untuk pasien itu.
+    // Siklus hidup kunjungan selalu hasil aturan Siklus hidup, tidak pernah dipilih petugas (aplikasi lama menghitung
+    // klaster di server saat simpan). Status hamil hanya berlaku bila ditanyakan untuk pasien itu.
     private async lifeCycle(
         patient: { gender: string | null; birth_date: string | null },
         date: string,
         pregnant: boolean,
-        chosenId: string | null,
     ): Promise<{ rule: LifeCycleRow; pregnant: boolean }> {
         const rules = await activeLifeCycles(this.db, this.workspace.tenantId);
         const subject = {
@@ -602,14 +601,6 @@ export class Visits {
             validation({
                 pregnant: 'Status hamil tidak berlaku untuk pasien ini.',
             });
-        if (chosenId) {
-            const chosen = rules.find((rule) => rule.id === chosenId);
-            if (!chosen)
-                validation({
-                    life_cycle_id: 'Pilih siklus hidup dari daftar.',
-                });
-            return { rule: chosen, pregnant };
-        }
         const rule = classifyVisit(rules, { ...subject, pregnant });
         if (!rule) validation({ life_cycle_id: undeterminedLifeCycleMessage });
         return { rule, pregnant };
@@ -906,7 +897,6 @@ export class Visits {
                 patient,
                 date,
                 input.pregnant === true,
-                optional(input.life_cycle_id),
             );
             if (
                 section.cluster_ids.length &&
