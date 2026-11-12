@@ -713,6 +713,7 @@ function QueuePage(): ReactNode {
                     }
                     showRowNumbers
                     actionsPlacement="inline"
+                    actions={[{ id: 'open', label: 'Buka pemeriksaan' }]}
                     getRowActions={rowActions}
                     onRowAction={(action, row) => rowHandlers[action]?.(row)}
                     onRowClick={(row) =>
