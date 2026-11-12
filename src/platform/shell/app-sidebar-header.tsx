@@ -13,6 +13,7 @@ import { Command, House, Moon, Search, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ShellData } from './api.ts';
 import { AppCommandPalette } from './app-command-palette.tsx';
+import { EnvironmentBadge } from './environment-badge.tsx';
 import { useAppearance } from './use-appearance.ts';
 import { initials, UserMenuContent } from './user-menu.tsx';
 import { WorkspaceSwitcher } from './workspace-switcher.tsx';
@@ -81,6 +82,7 @@ export function AppSidebarHeader({
                         </Kbd>
                     </span>
                 </Button>
+                <EnvironmentBadge environment={shell.environment} />
 
                 <div className="ml-auto flex items-center gap-1">
                     <Button

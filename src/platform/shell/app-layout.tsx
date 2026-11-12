@@ -6,7 +6,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import { shellQuery } from './api.ts';
 import { AppSidebar } from './app-sidebar.tsx';
 import { AppSidebarHeader } from './app-sidebar-header.tsx';
-import { EnvironmentBanner } from './environment-banner.tsx';
 import { areaOf, rememberArea } from './home.ts';
 import { useDocumentTitle } from './use-document-title.ts';
 
@@ -22,7 +21,7 @@ function sidebarOpen(): boolean {
 
 /**
  * Bingkai halaman setelah login, dipindah dari app-layout dan app-sidebar-layout CoreERP: rail dan submenu di kiri,
- * header, spanduk lingkungan, lalu isi halaman. Halaman hanya merender isinya sendiri. Datanya dari `/api/v1/shell`,
+ * header (dengan label lingkungan di sebelah pencarian), lalu isi halaman. Halaman hanya merender isinya sendiri. Datanya dari `/api/v1/shell`,
  * yang sudah dimuat route sebelum bingkai ini dirender.
  */
 export function AppLayout(): ReactNode {
@@ -59,8 +58,6 @@ export function AppLayout(): ReactNode {
             <SidebarInset className="h-svh min-w-0 overflow-hidden bg-muted/30 py-2 pr-2 pl-0">
                 <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-background shadow-sm">
                     <AppSidebarHeader shell={shell} isScrolled={isScrolled} />
-                    {/* Di bawah header, di atas isi halaman, dan tidak dapat ditutup. */}
-                    <EnvironmentBanner environment={shell.environment} />
                     <div
                         data-shell-content=""
                         className="@container/shell-content relative isolate min-h-0 min-w-0 flex-1 overflow-hidden"
