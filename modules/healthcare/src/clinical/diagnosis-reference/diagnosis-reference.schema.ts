@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { listParametersSchema } from '@core/platform/http/index.ts';
 
 // Daftar pendek klinis yang berbentuk sama (kode, nama, urutan, aktif): jenis diagnosa, kasus diagnosa, prognosa, dan
-// penyakit kronis panel Diagnosa; kelompok tindakan; satuan obat, bentuk sediaan, dan aturan pakai resep. Isinya data
+// penyakit kronis panel Diagnosa; kelompok tindakan; satuan obat, bentuk sediaan, dan aturan pakai resep; status pasien.
+// Status pasien baru dari layar ini tidak membawa perilaku, jadi tidak membuka isian tambahan. Isinya data
 // per tenant; nilai di sini hanya nama daftarnya di URL.
 export const diagnosisReferenceListSchema = z.enum([
     'diagnosis-types',
@@ -13,6 +14,7 @@ export const diagnosisReferenceListSchema = z.enum([
     'drug-units',
     'dosage-forms',
     'usage-instructions',
+    'discharge-statuses',
 ]);
 export type DiagnosisReferenceList = z.infer<
     typeof diagnosisReferenceListSchema

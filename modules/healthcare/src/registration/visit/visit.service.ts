@@ -192,6 +192,109 @@ export function visitVisibility(
     return `${company} and r.operating_unit_id in (${units.map((id) => bind(id)).join(',')})`;
 }
 
+// Jadwal praktik yang dipilih, dikunci sampai transaksi selesai sehingga kuota tidak pernah terlampaui. Section
+// yang tidak punya jadwal apa pun pada tanggal itu boleh didaftarkan tanpa nakes, misalnya section penunjang.
+export async function takeSchedule(
+    db: Database,
+    tenantId: string,
+    sectionId: string,
+    scheduleId: string | null,
+    date: string,
+): Promise<{ id: string; practitionerId: string } | null> {
+    const message = 'Pilih nakes dari jadwal praktik hari ini di section ini.';
+    if (!scheduleId) {
+        const scheduled = await db.one(
+            z.object({ id: z.string() }),
+            `select id from sim_tr_jadwal_praktik
+             where tenant_id = $1 and section_id = $2 and tanggal = $3::date and deleted_at is null limit 1`,
+            [tenantId, sectionId, date],
+        );
+        if (scheduled) validation({ practice_schedule_id: message });
+        return null;
+    }
+    const found = lookupId(scheduleId)
+        ? await db.one(
+              z.object({
+                  id: z.string(),
+                  section_id: z.string(),
+                  date: z.string(),
+                  status: z.string(),
+                  capacity: z.number().nullable(),
+                  registered: z.number(),
+                  practitioner_id: z.string(),
+                  practitioner_active: z.boolean(),
+              }),
+              `select j.id, j.section_id, j.tanggal::text as date, j.status, j.kapasitas as capacity,
+                      j.jumlah_terdaftar as registered, n.id as practitioner_id,
+                      (n.aktif and n.deleted_at is null) as practitioner_active
+               from sim_tr_jadwal_praktik j
+               join sim_m_nakes n on n.tenant_id = j.tenant_id and n.id = coalesce(j.nakes_pengganti_id, j.nakes_id)
+               where j.tenant_id = $1 and j.id = $2 and j.deleted_at is null
+               for update of j`,
+              [tenantId, scheduleId],
+          )
+        : undefined;
+    if (!found) validation({ practice_schedule_id: message });
+    if (
+        found.section_id !== sectionId ||
+        found.date !== date ||
+        found.status !== 'terjadwal' ||
+        !found.practitioner_active
+    )
+        validation({ practice_schedule_id: message });
+    if (found.capacity !== null && found.registered >= found.capacity)
+        validation({ practice_schedule_id: scheduleFullMessage });
+    await db.execute(
+        `update sim_tr_jadwal_praktik set jumlah_terdaftar = jumlah_terdaftar + 1, updated_at = $3
+         where tenant_id = $1 and id = $2`,
+        [tenantId, found.id, nowSql()],
+    );
+    return { id: found.id, practitionerId: found.practitioner_id };
+}
+
+// Nomor antrean berikutnya dari penghitung, satu per section per hari atau satu per jadwal praktik. Upsert
+// mengunci baris penghitung sampai transaksi selesai, jadi nomornya tidak pernah kembar.
+export async function nextQueueNumber(
+    db: Database,
+    tenantId: string,
+    sectionId: string,
+    date: string,
+    mode: QueueMode,
+    scheduleId: string | null,
+): Promise<number> {
+    let key: string | null;
+    switch (mode) {
+        case 'bersama':
+            key = null;
+            break;
+        case 'per_jadwal':
+            key = scheduleId;
+            break;
+        default: {
+            const unknown: never = mode;
+            throw new Error(`Unknown queue mode: ${String(unknown)}`);
+        }
+    }
+    const stamp = nowSql();
+    const counter = await db.one(
+        z.object({ number: z.number() }),
+        `insert into sim_tr_antrean_penghitung
+             (id, tenant_id, section_id, tanggal, jadwal_praktik_id, nomor_terakhir, created_at, updated_at)
+         values ($1, $2, $3, $4::date, $5, 1, $6, $6)
+         on conflict (tenant_id, section_id, tanggal, jadwal_praktik_id)
+         do update set nomor_terakhir = sim_tr_antrean_penghitung.nomor_terakhir + 1, updated_at = excluded.updated_at
+         returning nomor_terakhir as number`,
+        [Bun.randomUUIDv7(), tenantId, sectionId, date, key, stamp],
+    );
+    if (!counter) throw new Error('Queue counter returned no row.');
+    return counter.number;
+}
+
+// Kode antrean: awalan antrean section dan nomor tiga digit, misalnya A-012.
+export function queueCode(prefix: string | null, number: number): string {
+    return (prefix ? `${prefix}-` : '') + String(number).padStart(3, '0');
+}
+
 // Pendaftaran kunjungan rawat jalan: kepala kunjungan dan satu tujuan per section, dengan NoReg, NoBukti, dan nomor
 // antrean yang diterbitkan server di dalam satu transaksi. Kunjungan milik operating unit section tujuannya dan legal
 // entity aktif pendaftar; yang melihat dan mendaftarkannya dibatasi unit yang diberikan lewat kebijakan data pasien.
@@ -740,108 +843,6 @@ export class Visits {
         return { ...section, queue_mode: section.queue_mode };
     }
 
-    // Jadwal praktik yang dipilih, dikunci sampai transaksi selesai sehingga kuota tidak pernah terlampaui. Section
-    // yang tidak punya jadwal apa pun pada tanggal itu boleh didaftarkan tanpa nakes, misalnya section penunjang.
-    private async schedule(
-        sectionId: string,
-        scheduleId: string | null,
-        date: string,
-    ): Promise<{ id: string; practitionerId: string } | null> {
-        const message =
-            'Pilih nakes dari jadwal praktik hari ini di section ini.';
-        if (!scheduleId) {
-            const scheduled = await this.db.one(
-                z.object({ id: z.string() }),
-                `select id from sim_tr_jadwal_praktik
-                 where tenant_id = $1 and section_id = $2 and tanggal = $3::date and deleted_at is null limit 1`,
-                [this.workspace.tenantId, sectionId, date],
-            );
-            if (scheduled) validation({ practice_schedule_id: message });
-            return null;
-        }
-        const found = lookupId(scheduleId)
-            ? await this.db.one(
-                  z.object({
-                      id: z.string(),
-                      section_id: z.string(),
-                      date: z.string(),
-                      status: z.string(),
-                      capacity: z.number().nullable(),
-                      registered: z.number(),
-                      practitioner_id: z.string(),
-                      practitioner_active: z.boolean(),
-                  }),
-                  `select j.id, j.section_id, j.tanggal::text as date, j.status, j.kapasitas as capacity,
-                          j.jumlah_terdaftar as registered, n.id as practitioner_id,
-                          (n.aktif and n.deleted_at is null) as practitioner_active
-                   from sim_tr_jadwal_praktik j
-                   join sim_m_nakes n on n.tenant_id = j.tenant_id and n.id = coalesce(j.nakes_pengganti_id, j.nakes_id)
-                   where j.tenant_id = $1 and j.id = $2 and j.deleted_at is null
-                   for update of j`,
-                  [this.workspace.tenantId, scheduleId],
-              )
-            : undefined;
-        if (!found) validation({ practice_schedule_id: message });
-        if (
-            found.section_id !== sectionId ||
-            found.date !== date ||
-            found.status !== 'terjadwal' ||
-            !found.practitioner_active
-        )
-            validation({ practice_schedule_id: message });
-        if (found.capacity !== null && found.registered >= found.capacity)
-            validation({ practice_schedule_id: scheduleFullMessage });
-        await this.db.execute(
-            `update sim_tr_jadwal_praktik set jumlah_terdaftar = jumlah_terdaftar + 1, updated_at = $3
-             where tenant_id = $1 and id = $2`,
-            [this.workspace.tenantId, found.id, nowSql()],
-        );
-        return { id: found.id, practitionerId: found.practitioner_id };
-    }
-
-    // Nomor antrean berikutnya dari penghitung, satu per section per hari atau satu per jadwal praktik. Upsert
-    // mengunci baris penghitung sampai transaksi selesai, jadi nomornya tidak pernah kembar.
-    private async queueNumber(
-        sectionId: string,
-        date: string,
-        mode: QueueMode,
-        scheduleId: string | null,
-    ): Promise<number> {
-        let key: string | null;
-        switch (mode) {
-            case 'bersama':
-                key = null;
-                break;
-            case 'per_jadwal':
-                key = scheduleId;
-                break;
-            default: {
-                const unknown: never = mode;
-                throw new Error(`Unknown queue mode: ${String(unknown)}`);
-            }
-        }
-        const stamp = nowSql();
-        const counter = await this.db.one(
-            z.object({ number: z.number() }),
-            `insert into sim_tr_antrean_penghitung
-                 (id, tenant_id, section_id, tanggal, jadwal_praktik_id, nomor_terakhir, created_at, updated_at)
-             values ($1, $2, $3, $4::date, $5, 1, $6, $6)
-             on conflict (tenant_id, section_id, tanggal, jadwal_praktik_id)
-             do update set nomor_terakhir = sim_tr_antrean_penghitung.nomor_terakhir + 1, updated_at = excluded.updated_at
-             returning nomor_terakhir as number`,
-            [
-                Bun.randomUUIDv7(),
-                this.workspace.tenantId,
-                sectionId,
-                date,
-                key,
-                stamp,
-            ],
-        );
-        if (!counter) throw new Error('Queue counter returned no row.');
-        return counter.number;
-    }
-
     async create(request: Request, body: unknown) {
         this.workspace.guard('visit', 'create');
         const input = this.parse(body);
@@ -919,12 +920,16 @@ export class Visits {
                 if ((today?.count ?? 0) >= payer.maxVisits)
                     validation({ section_id: visitLimitMessage });
             }
-            const schedule = await this.schedule(
+            const schedule = await takeSchedule(
+                this.db,
+                this.workspace.tenantId,
                 section.id,
                 optional(input.practice_schedule_id),
                 date,
             );
-            const queue = await this.queueNumber(
+            const queue = await nextQueueNumber(
+                this.db,
+                this.workspace.tenantId,
                 section.id,
                 date,
                 section.queue_mode,
@@ -1005,9 +1010,7 @@ export class Visits {
                 jadwal_praktik_id: schedule?.id ?? null,
                 nakes_id: schedule?.practitionerId ?? null,
                 no_antrean: queue,
-                kode_antrean:
-                    (section.queue_prefix ? `${section.queue_prefix}-` : '') +
-                    String(queue).padStart(3, '0'),
+                kode_antrean: queueCode(section.queue_prefix, queue),
                 no_bukti: examinationNumber,
                 status: 'menunggu',
                 created_at: stamp,

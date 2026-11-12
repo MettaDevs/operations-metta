@@ -63,6 +63,11 @@ const tables = {
         usedIn: 'sim_tr_resep_detail',
         usedBy: 'aturan_pakai_id',
     },
+    'discharge-statuses': {
+        table: 'sim_m_status_pulang',
+        usedIn: 'sim_tr_registrasi_tujuan',
+        usedBy: 'status_pulang_id',
+    },
 } satisfies Record<
     DiagnosisReferenceList,
     { table: string; usedIn: string; usedBy: string }
