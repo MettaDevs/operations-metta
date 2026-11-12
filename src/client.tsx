@@ -34,7 +34,12 @@ import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/hea
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
+import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
+import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
+import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
+import { page as foundationPurchasingReceiptReceiptsPage } from './foundation/purchasing/receipt/receipts.page.tsx';
+import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
 import { page as platformAccessSecurityConfigurationPage } from './platform/access/security-configuration.page.tsx';
@@ -421,12 +426,56 @@ const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
     staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
 });
 
+const foundationInventoryCodeListFundingSourcesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListFundingSourcesPage.path,
+    component: foundationInventoryCodeListFundingSourcesPage.component,
+    validateSearch:
+        foundationInventoryCodeListFundingSourcesPage.validateSearch,
+    staticData: { title: foundationInventoryCodeListFundingSourcesPage.title },
+});
+
+const foundationInventoryCodeListProcurementProgramsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryCodeListProcurementProgramsPage.path,
+    component: foundationInventoryCodeListProcurementProgramsPage.component,
+    validateSearch:
+        foundationInventoryCodeListProcurementProgramsPage.validateSearch,
+    staticData: {
+        title: foundationInventoryCodeListProcurementProgramsPage.title,
+    },
+});
+
+const foundationInventoryItemUnitItemUnitsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryItemUnitItemUnitsPage.path,
+    component: foundationInventoryItemUnitItemUnitsPage.component,
+    validateSearch: foundationInventoryItemUnitItemUnitsPage.validateSearch,
+    staticData: { title: foundationInventoryItemUnitItemUnitsPage.title },
+});
+
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationNumberSequenceNumberSequencesPage.path,
     component: foundationNumberSequenceNumberSequencesPage.component,
     validateSearch: foundationNumberSequenceNumberSequencesPage.validateSearch,
     staticData: { title: foundationNumberSequenceNumberSequencesPage.title },
+});
+
+const foundationPurchasingReceiptReceiptsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingReceiptReceiptsPage.path,
+    component: foundationPurchasingReceiptReceiptsPage.component,
+    validateSearch: foundationPurchasingReceiptReceiptsPage.validateSearch,
+    staticData: { title: foundationPurchasingReceiptReceiptsPage.title },
+});
+
+const foundationPurchasingVendorVendorsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingVendorVendorsPage.path,
+    component: foundationPurchasingVendorVendorsPage.component,
+    validateSearch: foundationPurchasingVendorVendorsPage.validateSearch,
+    staticData: { title: foundationPurchasingVendorVendorsPage.title },
 });
 
 const platformAccessAccessRoute = createRoute({
@@ -581,7 +630,12 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServiceSectionSectionsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
+        foundationInventoryCodeListFundingSourcesRoute,
+        foundationInventoryCodeListProcurementProgramsRoute,
+        foundationInventoryItemUnitItemUnitsRoute,
         foundationNumberSequenceNumberSequencesRoute,
+        foundationPurchasingReceiptReceiptsRoute,
+        foundationPurchasingVendorVendorsRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
         platformAccessSecurityConfigurationRoute,
