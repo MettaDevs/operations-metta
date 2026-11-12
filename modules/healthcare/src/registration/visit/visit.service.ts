@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import type { Workspace } from '@core/platform/access/index.ts';
+import { maskNumber } from '@core/platform/address-book/index.ts';
 import {
     nowSql,
     type Bind,
@@ -317,7 +318,7 @@ export class Visits {
     }
 
     // Daftar bertahap dengan penghitung status. Saring rentang tanggal (bawaan hari ini), section, nakes, tipe pasien,
-    // dan status; cari NRM, nama pasien, atau NoReg. Penghitung mengikuti saringan selain status dan pencarian,
+    // pasien, dan status; cari NRM, nama pasien, atau NoReg. Penghitung mengikuti saringan selain status dan pencarian,
     // supaya angka setiap status tetap terlihat saat satu status dipilih.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('visit', 'read');
@@ -355,6 +356,8 @@ export class Visits {
         const patientType = lookupId(parameters.get('patient_type_id') ?? '');
         if (patientType)
             filters.push(`r.tipe_pasien_id = ${bind(patientType)}`);
+        const patient = lookupId(parameters.get('patient_id') ?? '');
+        if (patient) filters.push(`r.pasien_id = ${bind(patient)}`);
         const base = `
             from sim_tr_registrasi r
             join lateral (select * from sim_tr_registrasi_tujuan x
@@ -386,17 +389,28 @@ export class Visits {
                 select r.id, r.no_reg as registration_number, r.tanggal::text as date,
                        to_char(r.didaftarkan_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as registered_at, r.status,
                        r.jenis_kunjungan as visit_kind, r.pasien_id as patient_id, k.nrm as patient_nrm,
-                       p.name as patient_name, p.gender, p.birth_date::text as birth_date, r.umur_tahun as age_years,
+                       p.name as patient_name, p.gender, p.birth_date::text as birth_date, p.birth_place,
+                       r.umur_tahun as age_years, nik.number as nik, k.no_dokumen_rm as document_number,
+                       k.nrm_lama as old_number, address.formatted as address, r.status_kunjungan as visit_condition,
                        t.nama as patient_type_name, gp.name as guarantor_name, r.no_kartu as card_number,
                        d.section_id, s.nama as section_name, d.nakes_id as practitioner_id,
                        np.name as practitioner_name, d.kode_antrean as queue_code, d.no_bukti as examination_number,
-                       sk.warna as screening_category_color
+                       sk.nama as screening_category_name, sk.warna as screening_category_color
                 from sim_tr_registrasi r
                 join lateral (select * from sim_tr_registrasi_tujuan x
                               where x.tenant_id = r.tenant_id and x.registrasi_id = r.id and x.deleted_at is null
                               order by x.urutan limit 1) d on true
                 join sim_m_pasien k on k.tenant_id = r.tenant_id and k.id = r.pasien_id
                 join parties p on p.tenant_id = k.tenant_id and p.id = k.party_id
+                left join party_identifications nik on nik.tenant_id = k.tenant_id and nik.party_id = k.party_id
+                    and nik.type_code = 'nik' and nik.deleted_at is null
+                left join lateral (
+                    select pa.formatted from party_locations pl
+                    join postal_addresses pa on pa.location_id = pl.location_id
+                    join party_location_purposes plp on plp.party_location_id = pl.id and plp.deleted_at is null
+                    where pl.tenant_id = k.tenant_id and pl.party_id = k.party_id and pl.deleted_at is null
+                      and not pl.is_private and plp.purpose_code in ('identity_card', 'domicile')
+                    order by plp.purpose_code = 'domicile' desc limit 1) address on true
                 join sim_m_tipe_pasien t on t.tenant_id = r.tenant_id and t.id = r.tipe_pasien_id
                 join sim_m_section s on s.tenant_id = d.tenant_id and s.id = d.section_id
                 left join sim_m_penjamin g on g.tenant_id = r.tenant_id and g.id = r.penjamin_id
@@ -422,8 +436,19 @@ export class Visits {
             defaultSort: 'registered_at',
             defaultDirection: 'desc',
         });
+        // NIK disamarkan seperti di daftar pasien bagi yang tidak memegang izin Core Lihat nomor identitas utuh.
+        const full = (
+            await this.workspace.holds(this.db, [
+                'core.party-identification.read',
+            ])
+        ).has('core.party-identification.read');
         return {
-            data: batch.data.map((row) => visitListRowSchema.parse(row)),
+            data: batch.data.map((row) => {
+                const parsed = visitListRowSchema.parse(row);
+                return parsed.nik !== null && !full
+                    ? { ...parsed, nik: maskNumber(parsed.nik) }
+                    : parsed;
+            }),
             next_cursor: batch.next_cursor,
             counts: counts ?? {
                 waiting: 0,

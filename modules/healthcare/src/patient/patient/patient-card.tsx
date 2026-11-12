@@ -17,6 +17,8 @@ import { Switch } from '@operations-metta/ui/switch';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { ClipboardList } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -630,6 +632,7 @@ function PatientCardBody({
     onDirtyChange: (dirty: boolean) => void;
 }): ReactNode {
     const permissions = metadata.permissions;
+    const navigate = useNavigate();
     // Pasien tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya.
     const editing = patient === null || permissions.update;
     const fallback = metadata.default_payment_method;
@@ -771,7 +774,7 @@ function PatientCardBody({
     });
 
     // Kelompok aksi kartu pasien di toolbar. Aksi yang endpoint-nya belum ada tidak ditampilkan; tempatnya:
-    // - Pelayanan: Registrasi kunjungan dan Riwayat pemeriksaan;
+    // - Pelayanan: Registrasi kunjungan (membuka halaman pendaftaran dengan pasien ini) dan Riwayat pemeriksaan;
     // - Dokumen: Cetak general consent dan Tambah dokumen;
     // - Administrasi: Merge NRM.
     // Kelompok tanpa aksi tidak dirender.
@@ -781,10 +784,36 @@ function PatientCardBody({
         actions: {
             id: string;
             label: string;
+            icon?: ReactNode;
+            disabled?: boolean;
+            title?: string;
             onSelect: () => void;
         }[];
     }[] = [
-        { id: 'service', label: 'Pelayanan', actions: [] },
+        {
+            id: 'service',
+            label: 'Pelayanan',
+            actions:
+                patient && permissions.register_visit
+                    ? [
+                          {
+                              id: 'register-visit',
+                              label: 'Registrasi kunjungan',
+                              icon: <ClipboardList aria-hidden="true" />,
+                              disabled: busy || dirty,
+                              title:
+                                  busy || dirty
+                                      ? 'Simpan atau batalkan perubahan pasien lebih dulu.'
+                                      : 'Daftarkan kunjungan pasien ini di halaman pendaftaran.',
+                              onSelect: () =>
+                                  void navigate({
+                                      to: '/healthcare/registration/visits/new',
+                                      search: { patient: patient.id },
+                                  }),
+                          },
+                      ]
+                    : [],
+        },
         { id: 'documents', label: 'Dokumen', actions: [] },
         { id: 'administration', label: 'Administrasi', actions: [] },
     ];

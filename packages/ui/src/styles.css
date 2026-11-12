@@ -33,6 +33,10 @@
     --color-success-foreground: var(--success-foreground);
     --color-warning: var(--warning);
     --color-warning-foreground: var(--warning-foreground);
+    --color-triage-red: var(--triage-red);
+    --color-triage-orange: var(--triage-orange);
+    --color-triage-yellow: var(--triage-yellow);
+    --color-triage-green: var(--triage-green);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
@@ -78,6 +82,11 @@
     --success-foreground: hsl(210 40% 98%);
     --warning: hsl(35 92% 30%);
     --warning-foreground: hsl(210 40% 98%);
+    /* Kategori skrining visual pasien (sim_m_skrining_kategori.warna), dipakai sebagai titik kecil. */
+    --triage-red: hsl(0 72% 51%);
+    --triage-orange: hsl(25 95% 53%);
+    --triage-yellow: hsl(45 93% 47%);
+    --triage-green: hsl(142 72% 35%);
     --border: hsl(214 22% 84%);
     --input: hsl(214 22% 84%);
     --ring: hsl(199 89% 42%);
@@ -126,6 +135,10 @@
     --success-foreground: hsl(150 60% 10%);
     --warning: hsl(38 92% 60%);
     --warning-foreground: hsl(30 60% 12%);
+    --triage-red: hsl(0 84% 60%);
+    --triage-orange: hsl(25 95% 58%);
+    --triage-yellow: hsl(48 96% 53%);
+    --triage-green: hsl(142 69% 50%);
     --border: oklch(0.269 0 0);
     --input: oklch(0.269 0 0);
     --ring: hsl(199 89% 48%);

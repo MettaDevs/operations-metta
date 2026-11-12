@@ -33,4 +33,11 @@ test('the open area is found from the page address, ignoring search params in th
     );
     expect(areaOf([withQuery], '/query/page')?.id).toBe('query');
     expect(areaOf([sysAdmin, clinic], '/')).toBeUndefined();
+    // Halaman di bawah sebuah menu, misalnya halaman satu record, tetap di area menu itu.
+    expect(areaOf([sysAdmin, clinic], '/clinic/patient/patients/new')?.id).toBe(
+        'clinic',
+    );
+    expect(
+        areaOf([sysAdmin, clinic], '/clinic/patient/patientsx'),
+    ).toBeUndefined();
 });

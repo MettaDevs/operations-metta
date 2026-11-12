@@ -21,14 +21,21 @@ export function homePath(
     );
 }
 
-// Area yang memuat halaman di alamat ini, dicocokkan dengan href menu tanpa search params.
+// Halaman di alamat ini milik entri menu `href` (tanpa search params): halamannya sendiri, atau halaman di bawahnya,
+// misalnya `/healthcare/registration/visits/new` di bawah menu Kunjungan.
+export function underMenu(href: string, pathname: string): boolean {
+    const path = href.split('?')[0] ?? href;
+    return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+// Area yang memuat halaman di alamat ini.
 export function areaOf<T extends Area>(
     navigation: readonly T[],
     pathname: string,
 ): T | undefined {
     return navigation.find((area) =>
         area.groups.some((group) =>
-            group.items.some((item) => item.href.split('?')[0] === pathname),
+            group.items.some((item) => underMenu(item.href, pathname)),
         ),
     );
 }

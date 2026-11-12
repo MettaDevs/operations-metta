@@ -371,6 +371,10 @@ export class Patients {
                 delete: this.workspace.permissions.has(
                     'healthcare.patient.delete',
                 ),
+                // Aksi Registrasi kunjungan di kartu pasien.
+                register_visit: this.workspace.permissions.has(
+                    'healthcare.visit.create',
+                ),
             },
             // Unit pendaftar pasien baru: unit aktif di tempat kerja, bila termasuk batas data pengguna.
             registering_unit:
