@@ -21,10 +21,13 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import type { Item } from '../item/item-lookup.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 
 // Stok minimum dan maksimum barang per lokasi (Stockkeeping Unit di BC) sebagai bagian kartu barang. Setiap baris
 // disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC. Stok maksimum menjadi stok optimum LPLPO.

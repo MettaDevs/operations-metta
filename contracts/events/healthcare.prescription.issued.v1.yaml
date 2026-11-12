@@ -15,7 +15,8 @@ info:
     Keadaan sebenarnya, 13 November 2026:
     - Event hanya diantar di dalam runtime ke handler module yang terpasang. Belum ada pengirim ke luar runtime, jadi
       baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
-    - Belum ada penerima. Module farmasi menyusul.
+    - Penerima: module farmasi (`modules/pharmacy`), bila terpasang untuk tenant itu, mencatat resep di antrean
+      farmasi. Isi yang tidak cocok dengan kontrak ini dicatat ke log lalu dilewati, tanpa membatalkan pengiriman.
     - Belum ada event pembatalan resep: layar tidak menawarkan membatalkan resep yang sudah dikirim, dan kunjungan hanya
       bisa dibatalkan sebelum diperiksa, jadi status `dibatalkan` belum pernah ditulis.
 channels:

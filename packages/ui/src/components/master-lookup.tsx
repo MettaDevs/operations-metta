@@ -1,13 +1,13 @@
-import type { DataTableColumn } from '@operations-metta/ui/data-table';
-import { FormControl } from '@operations-metta/ui/form-control';
-import { InlineLookup } from '@operations-metta/ui/inline-lookup';
-import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
+import type { DataTableColumn } from './data-table';
+import { FormControl } from './form-control';
+import { InlineLookup } from './inline-lookup';
+import type { LookupLoader } from './inline-lookup';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
-// Pilihan master persediaan di form: ketik untuk mencari di server, gulir untuk memuat berikutnya, Baru di kiri bawah
-// bila pemanggil membuka kartu barunya dan daftar master itu menyatakan pengguna boleh mengubahnya (can_manage), dan
-// Daftar lengkap di kanan bawah. Field memegang rujukan yang tersimpan (id, kode,
+// Pilihan master di form, dipakai layar persediaan Core dan layar module: ketik untuk mencari di server, gulir untuk
+// memuat berikutnya, Baru di kiri bawah bila pemanggil membuka kartu barunya dan daftar master itu menyatakan pengguna
+// boleh mengubahnya (can_manage), dan Daftar lengkap di kanan bawah. Field memegang rujukan yang tersimpan (id, kode,
 // nama); baris lengkap dari server diteruskan ke onChange, supaya pemanggil bisa memakai isian lainnya (misalnya
 // satuan atau profil pelacakan barang) tanpa memuat ulang.
 

@@ -33,7 +33,10 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import { ItemCard } from '../item/item-card.tsx';
 import { ItemLookup } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';

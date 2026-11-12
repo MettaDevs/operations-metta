@@ -29,7 +29,7 @@ import {
     orpc,
 } from '../../../platform/shell/index.ts';
 import type { StockCount } from './stock-count-card.tsx';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { label } from './stock-count-fields.tsx';
 
 type Errors = Record<string, string[]>;

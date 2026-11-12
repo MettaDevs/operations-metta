@@ -7,13 +7,16 @@ import { Input } from '@operations-metta/ui/input';
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api } from '../../../platform/shell/index.ts';
-import { displayNumber, parseDisplayNumber } from '../display-number.ts';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import {
     MasterLookup,
     type LookupRequest,
     type Reference,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 import type { Adjustment, Direction } from './adjustment-labels.tsx';
 
 // Baris penyesuaian stok (baris Item Journal BC). Isian stok masuk (nomor batch baru, kedaluwarsa, harga satuan) dan

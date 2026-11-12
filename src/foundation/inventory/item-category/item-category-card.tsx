@@ -20,7 +20,7 @@ import {
     errorText,
     FormErrorHeader,
 } from '../../../platform/shell/index.ts';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { TrackingCodeCard } from '../tracking-code/tracking-code-card.tsx';
 import { TrackingCodeLookup } from '../tracking-code/tracking-code-lookup.tsx';
 import {

@@ -26,13 +26,13 @@ import {
     errorText,
     useUnsavedChangesGuard,
 } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import {
     ItemCategoryLookup,
     type ItemCategory,
 } from '../item-category/item-category-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { ItemCard } from './item-card.tsx';
 import type { Item } from './item-lookup.tsx';
 

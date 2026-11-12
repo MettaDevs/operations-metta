@@ -1,6 +1,6 @@
 import { displayDate } from '@operations-metta/ui/date-picker';
 import type { ApiBody } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import type { ReportTable } from '../report-table.ts';
 
 type Stock = ApiBody<'inventoryStockByLocation'>;

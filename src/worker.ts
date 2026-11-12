@@ -2,6 +2,7 @@
 // lalu menutupnya. Satu operasi pada satu waktu; SIGTERM ditunggu sampai operasi yang sedang berjalan selesai.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { registerPharmacyEventHandlers } from '../modules/pharmacy/src/index.ts';
 import { registerOrganizationDefaults } from './foundation/number-sequence/index.ts';
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
@@ -20,6 +21,8 @@ import { readMigrationSource } from './platform/migration/index.ts';
 const config = loadConfig();
 // Data bawaan per organisasi milik module yang dipasang sync_entitlements.
 registerOrganizationDefaults();
+// Event yang diterbitkan operasi worker diantar ke module penerimanya, sama dengan proses HTTP.
+registerPharmacyEventHandlers();
 startErrorReporting(config, 'worker');
 if (
     !config.CONTROL_PLANE_URL ||

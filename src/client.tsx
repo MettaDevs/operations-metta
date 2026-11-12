@@ -31,6 +31,11 @@ import { page as modulesHealthcareSrcServicePracticeScheduleScheduleParametersPa
 import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPage } from '../modules/healthcare/src/service/practice-schedule/schedule-templates.page.tsx';
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
+import { page as modulesPharmacySrcDashboardDashboardPage } from '../modules/pharmacy/src/dashboard/dashboard.page.tsx';
+import { page as modulesPharmacySrcDispensingPrescriptionPrescriptionsPage } from '../modules/pharmacy/src/dispensing/prescription/prescriptions.page.tsx';
+import { page as modulesPharmacySrcDispensingServiceLocationServiceLocationsPage } from '../modules/pharmacy/src/dispensing/service-location/service-locations.page.tsx';
+import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modules/pharmacy/src/drug/drug-class/drug-classes.page.tsx';
+import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
@@ -411,6 +416,55 @@ const modulesHealthcareSrcServiceSectionSectionsRoute = createRoute({
     staticData: { title: modulesHealthcareSrcServiceSectionSectionsPage.title },
 });
 
+const modulesPharmacySrcDashboardDashboardRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDashboardDashboardPage.path,
+    component: modulesPharmacySrcDashboardDashboardPage.component,
+    staticData: { title: modulesPharmacySrcDashboardDashboardPage.title },
+});
+
+const modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDispensingPrescriptionPrescriptionsPage.path,
+    component:
+        modulesPharmacySrcDispensingPrescriptionPrescriptionsPage.component,
+    validateSearch:
+        modulesPharmacySrcDispensingPrescriptionPrescriptionsPage.validateSearch,
+    staticData: {
+        title: modulesPharmacySrcDispensingPrescriptionPrescriptionsPage.title,
+    },
+});
+
+const modulesPharmacySrcDispensingServiceLocationServiceLocationsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesPharmacySrcDispensingServiceLocationServiceLocationsPage.path,
+        component:
+            modulesPharmacySrcDispensingServiceLocationServiceLocationsPage.component,
+        validateSearch:
+            modulesPharmacySrcDispensingServiceLocationServiceLocationsPage.validateSearch,
+        staticData: {
+            title: modulesPharmacySrcDispensingServiceLocationServiceLocationsPage.title,
+        },
+    });
+
+const modulesPharmacySrcDrugDrugClassDrugClassesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDrugDrugClassDrugClassesPage.path,
+    component: modulesPharmacySrcDrugDrugClassDrugClassesPage.component,
+    validateSearch:
+        modulesPharmacySrcDrugDrugClassDrugClassesPage.validateSearch,
+    staticData: { title: modulesPharmacySrcDrugDrugClassDrugClassesPage.title },
+});
+
+const modulesPharmacySrcDrugDrugDrugsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDrugDrugDrugsPage.path,
+    component: modulesPharmacySrcDrugDrugDrugsPage.component,
+    validateSearch: modulesPharmacySrcDrugDrugDrugsPage.validateSearch,
+    staticData: { title: modulesPharmacySrcDrugDrugDrugsPage.title },
+});
+
 const foundationCalendarCalendarsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationCalendarCalendarsPage.path,
@@ -767,6 +821,11 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesRoute,
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,
+        modulesPharmacySrcDashboardDashboardRoute,
+        modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute,
+        modulesPharmacySrcDispensingServiceLocationServiceLocationsRoute,
+        modulesPharmacySrcDrugDrugClassDrugClassesRoute,
+        modulesPharmacySrcDrugDrugDrugsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,

@@ -10,6 +10,7 @@
         "./theme": "./src/theme.ts",
         "./utils": "./src/utils.ts",
         "./record-search": "./src/components/record-search.ts",
+        "./display-number": "./src/components/display-number.ts",
         "./use-incremental-list": "./src/components/use-incremental-list.ts",
         "./use-inline-lookup-data": "./src/components/use-inline-lookup-data.ts",
         "./use-record-navigation": "./src/components/use-record-navigation.ts",

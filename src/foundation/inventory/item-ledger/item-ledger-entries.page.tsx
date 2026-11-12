@@ -37,7 +37,7 @@ import {
     definePage,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber } from '../display-number.ts';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { ItemCard } from '../item/item-card.tsx';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';
@@ -46,7 +46,7 @@ import {
     MasterLookup,
     type LookupRequest,
     type Reference,
-} from '../master-lookup.tsx';
+} from '@operations-metta/ui/master-lookup';
 
 // Kartu stok (Item Ledger Entries di BC): gerak stok satu barang dalam satu periode, langsung dari kartu gudang.
 

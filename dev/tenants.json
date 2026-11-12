@@ -12,7 +12,7 @@
             { "kind": "production", "name": "Produksi" },
             { "kind": "demo", "name": "Demo" }
         ],
-        "modules": ["healthcare"],
+        "modules": ["healthcare", "pharmacy"],
         "sample": {
             "legal_entities": [
                 {

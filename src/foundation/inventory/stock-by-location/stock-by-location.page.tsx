@@ -19,7 +19,7 @@ import {
 } from '../item-category/item-category-lookup.tsx';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import { LocationLookup, type Location } from '../location/location-lookup.tsx';
-import type { Reference } from '../master-lookup.tsx';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { ReportDataTable, ReportDate } from '../report-controls.tsx';
 import { downloadCsv } from '../report-table.ts';
 import { stockByLocationTable } from './stock-by-location-table.ts';
