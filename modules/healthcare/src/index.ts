@@ -1,5 +1,6 @@
 import { clusterRoutes } from './clinical/cluster/cluster.routes.ts';
 import { lifeCycleRoutes } from './clinical/life-cycle/life-cycle.routes.ts';
+import { medicalRecordRoutes } from './examination/medical-record/medical-record.routes.ts';
 import { examinationQueueRoutes } from './examination/queue/queue.routes.ts';
 import { guarantorRoutes } from './coverage/guarantor/guarantor.routes.ts';
 import { patientTypeRoutes } from './coverage/patient-type/patient-type.routes.ts';
@@ -23,5 +24,6 @@ export function healthcareRoutes() {
         ...lifeCycleRoutes(),
         ...visitRoutes(),
         ...examinationQueueRoutes(),
+        ...medicalRecordRoutes(),
     };
 }

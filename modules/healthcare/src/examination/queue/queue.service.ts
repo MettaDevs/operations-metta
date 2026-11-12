@@ -24,6 +24,7 @@ import {
     isVisitStatus,
     refusedTransition,
 } from '../../registration/visit/visit.statuses.ts';
+import { missingRequired } from '../medical-record/medical-record.service.ts';
 import {
     callNextInputSchema,
     queueEntrySchema,
@@ -441,8 +442,17 @@ export class ExaminationQueue {
             switch (action) {
                 case 'panggil_ulang':
                 case 'tidak_datang':
-                case 'selesai_periksa':
                     break;
+                // Pemeriksaan selesai hanya bila isian wajib periksa fisik yang tersimpan sudah terisi.
+                case 'selesai_periksa': {
+                    const missing = await missingRequired(
+                        this.db,
+                        this.workspace.tenantId,
+                        current.id,
+                    );
+                    if (Object.keys(missing).length) validation(missing);
+                    break;
+                }
                 case 'lewati': {
                     const last = await this.db.one(
                         z.object({ position: z.number() }),
