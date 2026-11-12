@@ -34,7 +34,9 @@ const rowSql = `select * from (
                            b.diblokir as is_blocked, b.version, b.kategori_id as category_id,
                            b.satuan_dasar_id as base_unit_id, b.profil_pelacakan_id as tracking_code_id,
                            ${reference('unit')} as base_unit, ${reference('category')} as category,
-                           ${reference('profile')} as tracking_code
+                           ${reference('profile')} as tracking_code,
+                           coalesce(profile.wajib_batch, false) as batch_required,
+                           coalesce(profile.wajib_kedaluwarsa, false) as expiry_required
                     from gd_m_barang b
                     join gd_m_satuan unit on unit.tenant_id = b.tenant_id and unit.id = b.satuan_dasar_id
                     left join gd_m_kategori category on category.tenant_id = b.tenant_id

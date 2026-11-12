@@ -1,5 +1,19 @@
 import type { PickingMethod } from './stock-policy.ts';
 
+// Sumber dana, program pengadaan, dan tahun anggaran stok. Melekat pada baris masuk, lalu ikut ke baris keluar dan
+// mutasi yang mengambil stok itu, sama dengan batch dan harga satuannya.
+export type Funding = {
+    sourceId: string | null;
+    programId: string | null;
+    budgetYear: number | null;
+};
+
+export const noFunding: Funding = {
+    sourceId: null,
+    programId: null,
+    budgetYear: null,
+};
+
 // Baris kartu gudang yang masih terbuka: stok yang tersisa pada baris masuk, atau kekurangan yang belum mendapat stok
 // pada baris keluar yang minus. `open` selalu positif.
 export type OpenEntry = {
@@ -8,6 +22,7 @@ export type OpenEntry = {
     expiry: string | null;
     open: bigint;
     unitCost: bigint;
+    funding: Funding;
 };
 
 export type Slice = { entry: OpenEntry; quantity: bigint };

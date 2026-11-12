@@ -12,7 +12,9 @@ import {
 import {
     allocate,
     candidates,
+    noFunding,
     type Candidates,
+    type Funding,
     type OpenEntry,
     type Slice,
 } from './allocation.ts';
@@ -54,6 +56,8 @@ export type InboundLine = LineBase & {
     unitCost: bigint;
     batchNumber: string | null;
     expiry: string | null;
+    // Kosong berarti stok tanpa sumber dana, program, dan tahun anggaran.
+    funding?: Funding;
 };
 export type OutboundLine = LineBase & {
     kind: 'outbound';
@@ -115,12 +119,30 @@ const batchSchema = z.object({
 });
 type Batch = z.infer<typeof batchSchema>;
 
+const fundingColumns = {
+    funding_source_id: z.string().nullable(),
+    program_id: z.string().nullable(),
+    budget_year: z.number().nullable(),
+};
+const fundingSql =
+    'sumber_dana_id as funding_source_id, program_pengadaan_id as program_id, tahun_anggaran as budget_year';
+const fundingOf = (row: {
+    funding_source_id: string | null;
+    program_id: string | null;
+    budget_year: number | null;
+}): Funding => ({
+    sourceId: row.funding_source_id,
+    programId: row.program_id,
+    budgetYear: row.budget_year,
+});
+
 const openSchema = z.object({
     id: z.string(),
     batch_id: z.string().nullable(),
     expiry: z.string().nullable(),
     open: z.string(),
     unit_cost: z.string().nullable(),
+    ...fundingColumns,
 });
 
 const entrySchema = z.object({
@@ -140,6 +162,7 @@ const entrySchema = z.object({
     source_id: z.string(),
     source_line_id: z.string().nullable(),
     source_number: z.string().nullable(),
+    ...fundingColumns,
 });
 
 type Prepared =
@@ -180,6 +203,7 @@ function openEntry(row: z.infer<typeof openSchema>): OpenEntry {
         expiry: row.expiry,
         open: quantityOf(row.open),
         unitCost: row.unit_cost === null ? 0n : quantityOf(row.unit_cost),
+        funding: fundingOf(row),
     };
 }
 
@@ -264,6 +288,7 @@ class Ledger {
         source: Source;
         sourceLineId: string | null;
         reversedFrom: string | null;
+        funding: Funding;
     }): Promise<string> {
         const id = Bun.randomUUIDv7();
         await this.db.insert('gd_tr_kartu_gudang', {
@@ -288,6 +313,9 @@ class Ledger {
             sumber_nomor: entry.source.number,
             kunci_idempoten: entry.key,
             dibalik_dari: entry.reversedFrom,
+            sumber_dana_id: entry.funding.sourceId,
+            program_pengadaan_id: entry.funding.programId,
+            tahun_anggaran: entry.funding.budgetYear,
             created_by_user_id: this.userId,
             created_at: nowSql(),
         });
@@ -390,6 +418,7 @@ export async function postItemLines(
                     batchId: batch?.id ?? null,
                     expiry: batch?.expiry ?? null,
                     kind: line.entryKind,
+                    funding: line.funding ?? noFunding,
                 });
                 break;
             }
@@ -424,6 +453,7 @@ export async function postItemLines(
                         batchId: slice.entry.batchId,
                         expiry: slice.entry.expiry,
                         kind: 'transfer',
+                        funding: slice.entry.funding,
                     });
                 break;
             }
@@ -729,13 +759,14 @@ async function receive(
         batchId: string | null;
         expiry: string | null;
         kind: EntryKind;
+        funding: Funding;
     },
 ): Promise<void> {
     const negatives = (
         await ledger.db.rows(
             openSchema,
             `select id, batch_id, kedaluwarsa::text as expiry, (-sisa)::text as open,
-                    harga_satuan::text as unit_cost
+                    harga_satuan::text as unit_cost, ${fundingSql}
              from gd_tr_kartu_gudang
              where tenant_id = $1 and legal_entity_id = $2 and barang_id = $3 and lokasi_id = $4 and sisa < 0
                and ${entry.batchId === null ? 'batch_id is null' : '(batch_id is null or batch_id = $5)'}
@@ -765,6 +796,7 @@ async function receive(
         source: context.source,
         sourceLineId: entry.sourceLineId,
         reversedFrom: null,
+        funding: entry.funding,
     });
     for (const slice of allocate(negatives, entry.quantity).slices)
         await ledger.apply(id, slice.entry.id, slice.quantity);
@@ -803,31 +835,54 @@ async function issue(
             available: open.reduce((sum, entry) => sum + entry.open, 0n),
             skipExpired,
         });
+    // Satu baris keluar per batch dan sumber dana, jadi setiap baris keluar membawa sumber dana stok yang diambilnya.
     const groups = new Map<
-        string | null,
-        { expiry: string | null; slices: Slice[]; shortfall: bigint }
+        string,
+        {
+            batchId: string | null;
+            expiry: string | null;
+            funding: Funding;
+            slices: Slice[];
+            shortfall: bigint;
+        }
     >();
-    for (const slice of slices) {
-        const group = groups.get(slice.entry.batchId) ?? {
-            expiry: slice.entry.expiry,
+    const groupOf = (
+        batchId: string | null,
+        expiry: string | null,
+        funding: Funding,
+    ) => {
+        const key = JSON.stringify([
+            batchId,
+            funding.sourceId,
+            funding.programId,
+            funding.budgetYear,
+        ]);
+        const group = groups.get(key) ?? {
+            batchId,
+            expiry,
+            funding,
             slices: [],
             shortfall: 0n,
         };
-        group.slices.push(slice);
-        groups.set(slice.entry.batchId, group);
-    }
+        groups.set(key, group);
+        return group;
+    };
+    for (const slice of slices)
+        groupOf(
+            slice.entry.batchId,
+            slice.entry.expiry,
+            slice.entry.funding,
+        ).slices.push(slice);
     if (shortfall > 0n) {
         const target =
             plan.batch.kind === 'exactly' ? plan.batch.batchId : null;
-        const group = groups.get(target) ?? {
-            expiry: target === null ? null : (args.batch?.expiry ?? null),
-            slices: [],
-            shortfall: 0n,
-        };
-        group.shortfall = shortfall;
-        groups.set(target, group);
+        groupOf(
+            target,
+            target === null ? null : (args.batch?.expiry ?? null),
+            noFunding,
+        ).shortfall = shortfall;
     }
-    for (const [batchId, group] of groups) {
+    for (const group of groups.values()) {
         const taken = group.slices.reduce(
             (sum, slice) => sum + slice.quantity,
             0n,
@@ -836,7 +891,7 @@ async function issue(
             key: ledger.nextKey(line.key),
             location,
             itemId: item.id,
-            batchId,
+            batchId: group.batchId,
             expiry: group.expiry,
             kind: args.kind,
             postingDate: context.postingDate,
@@ -851,6 +906,7 @@ async function issue(
             source: context.source,
             sourceLineId: line.sourceLineId,
             reversedFrom: null,
+            funding: group.funding,
         });
         for (const slice of group.slices)
             await ledger.apply(slice.entry.id, id, slice.quantity);
@@ -938,7 +994,8 @@ function openInbound(
         }
     }
     return [
-        `select id, batch_id, kedaluwarsa::text as expiry, sisa::text as open, harga_satuan::text as unit_cost
+        `select id, batch_id, kedaluwarsa::text as expiry, sisa::text as open, harga_satuan::text as unit_cost,
+                ${fundingSql}
          from gd_tr_kartu_gudang
          where tenant_id = $1 and legal_entity_id = $2 and barang_id = $3 and lokasi_id = $4 and sisa > 0${filter}
          order by ${order}`,
@@ -981,7 +1038,7 @@ export async function reverseItemEntries(
                 kedaluwarsa::text as expiry, jenis as kind, tanggal_posting::text as posting_date,
                 jumlah::text as quantity, sisa::text as open, harga_satuan::text as unit_cost, nilai::text as amount,
                 sumber_jenis as source_type, sumber_id as source_id, sumber_baris_id as source_line_id,
-                sumber_nomor as source_number
+                sumber_nomor as source_number, ${fundingSql}
          from gd_tr_kartu_gudang where ${scope} and dibalik_dari is null
          order by id`,
         parameters,
@@ -1033,6 +1090,7 @@ export async function reverseItemEntries(
                 quantity: -quantity,
                 unitCost: null,
                 amount: -fromNumeric(entry.amount, amountScale),
+                funding: fundingOf(entry),
             });
             await ledger.apply(entry.id, id, quantity);
             continue;
@@ -1043,9 +1101,11 @@ export async function reverseItemEntries(
                 batch_id: z.string().nullable(),
                 expiry: z.string().nullable(),
                 unit_cost: z.string(),
+                ...fundingColumns,
             }),
             `select a.jumlah::text as quantity, i.batch_id, i.kedaluwarsa::text as expiry,
-                    i.harga_satuan::text as unit_cost
+                    i.harga_satuan::text as unit_cost, i.sumber_dana_id as funding_source_id,
+                    i.program_pengadaan_id as program_id, i.tahun_anggaran as budget_year
              from gd_tr_kartu_gudang_aplikasi a
              join gd_tr_kartu_gudang i on i.tenant_id = a.tenant_id and i.id = a.entri_masuk_id
              where a.tenant_id = $1 and a.entri_keluar_id = $2
@@ -1063,6 +1123,7 @@ export async function reverseItemEntries(
                 quantity: partQuantity,
                 unitCost,
                 amount: amountOf([{ quantity: partQuantity, unitCost }]),
+                funding: fundingOf(part),
             });
         }
         const unapplied = -quantityOf(entry.open);
@@ -1075,6 +1136,7 @@ export async function reverseItemEntries(
                 quantity: unapplied,
                 unitCost: 0n,
                 amount: 0n,
+                funding: fundingOf(entry),
             });
             await ledger.apply(id, entry.id, unapplied);
         }

@@ -180,6 +180,50 @@ export const sysAdminArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'inventory',
+            label: 'Persediaan',
+            icon: 'boxes',
+            items: [
+                {
+                    id: 'item-units',
+                    label: 'Satuan barang',
+                    href: '/sysadmin/inventory/item-units',
+                    permission: 'core.inventory-item.read',
+                },
+                {
+                    id: 'funding-sources',
+                    label: 'Sumber dana',
+                    href: '/sysadmin/inventory/funding-sources',
+                    permission: 'core.inventory-funding-source.read',
+                },
+                {
+                    id: 'procurement-programs',
+                    label: 'Program pengadaan',
+                    href: '/sysadmin/inventory/procurement-programs',
+                    permission: 'core.inventory-procurement-program.read',
+                },
+            ],
+        },
+        {
+            id: 'purchasing',
+            label: 'Pembelian',
+            icon: 'truck',
+            items: [
+                {
+                    id: 'receipts',
+                    label: 'Penerimaan barang',
+                    href: '/sysadmin/purchasing/receipts',
+                    permission: 'core.purchase-receipt.read',
+                },
+                {
+                    id: 'vendors',
+                    label: 'Vendor',
+                    href: '/sysadmin/purchasing/vendors',
+                    permission: 'core.vendor.read',
+                },
+            ],
+        },
+        {
             id: 'calendar',
             label: 'Kalender',
             icon: 'calendar',
