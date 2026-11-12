@@ -29,6 +29,7 @@ export {
 export { PasswordInput } from './password-input.tsx';
 export { ssoErrorMessage } from './sso-messages.ts';
 export { useAppearance } from './use-appearance.ts';
+export { useUnsavedChangesGuard } from './use-unsaved-changes-guard.tsx';
 export {
     appLayoutRoute,
     authLayoutRoute,

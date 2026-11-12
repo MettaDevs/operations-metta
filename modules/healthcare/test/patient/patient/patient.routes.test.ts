@@ -1414,6 +1414,15 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
                 .find((group) => group.id === 'patient')
                 ?.items.map((item) => item.label),
         ).toEqual(['Pasien']);
+        // Pendaftaran memisahkan daftar dan form baru, supaya petugas berpindah di antara keduanya dari sidebar.
+        expect(
+            groups
+                .find((group) => group.id === 'registration')
+                ?.items.map((item) => [item.label, item.href]),
+        ).toEqual([
+            ['Daftar kunjungan', '/healthcare/registration/visits'],
+            ['Registrasi baru', '/healthcare/registration/visits/new'],
+        ]);
         // Teks layar fitur ini memakai "sharing", bukan "berbagi": tujuan hierarki dan katalog izin di layar role.
         const [purpose] = await pool.unsafe<{ name: string }[]>(
             "select name from hierarchy_purposes where code = 'healthcare.patient-sharing'",

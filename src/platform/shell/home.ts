@@ -28,6 +28,26 @@ export function underMenu(href: string, pathname: string): boolean {
     return pathname === path || pathname.startsWith(`${path}/`);
 }
 
+// Entri menu yang menyala untuk alamat ini: entri yang alamatnya persis sama (termasuk search params), kalau tidak entri
+// terdalam yang memuat halaman ini. Dengan begitu `/healthcare/registration/visits/new` menyalakan Registrasi baru,
+// bukan Daftar kunjungan, sedangkan halaman satu kunjungan tetap menyalakan Daftar kunjungan.
+export function activeMenuHref(
+    hrefs: readonly string[],
+    url: string,
+    pathname: string,
+): string | undefined {
+    if (hrefs.includes(url)) return url;
+    let deepest: string | undefined;
+    for (const href of hrefs)
+        if (
+            !href.includes('?') &&
+            underMenu(href, pathname) &&
+            href.length > (deepest?.length ?? 0)
+        )
+            deepest = href;
+    return deepest;
+}
+
 // Area yang memuat halaman di alamat ini.
 export function areaOf<T extends Area>(
     navigation: readonly T[],
