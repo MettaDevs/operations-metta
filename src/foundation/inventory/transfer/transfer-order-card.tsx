@@ -44,7 +44,7 @@ type Posting = TransferOrder['postings'][number];
 type Errors = Record<string, string[]>;
 
 type Reference = { id: string; code: string; name: string };
-type ItemChoice = Reference & { base_unit: string };
+type ItemChoice = Reference & { base_unit: string; base_unit_id: string };
 type UnitChoice = Reference & { quantity_per_unit: string };
 type Line = {
     key: string;
@@ -99,7 +99,7 @@ function linesOf(order: TransferOrder | null): Line[] {
     return (order?.lines ?? []).map((line) => ({
         key: line.id,
         id: line.id,
-        item: { ...line.item },
+        item: { ...line.item, base_unit_id: '' },
         unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         quantity: line.quantity,
     }));
@@ -155,6 +155,7 @@ const loadItems = async (
             code: item.code,
             name: item.name,
             base_unit: item.base_unit.code,
+            base_unit_id: item.base_unit.id,
         })),
         nextCursor: body.next_cursor,
     };
@@ -1069,9 +1070,9 @@ export function TransferOrderCard({
                             {
                                 id: 'item_id',
                                 header: 'Barang',
-                                required: true,
+                                required: editable,
                                 content: control,
-                                minWidth: 260,
+                                minWidth: 220,
                                 cell: ({ index, line }) =>
                                     editable ? (
                                         <FormControl
@@ -1096,7 +1097,13 @@ export function TransferOrderCard({
                                                 onValueChange={(item) =>
                                                     change(index, {
                                                         item,
-                                                        unit: null,
+                                                        unit: {
+                                                            id: item.base_unit_id,
+                                                            code: item.base_unit,
+                                                            name: '',
+                                                            quantity_per_unit:
+                                                                '1',
+                                                        },
                                                     })
                                                 }
                                                 getItemValue={(item) => item.id}
@@ -1137,9 +1144,9 @@ export function TransferOrderCard({
                             {
                                 id: 'unit_id',
                                 header: 'Satuan',
-                                required: true,
+                                required: editable,
                                 content: control,
-                                minWidth: 120,
+                                minWidth: 110,
                                 cell: ({ index, line }) =>
                                     editable && line.item ? (
                                         <UnitLookup
@@ -1167,7 +1174,7 @@ export function TransferOrderCard({
                             {
                                 id: 'quantity',
                                 header: 'Diminta',
-                                required: true,
+                                required: editable,
                                 content: control,
                                 minWidth: 100,
                                 align: 'right',
@@ -1232,7 +1239,7 @@ export function TransferOrderCard({
                                       {
                                           id: 'quantity_in_transit',
                                           header: 'Dalam perjalanan',
-                                          minWidth: 130,
+                                          minWidth: 120,
                                           align: 'right' as const,
                                           cell: ({ line }: { line: Line }) =>
                                               text(
@@ -1300,7 +1307,12 @@ export function TransferOrderCard({
                                               index: number;
                                               line: Line;
                                           }) =>
-                                              receiving && line.id
+                                              receiving &&
+                                              line.id &&
+                                              Number(
+                                                  storedOf(line)
+                                                      ?.quantity_in_transit,
+                                              ) > 0
                                                   ? quantityInput(
                                                         index,
                                                         'quantity_to_receive',
