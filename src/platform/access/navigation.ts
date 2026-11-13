@@ -451,6 +451,12 @@ export const billingArea: NavigationAreaEntry = {
                     href: '/billing/merchants',
                     permission: 'core.merchant.read',
                 },
+                {
+                    id: 'discounts',
+                    label: 'Diskon',
+                    href: '/billing/discounts',
+                    permission: 'core.discount.read',
+                },
             ],
         },
     ],

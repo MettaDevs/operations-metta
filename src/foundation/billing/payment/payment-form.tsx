@@ -9,6 +9,12 @@ import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from '@operations-metta/ui/tabs';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -22,6 +28,12 @@ import {
 } from '../../../platform/shell/index.ts';
 import { Decimal } from '../../../platform/money/index.ts';
 import { PartyLookup, type Party } from './party-lookup.tsx';
+import {
+    discountPayload,
+    discountRowValues,
+    PaymentDiscounts,
+    type DiscountRow,
+} from './payment-discounts.tsx';
 import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 
 // Tab Pembayaran Form Pembayaran Kuta 1, digambar dari jenis bayar legal entity: jenis bayar tunai menjadi Data Jumlah
@@ -79,6 +91,7 @@ export function PaymentForm({
     const [received, setReceived] = useState('');
     const [lines, setLines] = useState<Record<string, Line>>({});
     const [takeRemainder, setTakeRemainder] = useState(false);
+    const [discounts, setDiscounts] = useState<DiscountRow[]>([]);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -119,9 +132,13 @@ export function PaymentForm({
                 .normalized(),
         );
     };
+    const discountTotal = discounts.reduce((sum, row) => {
+        const values = discountRowValues(form, row);
+        return values ? sum + toMinor(values.amount) : sum;
+    }, 0n);
     const amounts = paymentAmounts({
         value: toMinor(form.totals.value),
-        discount: 0n,
+        discount: discountTotal,
         received: minor(received),
         lines: used.map((method) => ({
             amount: localMinor(method),
@@ -155,6 +172,7 @@ export function PaymentForm({
                 body: {
                     received: typed(received),
                     take_remainder: takeRemainder,
+                    discounts: discountPayload(discounts),
                     lines: used.map((method) => ({
                         payment_method_id: method.id,
                         amount: typed(line(method.id).amount),
@@ -207,201 +225,272 @@ export function PaymentForm({
                 message={message}
                 operation="Pembayaran belum disimpan"
             />
-            <h3 className="text-sm font-semibold">Data Kasir</h3>
-            <FormGrid>
-                {readOnly('Nilai', toMinor(form.totals.value))}
-                {readOnly('Sub Total', amounts.subTotal)}
-                {readOnly('Tax Kartu Kredit', amounts.surcharge)}
-                {readOnly('Grand Total', amounts.grandTotal)}
-                {readOnly('Total Pembayaran', amounts.paid)}
-                {readOnly('Sisa', amounts.remainder)}
-            </FormGrid>
-            {cash && (
-                <>
-                    <h3 className="text-sm font-semibold">Data Jumlah Bayar</h3>
+            <Tabs defaultValue="payment">
+                <TabsList>
+                    <TabsTrigger value="payment">Pembayaran</TabsTrigger>
+                    <TabsTrigger value="discount">Diskon</TabsTrigger>
+                </TabsList>
+                <TabsContent value="discount">
+                    <PaymentDiscounts
+                        form={form}
+                        rows={discounts}
+                        onChange={setDiscounts}
+                        errors={errors}
+                        portalContainer={portalContainer}
+                    />
+                </TabsContent>
+                <TabsContent value="payment" className="space-y-4">
+                    <h3 className="text-sm font-semibold">Data Kasir</h3>
                     <FormGrid>
-                        <FormControl
-                            error={errors.received?.[0] ?? refusal(cash)}
-                        >
-                            <Input
-                                label={cash.label}
-                                inputMode="decimal"
-                                autoFocus
-                                data-error-field="received"
-                                value={received}
-                                onChange={(event) => {
-                                    if (accepts(cash))
-                                        setReceived(event.target.value);
-                                }}
-                            />
-                        </FormControl>
-                        {readOnly('Kembalian', amounts.change)}
+                        {readOnly('Nilai', toMinor(form.totals.value))}
+                        {readOnly('Nilai Discount', discountTotal)}
+                        {readOnly('Sub Total', amounts.subTotal)}
+                        {readOnly('Tax Kartu Kredit', amounts.surcharge)}
+                        {readOnly('Grand Total', amounts.grandTotal)}
+                        {readOnly('Total Pembayaran', amounts.paid)}
+                        {readOnly('Sisa', amounts.remainder)}
                     </FormGrid>
-                </>
-            )}
-            {others.length > 0 && (
-                <h3 className="text-sm font-semibold">
-                    Metode Pembayaran Lain
-                </h3>
-            )}
-            {others.map((method) => {
-                const index = used.indexOf(method);
-                return (
-                    <FormGrid key={method.id}>
-                        <FormControl
-                            error={
-                                errors[field(index, 'amount')]?.[0] ??
-                                refusal(method) ??
-                                method.rate_message ??
-                                undefined
-                            }
-                        >
-                            <Input
-                                label={
-                                    method.currency_code
-                                        ? `${method.label} (${method.currency_code})`
-                                        : method.label
-                                }
-                                inputMode="decimal"
-                                data-error-field={field(index, 'amount')}
-                                value={line(method.id).amount}
-                                onChange={(event) => {
-                                    if (accepts(method))
-                                        setLine(method.id, {
-                                            amount: event.target.value,
-                                        });
-                                }}
-                            />
-                        </FormControl>
-                        {method.currency_code && method.rate !== null && (
-                            <>
+                    {cash && (
+                        <>
+                            <h3 className="text-sm font-semibold">
+                                Data Jumlah Bayar
+                            </h3>
+                            <FormGrid>
                                 <FormControl
-                                    error={errors[field(index, 'rate')]?.[0]}
-                                    hint={`Nilai 1 ${method.currency_code} dalam ${form.local_currency} dari Sys Admin › Kurs untuk hari ini.${form.can_change_rate ? ' Ubah bila kurs yang disepakati berbeda.' : ''}`}
+                                    error={
+                                        errors.received?.[0] ?? refusal(cash)
+                                    }
                                 >
                                     <Input
-                                        label="Kurs"
+                                        label={cash.label}
                                         inputMode="decimal"
-                                        data-error-field={field(index, 'rate')}
-                                        value={
-                                            line(method.id).rate ||
-                                            displayNumber(method.rate)
-                                        }
-                                        readOnly={!form.can_change_rate}
-                                        onChange={(event) =>
-                                            setLine(method.id, {
-                                                rate: event.target.value,
-                                            })
-                                        }
+                                        autoFocus
+                                        data-error-field="received"
+                                        value={received}
+                                        onChange={(event) => {
+                                            if (accepts(cash))
+                                                setReceived(event.target.value);
+                                        }}
                                     />
                                 </FormControl>
-                                <FormControl>
+                                {readOnly('Kembalian', amounts.change)}
+                            </FormGrid>
+                        </>
+                    )}
+                    {others.length > 0 && (
+                        <h3 className="text-sm font-semibold">
+                            Metode Pembayaran Lain
+                        </h3>
+                    )}
+                    {others.map((method) => {
+                        const index = used.indexOf(method);
+                        return (
+                            <FormGrid key={method.id}>
+                                <FormControl
+                                    error={
+                                        errors[field(index, 'amount')]?.[0] ??
+                                        refusal(method) ??
+                                        method.rate_message ??
+                                        undefined
+                                    }
+                                >
                                     <Input
-                                        label={`Nilai ${form.local_currency}`}
-                                        value={shown(localMinor(method))}
-                                        readOnly
+                                        label={
+                                            method.currency_code
+                                                ? `${method.label} (${method.currency_code})`
+                                                : method.label
+                                        }
+                                        inputMode="decimal"
+                                        data-error-field={field(
+                                            index,
+                                            'amount',
+                                        )}
+                                        value={line(method.id).amount}
+                                        onChange={(event) => {
+                                            if (accepts(method))
+                                                setLine(method.id, {
+                                                    amount: event.target.value,
+                                                });
+                                        }}
                                     />
                                 </FormControl>
-                            </>
-                        )}
-                        {method.requires_merchant && (
-                            <FormControl
-                                error={errors[field(index, 'merchant_id')]?.[0]}
-                                data-error-field={field(index, 'merchant_id')}
-                            >
-                                <Select
-                                    label="Merchan"
-                                    items={form.merchants.map((merchant) => ({
-                                        value: merchant.id,
-                                        label: `${merchant.code} · ${merchant.name}`,
-                                    }))}
-                                    value={line(method.id).merchant}
-                                    onValueChange={(value) =>
-                                        setLine(method.id, {
-                                            merchant: value ?? '',
-                                        })
-                                    }
-                                    searchPlaceholder="Cari merchan"
-                                    emptyMessage="Belum ada merchan."
-                                    portalContainer={portalContainer}
-                                />
-                            </FormControl>
-                        )}
-                        {method.allows_surcharge && (
-                            <FormControl
-                                error={
-                                    errors[
-                                        field(index, 'surcharge_percent')
-                                    ]?.[0]
-                                }
-                            >
-                                <Input
-                                    label="Add Charge (%)"
-                                    inputMode="decimal"
-                                    data-error-field={field(
-                                        index,
-                                        'surcharge_percent',
+                                {method.currency_code &&
+                                    method.rate !== null && (
+                                        <>
+                                            <FormControl
+                                                error={
+                                                    errors[
+                                                        field(index, 'rate')
+                                                    ]?.[0]
+                                                }
+                                                hint={`Nilai 1 ${method.currency_code} dalam ${form.local_currency} dari Sys Admin › Kurs untuk hari ini.${form.can_change_rate ? ' Ubah bila kurs yang disepakati berbeda.' : ''}`}
+                                            >
+                                                <Input
+                                                    label="Kurs"
+                                                    inputMode="decimal"
+                                                    data-error-field={field(
+                                                        index,
+                                                        'rate',
+                                                    )}
+                                                    value={
+                                                        line(method.id).rate ||
+                                                        displayNumber(
+                                                            method.rate,
+                                                        )
+                                                    }
+                                                    readOnly={
+                                                        !form.can_change_rate
+                                                    }
+                                                    onChange={(event) =>
+                                                        setLine(method.id, {
+                                                            rate: event.target
+                                                                .value,
+                                                        })
+                                                    }
+                                                />
+                                            </FormControl>
+                                            <FormControl>
+                                                <Input
+                                                    label={`Nilai ${form.local_currency}`}
+                                                    value={shown(
+                                                        localMinor(method),
+                                                    )}
+                                                    readOnly
+                                                />
+                                            </FormControl>
+                                        </>
                                     )}
-                                    value={line(method.id).surcharge}
-                                    onChange={(event) =>
-                                        setLine(method.id, {
-                                            surcharge: event.target.value,
-                                        })
-                                    }
+                                {method.requires_merchant && (
+                                    <FormControl
+                                        error={
+                                            errors[
+                                                field(index, 'merchant_id')
+                                            ]?.[0]
+                                        }
+                                        data-error-field={field(
+                                            index,
+                                            'merchant_id',
+                                        )}
+                                    >
+                                        <Select
+                                            label="Merchan"
+                                            items={form.merchants.map(
+                                                (merchant) => ({
+                                                    value: merchant.id,
+                                                    label: `${merchant.code} · ${merchant.name}`,
+                                                }),
+                                            )}
+                                            value={line(method.id).merchant}
+                                            onValueChange={(value) =>
+                                                setLine(method.id, {
+                                                    merchant: value ?? '',
+                                                })
+                                            }
+                                            searchPlaceholder="Cari merchan"
+                                            emptyMessage="Belum ada merchan."
+                                            portalContainer={portalContainer}
+                                        />
+                                    </FormControl>
+                                )}
+                                {method.allows_surcharge && (
+                                    <FormControl
+                                        error={
+                                            errors[
+                                                field(
+                                                    index,
+                                                    'surcharge_percent',
+                                                )
+                                            ]?.[0]
+                                        }
+                                    >
+                                        <Input
+                                            label="Add Charge (%)"
+                                            inputMode="decimal"
+                                            data-error-field={field(
+                                                index,
+                                                'surcharge_percent',
+                                            )}
+                                            value={line(method.id).surcharge}
+                                            onChange={(event) =>
+                                                setLine(method.id, {
+                                                    surcharge:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </FormControl>
+                                )}
+                                {method.requires_reference && (
+                                    <FormControl
+                                        error={
+                                            errors[
+                                                field(index, 'reference')
+                                            ]?.[0]
+                                        }
+                                    >
+                                        <Input
+                                            label="No Kartu / Referensi"
+                                            maxLength={100}
+                                            data-error-field={field(
+                                                index,
+                                                'reference',
+                                            )}
+                                            value={line(method.id).reference}
+                                            onChange={(event) =>
+                                                setLine(method.id, {
+                                                    reference:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </FormControl>
+                                )}
+                                {method.party === 'pilih_pihak' && (
+                                    <PartyLookup
+                                        label="Dokter / Karyawan"
+                                        field={field(index, 'party_id')}
+                                        value={line(method.id).party}
+                                        onChange={(party) =>
+                                            setLine(method.id, { party })
+                                        }
+                                        error={
+                                            errors[
+                                                field(index, 'party_id')
+                                            ]?.[0]
+                                        }
+                                    />
+                                )}
+                            </FormGrid>
+                        );
+                    })}
+                    {remainderMethod && (
+                        <FormControl
+                            hint="Sisa tagihan dicatat sebagai piutang pasien."
+                            error={refusal(remainderMethod)}
+                        >
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id={switchId}
+                                    checked={takeRemainder}
+                                    onCheckedChange={(checked) => {
+                                        if (
+                                            !checked ||
+                                            accepts(remainderMethod)
+                                        )
+                                            setTakeRemainder(checked);
+                                    }}
                                 />
-                            </FormControl>
-                        )}
-                        {method.requires_reference && (
-                            <FormControl
-                                error={errors[field(index, 'reference')]?.[0]}
-                            >
-                                <Input
-                                    label="No Kartu / Referensi"
-                                    maxLength={100}
-                                    data-error-field={field(index, 'reference')}
-                                    value={line(method.id).reference}
-                                    onChange={(event) =>
-                                        setLine(method.id, {
-                                            reference: event.target.value,
-                                        })
-                                    }
-                                />
-                            </FormControl>
-                        )}
-                        {method.party === 'pilih_pihak' && (
-                            <PartyLookup
-                                label="Dokter / Karyawan"
-                                field={field(index, 'party_id')}
-                                value={line(method.id).party}
-                                onChange={(party) =>
-                                    setLine(method.id, { party })
-                                }
-                                error={errors[field(index, 'party_id')]?.[0]}
-                            />
-                        )}
-                    </FormGrid>
-                );
-            })}
-            {remainderMethod && (
-                <FormControl
-                    hint="Sisa tagihan dicatat sebagai piutang pasien."
-                    error={refusal(remainderMethod)}
-                >
-                    <Field orientation="horizontal" className="w-auto">
-                        <Switch
-                            id={switchId}
-                            checked={takeRemainder}
-                            onCheckedChange={(checked) => {
-                                if (!checked || accepts(remainderMethod))
-                                    setTakeRemainder(checked);
-                            }}
-                        />
-                        <FieldLabel htmlFor={switchId} className="font-normal">
-                            {remainderMethod.label}
-                        </FieldLabel>
-                    </Field>
-                </FormControl>
-            )}
+                                <FieldLabel
+                                    htmlFor={switchId}
+                                    className="font-normal"
+                                >
+                                    {remainderMethod.label}
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
+                    )}
+                </TabsContent>
+            </Tabs>
             <ActionButton
                 action="save"
                 type="submit"

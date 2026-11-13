@@ -39,6 +39,12 @@ export const chargeRowSchema = z.object({
     doctor_name: z.string().nullable(),
     date: z.string(),
     status: z.string(),
+    // Untuk tab Diskon: jasa, dokter, dan nilai per komponen biaya baris ini.
+    procedure_id: z.string(),
+    doctor_id: z.string().nullable(),
+    components: z.array(
+        z.object({ charge_component_id: z.string(), value: z.string() }),
+    ),
 });
 
 export const visitDetailSchema = visitRowSchema.extend({
