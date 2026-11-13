@@ -3,6 +3,8 @@ import type { Database } from '../../platform/database/index.ts';
 import { validation } from '../../platform/http/index.ts';
 import {
     Decimal,
+    localCurrencyCode,
+    localCurrencyPrecision,
     roundingMethods,
     roundToMultiple,
     type RoundingMethod,
@@ -19,10 +21,7 @@ export {
     unitAmountDecimalOptions,
 } from './currency.rules.ts';
 export { currencyRoutes } from './currency.routes.ts';
-
-// Mata uang lokal tenant. Legal entity belum punya mata uang pembukuan sendiri (LCY Code BC), jadi kasir dan farmasi
-// memakai rupiah; aset dan finance memakai mata uang dokumennya.
-export const localCurrencyCode = 'IDR';
+export { localCurrencyCode } from '../../platform/money/index.ts';
 
 const precisionSchema = z.object({
     amount_decimals: z.number(),
@@ -39,15 +38,9 @@ export type Precision = {
     invoice_rounding_type: RoundingMethod;
 };
 
-// Bawaan rupiah tanpa baris setelan: jumlah dua angka dan harga satuan tiga angka di belakang koma seperti CoreERP (aset
-// dan finance diuji dengan angka ini), dan total tagihan dibulatkan ke rupiah terdekat, sama dengan round(..., 0) rumus
-// total kasir Kuta 1 (Inv. Rounding Precision 1 BC).
-const localDefault: Precision = {
-    amount_decimals: 2,
-    unit_amount_decimals: 3,
-    invoice_rounding_precision: '1',
-    invoice_rounding_type: 'nearest',
-};
+// Setiap tenant mendapat baris rupiah saat disiapkan, dan tenant lama lewat migration, jadi bawaan ini hanya jaring bila
+// baris itu tetap tidak ada: rupiah utuh, sama dengan baris yang ditulis penyiapan.
+const localDefault: Precision = localCurrencyPrecision;
 
 const isRoundingMethod = (value: string): value is RoundingMethod =>
     roundingMethods.some((method) => method === value);

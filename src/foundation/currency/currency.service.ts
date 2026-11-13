@@ -81,7 +81,7 @@ function codeTaken(error: unknown): void {
         validation({ currency_code: 'Mata uang ini sudah disetel.' });
 }
 
-// Presisi mata uang tenant (Sys Admin › Mata uang). Mata uang lokal tanpa baris memakai bawaan Currency.precision.
+// Presisi mata uang tenant (Sys Admin › Mata uang). Baris rupiah ditulis saat tenant disiapkan.
 export class Currencies {
     constructor(
         private readonly db: Database,

@@ -96,7 +96,7 @@ export class Decimal {
 }
 
 // Satu-satunya pembulatan uang dan harga di runtime ini: kasir, farmasi, tindakan, dan kelak finance memakainya dengan
-// setelan keuangan legal entity (src/foundation/finance-setup/).
+// presisi mata uang tenant (src/foundation/currency/).
 
 // Pembagian bilangan bulat, dibulatkan setengah menjauhi nol, sama dengan ROUND SQL Server dan Decimal.rounded.
 export function divideRounded(numerator: bigint, denominator: bigint): bigint {
@@ -109,6 +109,26 @@ export function divideRounded(numerator: bigint, denominator: bigint): bigint {
 
 export const roundingMethods = ['nearest', 'up', 'down'] as const;
 export type RoundingMethod = (typeof roundingMethods)[number];
+
+// Mata uang lokal tenant. Legal entity belum punya mata uang pembukuan sendiri (LCY Code BC), jadi kasir dan farmasi
+// memakai rupiah; aset dan finance memakai mata uang dokumennya.
+export const localCurrencyCode = 'IDR';
+
+// Presisi rupiah yang ditulis saat tenant disiapkan, dan yang dipakai bila barisnya tetap tidak ada: rupiah utuh untuk
+// jumlah dan harga satuan, tanpa pembulatan tagihan lagi. Rupiah tidak punya pecahan yang dipakai, dan inilah angka
+// Kuta 1 dan Penta (round(..., 0) total kasir, harga obat tanpa desimal). Klinik yang memakai desimal, seperti harga
+// obat Seroja, menyetelnya di Sys Admin › Mata uang.
+export const localCurrencyPrecision = {
+    amount_decimals: 0,
+    unit_amount_decimals: 0,
+    invoice_rounding_precision: '0',
+    invoice_rounding_type: 'nearest',
+} as const satisfies {
+    amount_decimals: number;
+    unit_amount_decimals: number;
+    invoice_rounding_precision: string;
+    invoice_rounding_type: RoundingMethod;
+};
 
 // Nilai dibulatkan ke kelipatan step menurut metode (Inv. Rounding Type BC: Nearest, Up, Down; Metode_Pembulatan sistem
 // lama: 3 Ke Semua, 1 Ke Atas, 2 Ke Bawah). Step nol berarti tidak dibulatkan.
