@@ -1,3 +1,4 @@
+import { displayNumber } from '@operations-metta/ui/display-number';
 import type { ReactNode } from 'react';
 import type { ApiBody } from '@core/platform/shell/index.ts';
 import { birthText, dateTimeText, Fact } from './prescription-display.tsx';
@@ -8,6 +9,28 @@ export type PrescriptionLine = Prescription['lines'][number];
 // Kepala racikan hanya pengelompok: tanpa barang, bernomor racikan, dengan jumlah racikan yang diminta.
 export const isCompoundHeader = (line: PrescriptionLine) =>
     line.item === null && line.compound !== null;
+
+// Dosis yang ditulis dokter, misalnya "3 x sehari 1 Tablet, Oral, 5 hari"; kosong pada resep yang ditulis sebelum dosis
+// dicatat dan pada komponen racikan.
+export function dosageText(line: PrescriptionLine): string {
+    const amount =
+        line.frequency_per_day !== null && line.dose !== null
+            ? `${line.frequency_per_day} x sehari ${displayNumber(line.dose)} ${line.dose_unit?.name ?? ''}`.trim()
+            : null;
+    return [
+        amount,
+        line.route?.name ?? null,
+        line.duration_days === null ? null : `${line.duration_days} hari`,
+    ]
+        .filter(Boolean)
+        .join(', ');
+}
+
+// Signa, dosis, dan aturan pakai baris, dalam urutan dokter menulisnya.
+export const instructionText = (line: PrescriptionLine) =>
+    [line.signa, dosageText(line), line.usage_instruction]
+        .filter(Boolean)
+        .join(' · ');
 
 // Identitas resep apa adanya seperti dikirim dokter.
 export function PrescriptionFacts({

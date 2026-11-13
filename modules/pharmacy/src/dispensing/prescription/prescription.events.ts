@@ -46,19 +46,41 @@ export async function receivePrescription(
     }
     const { legal_entity_id: legalEntityId, data } = parsed.data;
     const tenantId = envelope.tenant_id;
-    const itemIds = [
-        ...new Set(
-            data.lines.flatMap((line) => (line.item ? [line.item.id] : [])),
-        ),
-    ];
-    const known = await db.rows(
-        z.object({ id: z.string() }),
-        `select id from gd_m_barang where tenant_id = $1 and legal_entity_id = $2
-           and id in (${itemIds.map((_, index) => `$${index + 3}`).join(',')})`,
-        [tenantId, legalEntityId, ...itemIds],
-    );
-    if (known.length !== itemIds.length) {
+    // Barang dan satuan dosis harus milik legal entity resep; yang tidak dikenal dilewati, bukan dilempar.
+    const known = async (
+        table: 'gd_m_barang' | 'gd_m_satuan',
+        references: ({ id: string } | null | undefined)[],
+    ) => {
+        const ids = [
+            ...new Set(
+                references.flatMap((found) => (found ? [found.id] : [])),
+            ),
+        ];
+        if (!ids.length) return true;
+        const rows = await db.rows(
+            z.object({ id: z.string() }),
+            `select id from ${table} where tenant_id = $1 and legal_entity_id = $2
+               and id in (${ids.map((_, index) => `$${index + 3}`).join(',')})`,
+            [tenantId, legalEntityId, ...ids],
+        );
+        return rows.length === ids.length;
+    };
+    if (
+        !(await known(
+            'gd_m_barang',
+            data.lines.map((line) => line.item),
+        ))
+    ) {
         skip(envelope, 'unknown-items');
+        return;
+    }
+    if (
+        !(await known(
+            'gd_m_satuan',
+            data.lines.map((line) => line.dose_unit),
+        ))
+    ) {
+        skip(envelope, 'unknown-units');
         return;
     }
     if (await alreadyProcessed(db, 'far_processed_events', envelope)) return;
@@ -120,6 +142,12 @@ export async function receivePrescription(
             jumlah_permintaan: line.requested_quantity,
             signa: line.signa,
             aturan_pakai: line.usage_instruction,
+            frekuensi: line.frequency_per_day ?? null,
+            dosis: line.dose ?? null,
+            dosis_satuan_id: line.dose_unit?.id ?? null,
+            rute_kode: line.route?.code ?? null,
+            rute_nama: line.route?.name ?? null,
+            lama_hari: line.duration_days ?? null,
             keterangan: line.notes,
             created_at: stamp,
             updated_at: stamp,

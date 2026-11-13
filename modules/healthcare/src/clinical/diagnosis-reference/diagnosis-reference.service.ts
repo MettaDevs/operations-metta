@@ -54,6 +54,10 @@ const tables = {
         table: 'sim_m_aturan_pakai',
         uses: [{ table: 'sim_tr_resep_detail', column: 'aturan_pakai_id' }],
     },
+    'medication-routes': {
+        table: 'sim_m_rute_obat',
+        uses: [{ table: 'sim_tr_resep_detail', column: 'rute_id' }],
+    },
     'discharge-statuses': {
         table: 'sim_m_status_pulang',
         uses: [
@@ -174,13 +178,14 @@ export class DiagnosisReferences {
         return found;
     }
 
+    // Kode unik di setiap daftar; nama hanya di daftar yang indeksnya ada, misalnya rute pemberian obat.
     private codeTaken(error: unknown): void {
-        if (
-            sqlErrorCode(error) === '23505' &&
-            error instanceof Error &&
-            error.message.includes(`${this.table}_kode_unique`)
-        )
+        if (sqlErrorCode(error) !== '23505' || !(error instanceof Error))
+            return;
+        if (error.message.includes(`${this.table}_kode_unique`))
             validation({ code: 'Kode ini sudah dipakai baris lain.' });
+        if (error.message.includes(`${this.table}_nama_unique`))
+            validation({ name: 'Nama ini sudah dipakai baris lain.' });
     }
 
     async create(body: unknown) {

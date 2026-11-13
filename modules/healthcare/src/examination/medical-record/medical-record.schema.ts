@@ -191,6 +191,16 @@ export const prescriptionLineSchema = z.object({
     requested_quantity: number,
     signa: text,
     usage_instruction_id: text,
+    // Dosis untuk MedicationRequest.dosageInstruction SATUSEHAT, wajib pada obat tunggal dan kepala racikan, kosong pada
+    // komponen racikan: berapa kali sehari, jumlah sekali pakai dalam satuan dosis, rute pemberian, dan lama pemberian
+    // dalam hari. Kode dan nama satuan dosis hanya dibaca.
+    frequency_per_day: number,
+    dose: number,
+    dose_unit_id: text,
+    dose_unit_code: text,
+    dose_unit_name: text,
+    route_id: text,
+    duration_days: number,
     notes: text,
     // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
     // lama. Hanya dibaca; kosong selama belum diserahkan.

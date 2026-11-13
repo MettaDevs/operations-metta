@@ -15,6 +15,7 @@ import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api } from '@core/platform/shell/index.ts';
 import {
+    instructionText,
     isCompoundHeader,
     type Prescription,
     type PrescriptionLine,
@@ -236,13 +237,18 @@ export function DispensingLines({
             minWidth: 260,
             cell: ({ line }) =>
                 isCompoundHeader(line) ? (
-                    <DataTableText>
-                        <span className="font-medium">
+                    <DataTableText multiline>
+                        <span className="block font-medium">
                             Racikan {line.compound}
                             {line.requested_quantity
                                 ? ` · ${displayNumber(line.requested_quantity)} racikan`
                                 : ''}
                         </span>
+                        {instructionText(line) && (
+                            <span className="block text-muted-foreground">
+                                {instructionText(line)}
+                            </span>
+                        )}
                     </DataTableText>
                 ) : (
                     <DataTableText multiline>
@@ -253,7 +259,7 @@ export function DispensingLines({
                         >
                             {`${line.item?.code ?? ''} · ${line.item?.name ?? ''}`}
                         </span>
-                        {(line.signa || line.usage_instruction) && (
+                        {instructionText(line) && (
                             <span
                                 className={
                                     line.compound !== null
@@ -261,9 +267,7 @@ export function DispensingLines({
                                         : 'block text-muted-foreground'
                                 }
                             >
-                                {[line.signa, line.usage_instruction]
-                                    .filter(Boolean)
-                                    .join(' · ')}
+                                {instructionText(line)}
                             </span>
                         )}
                     </DataTableText>
@@ -276,7 +280,7 @@ export function DispensingLines({
             align: 'right',
             cell: ({ line }) =>
                 isCompoundHeader(line)
-                    ? text(line.signa ?? '')
+                    ? null
                     : text(
                           `${displayNumber(line.quantity ?? '0')} ${line.unit?.code ?? ''}`,
                       ),

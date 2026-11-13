@@ -44,6 +44,15 @@ export async function refused(response: Response) {
 
 type Reference = { id: string; code: string; name: string };
 
+// Dosis baris seperti dikirim layanan kesehatan. Baris tanpa dosis meniru pesan yang terbit sebelum dosis dicatat.
+export type IssuedDosage = {
+    frequency_per_day: number | null;
+    dose: string | null;
+    dose_unit: Reference | null;
+    route: { code: string; name: string } | null;
+    duration_days: number | null;
+};
+
 export type IssuedLine = {
     item?: Reference | null;
     compound?: number | null;
@@ -52,6 +61,7 @@ export type IssuedLine = {
     quantity_per_unit?: string;
     requested_quantity?: string | null;
     signa?: string | null;
+    dosage?: IssuedDosage;
 };
 
 let issuedContract: Promise<z.ZodType> | null = null;
@@ -177,6 +187,12 @@ export async function createPharmacy(
                 requested_quantity: line.requested_quantity ?? null,
                 signa: line.signa ?? null,
                 usage_instruction: line.item ? 'Setelah Makan' : null,
+                ...(line.dosage && {
+                    ...line.dosage,
+                    dose_unit: line.dosage.dose_unit
+                        ? reference(line.dosage.dose_unit)
+                        : null,
+                }),
                 notes: null,
             })),
             ...overrides.data,

@@ -3,8 +3,10 @@ import { Database } from '../../../../../src/platform/database/index.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import { receivePrescription } from '../../../src/dispensing/prescription/prescription.events.ts';
 import {
+    api,
     createPharmacy,
     issuedType,
+    json,
     type Pharmacy,
 } from '../../support/pharmacy-fixture.ts';
 
@@ -142,6 +144,150 @@ describe.skipIf(!process.env.DB_HOST)(
             expect([...(await stored(older.prescriptionId))]).toEqual([
                 { jumlah: '15', kode_satuan: 'TAB', konversi: '1' },
             ]);
+        });
+
+        test('a line keeps the dosage the doctor wrote, an older message shows none, and a dose unit the legal entity does not have is skipped', async () => {
+            const oral = { code: 'O', name: 'Oral' };
+            const { prescriptionId } = await pharmacy.issue([
+                {
+                    item: amoxicillin,
+                    quantity: '15',
+                    dosage: {
+                        frequency_per_day: 3,
+                        dose: '0.5',
+                        dose_unit: pharmacy.uom,
+                        route: oral,
+                        duration_days: 5,
+                    },
+                },
+                {
+                    compound: 1,
+                    requested_quantity: '10',
+                    dosage: {
+                        frequency_per_day: 2,
+                        dose: '1',
+                        dose_unit: pharmacy.uom,
+                        route: oral,
+                        duration_days: 3,
+                    },
+                },
+                {
+                    item: amoxicillin,
+                    compound: 1,
+                    quantity: '1',
+                    dosage: {
+                        frequency_per_day: null,
+                        dose: null,
+                        dose_unit: null,
+                        route: null,
+                        duration_days: null,
+                    },
+                },
+            ]);
+            const older = await pharmacy.issue([
+                { item: amoxicillin, quantity: '1' },
+            ]);
+            const stored = async (id: string) =>
+                pool.unsafe<
+                    {
+                        frekuensi: number | null;
+                        dosis: string | null;
+                        dosis_satuan_id: string | null;
+                        rute_kode: string | null;
+                        rute_nama: string | null;
+                        lama_hari: number | null;
+                    }[]
+                >(
+                    `select d.frekuensi, trim_scale(d.dosis)::text as dosis, d.dosis_satuan_id, d.rute_kode,
+                            d.rute_nama, d.lama_hari
+                     from far_tr_resep_detail d join far_tr_resep r on r.id = d.resep_id
+                     where r.tenant_id = $1 and r.resep_sumber_id = $2 order by d.urutan`,
+                    [pharmacy.tenantId, id],
+                );
+            const none = {
+                frekuensi: null,
+                dosis: null,
+                dosis_satuan_id: null,
+                rute_kode: null,
+                rute_nama: null,
+                lama_hari: null,
+            };
+            expect([...(await stored(prescriptionId))]).toEqual([
+                {
+                    frekuensi: 3,
+                    dosis: '0.5',
+                    dosis_satuan_id: pharmacy.uom.id,
+                    rute_kode: 'O',
+                    rute_nama: 'Oral',
+                    lama_hari: 5,
+                },
+                {
+                    frekuensi: 2,
+                    dosis: '1',
+                    dosis_satuan_id: pharmacy.uom.id,
+                    rute_kode: 'O',
+                    rute_nama: 'Oral',
+                    lama_hari: 3,
+                },
+                none,
+            ]);
+            expect([...(await stored(older.prescriptionId))]).toEqual([none]);
+
+            const [queued] = await pharmacy.queued(prescriptionId);
+            const shown = (
+                await json<{
+                    data: {
+                        lines: {
+                            frequency_per_day: number | null;
+                            dose: string | null;
+                            dose_unit: { id: string; code: string } | null;
+                            route: { code: string; name: string } | null;
+                            duration_days: number | null;
+                        }[];
+                    };
+                }>(
+                    await pharmacy.admin.get(
+                        `${api}/prescriptions/${queued?.id}`,
+                    ),
+                    200,
+                )
+            ).data;
+            expect(shown.lines[0]).toMatchObject({
+                frequency_per_day: 3,
+                dose: '0.5',
+                dose_unit: { id: pharmacy.uom.id, code: 'TAB' },
+                route: oral,
+                duration_days: 5,
+            });
+            expect(shown.lines[2]).toMatchObject({
+                frequency_per_day: null,
+                dose: null,
+                dose_unit: null,
+                route: null,
+                duration_days: null,
+            });
+
+            const other = await createPharmacy(
+                pool,
+                browser,
+                'Farmasi Uji Satuan Lain',
+            );
+            const { envelope, prescriptionId: foreignUnit } =
+                await pharmacy.issue([
+                    {
+                        item: amoxicillin,
+                        quantity: '1',
+                        dosage: {
+                            frequency_per_day: 1,
+                            dose: '1',
+                            dose_unit: other.uom,
+                            route: oral,
+                            duration_days: 1,
+                        },
+                    },
+                ]);
+            expect(await pharmacy.queued(foreignUnit)).toEqual([]);
+            expect(await processed(envelope.id)).toBe(0);
         });
 
         test('the queue keeps the Patient KTP of the visit, and an older message without it counts as KTP', async () => {

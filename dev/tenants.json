@@ -634,13 +634,23 @@
                                 "drug": "PCT-500",
                                 "quantity": 10,
                                 "signa": "3x1",
-                                "usage_instruction": "Setelah Makan"
+                                "usage_instruction": "Setelah Makan",
+                                "frequency_per_day": 3,
+                                "dose": 1,
+                                "dose_unit": "TAB",
+                                "route": "O",
+                                "duration_days": 3
                             },
                             {
                                 "drug": "AMX-500",
                                 "quantity": 15,
                                 "signa": "3x1",
-                                "usage_instruction": "Setelah Makan"
+                                "usage_instruction": "Setelah Makan",
+                                "frequency_per_day": 3,
+                                "dose": 1,
+                                "dose_unit": "KAP",
+                                "route": "O",
+                                "duration_days": 5
                             }
                         ]
                     },
@@ -665,13 +675,23 @@
                                 "drug": "CTM-4",
                                 "quantity": 10,
                                 "signa": "3x1",
-                                "usage_instruction": "Setelah Makan"
+                                "usage_instruction": "Setelah Makan",
+                                "frequency_per_day": 3,
+                                "dose": 1,
+                                "dose_unit": "TAB",
+                                "route": "O",
+                                "duration_days": 3
                             },
                             {
                                 "drug": "ANT-DOEN",
                                 "quantity": 2,
                                 "signa": "3x1",
-                                "usage_instruction": "Sebelum Makan"
+                                "usage_instruction": "Sebelum Makan",
+                                "frequency_per_day": 3,
+                                "dose": 1,
+                                "dose_unit": "TAB",
+                                "route": "O",
+                                "duration_days": 3
                             }
                         ]
                     },
@@ -696,7 +716,12 @@
                                 "drug": "PCT-500",
                                 "quantity": 10,
                                 "signa": "3x1",
-                                "usage_instruction": "Setelah Makan"
+                                "usage_instruction": "Setelah Makan",
+                                "frequency_per_day": 3,
+                                "dose": 1,
+                                "dose_unit": "TAB",
+                                "route": "O",
+                                "duration_days": 3
                             }
                         ]
                     }

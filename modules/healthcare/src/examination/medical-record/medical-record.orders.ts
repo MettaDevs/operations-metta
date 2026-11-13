@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
+    decimalInput,
     defaultUnit,
     itemUnits,
+    quantityHint,
     quantityScale,
     toNumeric,
     unitConversion,
@@ -83,15 +85,44 @@ function text(
     return value;
 }
 
-// Jumlah desimal lebih dari 0, muat di numeric(10,2).
-function amount(raw: unknown, field: string, errors: Errors): number | null {
-    const value = numeric(raw);
-    if (value === null) return null;
-    if (value === undefined || value <= 0 || value >= 1e8) {
-        add(errors, field, 'Isi jumlah lebih dari 0.');
+// Jumlah obat dan dosis mengikuti aturan jumlah persediaan Core (decimalInput), termasuk banyak angka di belakang koma.
+const decimalRule = `lebih dari 0, ${quantityHint}.`;
+const quantityMessage = `Isi jumlah ${decimalRule}`;
+
+// Jumlah lebih dari 0 sebagai teks numeric yang disimpan; null bila kosong atau tidak sah.
+function decimal(
+    raw: unknown,
+    field: string,
+    errors: Errors,
+    message: string,
+): string | null {
+    if (missing(raw)) return null;
+    const value = decimalInput(raw);
+    if (value === null || value <= 0n) {
+        add(errors, field, message);
         return null;
     }
-    return Math.round(value * 100) / 100;
+    return toNumeric(value, quantityScale);
+}
+
+// Bilangan bulat 1 atau lebih yang muat di smallint, wajib diisi.
+function count(
+    raw: unknown,
+    field: string,
+    errors: Errors,
+    messages: { missing: string; invalid: string },
+): number | null {
+    const value = numeric(raw);
+    if (value === null) add(errors, field, messages.missing);
+    else if (
+        value === undefined ||
+        !Number.isInteger(value) ||
+        value < 1 ||
+        value > 32767
+    )
+        add(errors, field, messages.invalid);
+    else return value;
+    return null;
 }
 
 // Nakes aktif yang profesinya boleh mengisi peran itu (centang di Setup → Profesi). Nakes yang sudah tersimpan tetap
@@ -128,14 +159,38 @@ type ProcedureLine = {
 };
 
 type ChosenUnit = { id: string; conversion: string };
+// Dosis obat tunggal dan kepala racikan; semuanya kosong pada komponen racikan. dose dalam dose_unit_id, sebagai teks
+// numeric yang disimpan.
+type Dosage = {
+    frequency_per_day: number | null;
+    dose: string | null;
+    dose_unit_id: string | null;
+    route_id: string | null;
+    duration_days: number | null;
+};
+const dosageFields = [
+    'frequency_per_day',
+    'dose',
+    'dose_unit_id',
+    'route_id',
+    'duration_days',
+] as const satisfies readonly (keyof Dosage)[];
+const noDosage: Dosage = {
+    frequency_per_day: null,
+    dose: null,
+    dose_unit_id: null,
+    route_id: null,
+    duration_days: null,
+};
 type PrescriptionLine = {
     drug_id: string | null;
     unit: ChosenUnit | null;
     compound: number | null;
-    quantity: number | null;
-    requested_quantity: number | null;
+    quantity: string | null;
+    requested_quantity: string | null;
     signa: string | null;
     usage_instruction_id: string | null;
+    dosage: Dosage;
     notes: string | null;
 };
 type PrescriptionDraft = {
@@ -181,10 +236,17 @@ const savedLineSchema = z.object({
     conversion: z.string().nullable(),
     base_unit_code: z.string().nullable(),
     compound: z.number().nullable(),
-    quantity: z.number().nullable(),
-    requested_quantity: z.number().nullable(),
+    quantity: z.string().nullable(),
+    requested_quantity: z.string().nullable(),
     signa: z.string().nullable(),
     usage_instruction_id: z.string().nullable(),
+    frequency_per_day: z.number().nullable(),
+    dose: z.string().nullable(),
+    dose_unit_id: z.string().nullable(),
+    dose_unit_code: z.string().nullable(),
+    dose_unit_name: z.string().nullable(),
+    route_id: z.string().nullable(),
+    duration_days: z.number().nullable(),
     notes: z.string().nullable(),
     dispensed: z.string().nullable(),
     returned: z.string().nullable(),
@@ -194,6 +256,9 @@ type SavedLine = z.infer<typeof savedLineSchema>;
 // Tanpa tarif berarti 0: Tarif kosong dari layar sistem lama tersimpan 0 di SIMtrRJTransaksi.Tarif yang NOT NULL.
 const tariffOf = (charge: ProcedurePriceLookup) =>
     Decimal.of(charge.price?.price ?? '0').normalized();
+
+const decimalNumber = (value: string | null) =>
+    value === null ? null : Number(value);
 
 // Kunci baris resep: obatnya, atau nomor racikan untuk kepala racikan.
 const lineKey = (line: { drug_id: string | null; compound: number | null }) =>
@@ -556,14 +621,17 @@ export class ExaminationOrders {
             savedLineSchema,
             `select d.id, d.urutan, d.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name,
                     d.satuan_id as unit_id, s.kode as unit_code, s.nama as unit_name, d.konversi::text as conversion,
-                    bs.kode as base_unit_code, d.racikan_ke as compound, d.jumlah::float8 as quantity,
-                    d.jumlah_permintaan::float8 as requested_quantity, d.signa,
-                    d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes,
+                    bs.kode as base_unit_code, d.racikan_ke as compound, d.jumlah::text as quantity,
+                    d.jumlah_permintaan::text as requested_quantity, d.signa,
+                    d.aturan_pakai_id as usage_instruction_id, d.frekuensi as frequency_per_day, d.dosis::text as dose,
+                    d.dosis_satuan_id as dose_unit_id, ds.kode as dose_unit_code, ds.nama as dose_unit_name,
+                    d.rute_id as route_id, d.lama_hari as duration_days, d.keterangan as notes,
                     d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned
              from sim_tr_resep_detail d
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
              left join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
              left join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
+             left join gd_m_satuan ds on ds.tenant_id = d.tenant_id and ds.id = d.dosis_satuan_id
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.tenantId, prescriptionId],
@@ -619,10 +687,19 @@ export class ExaminationOrders {
                             ? (units.get(line.drug_id) ?? [])
                             : [],
                         compound: line.compound,
-                        quantity: line.quantity,
-                        requested_quantity: line.requested_quantity,
+                        quantity: decimalNumber(line.quantity),
+                        requested_quantity: decimalNumber(
+                            line.requested_quantity,
+                        ),
                         signa: line.signa,
                         usage_instruction_id: line.usage_instruction_id,
+                        frequency_per_day: line.frequency_per_day,
+                        dose: decimalNumber(line.dose),
+                        dose_unit_id: line.dose_unit_id,
+                        dose_unit_code: line.dose_unit_code,
+                        dose_unit_name: line.dose_unit_name,
+                        route_id: line.route_id,
+                        duration_days: line.duration_days,
                         notes: line.notes,
                         dispensed_quantity:
                             line.dispensed === null
@@ -743,13 +820,25 @@ export class ExaminationOrders {
                     unit: null,
                     compound,
                     quantity: null,
-                    requested_quantity: amount(
+                    requested_quantity: decimal(
                         row.requested_quantity,
                         field('requested_quantity'),
                         errors,
+                        quantityMessage,
                     ),
                     signa,
                     usage_instruction_id: usageInstructionId,
+                    dosage: await this.dosage(
+                        row,
+                        saved.find(
+                            (line) =>
+                                lineKey(line) ===
+                                lineKey({ drug_id: null, compound }),
+                        ),
+                        legalEntityId,
+                        field,
+                        errors,
+                    ),
                     notes,
                 });
                 continue;
@@ -794,10 +883,22 @@ export class ExaminationOrders {
                         ),
                         'Signa dan aturan pakai komponen racikan diisi pada baris racikannya.',
                     );
+                for (const name of dosageFields)
+                    if (!missing(row[name]))
+                        add(
+                            errors,
+                            field(name),
+                            'Dosis komponen racikan diisi pada baris racikannya.',
+                        );
             }
-            const quantity = amount(row.quantity, field('quantity'), errors);
+            const quantity = decimal(
+                row.quantity,
+                field('quantity'),
+                errors,
+                quantityMessage,
+            );
             if (quantity === null && missing(row.quantity))
-                add(errors, field('quantity'), 'Isi jumlah lebih dari 0.');
+                add(errors, field('quantity'), quantityMessage);
             const unit = await this.lineUnit(
                 row.unit_id,
                 drug.id,
@@ -814,6 +915,16 @@ export class ExaminationOrders {
                 requested_quantity: null,
                 signa,
                 usage_instruction_id: usageInstructionId,
+                dosage:
+                    compound === null
+                        ? await this.dosage(
+                              row,
+                              saved.find((line) => line.drug_id === drug.id),
+                              legalEntityId,
+                              field,
+                              errors,
+                          )
+                        : noDosage,
                 notes,
             });
         }
@@ -862,6 +973,24 @@ export class ExaminationOrders {
         return null;
     }
 
+    // Baris aktif daftar pendek tenant, atau baris yang sudah tersimpan (kept) walau sejak itu nonaktif.
+    private async listed(
+        table: 'sim_m_aturan_pakai' | 'sim_m_rute_obat',
+        raw: unknown,
+        kept: (id: string) => boolean,
+    ): Promise<string | null> {
+        const id = typeof raw === 'string' ? lookupId(raw) : null;
+        const found = id
+            ? await this.db.one(
+                  z.object({ id: z.string() }),
+                  `select id from ${table}
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or $3)`,
+                  [this.tenantId, id, kept(id)],
+              )
+            : undefined;
+        return found?.id ?? null;
+    }
+
     private async usageInstruction(
         raw: unknown,
         saved: SavedLine[],
@@ -869,21 +998,103 @@ export class ExaminationOrders {
         errors: Errors,
     ): Promise<string | null> {
         if (missing(raw)) return null;
-        const id = typeof raw === 'string' ? lookupId(raw) : null;
-        const found = id
-            ? await this.db.one(
-                  z.object({ id: z.string() }),
-                  `select id from sim_m_aturan_pakai
-                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or $3)`,
-                  [
-                      this.tenantId,
-                      id,
-                      saved.some((line) => line.usage_instruction_id === id),
-                  ],
-              )
-            : undefined;
-        if (!found) add(errors, field, 'Pilih dari daftar.');
-        return found?.id ?? null;
+        const id = await this.listed('sim_m_aturan_pakai', raw, (value) =>
+            saved.some((line) => line.usage_instruction_id === value),
+        );
+        if (!id) add(errors, field, 'Pilih dari daftar.');
+        return id;
+    }
+
+    // Dosis obat tunggal dan kepala racikan; kelimanya wajib. Satuan dosis adalah satuan persediaan legal entity
+    // kunjungan, sumber yang sama dengan satuan obat, dan rute dari daftar rute tenant. Nilai yang sudah tersimpan di baris
+    // ini tetap diterima walau satuannya sejak itu dihapus atau rutenya dinonaktifkan.
+    private async dosage(
+        row: Record<string, unknown>,
+        before: SavedLine | undefined,
+        legalEntityId: string,
+        field: (name: keyof Dosage) => string,
+        errors: Errors,
+    ): Promise<Dosage> {
+        const frequency = count(
+            row.frequency_per_day,
+            field('frequency_per_day'),
+            errors,
+            {
+                missing: 'Isi berapa kali sehari.',
+                invalid:
+                    'Isi berapa kali sehari dengan bilangan bulat 1 atau lebih.',
+            },
+        );
+        const dose = decimal(
+            row.dose,
+            field('dose'),
+            errors,
+            `Isi dosis ${decimalRule}`,
+        );
+        if (missing(row.dose))
+            add(errors, field('dose'), 'Isi dosis sekali pakai.');
+        let doseUnitId: string | null = null;
+        if (missing(row.dose_unit_id))
+            add(errors, field('dose_unit_id'), 'Pilih satuan dosis.');
+        else {
+            const id =
+                typeof row.dose_unit_id === 'string'
+                    ? lookupId(row.dose_unit_id)
+                    : null;
+            const found = id
+                ? await this.db.one(
+                      z.object({ id: z.string() }),
+                      `select id from gd_m_satuan
+                       where tenant_id = $1 and legal_entity_id = $2 and id = $3 and (deleted_at is null or $4)`,
+                      [
+                          this.tenantId,
+                          legalEntityId,
+                          id,
+                          before?.dose_unit_id === id,
+                      ],
+                  )
+                : undefined;
+            if (!found)
+                add(
+                    errors,
+                    field('dose_unit_id'),
+                    'Pilih satuan dosis dari daftar.',
+                );
+            doseUnitId = found?.id ?? null;
+        }
+        let routeId: string | null = null;
+        if (missing(row.route_id))
+            add(errors, field('route_id'), 'Pilih rute pemberian.');
+        else {
+            routeId = await this.listed(
+                'sim_m_rute_obat',
+                row.route_id,
+                (id) => before?.route_id === id,
+            );
+            if (!routeId)
+                add(
+                    errors,
+                    field('route_id'),
+                    'Pilih rute pemberian dari daftar.',
+                );
+        }
+        const duration = count(
+            row.duration_days,
+            field('duration_days'),
+            errors,
+            {
+                missing: 'Isi lama pemberian (hari).',
+                invalid:
+                    'Isi lama pemberian dengan bilangan bulat 1 hari atau lebih.',
+            },
+        );
+        return {
+            frequency_per_day: frequency,
+            dose,
+            dose_unit_id: doseUnitId,
+            route_id: routeId,
+            duration_days: duration,
+        };
     }
 
     // Draf yang kosong tidak disimpan, seperti sistem lama yang hanya membuat resep bila ada baris. Draf tersimpan yang
@@ -962,6 +1173,11 @@ export class ExaminationOrders {
                 jumlah_permintaan: line.requested_quantity,
                 signa: line.signa,
                 aturan_pakai_id: line.usage_instruction_id,
+                frekuensi: line.dosage.frequency_per_day,
+                dosis: line.dosage.dose,
+                dosis_satuan_id: line.dosage.dose_unit_id,
+                rute_id: line.dosage.route_id,
+                lama_hari: line.dosage.duration_days,
                 keterangan: line.notes,
             };
             const match = existing.find(
@@ -986,6 +1202,11 @@ export class ExaminationOrders {
                 match.requested_quantity !== values.jumlah_permintaan ||
                 match.signa !== values.signa ||
                 match.usage_instruction_id !== values.aturan_pakai_id ||
+                match.frequency_per_day !== values.frekuensi ||
+                match.dose !== values.dosis ||
+                match.dose_unit_id !== values.dosis_satuan_id ||
+                match.route_id !== values.rute_id ||
+                match.duration_days !== values.lama_hari ||
                 match.notes !== values.keterangan
             )
                 await this.update('sim_tr_resep_detail', match.id, {

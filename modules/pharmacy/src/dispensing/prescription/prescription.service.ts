@@ -181,8 +181,15 @@ export class Prescriptions {
                         'id', d.barang_id, 'code', d.kode_barang, 'name', d.nama_barang) end as item,
                     case when d.satuan_id is null then null else json_build_object(
                         'id', d.satuan_id, 'code', d.kode_satuan, 'name', d.nama_satuan) end as unit,
-                    trim_scale(d.konversi)::text as quantity_per_unit
+                    trim_scale(d.konversi)::text as quantity_per_unit, d.frekuensi as frequency_per_day,
+                    trim_scale(d.dosis)::text as dose,
+                    case when ds.id is null then null else json_build_object(
+                        'id', ds.id, 'code', ds.kode, 'name', ds.nama) end as dose_unit,
+                    case when d.rute_kode is null then null else json_build_object(
+                        'code', d.rute_kode, 'name', d.rute_nama) end as route,
+                    d.lama_hari as duration_days
              from far_tr_resep_detail d
+             left join gd_m_satuan ds on ds.tenant_id = d.tenant_id and ds.id = d.dosis_satuan_id
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [scope.tenantId, header.id],

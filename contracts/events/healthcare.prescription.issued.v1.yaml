@@ -22,6 +22,10 @@ info:
       obat dihargai harga dasar barang tanpa kenaikan.
     - `patient.ktp` ditambahkan sesudah versi ini terbit, jadi opsional: farmasi memakai baris grading harga obat untuk
       nilai KTP itu saat resep disiapkan. Pesan tanpa `patient.ktp` diperlakukan sebagai `true`, bawaan sistem lama.
+    - Dosis baris (`frequency_per_day`, `dose`, `dose_unit`, `route`, `duration_days`) ditambahkan sesudah versi ini
+      terbit, jadi opsional. Penerbit selalu mengirim kelimanya: terisi pada obat tunggal dan kepala racikan, karena
+      layanan kesehatan menolak menyimpan resep tanpa dosis, dan kosong pada komponen racikan. Pesan tanpa field itu
+      berarti resepnya ditulis sebelum dosis dicatat; farmasi menampilkannya tanpa dosis.
     - Belum ada event pembatalan resep: layar tidak menawarkan membatalkan resep yang sudah dikirim, dan kunjungan hanya
       bisa dibatalkan sebelum diperiksa, jadi status `dibatalkan` belum pernah ditulis.
 channels:
@@ -170,6 +174,10 @@ components:
         resep disimpan. `base_quantity` adalah `quantity` x `quantity_per_unit`. Penerbit selalu mengisi ketiganya untuk
         baris obat dan mengosongkannya pada kepala racikan. Ketiganya ditambahkan sesudah versi ini terbit, jadi
         opsional: pesan tanpa ketiganya ditulis dalam satuan dasar, yaitu `unit` adalah satuan dasar barang.
+
+        Dosis (MedicationRequest.dosageInstruction SATUSEHAT) ada pada obat tunggal dan kepala racikan, dan kosong pada
+        komponen racikan: `frequency_per_day` kali sehari, masing-masing `dose` dalam `dose_unit`, lewat `route`, selama
+        `duration_days` hari. Kelimanya ditambahkan sesudah versi ini terbit, jadi opsional.
       required: [id, order, item, compound, quantity, unit, requested_quantity, signa, usage_instruction, notes]
       properties:
         id:
@@ -215,8 +223,42 @@ components:
         usage_instruction:
           type: [string, 'null']
           description: Aturan pakai sebagai teks, misalnya Setelah Makan.
+        frequency_per_day:
+          type: [integer, 'null']
+          minimum: 1
+          description: Berapa kali sehari (timing.repeat.frequency, dengan period 1 dan periodUnit `d`).
+        dose:
+          type: [string, 'null']
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Jumlah sekali pakai dalam `dose_unit` (doseAndRate.doseQuantity.value).
+        dose_unit:
+          description: Satuan dosis, satuan persediaan Core legal entity resep, misalnya Tablet.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/reference'
+        route:
+          description: |
+            Rute pemberian, disalin dari daftar rute layanan kesehatan saat resep dikirim. Bawaannya rute WHO ATC/DDD
+            (sistem `http://www.whocc.no/atc`) dengan kode singkatan ATC, misalnya `O` Oral; tenant boleh menambah
+            rutenya sendiri dengan kodenya sendiri.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/route'
+        duration_days:
+          type: [integer, 'null']
+          minimum: 1
+          description: Lama pemberian dalam hari (dispenseRequest.expectedSupplyDuration).
         notes:
           type: [string, 'null']
+    route:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
     priceGroup:
       type: object
       additionalProperties: false

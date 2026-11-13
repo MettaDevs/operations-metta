@@ -18,12 +18,13 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
+import { useQuery } from '@tanstack/react-query';
 import { FlaskConical, Send } from 'lucide-react';
 import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Decimal } from '@core/platform/money/index.ts';
-import { api } from '@core/platform/shell/index.ts';
+import { api, orpc } from '@core/platform/shell/index.ts';
 import { DrugCard, type Drug } from '../../clinical/drug/drug-card.tsx';
 import {
     ProcedureCard,
@@ -77,6 +78,20 @@ const unitChoices = (row: PrescriptionLine): DrugUnit[] =>
               ...row.units,
           ]
         : row.units;
+type DoseUnit = { id: string; code: string; name: string };
+const doseUnitValues = (unit: DoseUnit | undefined) => ({
+    dose_unit_id: unit?.id ?? null,
+    dose_unit_code: unit?.code ?? null,
+    dose_unit_name: unit?.name ?? null,
+});
+// Dosis kosong: baris baru, dan komponen racikan yang dosisnya ditulis pada baris racikannya.
+const noDosage = {
+    frequency_per_day: null,
+    dose: null,
+    ...doseUnitValues(undefined),
+    route_id: null,
+    duration_days: null,
+} satisfies Partial<PrescriptionLine>;
 const compoundLabel = (compound: number | string) => `Racikan ${compound}`;
 const drugLabel = (drug: { code: string | null; name: string }) =>
     drug.code ? `${drug.code} - ${drug.name}` : drug.name;
@@ -756,6 +771,43 @@ function PrescriptionFacts({
     );
 }
 
+// Isian angka baris resep. Isinya disimpan apa adanya selama diketik; server yang memeriksa batas dan banyak angka di
+// belakang koma, jadi step bilangan desimal tidak membatasinya.
+function NumberCell({
+    id,
+    label,
+    required,
+    whole,
+    value,
+    error,
+    onValue,
+}: {
+    id: string;
+    label: string;
+    required?: boolean;
+    whole?: boolean;
+    value: number | string | null;
+    error: string | undefined;
+    onValue: (value: string | null) => void;
+}): ReactNode {
+    return (
+        <FormControl error={error}>
+            <Input
+                id={id}
+                data-error-field={id}
+                label={label}
+                required={required}
+                type="number"
+                min={whole ? 1 : 0}
+                step={whole ? 1 : 'any'}
+                inputMode={whole ? 'numeric' : 'decimal'}
+                value={value ?? ''}
+                onChange={(event) => onValue(event.target.value || null)}
+            />
+        </FormControl>
+    );
+}
+
 // Satu resep. Draf diubah di tempat dan ikut Simpan halaman; resep yang sudah dikirim hanya dibaca.
 function PrescriptionLines({
     prescription,
@@ -826,6 +878,7 @@ function PrescriptionLines({
         requested_quantity: null,
         signa: null,
         usage_instruction_id: null,
+        ...noDosage,
         notes: null,
     };
     const pick = (line: number, drug: Drug) => {
@@ -845,6 +898,12 @@ function PrescriptionLines({
             ...unitValues(
                 drug.units.find((unit) => unit.id === drug.sales_unit_id),
             ),
+            // Dosis obat tunggal bawaannya dalam satuan dasar obat, misalnya 1 tablet.
+            ...(rows[line]?.compound === null
+                ? doseUnitValues(
+                      drug.units.find((unit) => unit.id === drug.base_unit_id),
+                  )
+                : {}),
         });
     };
     // Komponen dipindah ke bawah racikannya, seperti baris komponen yang menjorok di bawah "Racikan N" sistem lama.
@@ -860,6 +919,7 @@ function PrescriptionLines({
                           compound,
                           signa: null,
                           usage_instruction_id: null,
+                          ...noDosage,
                       };
             const rest = current.filter((_, at) => at !== line);
             if (compound === null) return [...rest, moved];
@@ -871,6 +931,26 @@ function PrescriptionLines({
             return [...rest.slice(0, last + 1), moved, ...rest.slice(last + 1)];
         });
     const usage = metadata.usage_instructions;
+    const routes = metadata.medication_routes;
+    // Satuan dosis: satuan legal entity tempat kerja, sumber yang sama dengan satuan di kartu obat.
+    const { data: doseUnits = [] } = useQuery(
+        orpc.healthcareDrugMetadata.queryOptions({
+            select: (response) => response.body.units,
+            enabled: !readOnly,
+        }),
+    );
+    const doseUnitChoices = (row: PrescriptionLine): DoseUnit[] =>
+        row.dose_unit_id &&
+        !doseUnits.some((unit) => unit.id === row.dose_unit_id)
+            ? [
+                  {
+                      id: row.dose_unit_id,
+                      code: row.dose_unit_code ?? '',
+                      name: row.dose_unit_name ?? '',
+                  },
+                  ...doseUnits,
+              ]
+            : doseUnits;
     const isHeader = (row: PrescriptionLine) =>
         !row.drug_id && row.compound !== null;
     const isComponent = (row: PrescriptionLine) =>
@@ -1172,6 +1252,196 @@ function PrescriptionLines({
                         },
                     },
                     {
+                        id: 'frequency_per_day',
+                        header: 'Kali sehari',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 100,
+                        cell: ({ index: line, row }) =>
+                            readOnly || isComponent(row) ? (
+                                <DataTableText>
+                                    {row.frequency_per_day ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <NumberCell
+                                    id={field(line, 'frequency_per_day')}
+                                    label="Kali sehari"
+                                    required
+                                    whole
+                                    value={row.frequency_per_day}
+                                    error={error(
+                                        field(line, 'frequency_per_day'),
+                                    )}
+                                    onValue={(value) =>
+                                        change(line, {
+                                            frequency_per_day: value,
+                                        })
+                                    }
+                                />
+                            ),
+                    },
+                    {
+                        id: 'dose',
+                        header: 'Dosis',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 90,
+                        cell: ({ index: line, row }) =>
+                            readOnly || isComponent(row) ? (
+                                <DataTableText>{row.dose ?? ''}</DataTableText>
+                            ) : (
+                                <NumberCell
+                                    id={field(line, 'dose')}
+                                    label="Dosis"
+                                    required
+                                    value={row.dose}
+                                    error={error(field(line, 'dose'))}
+                                    onValue={(value) =>
+                                        change(line, { dose: value })
+                                    }
+                                />
+                            ),
+                    },
+                    {
+                        id: 'dose_unit_id',
+                        header: 'Satuan dosis',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 150,
+                        cell: ({ index: line, row }) => {
+                            const current =
+                                doseUnitChoices(row).find(
+                                    (unit) => unit.id === row.dose_unit_id,
+                                ) ?? null;
+                            return readOnly || isComponent(row) ? (
+                                <DataTableText>
+                                    {row.dose_unit_code ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <FormControl
+                                    error={error(field(line, 'dose_unit_id'))}
+                                    data-error-field={field(
+                                        line,
+                                        'dose_unit_id',
+                                    )}
+                                >
+                                    <InlineLookup
+                                        label="Satuan dosis"
+                                        required
+                                        items={doseUnitChoices(row)}
+                                        value={current}
+                                        displayValue={current?.code ?? ''}
+                                        onValueChange={(unit) =>
+                                            change(line, doseUnitValues(unit))
+                                        }
+                                        getItemValue={(unit) => unit.id}
+                                        getItemLabel={(unit) => unit.code}
+                                        getSearchText={(unit) =>
+                                            `${unit.code} ${unit.name}`
+                                        }
+                                        emptyMessage="Satuan tidak ditemukan."
+                                        showDetails={false}
+                                        showFullList={false}
+                                        columns={[
+                                            {
+                                                id: 'code',
+                                                header: 'Kode',
+                                                width: 90,
+                                                cell: (unit) => unit.code,
+                                            },
+                                            {
+                                                id: 'name',
+                                                header: 'Nama',
+                                                width: 160,
+                                                cell: (unit) => unit.name,
+                                            },
+                                        ]}
+                                    />
+                                </FormControl>
+                            );
+                        },
+                    },
+                    {
+                        id: 'route_id',
+                        header: 'Rute',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 150,
+                        cell: ({ index: line, row }) => {
+                            const current =
+                                routes.find(
+                                    (item) => item.id === row.route_id,
+                                ) ?? null;
+                            return readOnly || isComponent(row) ? (
+                                <DataTableText>
+                                    {current?.name ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <FormControl
+                                    error={error(field(line, 'route_id'))}
+                                    data-error-field={field(line, 'route_id')}
+                                >
+                                    <InlineLookup
+                                        label="Rute"
+                                        required
+                                        items={routes.filter(
+                                            (item) =>
+                                                item.active ||
+                                                item.id === row.route_id,
+                                        )}
+                                        value={current}
+                                        displayValue={current?.name ?? ''}
+                                        onValueChange={(item) =>
+                                            change(line, { route_id: item.id })
+                                        }
+                                        getItemValue={(item) => item.id}
+                                        getItemLabel={(item) => item.name}
+                                        getSearchText={(item) =>
+                                            `${item.code} ${item.name}`
+                                        }
+                                        emptyMessage="Rute tidak ditemukan."
+                                        showDetails={false}
+                                        showFullList={false}
+                                        columns={[
+                                            {
+                                                id: 'code',
+                                                header: 'Kode',
+                                                width: 80,
+                                                cell: (item) => item.code,
+                                            },
+                                            {
+                                                id: 'name',
+                                                header: 'Nama',
+                                                width: 180,
+                                                cell: (item) => item.name,
+                                            },
+                                        ]}
+                                    />
+                                </FormControl>
+                            );
+                        },
+                    },
+                    {
+                        id: 'duration_days',
+                        header: 'Lama (hari)',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 100,
+                        cell: ({ index: line, row }) =>
+                            readOnly || isComponent(row) ? (
+                                <DataTableText>
+                                    {row.duration_days ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <NumberCell
+                                    id={field(line, 'duration_days')}
+                                    label="Lama (hari)"
+                                    required
+                                    whole
+                                    value={row.duration_days}
+                                    error={error(field(line, 'duration_days'))}
+                                    onValue={(value) =>
+                                        change(line, { duration_days: value })
+                                    }
+                                />
+                            ),
+                    },
+                    {
                         id: 'requested_quantity',
                         header: 'Jumlah Permintaan',
                         content: readOnly ? 'text' : 'control',
@@ -1182,31 +1452,19 @@ function PrescriptionLines({
                                     {row.requested_quantity ?? ''}
                                 </DataTableText>
                             ) : (
-                                <FormControl
+                                <NumberCell
+                                    id={field(line, 'requested_quantity')}
+                                    label="Jumlah Permintaan"
+                                    value={row.requested_quantity}
                                     error={error(
                                         field(line, 'requested_quantity'),
                                     )}
-                                >
-                                    <Input
-                                        id={field(line, 'requested_quantity')}
-                                        data-error-field={field(
-                                            line,
-                                            'requested_quantity',
-                                        )}
-                                        label="Jumlah Permintaan"
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        inputMode="decimal"
-                                        value={row.requested_quantity ?? ''}
-                                        onChange={(event) =>
-                                            change(line, {
-                                                requested_quantity:
-                                                    event.target.value || null,
-                                            })
-                                        }
-                                    />
-                                </FormControl>
+                                    onValue={(value) =>
+                                        change(line, {
+                                            requested_quantity: value,
+                                        })
+                                    }
+                                />
                             ),
                     },
                     {
@@ -1220,30 +1478,16 @@ function PrescriptionLines({
                                     {row.quantity ?? ''}
                                 </DataTableText>
                             ) : (
-                                <FormControl
+                                <NumberCell
+                                    id={field(line, 'quantity')}
+                                    label="Qty"
+                                    required
+                                    value={row.quantity}
                                     error={error(field(line, 'quantity'))}
-                                >
-                                    <Input
-                                        id={field(line, 'quantity')}
-                                        data-error-field={field(
-                                            line,
-                                            'quantity',
-                                        )}
-                                        label="Qty"
-                                        required
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        inputMode="decimal"
-                                        value={row.quantity ?? ''}
-                                        onChange={(event) =>
-                                            change(line, {
-                                                quantity:
-                                                    event.target.value || null,
-                                            })
-                                        }
-                                    />
-                                </FormControl>
+                                    onValue={(value) =>
+                                        change(line, { quantity: value })
+                                    }
+                                />
                             ),
                     },
                     ...(prescription.dispensed_at
