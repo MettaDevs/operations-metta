@@ -5,7 +5,7 @@ import { moduleId } from '../../module.ts';
 
 // Resep yang dikirim ke farmasi, sebagai event untuk module farmasi. Farmasi tidak membaca tabel module ini, jadi isinya
 // potret lengkap saat resep dikirim: nomor, kunjungan, pasien beserta Patient KTP kunjungan, dokter, section asal,
-// kelompok harga pembeli, dan baris beserta barang Core dan dosisnya.
+// kelompok harga pembeli, dan baris beserta barang Core, dosis, serta jenis dan bentuk sediaan racikannya.
 // Legal entity dan unit kunjungan ada di envelope. Kontraknya ditulis tangan di
 // contracts/events/healthcare.prescription.issued.v1.yaml; mengubah isinya berarti versi baru.
 export const prescriptionIssued = `${moduleId}.prescription.issued.v1` as const;
@@ -57,6 +57,8 @@ const lineSchema = z.object({
     dose_unit_name: z.string().nullable(),
     route: z.object({ code: z.string(), name: z.string() }).nullable(),
     duration_days: z.number().nullable(),
+    dtd: z.boolean().nullable(),
+    dosage_form: z.object({ code: z.string(), name: z.string() }).nullable(),
 });
 
 const reference = (
@@ -106,7 +108,10 @@ export async function publishPrescriptionIssued(
                 trim_scale(d.jumlah * d.konversi)::text as base_quantity, d.frekuensi as frequency_per_day,
                 trim_scale(d.dosis)::text as dose, du.id as dose_unit_id, du.kode as dose_unit_code,
                 du.nama as dose_unit_name, d.lama_hari as duration_days,
-                case when ro.id is null then null else json_build_object('code', ro.kode, 'name', ro.nama) end as route
+                case when ro.id is null then null else json_build_object('code', ro.kode, 'name', ro.nama) end as route,
+                d.dtd,
+                case when bs.id is null then null else json_build_object('code', bs.kode, 'name', bs.nama) end
+                    as dosage_form
          from sim_tr_resep_detail d
          left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
          left join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
@@ -114,6 +119,7 @@ export async function publishPrescriptionIssued(
          left join gd_m_satuan du on du.tenant_id = d.tenant_id and du.id = d.dosis_satuan_id
          left join sim_m_aturan_pakai a on a.tenant_id = d.tenant_id and a.id = d.aturan_pakai_id
          left join sim_m_rute_obat ro on ro.tenant_id = d.tenant_id and ro.id = d.rute_id
+         left join sim_m_bentuk_sediaan bs on bs.tenant_id = d.tenant_id and bs.id = d.bentuk_sediaan_id
          where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
          order by d.urutan, d.id`,
         [tenantId, prescriptionId],
@@ -176,6 +182,10 @@ export async function publishPrescriptionIssued(
                 ),
                 route: line.route,
                 duration_days: line.duration_days,
+                // Medication SATUSEHAT untuk racikan: jenisnya (MedicationType SD bila d.t.d., EP bila dibagi rata) dan
+                // bentuk sediaan hasilnya, disalin kode dan namanya seperti rute.
+                dtd: line.dtd,
+                dosage_form: line.dosage_form,
                 notes: line.notes,
             })),
         },

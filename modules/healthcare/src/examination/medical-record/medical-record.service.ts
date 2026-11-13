@@ -231,8 +231,8 @@ const headerSchema = z.object({
     prognosis_id: z.string().nullable(),
 });
 
-// Daftar pendek panel Diagnosa, aturan pakai, dan rute pemberian resep milik tenant. Baris nonaktif ikut dikirim supaya
-// nilai tersimpan tetap berlabel; layar hanya menawarkan yang aktif.
+// Daftar pendek panel Diagnosa, serta aturan pakai, rute pemberian, dan bentuk sediaan resep milik tenant. Baris nonaktif
+// ikut dikirim supaya nilai tersimpan tetap berlabel; layar hanya menawarkan yang aktif.
 const referenceTables = {
     diagnosis_types: 'sim_m_diagnosa_jenis',
     diagnosis_cases: 'sim_m_diagnosa_kasus',
@@ -240,6 +240,7 @@ const referenceTables = {
     chronic_diseases: 'sim_m_penyakit_kronis',
     usage_instructions: 'sim_m_aturan_pakai',
     medication_routes: 'sim_m_rute_obat',
+    dosage_forms: 'sim_m_bentuk_sediaan',
 } as const;
 type ReferenceList = keyof typeof referenceTables;
 const referenceRowSchema = z.object({
@@ -512,6 +513,7 @@ export class MedicalRecords {
             medication_routes: await reference(
                 referenceTables.medication_routes,
             ),
+            dosage_forms: await reference(referenceTables.dosage_forms),
             options: Object.fromEntries(
                 optionGroups.map((group) => [
                     group,

@@ -182,6 +182,16 @@ const noDosage: Dosage = {
     route_id: null,
     duration_days: null,
 };
+// Jenis racikan (dtd: true d.t.d., false dibagi rata) dan bentuk sediaan hasilnya; keduanya hanya pada kepala racikan.
+type CompoundPreparation = {
+    dtd: boolean | null;
+    dosage_form_id: string | null;
+};
+const compoundPreparationFields = [
+    'dtd',
+    'dosage_form_id',
+] as const satisfies readonly (keyof CompoundPreparation)[];
+const noPreparation: CompoundPreparation = { dtd: null, dosage_form_id: null };
 type PrescriptionLine = {
     drug_id: string | null;
     unit: ChosenUnit | null;
@@ -191,6 +201,7 @@ type PrescriptionLine = {
     signa: string | null;
     usage_instruction_id: string | null;
     dosage: Dosage;
+    preparation: CompoundPreparation;
     notes: string | null;
 };
 type PrescriptionDraft = {
@@ -247,6 +258,8 @@ const savedLineSchema = z.object({
     dose_unit_name: z.string().nullable(),
     route_id: z.string().nullable(),
     duration_days: z.number().nullable(),
+    dtd: z.boolean().nullable(),
+    dosage_form_id: z.string().nullable(),
     notes: z.string().nullable(),
     dispensed: z.string().nullable(),
     returned: z.string().nullable(),
@@ -645,7 +658,8 @@ export class ExaminationOrders {
                     d.jumlah_permintaan::text as requested_quantity, d.signa,
                     d.aturan_pakai_id as usage_instruction_id, d.frekuensi as frequency_per_day, d.dosis::text as dose,
                     d.dosis_satuan_id as dose_unit_id, ds.kode as dose_unit_code, ds.nama as dose_unit_name,
-                    d.rute_id as route_id, d.lama_hari as duration_days, d.keterangan as notes,
+                    d.rute_id as route_id, d.lama_hari as duration_days, d.dtd,
+                    d.bentuk_sediaan_id as dosage_form_id, d.keterangan as notes,
                     d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned
              from sim_tr_resep_detail d
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
@@ -720,6 +734,8 @@ export class ExaminationOrders {
                         dose_unit_name: line.dose_unit_name,
                         route_id: line.route_id,
                         duration_days: line.duration_days,
+                        dtd: line.dtd,
+                        dosage_form_id: line.dosage_form_id,
                         notes: line.notes,
                         dispensed_quantity:
                             line.dispensed === null
@@ -835,6 +851,10 @@ export class ExaminationOrders {
                 compounds.add(compound);
                 if (!missing(row.quantity))
                     add(errors, field('quantity'), 'Isian ini tidak sah.');
+                const before = saved.find(
+                    (line) =>
+                        lineKey(line) === lineKey({ drug_id: null, compound }),
+                );
                 lines.push({
                     drug_id: null,
                     unit: null,
@@ -850,12 +870,14 @@ export class ExaminationOrders {
                     usage_instruction_id: usageInstructionId,
                     dosage: await this.dosage(
                         row,
-                        saved.find(
-                            (line) =>
-                                lineKey(line) ===
-                                lineKey({ drug_id: null, compound }),
-                        ),
+                        before,
                         legalEntityId,
+                        field,
+                        errors,
+                    ),
+                    preparation: await this.compoundPreparation(
+                        row,
+                        before,
                         field,
                         errors,
                     ),
@@ -893,6 +915,13 @@ export class ExaminationOrders {
                     field('requested_quantity'),
                     'Jumlah permintaan hanya diisi pada baris racikan.',
                 );
+            for (const name of compoundPreparationFields)
+                if (!missing(row[name]))
+                    add(
+                        errors,
+                        field(name),
+                        'Jenis racikan dan bentuk sediaan hanya diisi pada baris racikan.',
+                    );
             if (compound !== null) {
                 components.push({ compound, field: field('compound') });
                 if (signa !== null || usageInstructionId !== null)
@@ -945,6 +974,7 @@ export class ExaminationOrders {
                               errors,
                           )
                         : noDosage,
+                preparation: noPreparation,
                 notes,
             });
         }
@@ -995,7 +1025,8 @@ export class ExaminationOrders {
 
     // Baris aktif daftar pendek tenant, atau baris yang sudah tersimpan (kept) walau sejak itu nonaktif.
     private async listed(
-        table: 'sim_m_aturan_pakai' | 'sim_m_rute_obat',
+        table:
+            'sim_m_aturan_pakai' | 'sim_m_rute_obat' | 'sim_m_bentuk_sediaan',
         raw: unknown,
         kept: (id: string) => boolean,
     ): Promise<string | null> {
@@ -1117,6 +1148,46 @@ export class ExaminationOrders {
         };
     }
 
+    // Keduanya wajib karena Medication SATUSEHAT untuk racikan menuntut MedicationType (SD atau EP) dan form.
+    private async compoundPreparation(
+        row: Record<string, unknown>,
+        before: SavedLine | undefined,
+        field: (name: keyof CompoundPreparation) => string,
+        errors: Errors,
+    ): Promise<CompoundPreparation> {
+        let dtd: boolean | null = null;
+        if (typeof row.dtd === 'boolean') dtd = row.dtd;
+        else
+            add(
+                errors,
+                field('dtd'),
+                missing(row.dtd)
+                    ? 'Pilih jenis racikan: d.t.d. atau dibagi rata.'
+                    : 'Isian ini tidak sah.',
+            );
+        let dosageFormId: string | null = null;
+        if (missing(row.dosage_form_id))
+            add(
+                errors,
+                field('dosage_form_id'),
+                'Pilih bentuk sediaan hasil racikan.',
+            );
+        else {
+            dosageFormId = await this.listed(
+                'sim_m_bentuk_sediaan',
+                row.dosage_form_id,
+                (id) => before?.dosage_form_id === id,
+            );
+            if (!dosageFormId)
+                add(
+                    errors,
+                    field('dosage_form_id'),
+                    'Pilih bentuk sediaan dari daftar.',
+                );
+        }
+        return { dtd, dosage_form_id: dosageFormId };
+    }
+
     // Draf yang kosong tidak disimpan, seperti sistem lama yang hanya membuat resep bila ada baris. Draf tersimpan yang
     // tidak dikirim lagi, atau dikosongkan, diberi deleted_at beserta barisnya.
     async writePrescriptions(
@@ -1198,6 +1269,8 @@ export class ExaminationOrders {
                 dosis_satuan_id: line.dosage.dose_unit_id,
                 rute_id: line.dosage.route_id,
                 lama_hari: line.dosage.duration_days,
+                dtd: line.preparation.dtd,
+                bentuk_sediaan_id: line.preparation.dosage_form_id,
                 keterangan: line.notes,
             };
             const match = existing.find(
@@ -1227,6 +1300,8 @@ export class ExaminationOrders {
                 match.dose_unit_id !== values.dosis_satuan_id ||
                 match.route_id !== values.rute_id ||
                 match.duration_days !== values.lama_hari ||
+                match.dtd !== values.dtd ||
+                match.dosage_form_id !== values.bentuk_sediaan_id ||
                 match.notes !== values.keterangan
             )
                 await this.update('sim_tr_resep_detail', match.id, {

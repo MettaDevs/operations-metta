@@ -201,6 +201,10 @@ export const prescriptionLineSchema = z.object({
     dose_unit_name: text,
     route_id: text,
     duration_days: number,
+    // Medication SATUSEHAT untuk racikan, wajib pada kepala racikan dan kosong pada baris lain: jenis racikan (true
+    // d.t.d., false dibagi rata) dan bentuk sediaan hasilnya dari daftar bentuk sediaan tenant.
+    dtd: flag,
+    dosage_form_id: text,
     notes: text,
     // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
     // lama. Hanya dibaca; kosong selama belum diserahkan.
