@@ -144,6 +144,46 @@ describe.skipIf(!process.env.DB_HOST)(
             ]);
         });
 
+        test('the queue keeps the Patient KTP of the visit, and an older message without it counts as KTP', async () => {
+            const withoutKtp = await pharmacy.issue(
+                [{ item: amoxicillin, quantity: '1' }],
+                {
+                    data: {
+                        patient: {
+                            id: Bun.randomUUIDv7(),
+                            medical_record_number: '00.00.77',
+                            name: 'Pasien Tanpa KTP',
+                            birth_date: null,
+                            ktp: false,
+                        },
+                    },
+                },
+            );
+            const older = await pharmacy.issue([
+                { item: amoxicillin, quantity: '1' },
+            ]);
+            expect(older.data.patient).not.toHaveProperty('ktp');
+            const stored = await pool.unsafe<
+                { resep_sumber_id: string; pasien_ktp: boolean }[]
+            >(
+                `select resep_sumber_id, pasien_ktp from far_tr_resep
+                 where tenant_id = $1 and resep_sumber_id in ($2, $3)`,
+                [
+                    pharmacy.tenantId,
+                    withoutKtp.prescriptionId,
+                    older.prescriptionId,
+                ],
+            );
+            expect(
+                Object.fromEntries(
+                    stored.map((row) => [row.resep_sumber_id, row.pasien_ktp]),
+                ),
+            ).toEqual({
+                [withoutKtp.prescriptionId]: false,
+                [older.prescriptionId]: true,
+            });
+        });
+
         test('the same event delivered twice, or the same prescription in a second event, is queued once', async () => {
             const { envelope, prescriptionId, data } = await pharmacy.issue([
                 { item: amoxicillin, quantity: '6' },

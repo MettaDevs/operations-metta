@@ -46,6 +46,8 @@ export const issuedPrescriptionSchema = z.object({
             medical_record_number: text(60),
             name: text(200),
             birth_date: z.iso.date().nullable(),
+            // KTP kunjungan untuk grading harga obat. Pesan yang belum membawanya dianggap KTP, bawaan sistem lama.
+            ktp: z.boolean().optional(),
         }),
         doctor: z.object({ id: idSchema, name: text(200) }).nullable(),
         section: z.object({ id: idSchema, name: text(150) }),

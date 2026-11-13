@@ -23,6 +23,7 @@ type Patient = {
     legal_entity_id: string;
     name: string;
     nik: { number: string | null; masked: boolean };
+    ktp_patient: boolean;
     phone: string | null;
     email: string | null;
     identity_address: {
@@ -844,6 +845,45 @@ describe.skipIf(!process.env.DB_HOST)('patient master', () => {
         );
         expect(row?.archived).toBe(true);
     }, 30_000);
+
+    test('Patient KTP is on for a new patient, can be turned off, and a change that does not send it keeps it', async () => {
+        const { data } = await created(
+            clerks.barat!,
+            patientBody({ nik: nik(89) }),
+        );
+        expect(data.ktp_patient).toBe(true);
+        const stored = async () =>
+            (
+                await pool.unsafe<{ pasien_ktp: boolean }[]>(
+                    'select pasien_ktp from sim_m_pasien where id = $1',
+                    [data.id],
+                )
+            )[0]?.pasien_ktp;
+        expect(await stored()).toBe(true);
+        const change = (version: number, extra: Record<string, unknown>) =>
+            clerks.barat!.patch(`${api}/patients/${data.id}`, {
+                version,
+                name: 'Pasien Uji',
+                nationality_country_code: 'ID',
+                gender: 'female',
+                phone: '081200000000',
+                identity_address: identityAddress(),
+                payment_methods: [{ patient_type_id: umum }],
+                ...extra,
+            });
+        const off = await json<{ data: Patient }>(
+            await change(data.version, { ktp_patient: false }),
+            200,
+        );
+        expect(off.data.ktp_patient).toBe(false);
+        expect(await stored()).toBe(false);
+        const renamed = await json<{ data: Patient }>(
+            await change(off.data.version, { name: 'Pasien Uji Lain' }),
+            200,
+        );
+        expect(renamed.data.ktp_patient).toBe(false);
+        expect(await stored()).toBe(false);
+    });
 
     test('another tenant cannot see or change these patients', async () => {
         const { data } = await created(clerks.barat!, patientBody());

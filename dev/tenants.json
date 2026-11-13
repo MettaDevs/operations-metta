@@ -598,6 +598,18 @@
                         "patient_type": "UMUM",
                         "village": "3171011002",
                         "street": "Jl. Contoh No. 2"
+                    },
+                    {
+                        "name": "Wayan Contoh",
+                        "nationality": "ID",
+                        "nik": "3171010303850003",
+                        "gender": "male",
+                        "birth_date": "1985-03-03",
+                        "phone": "081200000113",
+                        "patient_type": "UMUM",
+                        "ktp_patient": false,
+                        "village": "3171011001",
+                        "street": "Jl. Contoh No. 3"
                     }
                 ],
                 "visits": [
@@ -662,6 +674,31 @@
                                 "usage_instruction": "Sebelum Makan"
                             }
                         ]
+                    },
+                    {
+                        "patient": "3171010303850003",
+                        "section": "Poli Umum",
+                        "room": "R-UMUM",
+                        "doctor": "dr. Contoh Sehat",
+                        "condition": "sakit",
+                        "physical": {
+                            "pulse_rate": 82,
+                            "respiratory_rate": 19,
+                            "consciousness": "COMPOS MENTIS",
+                            "systolic": 118,
+                            "diastolic": 78,
+                            "height": 170,
+                            "weight": 68,
+                            "waist_circumference": 84
+                        },
+                        "prescription": [
+                            {
+                                "drug": "PCT-500",
+                                "quantity": 10,
+                                "signa": "3x1",
+                                "usage_instruction": "Setelah Makan"
+                            }
+                        ]
                     }
                 ]
             },
@@ -694,6 +731,15 @@
                         "price_from": 0,
                         "price_to": 1000000000,
                         "markup_percent": 20,
+                        "effective_from": "2026-01-01"
+                    },
+                    {
+                        "price_group": "UMUM",
+                        "grading_group": null,
+                        "ktp_patient": false,
+                        "price_from": 0,
+                        "price_to": 1000000000,
+                        "markup_percent": 45,
                         "effective_from": "2026-01-01"
                     },
                     {

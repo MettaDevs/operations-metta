@@ -18,12 +18,14 @@ const caseKey = z.object({
     grading_group: z.string(),
     base_price: decimal,
     price_group: z.string(),
+    ktp: z.boolean(),
 });
 const fixtureSchema = z.object({
     case_columns: z.tuple([
         z.literal('grading_group'),
         z.literal('base_price'),
         z.literal('price_group'),
+        z.literal('ktp'),
         z.literal('legacy_price'),
         z.literal('legacy_discount'),
     ]),
@@ -35,6 +37,7 @@ const fixtureSchema = z.object({
                 z.object({
                     price_group: z.string(),
                     grading_group: z.string().nullable(),
+                    ktp: z.boolean(),
                     price_from: decimal,
                     price_to: decimal,
                     markup_percent: decimal,
@@ -42,7 +45,14 @@ const fixtureSchema = z.object({
                 }),
             ),
             cases: z.array(
-                z.tuple([z.string(), decimal, z.string(), decimal, decimal]),
+                z.tuple([
+                    z.string(),
+                    decimal,
+                    z.string(),
+                    z.boolean(),
+                    decimal,
+                    decimal,
+                ]),
             ),
         }),
     ),
@@ -76,6 +86,7 @@ const key = (entry: z.infer<typeof caseKey>) =>
         entry.grading_group,
         entry.base_price,
         entry.price_group,
+        String(entry.ktp),
     ].join('|');
 
 // Grading sumber itu dalam bentuk aturan harga; nama kelompok menjadi id-nya. Semua baris berlaku sejak awal tahun.
@@ -84,6 +95,7 @@ const gradingsOf = (source: string): PriceGrading[] =>
         id: `${source}-${String(index)}`,
         priceGroupId: row.price_group,
         gradingGroupId: row.grading_group,
+        ktpPatient: row.ktp,
         priceFrom: amount(row.price_from),
         priceTo: amount(row.price_to),
         markupPercent: amount(row.markup_percent),
@@ -101,6 +113,7 @@ const ours = (
         basePrice: amount(entry.base_price),
         priceGroupId: entry.price_group,
         gradingGroupId: entry.grading_group,
+        ktpPatient: entry.ktp,
         date: '2026-11-13',
         quantityPerUnit: amount(quantityPerUnit),
         unitPriceDecimals: source.unit_price_decimals,
@@ -112,21 +125,29 @@ const ours = (
 };
 
 // Golden test harga obat terhadap fungsi SQL sistem lama GetHargaObatNew_WithStok. Fixture-nya keluaran oracle
-// legacy-drug-prices.sql yang dijalankan read-only di Kuta 1, Seroja, dan Penta; CI tidak punya SQL Server. Setiap kasus
-// dihitung dengan setelan farmasi sumbernya (unit_price_decimals) dan wajib sama dengan harga sistem lama, kecuali yang
-// tercatat di expected_differences beserta harga kita dan alasannya. Kasus yang berbeda tanpa tercatat, atau yang
-// tercatat tetapi ternyata sama, membuat test gagal.
+// legacy-drug-prices.sql yang dijalankan read-only di Kuta 1, Seroja, dan Penta, dengan KTP 1 dan (Seroja, Penta) KTP 0;
+// CI tidak punya SQL Server. Setiap kasus dihitung dengan KTP-nya dan setelan farmasi sumbernya (unit_price_decimals)
+// dan wajib sama dengan harga sistem lama, kecuali yang tercatat di expected_differences beserta harga kita dan
+// alasannya. Kasus yang berbeda tanpa tercatat, atau yang tercatat tetapi ternyata sama, membuat test gagal.
 describe('legacy drug prices', () => {
     const differences = new Map(
         golden.expected_differences.map((entry) => [key(entry), entry]),
     );
     const cases = Object.entries(golden.sources).flatMap(([source, data]) =>
         data.cases.map(
-            ([grading_group, base_price, price_group, legacy, discount]) => ({
+            ([
+                grading_group,
+                base_price,
+                price_group,
+                ktp,
+                legacy,
+                discount,
+            ]) => ({
                 source,
                 grading_group,
                 base_price,
                 price_group,
+                ktp,
                 legacy,
                 discount,
             }),
@@ -134,7 +155,7 @@ describe('legacy drug prices', () => {
     );
 
     test.each(cases)(
-        '$source $grading_group $base_price $price_group',
+        '$source $grading_group $base_price $price_group KTP $ktp',
         (entry) => {
             const difference = differences.get(key(entry));
             const result = ours(entry);
@@ -156,6 +177,16 @@ describe('legacy drug prices', () => {
             ),
         ).toEqual([]);
         expect(differences.size).toBe(golden.expected_differences.length);
+    });
+
+    test('the fixture has cases whose legacy price differs only by KTP, so a rule that ignores KTP fails', () => {
+        const byKey = new Map(cases.map((entry) => [key(entry), entry.legacy]));
+        const differing = cases.filter(
+            (entry) =>
+                !entry.ktp &&
+                byKey.get(key({ ...entry, ktp: true })) !== entry.legacy,
+        );
+        expect(differing.length).toBeGreaterThan(0);
     });
 
     // Harga per satuan dasar dikali isi satuan, cara sistem lama bila ia menjual dalam satuan lain.

@@ -1,9 +1,10 @@
 -- Oracle harga obat sistem lama untuk legacy-drug-prices.json. Dijalankan read-only (hanya SELECT, tanpa menulis apa
 -- pun) pada 13 November 2026 di salinan database Kuta 1, Seroja, dan Penta, memanggil fungsi sistem lama
 -- dbo.GetHargaObatNew_WithStok(tipe, 'xx', 1, barang, 0, '', 0): tipe pasien (kelompok harga), section 'xx', KTP 1,
--- barang, CustomerKerjasamaID 0 (tanpa kontrak penjamin), dan dua parameter lain kosong. Keluarannya, beserta baris
--- SIMmGradingHargaObat untuk KTP 1 dan TipePelayanan STANDARD, adalah isi legacy-drug-prices.json. Hanya nilai master
--- dan harga yang diambil, tanpa data pasien. CI tidak punya SQL Server; test membaca berkas JSON itu saja.
+-- barang, CustomerKerjasamaID 0 (tanpa kontrak penjamin), dan dua parameter lain kosong. Seroja dan Penta dijalankan
+-- sekali lagi dengan KTP 0 (argumen ketiga 0) untuk barang yang sama. Keluarannya, beserta baris SIMmGradingHargaObat
+-- TipePelayanan STANDARD untuk setiap nilai KTP, adalah isi legacy-drug-prices.json. Hanya nilai master dan harga yang
+-- diambil, tanpa data pasien. CI tidak punya SQL Server; test membaca berkas JSON itu saja.
 --
 -- Sampel per database: harga dasar (mBarang.Harga_Jual) terendah, tengah, dan tertinggi per kelompok grading, untuk
 -- setiap tipe pasien yang punya baris grading.

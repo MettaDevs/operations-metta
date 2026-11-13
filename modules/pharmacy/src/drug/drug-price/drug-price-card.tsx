@@ -47,6 +47,7 @@ const formOf = (row: DrugPrice | null) => ({
     // dibuka lewat saklar.
     hasGradingGroup: row ? row.grading_group !== null : true,
     gradingGroup: row?.grading_group ?? null,
+    ktpPatient: row?.ktp_patient ?? true,
     priceFrom: displayNumber(row?.price_from ?? '0'),
     priceTo: displayNumber(row?.price_to ?? '1000000000'),
     markupPercent: row ? displayNumber(row.markup_percent) : '',
@@ -57,9 +58,9 @@ type PriceForm = ReturnType<typeof formOf>;
 
 const typed = (text: string) => parseDisplayNumber(text) ?? text;
 
-// Kartu satu baris grading harga obat (SIMmGradingHargaObat sistem lama): untuk pembeli berkelompok harga ini dan obat
-// berkelompok grading ini (atau semua obat), dengan harga dasar di rentang ini, harga jual naik sekian persen mulai
-// tanggal berlakunya.
+// Kartu satu baris grading harga obat (SIMmGradingHargaObat sistem lama): untuk pembeli berkelompok harga ini dengan
+// Patient KTP ini dan obat berkelompok grading ini (atau semua obat), dengan harga dasar di rentang ini, harga jual naik
+// sekian persen mulai tanggal berlakunya.
 export function DrugPriceCard({
     record,
     canManage,
@@ -79,6 +80,7 @@ export function DrugPriceCard({
     const [creatingGroup, setCreatingGroup] = useState(false);
     const { confirm, confirmation } = useConfirmation();
     const gradingSwitchId = useId();
+    const ktpSwitchId = useId();
     const portalContainer = useRef<HTMLDivElement>(null);
     const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     const { data: metadata } = useQuery(
@@ -130,6 +132,7 @@ export function DrugPriceCard({
             grading_group_id: form.hasGradingGroup
                 ? (form.gradingGroup?.id ?? null)
                 : null,
+            ktp_patient: form.ktpPatient,
             price_from: typed(form.priceFrom),
             price_to: typed(form.priceTo),
             markup_percent: typed(form.markupPercent),
@@ -266,6 +269,9 @@ export function DrugPriceCard({
                                 form.hasGradingGroup
                                     ? form.gradingGroup?.name
                                     : 'Semua barang',
+                                form.ktpPatient
+                                    ? 'Patient KTP'
+                                    : 'Bukan Patient KTP',
                                 `mulai ${displayDate(form.effectiveFrom)}`,
                             ]
                                 .filter(Boolean)
@@ -359,6 +365,27 @@ export function DrugPriceCard({
                                         }
                                     />
                                 )}
+                                <FormControl hint="Nyala untuk pasien yang memegang KTP setempat, mati untuk yang tidak. Grading ini hanya dipakai resep pasien dengan isian Patient KTP yang sama; pasien yang tidak punya grading untuk isiannya memakai grading semua barang untuk isian itu, lalu harga dasar.">
+                                    <Field
+                                        orientation="horizontal"
+                                        className="w-auto"
+                                    >
+                                        <Switch
+                                            id={ktpSwitchId}
+                                            checked={form.ktpPatient}
+                                            disabled={!canManage}
+                                            onCheckedChange={(ktpPatient) =>
+                                                setForm({ ...form, ktpPatient })
+                                            }
+                                        />
+                                        <FieldLabel
+                                            htmlFor={ktpSwitchId}
+                                            className="font-normal"
+                                        >
+                                            Patient KTP
+                                        </FieldLabel>
+                                    </Field>
+                                </FormControl>
                                 <FormControl
                                     error={errors.effective_from?.[0]}
                                     hint="Penyerahan pada tanggal ini atau sesudahnya memakai grading ini, sampai ada grading yang berlaku lebih baru."

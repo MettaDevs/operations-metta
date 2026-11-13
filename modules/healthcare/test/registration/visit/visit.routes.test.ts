@@ -30,6 +30,7 @@ type Visit = {
     patient_type_id: string;
     guarantor_id: string | null;
     card_number: string | null;
+    ktp_patient: boolean;
     height_cm: number | null;
     weight_kg: number | null;
     visit_condition: string;
@@ -561,6 +562,59 @@ describe.skipIf(!process.env.DB_HOST)('visit registration', () => {
             patient_id: patientId,
             section_id: sections.Laboratorium,
         });
+    }, 30_000);
+
+    test('a visit copies Patient KTP from the patient when it is registered, and a later change of the patient leaves that visit', async () => {
+        const patientBody = {
+            name: 'Pasien Tanpa KTP',
+            nationality_country_code: 'AU',
+            passport_number: `PK${Math.floor(Math.random() * 1e8)}`,
+            gender: 'male',
+            birth_date: '1988-01-02',
+            phone: '081200000005',
+            domicile_address: { street: 'Jl. Kunjungan No. 2' },
+            payment_methods: [{ patient_type_id: umum }],
+        };
+        const saved = await created(`${api}/patients`, {
+            ...patientBody,
+            ktp_patient: false,
+        });
+        const stored = async (visitId: string) =>
+            (
+                await pool.unsafe<{ pasien_ktp: boolean }[]>(
+                    'select pasien_ktp from sim_tr_registrasi where id = $1',
+                    [visitId],
+                )
+            )[0]?.pasien_ktp;
+        const visit = await registered({
+            patient_id: saved.id,
+            section_id: sections.Laboratorium,
+        });
+        expect(visit.ktp_patient).toBe(false);
+        expect(await stored(visit.id)).toBe(false);
+
+        await json(
+            await admin.patch(`${api}/patients/${saved.id}`, {
+                ...patientBody,
+                ktp_patient: true,
+                version: saved.version,
+            }),
+            200,
+        );
+        expect(await stored(visit.id)).toBe(false);
+        expect(
+            (
+                await json<{ data: Visit }>(
+                    await admin.get(`${api}/visits/${visit.id}`),
+                    200,
+                )
+            ).data.ktp_patient,
+        ).toBe(false);
+        const next = await registered({
+            patient_id: saved.id,
+            section_id: sections.Laboratorium,
+        });
+        expect(await stored(next.id)).toBe(true);
     }, 30_000);
 
     test('a cancelled visit does not make the next one a returning visit', async () => {

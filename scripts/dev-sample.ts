@@ -164,6 +164,7 @@ const clinicSchema = z.object({
             birth_date: z.string(),
             phone: z.string(),
             patient_type: z.string(),
+            ktp_patient: z.boolean().default(true),
             // Kode kelurahan/desa alamat KTP.
             village: z.string(),
             street: z.string(),
@@ -200,13 +201,15 @@ const pharmacySchema = z.object({
         }),
     ),
     // Kelompok grading dikenali dari namanya. Grading harga menunjuk kode kelompok harga dan nama kelompok grading;
-    // grading_group kosong berarti semua barang. drug_grading_groups memetakan kode obat ke nama kelompok gradingnya.
+    // grading_group kosong berarti semua barang, dan ktp_patient bawaannya untuk pasien ber-KTP. drug_grading_groups
+    // memetakan kode obat ke nama kelompok gradingnya.
     grading_groups: z.array(z.string()).default([]),
     price_gradings: z
         .array(
             z.object({
                 price_group: z.string(),
                 grading_group: z.string().nullable(),
+                ktp_patient: z.boolean().default(true),
                 price_from: z.number(),
                 price_to: z.number(),
                 markup_percent: z.number(),
@@ -1083,6 +1086,7 @@ async function seedClinic(
                 gender: patient.gender,
                 birth_date: patient.birth_date,
                 phone: patient.phone,
+                ktp_patient: patient.ktp_patient,
                 identity_address: {
                     ...(await region(api, patient.village)),
                     street: patient.street,
@@ -1245,8 +1249,9 @@ async function seedPharmacy(
     await seedDrugPrices(api, pharmacy);
 }
 
-// Kelompok grading dikenali dari namanya, baris grading dari kelompok harga, kelompok grading, tanggal berlaku, dan
-// harga dasar dari-nya. Obat hanya diberi kelompok grading bila belum punya, supaya pilihan di layar tidak tertimpa.
+// Kelompok grading dikenali dari namanya, baris grading dari kelompok harga, kelompok grading, Patient KTP, tanggal
+// berlaku, dan harga dasar dari-nya. Obat hanya diberi kelompok grading bila belum punya, supaya pilihan di layar tidak
+// tertimpa.
 async function seedDrugPrices(
     api: SampleApi,
     pharmacy: z.infer<typeof pharmacySchema>,
@@ -1261,6 +1266,7 @@ async function seedDrugPrices(
         );
     const gradingRow = z.object({
         grading_group: z.object({ name: z.string() }).nullable(),
+        ktp_patient: z.boolean(),
         price_from: z.string(),
         effective_from: z.string(),
     });
@@ -1279,6 +1285,7 @@ async function seedDrugPrices(
                 (row) =>
                     (row.grading_group?.name ?? null) ===
                         grading.grading_group &&
+                    row.ktp_patient === grading.ktp_patient &&
                     row.effective_from === grading.effective_from &&
                     row.price_from === String(grading.price_from),
             )
@@ -1294,6 +1301,7 @@ async function seedDrugPrices(
                           grading.grading_group,
                           'Kelompok grading',
                       ),
+            ktp_patient: grading.ktp_patient,
             price_from: grading.price_from,
             price_to: grading.price_to,
             markup_percent: grading.markup_percent,

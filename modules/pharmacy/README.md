@@ -16,21 +16,21 @@ Resep tanpa ketiganya tetap masuk antrean dan tampil sebagai "Belum ada lokasi".
 
 Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILLFarmasi) dan `retur_farmasi` (RETURFARMASI). `bun run check:boundaries` menolak ketiganya di kode Core.
 
-| Tabel                    | Isi                                                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                     |
-| `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode    |
-| `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                       |
-| `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                    |
-| `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, dan rentang harga dasar (SIMmGradingHargaObat)         |
-| `far_m_parameter`        | Setelan farmasi per legal entity: banyak angka di belakang koma harga satuan obat                                |
-| `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                             |
-| `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                          |
-| `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                       |
-| `bill_farmasi`           | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, dan waktu setiap langkah       |
-| `bill_farmasi_detail`    | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan |
-| `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                              |
-| `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                       |
+| Tabel                    | Isi                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                          |
+| `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode         |
+| `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                            |
+| `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                         |
+| `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, Patient KTP, dan rentang harga dasar (SIMmGradingHargaObat) |
+| `far_m_parameter`        | Setelan farmasi per legal entity: banyak angka di belakang koma harga satuan obat                                     |
+| `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                                  |
+| `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                               |
+| `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                            |
+| `bill_farmasi`           | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, dan waktu setiap langkah            |
+| `bill_farmasi_detail`    | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan      |
+| `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                                   |
+| `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                            |
 
 ## Resep masuk lewat event
 
@@ -41,6 +41,7 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 - Isi yang tidak cocok (bentuk salah, teks lebih panjang dari kolom, barang yang bukan milik legal entity itu) dicatat ke log `pharmacy-event-skipped` lalu dilewati, tidak dilempar: lemparan membatalkan resep dokter. Event yang dilewati tidak dicatat sebagai sudah diproses.
 - Baris obat menyimpan satuan yang ditulis dokter dan isinya dalam satuan dasar (`konversi`, dari `quantity_per_unit`). Pesan yang belum membawa `quantity_per_unit` ditulis dalam satuan dasar, jadi isinya 1.
 - Kelompok harga pembeli (`price_group`, kelompok harga tipe pasien kunjungan) disimpan di `far_tr_resep.kelompok_harga_id` untuk harga obat. Pesan tanpa `price_group` disimpan kosong.
+- Patient KTP kunjungan (`patient.ktp`) disimpan di `far_tr_resep.pasien_ktp` untuk harga obat. Pesan tanpa `patient.ktp` disimpan `true`, bawaan sistem lama.
 - Event yang sama diantar dua kali, atau resep yang sama dalam event lain, dicatat sekali (`far_processed_events` dan indeks unik `resep_sumber_id`).
 - Handler hanya berjalan untuk tenant yang memasang module ini.
 
@@ -66,12 +67,12 @@ Makna fungsi sistem lama `GetHargaObatNew_WithStok` (Seroja dan Penta; Kuta 1 me
 
 - **Harga dasar** milik barang Core (`gd_m_barang.harga_dasar`, Harga_Jual `mBarang`), per satuan dasar. Posting penerimaan menaikkannya ke harga beli per satuan dasar sebelum diskon bila lebih tinggi; batal posting tidak menurunkannya, dan pengguna boleh mengubahnya di kartu barang (FastTab Harga).
 - **Kelompok grading** (Setup → Harga obat → Kelompok grading) dipasang di data obat farmasi. Obat tanpa kelompok sama dengan `'ALL'` sistem lama. Kelompok XX sistem lama adalah kelompok biasa.
-- **Grading harga obat** (Setup → Harga obat → Grading harga obat): per kelompok harga (master Core), kelompok grading atau semua barang, rentang harga dasar (kedua batas termasuk), % naik, % diskon, dan tanggal berlaku mulai. Rentang yang bertumpuk dengan baris lain berkunci sama (kelompok harga, kelompok grading, tanggal berlaku) ditolak. Kelompok harga yang dipakai baris grading tidak bisa dihapus di Core.
+- **Grading harga obat** (Setup → Harga obat → Grading harga obat): per kelompok harga (master Core), kelompok grading atau semua barang, Patient KTP (`pasien_ktp`, bawaan nyala), rentang harga dasar (kedua batas termasuk), % naik, % diskon, dan tanggal berlaku mulai. Rentang yang bertumpuk dengan baris lain berkunci sama (kelompok harga, kelompok grading, Patient KTP, tanggal berlaku) ditolak. Kelompok harga yang dipakai baris grading tidak bisa dihapus di Core.
 - **Setelan farmasi** (Setup → Harga obat → Setelan farmasi, `far_m_parameter`, satu baris per legal entity, izin harga obat): **Desimal harga satuan obat**, 0 sampai 4 angka di belakang koma. Ketiga salinan sistem lama berbeda di sini: Kuta 1 dan Penta menyimpan `round(@HargaObat, 0)` (0, rupiah utuh), Seroja menyimpan `@HargaObat` money tanpa round (4). Legal entity tanpa baris memakai 0. Padanannya di BC adalah Unit-Amount Rounding Precision; `currency_precisions.unit_amount_decimals` Core tidak dipakai karena nilai IDR-nya milik penerimaan aset.
-- **Aturan** (`drug-price.calculation.ts`, fungsi murni): baris kelompok grading obat yang cocok dulu, lalu baris semua barang, lalu 0 %; di antara yang cocok, tanggal berlaku terakhir yang sudah lewat pada tanggal penyerahan. Resep tanpa kelompok harga dihargai harga dasar. Harga satuan baris = harga dasar x (1 + % naik / 100) x isi satuan baris, dibulatkan ke desimal harga satuan setelan farmasi, setengah menjauhi nol, sesudah dikali isi satuan (urutan `ConvertAmountByUnitOfMeasure` BC; sistem lama tidak pernah menjual dalam satuan lain). % diskon disimpan terpisah, dan nilai baris = jumlah x harga satuan x (100 - % diskon) / 100, dibulatkan ke sen.
+- **Aturan** (`drug-price.calculation.ts`, fungsi murni): baris kelompok grading obat yang cocok dulu, lalu baris semua barang, lalu 0 %; di antara yang cocok, tanggal berlaku terakhir yang sudah lewat pada tanggal penyerahan. Baris hanya cocok dengan resep yang Patient KTP-nya sama persis (`KTP=@KTP` sistem lama): resep tanpa baris untuk KTP-nya jatuh ke baris semua barang untuk KTP-nya, lalu 0 %, tidak pernah ke baris KTP lain. Resep tanpa kelompok harga dihargai harga dasar. Harga satuan baris = harga dasar x (1 + % naik / 100) x isi satuan baris, dibulatkan ke desimal harga satuan setelan farmasi, setengah menjauhi nol, sesudah dikali isi satuan (urutan `ConvertAmountByUnitOfMeasure` BC; sistem lama tidak pernah menjual dalam satuan lain). % diskon disimpan terpisah, dan nilai baris = jumlah x harga satuan x (100 - % diskon) / 100, dibulatkan ke sen.
 - **Disalin saat Siapkan**: harga dasar, baris grading yang dipakai, % naik, harga satuan (`numeric(18,4)`), dan % diskon. Perubahan grading, harga dasar, atau setelan farmasi sesudahnya tidak mengubah baris itu; Batal siapkan lalu Siapkan lagi menghitung ulang. Kartu penyerahan menampilkan harga satuan, diskon, nilai per baris, dan totalnya.
-- **Golden test** terhadap fungsi SQL sistem lama: `test/drug/drug-price/legacy-drug-prices.test.ts` memakai keluaran oracle `legacy-drug-prices.sql` (dijalankan read-only di Kuta 1, Seroja, dan Penta) yang disimpan di `legacy-drug-prices.json`. Setiap kasus dihitung dengan setelan farmasi sumbernya (`unit_price_decimals`: Kuta 1 dan Penta 0, Seroja 4) dan wajib sama dengan harga sistem lama kecuali yang tercatat di `expected_differences` beserta alasannya: satu barang Seroja berkelas ALKES di kelompok XX, yang salinan Seroja hargai 0 % karena juga mencocokkan kelas barang.
-- **Tidak dibawa sebagai kode**: dimensi KTP (lokal dan asing adalah kelompok harga), TipePelayanan, kontrak penjamin dan HargaObatDigunakan, BPJS + Fornas tanpa kenaikan (cukup baris grading 0 %), dan diskon karyawan; semuanya bergantung pada id yang ditulis mati di sistem lama.
+- **Golden test** terhadap fungsi SQL sistem lama: `test/drug/drug-price/legacy-drug-prices.test.ts` memakai keluaran oracle `legacy-drug-prices.sql` (dijalankan read-only di Kuta 1, Seroja, dan Penta dengan KTP 1, dan di Seroja dan Penta sekali lagi dengan KTP 0) yang disimpan di `legacy-drug-prices.json`. Setiap kasus dihitung dengan KTP-nya dan setelan farmasi sumbernya (`unit_price_decimals`: Kuta 1 dan Penta 0, Seroja 4) dan wajib sama dengan harga sistem lama kecuali yang tercatat di `expected_differences` beserta alasannya: satu barang Seroja berkelas ALKES di kelompok XX, yang salinan Seroja hargai 0 % untuk kedua nilai KTP karena juga mencocokkan kelas barang.
+- **Tidak dibawa sebagai kode**: KTP 1 yang dipaksakan untuk BPJS (JenisKerjasamaID 9; kelompok harga yang tidak membedakan KTP cukup diberi baris untuk kedua nilai), TipePelayanan (mati di setiap salinan sistem lama: lookup-nya dikomentari dan yang hidup memakai `'STANDARD'`), kontrak penjamin dan HargaObatDigunakan, BPJS + Fornas tanpa kenaikan (cukup baris grading 0 %), dan diskon karyawan; semuanya bergantung pada id yang ditulis mati di sistem lama.
 
 ## Obat diserahkan: event ke layanan kesehatan
 

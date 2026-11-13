@@ -1,12 +1,13 @@
 {
     "about": [
-        "Output of the legacy SQL function dbo.GetHargaObatNew_WithStok, run read-only on 13 November 2026 with (price group, 'xx', KTP 1, item, CustomerKerjasamaID 0, '', 0) by legacy-drug-prices.sql. Master values and prices only, no patient data. Gradings are the SIMmGradingHargaObat rows for KTP 1 and TipePelayanan STANDARD; grading_group null would mean the legacy ALL rows (none in these sources).",
-        "Every case is fed to the pure price rule with conversion 1 and the unit_price_decimals of its source, the pharmacy setting desimal_harga_satuan: Kuta 1 and Penta 0 (their copies return round(@HargaObat, 0)), Seroja 4 (its copy returns @HargaObat as money without round, which keeps four decimals). A case must give legacy_price unless it is listed in expected_differences, which states the price our rule gives and why."
+        "Output of the legacy SQL function dbo.GetHargaObatNew_WithStok, run read-only on 13 November 2026 with (price group, 'xx', KTP, item, CustomerKerjasamaID 0, '', 0) by legacy-drug-prices.sql: KTP 1 in Kuta 1, Seroja, and Penta, and KTP 0 in Seroja and Penta for the same items. Master values and prices only, no patient data. Gradings are the SIMmGradingHargaObat rows of TipePelayanan STANDARD for each KTP value (ktp true is KTP 1); grading_group null would mean the legacy ALL rows (none in these sources).",
+        "Every case is fed to the pure price rule with conversion 1, its KTP, and the unit_price_decimals of its source, the pharmacy setting desimal_harga_satuan: Kuta 1 and Penta 0 (their copies return round(@HargaObat, 0)), Seroja 4 (its copy returns @HargaObat as money without round, which keeps four decimals). A case must give legacy_price unless it is listed in expected_differences, which states the price our rule gives and why."
     ],
     "case_columns": [
         "grading_group",
         "base_price",
         "price_group",
+        "ktp",
         "legacy_price",
         "legacy_discount"
     ],
@@ -18,6 +19,7 @@
                 {
                     "price_group": "IKS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "10",
@@ -26,6 +28,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "0",
@@ -33,27 +36,27 @@
                 }
             ],
             "cases": [
-                ["XX", "0.515", "IKS", "1", "0"],
-                ["XX", "0.515", "UMUM", "1", "0"],
-                ["XX", "0.515", "BPJS", "1", "0"],
-                ["XX", "0.545", "IKS", "1", "0"],
-                ["XX", "0.545", "UMUM", "1", "0"],
-                ["XX", "0.545", "BPJS", "1", "0"],
-                ["XX", "1", "IKS", "1", "0"],
-                ["XX", "1", "UMUM", "1", "0"],
-                ["XX", "1", "BPJS", "1", "0"],
-                ["XX", "495", "IKS", "545", "0"],
-                ["XX", "495", "UMUM", "495", "0"],
-                ["XX", "495", "BPJS", "495", "0"],
-                ["XX", "11877", "IKS", "13065", "0"],
-                ["XX", "11877", "UMUM", "11877", "0"],
-                ["XX", "11877", "BPJS", "11877", "0"],
-                ["XX", "5488636", "IKS", "6037500", "0"],
-                ["XX", "5488636", "UMUM", "5488636", "0"],
-                ["XX", "5488636", "BPJS", "5488636", "0"],
-                ["XX", "4437570432", "IKS", "4437570432", "0"],
-                ["XX", "4437570432", "UMUM", "4437570432", "0"],
-                ["XX", "4437570432", "BPJS", "4437570432", "0"]
+                ["XX", "0.515", "IKS", true, "1", "0"],
+                ["XX", "0.515", "UMUM", true, "1", "0"],
+                ["XX", "0.515", "BPJS", true, "1", "0"],
+                ["XX", "0.545", "IKS", true, "1", "0"],
+                ["XX", "0.545", "UMUM", true, "1", "0"],
+                ["XX", "0.545", "BPJS", true, "1", "0"],
+                ["XX", "1", "IKS", true, "1", "0"],
+                ["XX", "1", "UMUM", true, "1", "0"],
+                ["XX", "1", "BPJS", true, "1", "0"],
+                ["XX", "495", "IKS", true, "545", "0"],
+                ["XX", "495", "UMUM", true, "495", "0"],
+                ["XX", "495", "BPJS", true, "495", "0"],
+                ["XX", "11877", "IKS", true, "13065", "0"],
+                ["XX", "11877", "UMUM", true, "11877", "0"],
+                ["XX", "11877", "BPJS", true, "11877", "0"],
+                ["XX", "5488636", "IKS", true, "6037500", "0"],
+                ["XX", "5488636", "UMUM", true, "5488636", "0"],
+                ["XX", "5488636", "BPJS", true, "5488636", "0"],
+                ["XX", "4437570432", "IKS", true, "4437570432", "0"],
+                ["XX", "4437570432", "UMUM", true, "4437570432", "0"],
+                ["XX", "4437570432", "BPJS", true, "4437570432", "0"]
             ]
         },
         "penta": {
@@ -63,6 +66,7 @@
                 {
                     "price_group": "IKS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "10",
@@ -71,6 +75,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "GRADING 10",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "10",
@@ -79,6 +84,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "GRADING 20",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "20",
@@ -87,6 +93,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "0",
@@ -95,6 +102,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -103,6 +111,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -111,6 +120,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "22.1",
@@ -119,6 +129,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -127,6 +138,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -135,6 +147,7 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "0",
@@ -143,6 +156,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -151,6 +165,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -159,6 +174,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "22.1",
@@ -167,6 +183,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -175,6 +192,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -183,6 +201,7 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "24.32",
@@ -191,6 +210,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -199,6 +219,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -207,6 +228,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "22.1",
@@ -215,6 +237,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -223,6 +246,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -231,6 +255,7 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "38.75",
@@ -239,6 +264,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -247,6 +273,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -255,6 +282,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "11",
@@ -263,6 +291,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -271,6 +300,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -279,6 +309,7 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "0",
@@ -287,6 +318,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -295,6 +327,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -303,6 +336,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "22.1",
@@ -311,6 +345,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -319,6 +354,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -327,6 +363,7 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "33.2",
@@ -335,6 +372,7 @@
                 {
                     "price_group": "UMUM",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -343,6 +381,7 @@
                 {
                     "price_group": "WNA",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "233",
@@ -351,6 +390,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "11",
@@ -359,6 +399,7 @@
                 {
                     "price_group": "EKSPATRIAT",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "55.4",
@@ -367,6 +408,7 @@
                 {
                     "price_group": "TOURIST INSURANCE",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "344",
@@ -375,6 +417,331 @@
                 {
                     "price_group": "APOTEK",
                     "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": true,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "24.32",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "24.32",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "38.75",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "11",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "33.2",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "11",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "ktp": false,
                     "price_from": "0",
                     "price_to": "1000000000",
                     "markup_percent": "24.32",
@@ -382,40 +749,78 @@
                 }
             ],
             "cases": [
-                ["PENTA G1 (BPJS 10%)", "56.25", "IKS", "56", "0"],
-                ["PENTA G1 (BPJS 10%)", "56.25", "UMUM", "87", "0"],
-                ["PENTA G1 (BPJS 10%)", "56.25", "WNA", "187", "0"],
-                ["PENTA G1 (BPJS 10%)", "56.25", "BPJS", "69", "0"],
-                ["PENTA G1 (BPJS 10%)", "56.25", "EKSPATRIAT", "87", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "IKS", true, "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "UMUM", true, "87", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "WNA", true, "187", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "BPJS", true, "69", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "EKSPATRIAT", true, "87", "0"],
                 [
                     "PENTA G1 (BPJS 10%)",
                     "56.25",
                     "TOURIST INSURANCE",
+                    true,
                     "250",
                     "0"
                 ],
-                ["PENTA G1 (BPJS 10%)", "56.25", "APOTEK", "56", "0"],
-                ["PENTA G1 (BPJS 10%)", "23330", "IKS", "23330", "0"],
-                ["PENTA G1 (BPJS 10%)", "23330", "UMUM", "36255", "0"],
-                ["PENTA G1 (BPJS 10%)", "23330", "WNA", "77689", "0"],
-                ["PENTA G1 (BPJS 10%)", "23330", "BPJS", "28486", "0"],
-                ["PENTA G1 (BPJS 10%)", "23330", "EKSPATRIAT", "36255", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "APOTEK", true, "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "IKS", true, "23330", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "UMUM", true, "36255", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "WNA", true, "77689", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "BPJS", true, "28486", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "23330",
+                    "EKSPATRIAT",
+                    true,
+                    "36255",
+                    "0"
+                ],
                 [
                     "PENTA G1 (BPJS 10%)",
                     "23330",
                     "TOURIST INSURANCE",
+                    true,
                     "103585",
                     "0"
                 ],
-                ["PENTA G1 (BPJS 10%)", "23330", "APOTEK", "23330", "0"],
-                ["PENTA G1 (BPJS 10%)", "25000000", "IKS", "25000000", "0"],
-                ["PENTA G1 (BPJS 10%)", "25000000", "UMUM", "38850000", "0"],
-                ["PENTA G1 (BPJS 10%)", "25000000", "WNA", "83250000", "0"],
-                ["PENTA G1 (BPJS 10%)", "25000000", "BPJS", "30525000", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "APOTEK", true, "23330", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "IKS",
+                    true,
+                    "25000000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "UMUM",
+                    true,
+                    "38850000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "WNA",
+                    true,
+                    "83250000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "BPJS",
+                    true,
+                    "30525000",
+                    "0"
+                ],
                 [
                     "PENTA G1 (BPJS 10%)",
                     "25000000",
                     "EKSPATRIAT",
+                    true,
                     "38850000",
                     "0"
                 ],
@@ -423,18 +828,55 @@
                     "PENTA G1 (BPJS 10%)",
                     "25000000",
                     "TOURIST INSURANCE",
+                    true,
                     "111000000",
                     "0"
                 ],
-                ["PENTA G1 (BPJS 10%)", "25000000", "APOTEK", "25000000", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "IKS", "107", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "UMUM", "166", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "WNA", "356", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "BPJS", "130", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "APOTEK",
+                    true,
+                    "25000000",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "IKS",
+                    true,
+                    "107",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "UMUM",
+                    true,
+                    "166",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "WNA",
+                    true,
+                    "356",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "BPJS",
+                    true,
+                    "130",
+                    "0"
+                ],
                 [
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "106.82",
                     "EKSPATRIAT",
+                    true,
                     "166",
                     "0"
                 ],
@@ -442,6 +884,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "106.82",
                     "TOURIST INSURANCE",
+                    true,
                     "474",
                     "0"
                 ],
@@ -449,17 +892,47 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "106.82",
                     "APOTEK",
+                    true,
                     "133",
                     "0"
                 ],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "IKS", "14630", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "UMUM", "22735", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "WNA", "48718", "0"],
-                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "BPJS", "17863", "0"],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "IKS",
+                    true,
+                    "14630",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "UMUM",
+                    true,
+                    "22735",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "WNA",
+                    true,
+                    "48718",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "BPJS",
+                    true,
+                    "17863",
+                    "0"
+                ],
                 [
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "14630",
                     "EKSPATRIAT",
+                    true,
                     "22735",
                     "0"
                 ],
@@ -467,6 +940,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "14630",
                     "TOURIST INSURANCE",
+                    true,
                     "64957",
                     "0"
                 ],
@@ -474,6 +948,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "14630",
                     "APOTEK",
+                    true,
                     "18188",
                     "0"
                 ],
@@ -481,6 +956,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "IKS",
+                    true,
                     "405223",
                     "0"
                 ],
@@ -488,6 +964,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "UMUM",
+                    true,
                     "629717",
                     "0"
                 ],
@@ -495,6 +972,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "WNA",
+                    true,
                     "1349393",
                     "0"
                 ],
@@ -502,6 +980,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "BPJS",
+                    true,
                     "494777",
                     "0"
                 ],
@@ -509,6 +988,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "EKSPATRIAT",
+                    true,
                     "629717",
                     "0"
                 ],
@@ -516,6 +996,7 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "TOURIST INSURANCE",
+                    true,
                     "1799190",
                     "0"
                 ],
@@ -523,17 +1004,47 @@
                     "PENTA G2 (BPJS 10%, APT 12%)",
                     "405223",
                     "APOTEK",
+                    true,
                     "503773",
                     "0"
                 ],
-                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "IKS", "45", "0"],
-                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "UMUM", "70", "0"],
-                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "WNA", "149", "0"],
-                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "BPJS", "55", "0"],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "IKS",
+                    true,
+                    "45",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "UMUM",
+                    true,
+                    "70",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "WNA",
+                    true,
+                    "149",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "BPJS",
+                    true,
+                    "55",
+                    "0"
+                ],
                 [
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "44.89",
                     "EKSPATRIAT",
+                    true,
                     "70",
                     "0"
                 ],
@@ -541,14 +1052,23 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "44.89",
                     "TOURIST INSURANCE",
+                    true,
                     "199",
                     "0"
                 ],
-                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "APOTEK", "62", "0"],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "APOTEK",
+                    true,
+                    "62",
+                    "0"
+                ],
                 [
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "IKS",
+                    true,
                     "13963",
                     "0"
                 ],
@@ -556,6 +1076,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "UMUM",
+                    true,
                     "21699",
                     "0"
                 ],
@@ -563,6 +1084,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "WNA",
+                    true,
                     "46497",
                     "0"
                 ],
@@ -570,6 +1092,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "BPJS",
+                    true,
                     "17049",
                     "0"
                 ],
@@ -577,6 +1100,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "EKSPATRIAT",
+                    true,
                     "21699",
                     "0"
                 ],
@@ -584,6 +1108,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "TOURIST INSURANCE",
+                    true,
                     "61996",
                     "0"
                 ],
@@ -591,6 +1116,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "13963.04",
                     "APOTEK",
+                    true,
                     "19374",
                     "0"
                 ],
@@ -598,6 +1124,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "IKS",
+                    true,
                     "1776000",
                     "0"
                 ],
@@ -605,6 +1132,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "UMUM",
+                    true,
                     "2759904",
                     "0"
                 ],
@@ -612,6 +1140,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "WNA",
+                    true,
                     "5914080",
                     "0"
                 ],
@@ -619,6 +1148,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "BPJS",
+                    true,
                     "2168496",
                     "0"
                 ],
@@ -626,6 +1156,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "EKSPATRIAT",
+                    true,
                     "2759904",
                     "0"
                 ],
@@ -633,6 +1164,7 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "TOURIST INSURANCE",
+                    true,
                     "7885440",
                     "0"
                 ],
@@ -640,50 +1172,110 @@
                     "PENTA G3 (BPJS 10%, APT 25%)",
                     "1776000",
                     "APOTEK",
+                    true,
                     "2464200",
                     "0"
                 ],
-                ["PENTA G4 (BPJS 0%)", "125", "IKS", "125", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "UMUM", "194", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "WNA", "416", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "BPJS", "139", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "EKSPATRIAT", "194", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "TOURIST INSURANCE", "555", "0"],
-                ["PENTA G4 (BPJS 0%)", "125", "APOTEK", "125", "0"],
-                ["PENTA G4 (BPJS 0%)", "28482", "IKS", "28482", "0"],
-                ["PENTA G4 (BPJS 0%)", "28482", "UMUM", "44261", "0"],
-                ["PENTA G4 (BPJS 0%)", "28482", "WNA", "94845", "0"],
-                ["PENTA G4 (BPJS 0%)", "28482", "BPJS", "31615", "0"],
-                ["PENTA G4 (BPJS 0%)", "28482", "EKSPATRIAT", "44261", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "IKS", true, "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "UMUM", true, "194", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "WNA", true, "416", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "BPJS", true, "139", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "EKSPATRIAT", true, "194", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "125",
+                    "TOURIST INSURANCE",
+                    true,
+                    "555",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "125", "APOTEK", true, "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "IKS", true, "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "UMUM", true, "44261", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "WNA", true, "94845", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "BPJS", true, "31615", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "28482",
+                    "EKSPATRIAT",
+                    true,
+                    "44261",
+                    "0"
+                ],
                 [
                     "PENTA G4 (BPJS 0%)",
                     "28482",
                     "TOURIST INSURANCE",
+                    true,
                     "126460",
                     "0"
                 ],
-                ["PENTA G4 (BPJS 0%)", "28482", "APOTEK", "28482", "0"],
-                ["PENTA G4 (BPJS 0%)", "5049000", "IKS", "5049000", "0"],
-                ["PENTA G4 (BPJS 0%)", "5049000", "UMUM", "7846146", "0"],
-                ["PENTA G4 (BPJS 0%)", "5049000", "WNA", "16813170", "0"],
-                ["PENTA G4 (BPJS 0%)", "5049000", "BPJS", "5604390", "0"],
-                ["PENTA G4 (BPJS 0%)", "5049000", "EKSPATRIAT", "7846146", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "APOTEK", true, "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "IKS", true, "5049000", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "UMUM", true, "7846146", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "WNA", true, "16813170", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "BPJS", true, "5604390", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "EKSPATRIAT",
+                    true,
+                    "7846146",
+                    "0"
+                ],
                 [
                     "PENTA G4 (BPJS 0%)",
                     "5049000",
                     "TOURIST INSURANCE",
+                    true,
                     "22417560",
                     "0"
                 ],
-                ["PENTA G4 (BPJS 0%)", "5049000", "APOTEK", "5049000", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "IKS", "78", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "UMUM", "121", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "WNA", "259", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "BPJS", "95", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "APOTEK",
+                    true,
+                    "5049000",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "IKS",
+                    true,
+                    "78",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "UMUM",
+                    true,
+                    "121",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "WNA",
+                    true,
+                    "259",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "BPJS",
+                    true,
+                    "95",
+                    "0"
+                ],
                 [
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "77.73",
                     "EKSPATRIAT",
+                    true,
                     "121",
                     "0"
                 ],
@@ -691,18 +1283,55 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "77.73",
                     "TOURIST INSURANCE",
+                    true,
                     "345",
                     "0"
                 ],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "APOTEK", "104", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "IKS", "4750", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "UMUM", "7382", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "WNA", "15818", "0"],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "BPJS", "5800", "0"],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "APOTEK",
+                    true,
+                    "104",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "IKS",
+                    true,
+                    "4750",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "UMUM",
+                    true,
+                    "7382",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "WNA",
+                    true,
+                    "15818",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "BPJS",
+                    true,
+                    "5800",
+                    "0"
+                ],
                 [
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "4750",
                     "EKSPATRIAT",
+                    true,
                     "7382",
                     "0"
                 ],
@@ -710,14 +1339,23 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "4750",
                     "TOURIST INSURANCE",
+                    true,
                     "21090",
                     "0"
                 ],
-                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "APOTEK", "6327", "0"],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "APOTEK",
+                    true,
+                    "6327",
+                    "0"
+                ],
                 [
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "IKS",
+                    true,
                     "276667",
                     "0"
                 ],
@@ -725,6 +1363,7 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "UMUM",
+                    true,
                     "429941",
                     "0"
                 ],
@@ -732,6 +1371,7 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "WNA",
+                    true,
                     "921301",
                     "0"
                 ],
@@ -739,6 +1379,7 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "BPJS",
+                    true,
                     "337810",
                     "0"
                 ],
@@ -746,6 +1387,7 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "EKSPATRIAT",
+                    true,
                     "429941",
                     "0"
                 ],
@@ -753,6 +1395,7 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "TOURIST INSURANCE",
+                    true,
                     "1228401",
                     "0"
                 ],
@@ -760,17 +1403,47 @@
                     "PENTA G5 (BPJS 10%, APT 20%)",
                     "276667",
                     "APOTEK",
+                    true,
                     "368520",
                     "0"
                 ],
-                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "IKS", "20349", "0"],
-                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "UMUM", "31622", "0"],
-                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "WNA", "67762", "0"],
-                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "BPJS", "22587", "0"],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "IKS",
+                    true,
+                    "20349",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "UMUM",
+                    true,
+                    "31622",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "WNA",
+                    true,
+                    "67762",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "BPJS",
+                    true,
+                    "22587",
+                    "0"
+                ],
                 [
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "20349",
                     "EKSPATRIAT",
+                    true,
                     "31622",
                     "0"
                 ],
@@ -778,6 +1451,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "20349",
                     "TOURIST INSURANCE",
+                    true,
                     "90350",
                     "0"
                 ],
@@ -785,6 +1459,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "20349",
                     "APOTEK",
+                    true,
                     "25298",
                     "0"
                 ],
@@ -792,6 +1467,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "IKS",
+                    true,
                     "46836",
                     "0"
                 ],
@@ -799,6 +1475,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "UMUM",
+                    true,
                     "72784",
                     "0"
                 ],
@@ -806,6 +1483,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "WNA",
+                    true,
                     "155965",
                     "0"
                 ],
@@ -813,6 +1491,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "BPJS",
+                    true,
                     "51988",
                     "0"
                 ],
@@ -820,6 +1499,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "EKSPATRIAT",
+                    true,
                     "72784",
                     "0"
                 ],
@@ -827,6 +1507,7 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "TOURIST INSURANCE",
+                    true,
                     "207953",
                     "0"
                 ],
@@ -834,6 +1515,805 @@
                     "PENTA G6 (BPJS 0%, APT 12%)",
                     "46836.28",
                     "APOTEK",
+                    true,
+                    "58227",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "56.25", "IKS", false, "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "UMUM", false, "87", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "WNA", false, "187", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "BPJS", false, "69", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "56.25",
+                    "EKSPATRIAT",
+                    false,
+                    "87",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "56.25",
+                    "TOURIST INSURANCE",
+                    false,
+                    "250",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "56.25", "APOTEK", false, "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "IKS", false, "23330", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "UMUM", false, "36255", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "WNA", false, "77689", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "BPJS", false, "28486", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "23330",
+                    "EKSPATRIAT",
+                    false,
+                    "36255",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "23330",
+                    "TOURIST INSURANCE",
+                    false,
+                    "103585",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "23330", "APOTEK", false, "23330", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "IKS",
+                    false,
+                    "25000000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "UMUM",
+                    false,
+                    "38850000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "WNA",
+                    false,
+                    "83250000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "BPJS",
+                    false,
+                    "30525000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "EKSPATRIAT",
+                    false,
+                    "38850000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "TOURIST INSURANCE",
+                    false,
+                    "111000000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "APOTEK",
+                    false,
+                    "25000000",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "IKS",
+                    false,
+                    "107",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "UMUM",
+                    false,
+                    "166",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "WNA",
+                    false,
+                    "356",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "BPJS",
+                    false,
+                    "130",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "EKSPATRIAT",
+                    false,
+                    "166",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "TOURIST INSURANCE",
+                    false,
+                    "474",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "APOTEK",
+                    false,
+                    "133",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "IKS",
+                    false,
+                    "14630",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "UMUM",
+                    false,
+                    "22735",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "WNA",
+                    false,
+                    "48718",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "BPJS",
+                    false,
+                    "17863",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "EKSPATRIAT",
+                    false,
+                    "22735",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "TOURIST INSURANCE",
+                    false,
+                    "64957",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "APOTEK",
+                    false,
+                    "18188",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "IKS",
+                    false,
+                    "405223",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "UMUM",
+                    false,
+                    "629717",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "WNA",
+                    false,
+                    "1349393",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "BPJS",
+                    false,
+                    "494777",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "EKSPATRIAT",
+                    false,
+                    "629717",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "TOURIST INSURANCE",
+                    false,
+                    "1799190",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "APOTEK",
+                    false,
+                    "503773",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "IKS",
+                    false,
+                    "45",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "UMUM",
+                    false,
+                    "70",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "WNA",
+                    false,
+                    "149",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "BPJS",
+                    false,
+                    "55",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "EKSPATRIAT",
+                    false,
+                    "70",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "TOURIST INSURANCE",
+                    false,
+                    "199",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "APOTEK",
+                    false,
+                    "62",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "IKS",
+                    false,
+                    "13963",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "UMUM",
+                    false,
+                    "21699",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "WNA",
+                    false,
+                    "46497",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "BPJS",
+                    false,
+                    "17049",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "EKSPATRIAT",
+                    false,
+                    "21699",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "TOURIST INSURANCE",
+                    false,
+                    "61996",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "APOTEK",
+                    false,
+                    "19374",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "IKS",
+                    false,
+                    "1776000",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "UMUM",
+                    false,
+                    "2759904",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "WNA",
+                    false,
+                    "5914080",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "BPJS",
+                    false,
+                    "2168496",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "EKSPATRIAT",
+                    false,
+                    "2759904",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "TOURIST INSURANCE",
+                    false,
+                    "7885440",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "APOTEK",
+                    false,
+                    "2464200",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "125", "IKS", false, "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "UMUM", false, "194", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "WNA", false, "416", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "BPJS", false, "139", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "EKSPATRIAT", false, "194", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "125",
+                    "TOURIST INSURANCE",
+                    false,
+                    "555",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "125", "APOTEK", false, "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "IKS", false, "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "UMUM", false, "44261", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "WNA", false, "94845", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "BPJS", false, "31615", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "28482",
+                    "EKSPATRIAT",
+                    false,
+                    "44261",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "28482",
+                    "TOURIST INSURANCE",
+                    false,
+                    "126460",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "28482", "APOTEK", false, "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "IKS", false, "5049000", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "UMUM",
+                    false,
+                    "7846146",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "WNA",
+                    false,
+                    "16813170",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "BPJS",
+                    false,
+                    "5604390",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "EKSPATRIAT",
+                    false,
+                    "7846146",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "TOURIST INSURANCE",
+                    false,
+                    "22417560",
+                    "0"
+                ],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "APOTEK",
+                    false,
+                    "5049000",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "IKS",
+                    false,
+                    "78",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "UMUM",
+                    false,
+                    "121",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "WNA",
+                    false,
+                    "259",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "BPJS",
+                    false,
+                    "95",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "EKSPATRIAT",
+                    false,
+                    "121",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "TOURIST INSURANCE",
+                    false,
+                    "345",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "APOTEK",
+                    false,
+                    "104",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "IKS",
+                    false,
+                    "4750",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "UMUM",
+                    false,
+                    "7382",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "WNA",
+                    false,
+                    "15818",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "BPJS",
+                    false,
+                    "5800",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "EKSPATRIAT",
+                    false,
+                    "7382",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "TOURIST INSURANCE",
+                    false,
+                    "21090",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "APOTEK",
+                    false,
+                    "6327",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "IKS",
+                    false,
+                    "276667",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "UMUM",
+                    false,
+                    "429941",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "WNA",
+                    false,
+                    "921301",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "BPJS",
+                    false,
+                    "337810",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "EKSPATRIAT",
+                    false,
+                    "429941",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "TOURIST INSURANCE",
+                    false,
+                    "1228401",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "APOTEK",
+                    false,
+                    "368520",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "IKS",
+                    false,
+                    "20349",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "UMUM",
+                    false,
+                    "31622",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "WNA",
+                    false,
+                    "67762",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "BPJS",
+                    false,
+                    "22587",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "EKSPATRIAT",
+                    false,
+                    "31622",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "TOURIST INSURANCE",
+                    false,
+                    "90350",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "APOTEK",
+                    false,
+                    "25298",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "IKS",
+                    false,
+                    "46836",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "UMUM",
+                    false,
+                    "72784",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "WNA",
+                    false,
+                    "155965",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "BPJS",
+                    false,
+                    "51988",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "EKSPATRIAT",
+                    false,
+                    "72784",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "TOURIST INSURANCE",
+                    false,
+                    "207953",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "APOTEK",
+                    false,
                     "58227",
                     "0"
                 ]
@@ -846,6 +2326,7 @@
                 {
                     "price_group": "IKS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "45",
@@ -854,6 +2335,7 @@
                 {
                     "price_group": "LOCAL",
                     "grading_group": "INJEKSI",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "10000000",
                     "markup_percent": "50",
@@ -862,6 +2344,7 @@
                 {
                     "price_group": "LOCAL",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "30",
@@ -870,6 +2353,7 @@
                 {
                     "price_group": "BPJS",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000",
                     "markup_percent": "0",
@@ -878,6 +2362,7 @@
                 {
                     "price_group": "DOMESTIC",
                     "grading_group": "INJEKSI",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "1000000000000",
                     "markup_percent": "100",
@@ -886,6 +2371,7 @@
                 {
                     "price_group": "EXPART",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1000",
                     "price_to": "10000000",
                     "markup_percent": "60",
@@ -894,139 +2380,329 @@
                 {
                     "price_group": "FOREIGN",
                     "grading_group": "XX",
+                    "ktp": true,
                     "price_from": "1",
                     "price_to": "100000000",
                     "markup_percent": "80",
                     "discount_percent": "0"
+                },
+                {
+                    "price_group": "LOCAL",
+                    "grading_group": "INJEKSI",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "10000000",
+                    "markup_percent": "50",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "LOCAL",
+                    "grading_group": "NONE",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "10000000",
+                    "markup_percent": "50",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "LOCAL",
+                    "grading_group": "XX",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "30",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "DOMESTIC",
+                    "grading_group": "INJEKSI",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "10000000",
+                    "markup_percent": "100",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EXPART",
+                    "grading_group": "INJEKSI",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "100000000",
+                    "markup_percent": "250",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "FOREIGN",
+                    "grading_group": "INJEKSI",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "100000000",
+                    "markup_percent": "400",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "FOREIGN",
+                    "grading_group": "XX",
+                    "ktp": false,
+                    "price_from": "1",
+                    "price_to": "100000000",
+                    "markup_percent": "60",
+                    "discount_percent": "0"
                 }
             ],
             "cases": [
-                ["ANTIBIOTIK ORAL", "899.1", "IKS", "899.1", "0"],
-                ["ANTIBIOTIK ORAL", "899.1", "LOCAL", "899.1", "0"],
-                ["ANTIBIOTIK ORAL", "899.1", "BPJS", "899.1", "0"],
-                ["ANTIBIOTIK ORAL", "899.1", "DOMESTIC", "899.1", "0"],
-                ["ANTIBIOTIK ORAL", "899.1", "EXPART", "899.1", "0"],
-                ["ANTIBIOTIK ORAL", "899.1", "FOREIGN", "899.1", "0"],
-                ["BHP", "50000", "IKS", "50000", "0"],
-                ["BHP", "50000", "LOCAL", "50000", "0"],
-                ["BHP", "50000", "BPJS", "50000", "0"],
-                ["BHP", "50000", "DOMESTIC", "50000", "0"],
-                ["BHP", "50000", "EXPART", "50000", "0"],
-                ["BHP", "50000", "FOREIGN", "50000", "0"],
-                ["BHP", "128847", "IKS", "128847", "0"],
-                ["BHP", "128847", "LOCAL", "128847", "0"],
-                ["BHP", "128847", "BPJS", "128847", "0"],
-                ["BHP", "128847", "DOMESTIC", "128847", "0"],
-                ["BHP", "128847", "EXPART", "128847", "0"],
-                ["BHP", "128847", "FOREIGN", "128847", "0"],
-                ["BHP", "149850", "IKS", "149850", "0"],
-                ["BHP", "149850", "LOCAL", "149850", "0"],
-                ["BHP", "149850", "BPJS", "149850", "0"],
-                ["BHP", "149850", "DOMESTIC", "149850", "0"],
-                ["BHP", "149850", "EXPART", "149850", "0"],
-                ["BHP", "149850", "FOREIGN", "149850", "0"],
-                ["INJEKSI", "2220", "IKS", "2220", "0"],
-                ["INJEKSI", "2220", "LOCAL", "3330", "0"],
-                ["INJEKSI", "2220", "BPJS", "2220", "0"],
-                ["INJEKSI", "2220", "DOMESTIC", "4440", "0"],
-                ["INJEKSI", "2220", "EXPART", "2220", "0"],
-                ["INJEKSI", "2220", "FOREIGN", "2220", "0"],
-                ["INJEKSI", "11475", "IKS", "11475", "0"],
-                ["INJEKSI", "11475", "LOCAL", "17212.5", "0"],
-                ["INJEKSI", "11475", "BPJS", "11475", "0"],
-                ["INJEKSI", "11475", "DOMESTIC", "22950", "0"],
-                ["INJEKSI", "11475", "EXPART", "11475", "0"],
-                ["INJEKSI", "11475", "FOREIGN", "11475", "0"],
-                ["INJEKSI", "532800", "IKS", "532800", "0"],
-                ["INJEKSI", "532800", "LOCAL", "799200", "0"],
-                ["INJEKSI", "532800", "BPJS", "532800", "0"],
-                ["INJEKSI", "532800", "DOMESTIC", "1065600", "0"],
-                ["INJEKSI", "532800", "EXPART", "532800", "0"],
-                ["INJEKSI", "532800", "FOREIGN", "532800", "0"],
-                ["OBAT ORAL", "87.52", "IKS", "87.52", "0"],
-                ["OBAT ORAL", "87.52", "LOCAL", "87.52", "0"],
-                ["OBAT ORAL", "87.52", "BPJS", "87.52", "0"],
-                ["OBAT ORAL", "87.52", "DOMESTIC", "87.52", "0"],
-                ["OBAT ORAL", "87.52", "EXPART", "87.52", "0"],
-                ["OBAT ORAL", "87.52", "FOREIGN", "87.52", "0"],
-                ["OBAT ORAL", "783.82", "IKS", "783.82", "0"],
-                ["OBAT ORAL", "783.82", "LOCAL", "783.82", "0"],
-                ["OBAT ORAL", "783.82", "BPJS", "783.82", "0"],
-                ["OBAT ORAL", "783.82", "DOMESTIC", "783.82", "0"],
-                ["OBAT ORAL", "783.82", "EXPART", "783.82", "0"],
-                ["OBAT ORAL", "783.82", "FOREIGN", "783.82", "0"],
-                ["OBAT ORAL", "109840.05", "IKS", "109840.05", "0"],
-                ["OBAT ORAL", "109840.05", "LOCAL", "109840.05", "0"],
-                ["OBAT ORAL", "109840.05", "BPJS", "109840.05", "0"],
-                ["OBAT ORAL", "109840.05", "DOMESTIC", "109840.05", "0"],
-                ["OBAT ORAL", "109840.05", "EXPART", "109840.05", "0"],
-                ["OBAT ORAL", "109840.05", "FOREIGN", "109840.05", "0"],
-                ["TOPIKAL", "500", "IKS", "500", "0"],
-                ["TOPIKAL", "500", "LOCAL", "500", "0"],
-                ["TOPIKAL", "500", "BPJS", "500", "0"],
-                ["TOPIKAL", "500", "DOMESTIC", "500", "0"],
-                ["TOPIKAL", "500", "EXPART", "500", "0"],
-                ["TOPIKAL", "500", "FOREIGN", "500", "0"],
-                ["TOPIKAL", "21367.5", "IKS", "21367.5", "0"],
-                ["TOPIKAL", "21367.5", "LOCAL", "21367.5", "0"],
-                ["TOPIKAL", "21367.5", "BPJS", "21367.5", "0"],
-                ["TOPIKAL", "21367.5", "DOMESTIC", "21367.5", "0"],
-                ["TOPIKAL", "21367.5", "EXPART", "21367.5", "0"],
-                ["TOPIKAL", "21367.5", "FOREIGN", "21367.5", "0"],
-                ["TOPIKAL", "33300", "IKS", "33300", "0"],
-                ["TOPIKAL", "33300", "LOCAL", "33300", "0"],
-                ["TOPIKAL", "33300", "BPJS", "33300", "0"],
-                ["TOPIKAL", "33300", "DOMESTIC", "33300", "0"],
-                ["TOPIKAL", "33300", "EXPART", "33300", "0"],
-                ["TOPIKAL", "33300", "FOREIGN", "33300", "0"],
-                ["XX", "84.38", "IKS", "122.351", "0"],
-                ["XX", "84.38", "LOCAL", "109.694", "0"],
-                ["XX", "84.38", "BPJS", "84.38", "0"],
-                ["XX", "84.38", "DOMESTIC", "84.38", "0"],
-                ["XX", "84.38", "EXPART", "84.38", "0"],
-                ["XX", "84.38", "FOREIGN", "151.884", "0"],
-                ["XX", "97.77", "IKS", "141.7665", "0"],
-                ["XX", "97.77", "LOCAL", "127.101", "0"],
-                ["XX", "97.77", "BPJS", "97.77", "0"],
-                ["XX", "97.77", "DOMESTIC", "97.77", "0"],
-                ["XX", "97.77", "EXPART", "97.77", "0"],
-                ["XX", "97.77", "FOREIGN", "175.986", "0"],
-                ["XX", "300", "IKS", "435", "0"],
-                ["XX", "300", "LOCAL", "390", "0"],
-                ["XX", "300", "BPJS", "300", "0"],
-                ["XX", "300", "DOMESTIC", "300", "0"],
-                ["XX", "300", "EXPART", "300", "0"],
-                ["XX", "300", "FOREIGN", "540", "0"],
-                ["XX", "3663", "IKS", "5311.35", "0"],
-                ["XX", "3663", "LOCAL", "4761.9", "0"],
-                ["XX", "3663", "BPJS", "3663", "0"],
-                ["XX", "3663", "DOMESTIC", "3663", "0"],
-                ["XX", "3663", "EXPART", "5860.8", "0"],
-                ["XX", "3663", "FOREIGN", "6593.4", "0"],
-                ["XX", "13500", "IKS", "19575", "0"],
-                ["XX", "13500", "LOCAL", "17550", "0"],
-                ["XX", "13500", "BPJS", "13500", "0"],
-                ["XX", "13500", "DOMESTIC", "13500", "0"],
-                ["XX", "13500", "EXPART", "21600", "0"],
-                ["XX", "13500", "FOREIGN", "24300", "0"],
-                ["XX", "38250", "IKS", "55462.5", "0"],
-                ["XX", "38250", "LOCAL", "49725", "0"],
-                ["XX", "38250", "BPJS", "38250", "0"],
-                ["XX", "38250", "DOMESTIC", "38250", "0"],
-                ["XX", "38250", "EXPART", "61200", "0"],
-                ["XX", "38250", "FOREIGN", "68850", "0"],
-                ["XX", "15066000", "IKS", "21845700", "0"],
-                ["XX", "15066000", "LOCAL", "19585800", "0"],
-                ["XX", "15066000", "BPJS", "15066000", "0"],
-                ["XX", "15066000", "DOMESTIC", "15066000", "0"],
-                ["XX", "15066000", "EXPART", "15066000", "0"],
-                ["XX", "15066000", "FOREIGN", "27118800", "0"],
-                ["XX", "11100", "IKS", "11100", "0"],
-                ["XX", "11100", "LOCAL", "11100", "0"],
-                ["XX", "11100", "BPJS", "11100", "0"],
-                ["XX", "11100", "DOMESTIC", "11100", "0"],
-                ["XX", "11100", "EXPART", "11100", "0"],
-                ["XX", "11100", "FOREIGN", "11100", "0"]
+                ["ANTIBIOTIK ORAL", "899.1", "IKS", true, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "LOCAL", true, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "BPJS", true, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "DOMESTIC", true, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "EXPART", true, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "FOREIGN", true, "899.1", "0"],
+                ["BHP", "50000", "IKS", true, "50000", "0"],
+                ["BHP", "50000", "LOCAL", true, "50000", "0"],
+                ["BHP", "50000", "BPJS", true, "50000", "0"],
+                ["BHP", "50000", "DOMESTIC", true, "50000", "0"],
+                ["BHP", "50000", "EXPART", true, "50000", "0"],
+                ["BHP", "50000", "FOREIGN", true, "50000", "0"],
+                ["BHP", "128847", "IKS", true, "128847", "0"],
+                ["BHP", "128847", "LOCAL", true, "128847", "0"],
+                ["BHP", "128847", "BPJS", true, "128847", "0"],
+                ["BHP", "128847", "DOMESTIC", true, "128847", "0"],
+                ["BHP", "128847", "EXPART", true, "128847", "0"],
+                ["BHP", "128847", "FOREIGN", true, "128847", "0"],
+                ["BHP", "149850", "IKS", true, "149850", "0"],
+                ["BHP", "149850", "LOCAL", true, "149850", "0"],
+                ["BHP", "149850", "BPJS", true, "149850", "0"],
+                ["BHP", "149850", "DOMESTIC", true, "149850", "0"],
+                ["BHP", "149850", "EXPART", true, "149850", "0"],
+                ["BHP", "149850", "FOREIGN", true, "149850", "0"],
+                ["INJEKSI", "2220", "IKS", true, "2220", "0"],
+                ["INJEKSI", "2220", "LOCAL", true, "3330", "0"],
+                ["INJEKSI", "2220", "BPJS", true, "2220", "0"],
+                ["INJEKSI", "2220", "DOMESTIC", true, "4440", "0"],
+                ["INJEKSI", "2220", "EXPART", true, "2220", "0"],
+                ["INJEKSI", "2220", "FOREIGN", true, "2220", "0"],
+                ["INJEKSI", "11475", "IKS", true, "11475", "0"],
+                ["INJEKSI", "11475", "LOCAL", true, "17212.5", "0"],
+                ["INJEKSI", "11475", "BPJS", true, "11475", "0"],
+                ["INJEKSI", "11475", "DOMESTIC", true, "22950", "0"],
+                ["INJEKSI", "11475", "EXPART", true, "11475", "0"],
+                ["INJEKSI", "11475", "FOREIGN", true, "11475", "0"],
+                ["INJEKSI", "532800", "IKS", true, "532800", "0"],
+                ["INJEKSI", "532800", "LOCAL", true, "799200", "0"],
+                ["INJEKSI", "532800", "BPJS", true, "532800", "0"],
+                ["INJEKSI", "532800", "DOMESTIC", true, "1065600", "0"],
+                ["INJEKSI", "532800", "EXPART", true, "532800", "0"],
+                ["INJEKSI", "532800", "FOREIGN", true, "532800", "0"],
+                ["OBAT ORAL", "87.52", "IKS", true, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "LOCAL", true, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "BPJS", true, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "DOMESTIC", true, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "EXPART", true, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "FOREIGN", true, "87.52", "0"],
+                ["OBAT ORAL", "783.82", "IKS", true, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "LOCAL", true, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "BPJS", true, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "DOMESTIC", true, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "EXPART", true, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "FOREIGN", true, "783.82", "0"],
+                ["OBAT ORAL", "109840.05", "IKS", true, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "LOCAL", true, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "BPJS", true, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "DOMESTIC", true, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "EXPART", true, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "FOREIGN", true, "109840.05", "0"],
+                ["TOPIKAL", "500", "IKS", true, "500", "0"],
+                ["TOPIKAL", "500", "LOCAL", true, "500", "0"],
+                ["TOPIKAL", "500", "BPJS", true, "500", "0"],
+                ["TOPIKAL", "500", "DOMESTIC", true, "500", "0"],
+                ["TOPIKAL", "500", "EXPART", true, "500", "0"],
+                ["TOPIKAL", "500", "FOREIGN", true, "500", "0"],
+                ["TOPIKAL", "21367.5", "IKS", true, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "LOCAL", true, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "BPJS", true, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "DOMESTIC", true, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "EXPART", true, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "FOREIGN", true, "21367.5", "0"],
+                ["TOPIKAL", "33300", "IKS", true, "33300", "0"],
+                ["TOPIKAL", "33300", "LOCAL", true, "33300", "0"],
+                ["TOPIKAL", "33300", "BPJS", true, "33300", "0"],
+                ["TOPIKAL", "33300", "DOMESTIC", true, "33300", "0"],
+                ["TOPIKAL", "33300", "EXPART", true, "33300", "0"],
+                ["TOPIKAL", "33300", "FOREIGN", true, "33300", "0"],
+                ["XX", "84.38", "IKS", true, "122.351", "0"],
+                ["XX", "84.38", "LOCAL", true, "109.694", "0"],
+                ["XX", "84.38", "BPJS", true, "84.38", "0"],
+                ["XX", "84.38", "DOMESTIC", true, "84.38", "0"],
+                ["XX", "84.38", "EXPART", true, "84.38", "0"],
+                ["XX", "84.38", "FOREIGN", true, "151.884", "0"],
+                ["XX", "97.77", "IKS", true, "141.7665", "0"],
+                ["XX", "97.77", "LOCAL", true, "127.101", "0"],
+                ["XX", "97.77", "BPJS", true, "97.77", "0"],
+                ["XX", "97.77", "DOMESTIC", true, "97.77", "0"],
+                ["XX", "97.77", "EXPART", true, "97.77", "0"],
+                ["XX", "97.77", "FOREIGN", true, "175.986", "0"],
+                ["XX", "300", "IKS", true, "435", "0"],
+                ["XX", "300", "LOCAL", true, "390", "0"],
+                ["XX", "300", "BPJS", true, "300", "0"],
+                ["XX", "300", "DOMESTIC", true, "300", "0"],
+                ["XX", "300", "EXPART", true, "300", "0"],
+                ["XX", "300", "FOREIGN", true, "540", "0"],
+                ["XX", "3663", "IKS", true, "5311.35", "0"],
+                ["XX", "3663", "LOCAL", true, "4761.9", "0"],
+                ["XX", "3663", "BPJS", true, "3663", "0"],
+                ["XX", "3663", "DOMESTIC", true, "3663", "0"],
+                ["XX", "3663", "EXPART", true, "5860.8", "0"],
+                ["XX", "3663", "FOREIGN", true, "6593.4", "0"],
+                ["XX", "13500", "IKS", true, "19575", "0"],
+                ["XX", "13500", "LOCAL", true, "17550", "0"],
+                ["XX", "13500", "BPJS", true, "13500", "0"],
+                ["XX", "13500", "DOMESTIC", true, "13500", "0"],
+                ["XX", "13500", "EXPART", true, "21600", "0"],
+                ["XX", "13500", "FOREIGN", true, "24300", "0"],
+                ["XX", "38250", "IKS", true, "55462.5", "0"],
+                ["XX", "38250", "LOCAL", true, "49725", "0"],
+                ["XX", "38250", "BPJS", true, "38250", "0"],
+                ["XX", "38250", "DOMESTIC", true, "38250", "0"],
+                ["XX", "38250", "EXPART", true, "61200", "0"],
+                ["XX", "38250", "FOREIGN", true, "68850", "0"],
+                ["XX", "15066000", "IKS", true, "21845700", "0"],
+                ["XX", "15066000", "LOCAL", true, "19585800", "0"],
+                ["XX", "15066000", "BPJS", true, "15066000", "0"],
+                ["XX", "15066000", "DOMESTIC", true, "15066000", "0"],
+                ["XX", "15066000", "EXPART", true, "15066000", "0"],
+                ["XX", "15066000", "FOREIGN", true, "27118800", "0"],
+                ["XX", "11100", "IKS", true, "11100", "0"],
+                ["XX", "11100", "LOCAL", true, "11100", "0"],
+                ["XX", "11100", "BPJS", true, "11100", "0"],
+                ["XX", "11100", "DOMESTIC", true, "11100", "0"],
+                ["XX", "11100", "EXPART", true, "11100", "0"],
+                ["XX", "11100", "FOREIGN", true, "11100", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "IKS", false, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "LOCAL", false, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "BPJS", false, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "DOMESTIC", false, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "EXPART", false, "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "FOREIGN", false, "899.1", "0"],
+                ["BHP", "50000", "IKS", false, "50000", "0"],
+                ["BHP", "50000", "LOCAL", false, "50000", "0"],
+                ["BHP", "50000", "BPJS", false, "50000", "0"],
+                ["BHP", "50000", "DOMESTIC", false, "50000", "0"],
+                ["BHP", "50000", "EXPART", false, "50000", "0"],
+                ["BHP", "50000", "FOREIGN", false, "50000", "0"],
+                ["BHP", "128847", "IKS", false, "128847", "0"],
+                ["BHP", "128847", "LOCAL", false, "128847", "0"],
+                ["BHP", "128847", "BPJS", false, "128847", "0"],
+                ["BHP", "128847", "DOMESTIC", false, "128847", "0"],
+                ["BHP", "128847", "EXPART", false, "128847", "0"],
+                ["BHP", "128847", "FOREIGN", false, "128847", "0"],
+                ["BHP", "149850", "IKS", false, "149850", "0"],
+                ["BHP", "149850", "LOCAL", false, "149850", "0"],
+                ["BHP", "149850", "BPJS", false, "149850", "0"],
+                ["BHP", "149850", "DOMESTIC", false, "149850", "0"],
+                ["BHP", "149850", "EXPART", false, "149850", "0"],
+                ["BHP", "149850", "FOREIGN", false, "149850", "0"],
+                ["INJEKSI", "2220", "IKS", false, "2220", "0"],
+                ["INJEKSI", "2220", "LOCAL", false, "3330", "0"],
+                ["INJEKSI", "2220", "BPJS", false, "2220", "0"],
+                ["INJEKSI", "2220", "DOMESTIC", false, "4440", "0"],
+                ["INJEKSI", "2220", "EXPART", false, "7770", "0"],
+                ["INJEKSI", "2220", "FOREIGN", false, "11100", "0"],
+                ["INJEKSI", "11475", "IKS", false, "11475", "0"],
+                ["INJEKSI", "11475", "LOCAL", false, "17212.5", "0"],
+                ["INJEKSI", "11475", "BPJS", false, "11475", "0"],
+                ["INJEKSI", "11475", "DOMESTIC", false, "22950", "0"],
+                ["INJEKSI", "11475", "EXPART", false, "40162.5", "0"],
+                ["INJEKSI", "11475", "FOREIGN", false, "57375", "0"],
+                ["INJEKSI", "532800", "IKS", false, "532800", "0"],
+                ["INJEKSI", "532800", "LOCAL", false, "799200", "0"],
+                ["INJEKSI", "532800", "BPJS", false, "532800", "0"],
+                ["INJEKSI", "532800", "DOMESTIC", false, "1065600", "0"],
+                ["INJEKSI", "532800", "EXPART", false, "1864800", "0"],
+                ["INJEKSI", "532800", "FOREIGN", false, "2664000", "0"],
+                ["OBAT ORAL", "87.52", "IKS", false, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "LOCAL", false, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "BPJS", false, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "DOMESTIC", false, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "EXPART", false, "87.52", "0"],
+                ["OBAT ORAL", "87.52", "FOREIGN", false, "87.52", "0"],
+                ["OBAT ORAL", "783.82", "IKS", false, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "LOCAL", false, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "BPJS", false, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "DOMESTIC", false, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "EXPART", false, "783.82", "0"],
+                ["OBAT ORAL", "783.82", "FOREIGN", false, "783.82", "0"],
+                ["OBAT ORAL", "109840.05", "IKS", false, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "LOCAL", false, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "BPJS", false, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "DOMESTIC", false, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "EXPART", false, "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "FOREIGN", false, "109840.05", "0"],
+                ["TOPIKAL", "500", "IKS", false, "500", "0"],
+                ["TOPIKAL", "500", "LOCAL", false, "500", "0"],
+                ["TOPIKAL", "500", "BPJS", false, "500", "0"],
+                ["TOPIKAL", "500", "DOMESTIC", false, "500", "0"],
+                ["TOPIKAL", "500", "EXPART", false, "500", "0"],
+                ["TOPIKAL", "500", "FOREIGN", false, "500", "0"],
+                ["TOPIKAL", "21367.5", "IKS", false, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "LOCAL", false, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "BPJS", false, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "DOMESTIC", false, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "EXPART", false, "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "FOREIGN", false, "21367.5", "0"],
+                ["TOPIKAL", "33300", "IKS", false, "33300", "0"],
+                ["TOPIKAL", "33300", "LOCAL", false, "33300", "0"],
+                ["TOPIKAL", "33300", "BPJS", false, "33300", "0"],
+                ["TOPIKAL", "33300", "DOMESTIC", false, "33300", "0"],
+                ["TOPIKAL", "33300", "EXPART", false, "33300", "0"],
+                ["TOPIKAL", "33300", "FOREIGN", false, "33300", "0"],
+                ["XX", "84.38", "IKS", false, "84.38", "0"],
+                ["XX", "84.38", "LOCAL", false, "109.694", "0"],
+                ["XX", "84.38", "BPJS", false, "84.38", "0"],
+                ["XX", "84.38", "DOMESTIC", false, "84.38", "0"],
+                ["XX", "84.38", "EXPART", false, "84.38", "0"],
+                ["XX", "84.38", "FOREIGN", false, "135.008", "0"],
+                ["XX", "97.77", "IKS", false, "97.77", "0"],
+                ["XX", "97.77", "LOCAL", false, "127.101", "0"],
+                ["XX", "97.77", "BPJS", false, "97.77", "0"],
+                ["XX", "97.77", "DOMESTIC", false, "97.77", "0"],
+                ["XX", "97.77", "EXPART", false, "97.77", "0"],
+                ["XX", "97.77", "FOREIGN", false, "156.432", "0"],
+                ["XX", "300", "IKS", false, "300", "0"],
+                ["XX", "300", "LOCAL", false, "390", "0"],
+                ["XX", "300", "BPJS", false, "300", "0"],
+                ["XX", "300", "DOMESTIC", false, "300", "0"],
+                ["XX", "300", "EXPART", false, "300", "0"],
+                ["XX", "300", "FOREIGN", false, "480", "0"],
+                ["XX", "3663", "IKS", false, "3663", "0"],
+                ["XX", "3663", "LOCAL", false, "4761.9", "0"],
+                ["XX", "3663", "BPJS", false, "3663", "0"],
+                ["XX", "3663", "DOMESTIC", false, "3663", "0"],
+                ["XX", "3663", "EXPART", false, "3663", "0"],
+                ["XX", "3663", "FOREIGN", false, "5860.8", "0"],
+                ["XX", "13500", "IKS", false, "13500", "0"],
+                ["XX", "13500", "LOCAL", false, "17550", "0"],
+                ["XX", "13500", "BPJS", false, "13500", "0"],
+                ["XX", "13500", "DOMESTIC", false, "13500", "0"],
+                ["XX", "13500", "EXPART", false, "13500", "0"],
+                ["XX", "13500", "FOREIGN", false, "21600", "0"],
+                ["XX", "38250", "IKS", false, "38250", "0"],
+                ["XX", "38250", "LOCAL", false, "49725", "0"],
+                ["XX", "38250", "BPJS", false, "38250", "0"],
+                ["XX", "38250", "DOMESTIC", false, "38250", "0"],
+                ["XX", "38250", "EXPART", false, "38250", "0"],
+                ["XX", "38250", "FOREIGN", false, "61200", "0"],
+                ["XX", "15066000", "IKS", false, "15066000", "0"],
+                ["XX", "15066000", "LOCAL", false, "19585800", "0"],
+                ["XX", "15066000", "BPJS", false, "15066000", "0"],
+                ["XX", "15066000", "DOMESTIC", false, "15066000", "0"],
+                ["XX", "15066000", "EXPART", false, "15066000", "0"],
+                ["XX", "15066000", "FOREIGN", false, "24105600", "0"],
+                ["XX", "11100", "IKS", false, "11100", "0"],
+                ["XX", "11100", "LOCAL", false, "11100", "0"],
+                ["XX", "11100", "BPJS", false, "11100", "0"],
+                ["XX", "11100", "DOMESTIC", false, "11100", "0"],
+                ["XX", "11100", "EXPART", false, "11100", "0"],
+                ["XX", "11100", "FOREIGN", false, "11100", "0"]
             ]
         }
     },
@@ -1039,6 +2715,7 @@
             "grading_group": "XX",
             "base_price": "11100",
             "price_group": "IKS",
+            "ktp": true,
             "item_class": 7,
             "legacy_price": "11100",
             "our_price": "16095",
@@ -1049,6 +2726,7 @@
             "grading_group": "XX",
             "base_price": "11100",
             "price_group": "LOCAL",
+            "ktp": true,
             "item_class": 7,
             "legacy_price": "11100",
             "our_price": "14430",
@@ -1059,6 +2737,7 @@
             "grading_group": "XX",
             "base_price": "11100",
             "price_group": "EXPART",
+            "ktp": true,
             "item_class": 7,
             "legacy_price": "11100",
             "our_price": "17760",
@@ -1069,16 +2748,39 @@
             "grading_group": "XX",
             "base_price": "11100",
             "price_group": "FOREIGN",
+            "ktp": true,
             "item_class": 7,
             "legacy_price": "11100",
             "our_price": "19980",
+            "reason": "seroja-item-class"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "LOCAL",
+            "ktp": false,
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "14430",
+            "reason": "seroja-item-class"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "FOREIGN",
+            "ktp": false,
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "17760",
             "reason": "seroja-item-class"
         }
     ],
     "not_carried": [
         {
             "rule": "TipePelayanan other than STANDARD",
-            "reason": "Decision 6: no service-type dimension now. No case exercises it."
+            "reason": "Decision 6: no service-type dimension. It is inert in every legacy copy: every lookup by TipePelayanan=@JenisLayanan that sets the markup or discount is commented out, and the live lookups use the literal 'STANDARD'. No case exercises it."
         },
         {
             "rule": "Guarantor contracts: CustomerKerjasamaID, ObatUp, guarantor category CC108 \"MA\", HargaObatDigunakan",
@@ -1093,8 +2795,8 @@
             "reason": "Depends on a hard-coded class; not carried. No case exercises it."
         },
         {
-            "rule": "KTP (local or foreign identity card)",
-            "reason": "Decision 5: local and foreign are price groups. The oracle used KTP 1 and the gradings are the KTP 1 rows."
+            "rule": "BPJS forces KTP 1 (JenisKerjasamaID 9 sets @KTP = 1)",
+            "reason": "It depends on a hard-coded id. A price group that should ignore KTP gets grading rows for both values, as data. In Seroja, BPJS with KTP 0 gives the base price either way: our rule finds no BPJS KTP 0 row (0 %), and legacy uses the BPJS KTP 1 row of 0 %."
         }
     ],
     "unit_conversion": {
@@ -1103,6 +2805,7 @@
         "grading_group": "XX",
         "base_price": "495",
         "price_group": "IKS",
+        "ktp": true,
         "quantity_per_unit": "10",
         "our_price": "5445",
         "legacy_style_price": "5450"
@@ -1113,6 +2816,7 @@
         "grading_group": "XX",
         "base_price": "84.38",
         "price_group": "LOCAL",
+        "ktp": true,
         "quantity_per_unit": "10",
         "our_price": "1096.94",
         "legacy_style_price": "1096.94"

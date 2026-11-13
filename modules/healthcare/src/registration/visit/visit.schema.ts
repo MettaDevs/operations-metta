@@ -76,6 +76,8 @@ export const visitSchema = z.object({
     guarantor_id: z.string().nullable(),
     guarantor_name: z.string().nullable(),
     card_number: z.string().nullable(),
+    // Patient KTP pasien saat kunjungan didaftarkan; harga kunjungan membaca nilai ini, bukan nilai pasien sekarang.
+    ktp_patient: z.boolean(),
     height_cm: z.coerce.number().nullable(),
     weight_kg: z.coerce.number().nullable(),
     visit_condition: z.string(),

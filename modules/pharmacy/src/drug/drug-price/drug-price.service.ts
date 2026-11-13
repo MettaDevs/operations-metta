@@ -39,6 +39,7 @@ const rowSql = `select * from (
                     select h.id, json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) as price_group,
                            case when k.id is null then null
                                 else json_build_object('id', k.id, 'name', k.nama) end as grading_group,
+                           h.pasien_ktp as ktp_patient,
                            trim_scale(h.harga_dari)::text as price_from, trim_scale(h.harga_sampai)::text as price_to,
                            trim_scale(h.persen_naik)::text as markup_percent,
                            trim_scale(h.persen_diskon)::text as discount_percent,
@@ -56,6 +57,7 @@ const gradingSchema = z.object({
     id: z.string(),
     price_group_id: z.string(),
     grading_group_id: z.string().nullable(),
+    ktp_patient: z.boolean(),
     price_from: z.string(),
     price_to: z.string(),
     markup_percent: z.string(),
@@ -66,6 +68,7 @@ const gradingSchema = z.object({
 const messages = {
     price_group_id: 'Pilih kelompok harga dari daftar.',
     grading_group_id: 'Pilih kelompok grading dari daftar.',
+    ktp_patient: 'Pilih apakah grading ini untuk pasien ber-KTP atau tidak.',
     price_from: 'Isi harga dasar dari, 0 atau lebih.',
     price_to: 'Isi harga dasar sampai, 0 atau lebih.',
     markup_percent: 'Isi % naik, 0 atau lebih.',
@@ -74,15 +77,15 @@ const messages = {
 };
 
 // Harga obat untuk baris penyerahan yang disiapkan: harga dasar barang Core per satuan dasar, kelompok grading dari
-// data obat farmasi, baris grading kelompok harga pembeli yang sudah berlaku pada tanggal penyerahan, dan pembulatan
-// harga satuan dari setelan farmasi legal entity itu. Barang yang tidak punya data obat farmasi tidak berkelompok
-// grading.
+// data obat farmasi, baris grading kelompok harga dan KTP pembeli yang sudah berlaku pada tanggal penyerahan, dan
+// pembulatan harga satuan dari setelan farmasi legal entity itu. Barang yang tidak punya data obat farmasi tidak
+// berkelompok grading.
 export async function priceDrugLines<
     Line extends { itemId: string; quantityPerUnit: bigint },
 >(
     db: Database,
     scope: Scope,
-    buyer: { priceGroupId: string | null; date: string },
+    buyer: { priceGroupId: string | null; ktpPatient: boolean; date: string },
     lines: readonly Line[],
 ): Promise<{ line: Line; price: DrugPrice & { basePrice: bigint } }[]> {
     const itemIds = [...new Set(lines.map((line) => line.itemId))];
@@ -110,7 +113,7 @@ export async function priceDrugLines<
                   await db.rows(
                       gradingSchema,
                       `select id, kelompok_harga_id as price_group_id, kelompok_grading_id as grading_group_id,
-                              harga_dari::text as price_from, harga_sampai::text as price_to,
+                              pasien_ktp as ktp_patient, harga_dari::text as price_from, harga_sampai::text as price_to,
                               persen_naik::text as markup_percent, persen_diskon::text as discount_percent,
                               berlaku_mulai::text as effective_from
                        from far_m_grading_harga
@@ -127,6 +130,7 @@ export async function priceDrugLines<
                   id: row.id,
                   priceGroupId: row.price_group_id,
                   gradingGroupId: row.grading_group_id,
+                  ktpPatient: row.ktp_patient,
                   priceFrom: fromNumeric(row.price_from, quantityScale),
                   priceTo: fromNumeric(row.price_to, quantityScale),
                   markupPercent: fromNumeric(row.markup_percent, quantityScale),
@@ -152,6 +156,7 @@ export async function priceDrugLines<
                     basePrice,
                     priceGroupId: buyer.priceGroupId,
                     gradingGroupId: item.grading_group_id,
+                    ktpPatient: buyer.ktpPatient,
                     date: buyer.date,
                     quantityPerUnit: line.quantityPerUnit,
                     unitPriceDecimals,
@@ -246,7 +251,11 @@ export class DrugPrices {
     // Kelompok harga dan kelompok grading nonaktif hanya boleh tetap dipakai baris yang sudah memegangnya.
     private async checked(
         body: unknown,
-        saved: { priceGroupId: string; gradingGroupId: string | null } | null,
+        saved: {
+            priceGroupId: string;
+            gradingGroupId: string | null;
+            ktpPatient: boolean;
+        } | null,
     ) {
         const data = parseInput(drugPriceInputSchema, body, messages);
         const scope = this.scope;
@@ -314,6 +323,7 @@ export class DrugPrices {
         return {
             priceGroupId,
             gradingGroupId,
+            ktpPatient: data.ktp_patient ?? saved?.ktpPatient ?? true,
             priceFrom: priceFrom ?? 0n,
             priceTo: priceTo ?? 0n,
             markup: markup ?? 0n,
@@ -337,7 +347,7 @@ export class DrugPrices {
             z.object({ found: z.number() }),
             `select 1 as found from far_m_grading_harga
              where tenant_id = $1 and legal_entity_id = $2 and kelompok_harga_id = $3
-               and kelompok_grading_id is not distinct from $4::uuid and berlaku_mulai = $5::date
+               and kelompok_grading_id is not distinct from $4::uuid and pasien_ktp = $9 and berlaku_mulai = $5::date
                and harga_dari <= $7::numeric and $6::numeric <= harga_sampai and id <> $8 and deleted_at is null
              limit 1`,
             [
@@ -349,12 +359,13 @@ export class DrugPrices {
                 toNumeric(data.priceFrom, quantityScale),
                 toNumeric(data.priceTo, quantityScale),
                 id,
+                data.ktpPatient,
             ],
         );
         if (overlapping)
             validation({
                 price_from:
-                    'Rentang harga dasar ini bertumpuk dengan grading lain untuk kelompok harga, kelompok grading, dan tanggal berlaku yang sama. Ubah rentangnya atau tanggal berlakunya.',
+                    'Rentang harga dasar ini bertumpuk dengan grading lain untuk kelompok harga, kelompok grading, Patient KTP, dan tanggal berlaku yang sama. Ubah rentangnya atau tanggal berlakunya.',
             });
     }
 
@@ -372,6 +383,7 @@ export class DrugPrices {
                 legal_entity_id: scope.legalEntityId,
                 kelompok_harga_id: data.priceGroupId,
                 kelompok_grading_id: data.gradingGroupId,
+                pasien_ktp: data.ktpPatient,
                 harga_dari: toNumeric(data.priceFrom, quantityScale),
                 harga_sampai: toNumeric(data.priceTo, quantityScale),
                 persen_naik: toNumeric(data.markup, quantityScale),
@@ -390,6 +402,7 @@ export class DrugPrices {
         const data = await this.checked(body, {
             priceGroupId: current.price_group.id,
             gradingGroupId: current.grading_group?.id ?? null,
+            ktpPatient: current.ktp_patient,
         });
         const version = expectedVersion(request, body);
         let updated = 0;
@@ -397,7 +410,8 @@ export class DrugPrices {
             await this.refuseOverlap(current.id, data);
             updated = await this.db.execute(
                 `update far_m_grading_harga set kelompok_harga_id = $1, kelompok_grading_id = $2, harga_dari = $3,
-                        harga_sampai = $4, persen_naik = $5, persen_diskon = $6, berlaku_mulai = $7, updated_at = $8
+                        harga_sampai = $4, persen_naik = $5, persen_diskon = $6, berlaku_mulai = $7, updated_at = $8,
+                        pasien_ktp = $12
                  where tenant_id = $9 and id = $10 and version = $11 and deleted_at is null`,
                 [
                     data.priceGroupId,
@@ -411,6 +425,7 @@ export class DrugPrices {
                     this.scope.tenantId,
                     current.id,
                     version,
+                    data.ktpPatient,
                 ],
             );
         });

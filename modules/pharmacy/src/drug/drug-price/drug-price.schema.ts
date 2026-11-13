@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { listParametersSchema } from '@core/platform/http/index.ts';
 
 // Satu baris grading harga obat (SIMmGradingHargaObat sistem lama). Angka sebagai teks desimal; grading_group kosong
-// berarti semua barang.
+// berarti semua barang. ktp_patient adalah KTP sistem lama: baris untuk pasien yang memegang KTP setempat atau yang
+// tidak.
 export const drugPriceRowSchema = z.object({
     id: z.string(),
     price_group: z.object({
@@ -11,6 +12,7 @@ export const drugPriceRowSchema = z.object({
         name: z.string(),
     }),
     grading_group: z.object({ id: z.string(), name: z.string() }).nullable(),
+    ktp_patient: z.boolean(),
     price_from: z.string(),
     price_to: z.string(),
     markup_percent: z.string(),
@@ -25,10 +27,12 @@ export const drugPriceListQuerySchema = listParametersSchema.extend({
 
 const amount = z.union([z.number(), z.string()]);
 
-// discount_percent yang tidak dikirim berarti 0.
+// discount_percent yang tidak dikirim berarti 0. ktp_patient yang tidak dikirim berarti KTP pada baris baru dan tidak
+// diubah pada baris tersimpan.
 export const drugPriceInputSchema = z.object({
     price_group_id: z.string(),
     grading_group_id: z.string().nullable(),
+    ktp_patient: z.boolean().optional(),
     price_from: amount,
     price_to: amount,
     markup_percent: amount,
