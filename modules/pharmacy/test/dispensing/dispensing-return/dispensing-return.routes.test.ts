@@ -347,6 +347,84 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
         expect((await stock()).NANTI).toBe(before.NANTI);
     });
 
+    test('posting and reversing a return publish their events once, as the contracts say, with the total still returned', async () => {
+        const { id, prescriptionId, data } = await handedOver('6');
+        const [line] = (
+            await json<{ data: Returns }>(
+                await pharmacy.admin.get(returnsPath(id)),
+                200,
+            )
+        ).data.returnable;
+        const give = async (quantity: string) =>
+            (
+                await json<{ data: Returns }>(
+                    await pharmacy.admin.post(returnsPath(id), {
+                        reason: 'Pasien alergi',
+                        lines: [
+                            {
+                                dispensing_line_id: line?.dispensing_line_id,
+                                batch_id: line?.batch?.id ?? null,
+                                quantity,
+                            },
+                        ],
+                    }),
+                    200,
+                )
+            ).data.returns;
+        await give('4');
+        const [first, second] = await give('1');
+        const published = async (type: string) => {
+            const contract = await eventContract(type);
+            return (await outboxEnvelopes(pool, pharmacy.tenantId, type))
+                .filter((row) => row.data.prescription_id === prescriptionId)
+                .map((row) => {
+                    contract.parse(row);
+                    return row;
+                });
+        };
+        const unit = { id: pharmacy.uom.id, code: pharmacy.uom.code };
+        const lineOf = (quantity: string, returned: string) => ({
+            prescription_line_id: data.lines[0]?.id,
+            item: { id: item.id },
+            unit,
+            quantity,
+            base_unit: unit,
+            base_quantity: quantity,
+            returned_base_quantity: returned,
+            batches: [
+                {
+                    batch_number: 'NANTI',
+                    expiry_date: '2027-12-31',
+                    quantity,
+                },
+            ],
+        });
+        const posted = await published('pharmacy.return.posted.v1');
+        expect(posted.map((row) => row.data)).toMatchObject([
+            {
+                return_id: first?.id,
+                return_number: first?.number,
+                reason: 'Pasien alergi',
+                prescription_number: data.prescription_number,
+                location: { id: farmasi.id },
+                lines: [lineOf('4', '4')],
+            },
+            { return_id: second?.id, lines: [lineOf('1', '5')] },
+        ]);
+        expect(posted[0]?.org_unit_id).toBe(pharmacy.unitId);
+        const reverse = () =>
+            pharmacy.admin.post(returnsPath(id, `/${first?.id}/reverse`), {
+                version: first?.version,
+            });
+        await json(await reverse(), 200);
+        await json(await reverse(), 200);
+        const reversed = await published('pharmacy.return.reversed.v1');
+        expect(reversed.map((row) => row.data)).toMatchObject([
+            { return_id: first?.id, lines: [lineOf('4', '1')] },
+        ]);
+        expect(typeof reversed[0]?.data.reversed_at).toBe('string');
+    });
+
     test('a return spanning batches keeps each batch cost and funding', async () => {
         const fresh = await pharmacy.item('PCT-500', {
             tracking_code_id: (
