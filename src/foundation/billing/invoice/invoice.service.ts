@@ -7,6 +7,7 @@ import {
     lookupId,
     validation,
 } from '../../../platform/http/index.ts';
+import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
 import {
     chargeRowSchema,
@@ -141,6 +142,9 @@ export class Invoices {
                 discountPercent: charge.discount_percent,
                 extra: charge.extra,
             })),
+            await new Currency(this.db, this.scope.tenantId).precision(
+                localCurrencyCode,
+            ),
         );
         return {
             data: {

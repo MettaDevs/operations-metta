@@ -1,11 +1,17 @@
 import { Decimal } from '../../../platform/money/index.ts';
+import {
+    roundAmount,
+    roundInvoice,
+    type Precision,
+} from '../../currency/index.ts';
 
 // Total tagihan kunjungan, rumus server kasir Kuta 1 (general_payment_helper.php get_total_cost):
 //   Nilai     = round( Σ (Qty × (Nilai − Nilai × Disc / 100) + HExt), 0 )
 //   NilaiOrig = round( Σ (Qty × (HargaOrig − HargaOrig × Disc / 100) + HExt), 0 )
-// dan per kelompok jasa dengan rumus yang sama. HExt ditambahkan per baris, tidak dikali Qty. Pembulatan setengah
-// menjauhi nol ke rupiah, sama dengan ROUND SQL Server. Rumus Seroja (tanpa round, ditambah BiayaResep) tidak dipakai:
-// rumus Kuta cocok dengan lebih banyak pembayaran di kedua sumber (spesifikasi kasir 2.4).
+// dan per kelompok jasa dengan rumus yang sama. HExt ditambahkan per baris, tidak dikali Qty. round(..., 0) Kuta adalah
+// pembulatan tagihan mata uang (bawaan rupiah: kelipatan 1, terdekat); nilai per kelompok jasa dibulatkan ke presisi
+// jumlah. Rumus Seroja (tanpa round, ditambah BiayaResep) tidak dipakai: rumus Kuta cocok dengan lebih banyak
+// pembayaran di kedua sumber (spesifikasi kasir 2.4).
 
 export type ChargeLine = {
     serviceGroupId: string | null;
@@ -52,9 +58,10 @@ function lineAmount(price: string, line: ChargeLine): Decimal {
     );
 }
 
-const rupiah = (value: Decimal) => value.rounded(0).fixed(0);
-
-export function invoiceTotals(lines: ChargeLine[]): InvoiceTotals {
+export function invoiceTotals(
+    lines: ChargeLine[],
+    precision: Precision,
+): InvoiceTotals {
     const zero = Decimal.of('0');
     let value = zero;
     let originalValue = zero;
@@ -71,10 +78,13 @@ export function invoiceTotals(lines: ChargeLine[]): InvoiceTotals {
         );
     }
     return {
-        value: rupiah(value),
-        originalValue: rupiah(originalValue),
+        value: roundInvoice(value, precision).normalized(),
+        originalValue: roundInvoice(originalValue, precision).normalized(),
         groups: new Map(
-            [...groups].map(([group, amount]) => [group, rupiah(amount)]),
+            [...groups].map(([group, amount]) => [
+                group,
+                roundAmount(amount, precision).normalized(),
+            ]),
         ),
     };
 }

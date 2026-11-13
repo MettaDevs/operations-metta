@@ -24,3 +24,25 @@ export function parseDisplayNumber(text: string): string | null {
     const digits = fraction ? `${whole}.${fraction}` : whole;
     return match[1] && /[1-9]/.test(digits) ? `-${digits}` : digits;
 }
+
+// Uang dan harga satuan ditampilkan dengan presisi mata uangnya (AutoFormatType BC), tidak dengan jumlah desimal yang
+// ditulis mati di layar: nilai dibulatkan setengah menjauhi nol ke `decimals` angka, lalu nol di belakang koma tetap
+// ditulis, misalnya displayAmount('1234.5', 2) = '1.234,50'.
+export function displayAmount(value: string, decimals: number): string {
+    const negative = value.startsWith('-');
+    const [whole = '0', fraction = ''] = (
+        negative ? value.slice(1) : value
+    ).split('.');
+    const digits = BigInt(
+        `${whole}${fraction.padEnd(decimals + 1, '0')}`.slice(
+            0,
+            whole.length + decimals + 1,
+        ),
+    );
+    const rounded = (digits + 5n) / 10n;
+    const text = rounded.toString().padStart(decimals + 1, '0');
+    const integer = text.slice(0, text.length - decimals);
+    const decimal = decimals ? text.slice(-decimals) : '';
+    const sign = negative && /[1-9]/.test(text) ? '-' : '';
+    return `${sign}${BigInt(integer).toLocaleString('id-ID')}${decimal ? `,${decimal}` : ''}`;
+}

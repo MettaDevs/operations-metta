@@ -17,7 +17,12 @@ import {
     validation,
 } from '../../../platform/http/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
-import { decimalText } from '../billing.service.ts';
+import {
+    amountInput,
+    Currency,
+    decimalsHint,
+    localCurrencyCode,
+} from '../../currency/index.ts';
 import { closeClerk, countedMethods } from './clerk.close.ts';
 import { clerkSales } from './clerk.sales.ts';
 import {
@@ -288,6 +293,10 @@ export class Clerks {
         const sales = clerkSales();
         const methods = countedMethods(await this.methods(), sales);
         const allowed = new Set(methods.map((method) => method.id));
+        const precision = await new Currency(
+            this.db,
+            this.scope.tenantId,
+        ).precision(localCurrencyCode);
         const counts = new Map<string, string>();
         const errors: Record<string, string> = {};
         for (const [methodId, raw] of Object.entries(
@@ -300,11 +309,11 @@ export class Clerks {
             }
             const amount =
                 String(raw).trim() === ''
-                    ? '0.00'
-                    : decimalText(raw, 2, '0', '9999999999999999');
+                    ? '0'
+                    : amountInput(raw, precision.amount_decimals);
             if (amount === null)
                 errors[`counts.${methodId}`] =
-                    'Isi jumlah 0 atau lebih, paling banyak dua angka di belakang koma.';
+                    `Isi jumlah 0 atau lebih, ${decimalsHint(precision.amount_decimals)}.`;
             else counts.set(methodId, amount);
         }
         if (Object.keys(errors).length) validation(errors);

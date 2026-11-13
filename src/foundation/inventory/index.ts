@@ -58,6 +58,7 @@ export {
     baseQuantity,
     decimalInput,
     fromNumeric,
+    quantityHint,
     quantityScale,
     toNumeric,
 } from './quantity.ts';

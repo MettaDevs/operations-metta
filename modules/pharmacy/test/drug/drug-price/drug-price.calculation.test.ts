@@ -6,7 +6,6 @@ import {
 import {
     drugPrice,
     type PriceGrading,
-    type UnitPriceDecimals,
 } from '../../../src/drug/drug-price/drug-price.calculation.ts';
 
 const amount = (text: string) => fromNumeric(text, quantityScale);
@@ -61,7 +60,7 @@ const priced = (
     options: {
         quantityPerUnit?: string;
         date?: string;
-        decimals?: UnitPriceDecimals;
+        decimals?: number;
         ktp?: boolean;
     } = {},
 ) =>
@@ -340,7 +339,7 @@ describe('drug price', () => {
 
     test('each precision from 0 to 4 rounds half away from zero at its last decimal', () => {
         const kuta = [row('iks-xx', 'IKS', 'XX', '10', { from: '0' })];
-        const at = (decimals: UnitPriceDecimals) =>
+        const at = (decimals: number) =>
             priced(kuta, 'IKS', 'XX', '0.515', { decimals }).unitPrice;
         expect([at(0), at(1), at(2), at(3), at(4)]).toEqual(
             ['1', '0.6', '0.57', '0.567', '0.5665'].map(amount),

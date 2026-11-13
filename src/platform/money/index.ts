@@ -94,3 +94,82 @@ export class Decimal {
         );
     }
 }
+
+// Satu-satunya pembulatan uang dan harga di runtime ini: kasir, farmasi, tindakan, dan kelak finance memakainya dengan
+// setelan keuangan legal entity (src/foundation/finance-setup/).
+
+// Pembagian bilangan bulat, dibulatkan setengah menjauhi nol, sama dengan ROUND SQL Server dan Decimal.rounded.
+export function divideRounded(numerator: bigint, denominator: bigint): bigint {
+    if (denominator <= 0n) throw new Error('Invalid rounding divisor.');
+    const negative = numerator < 0n;
+    const absolute = negative ? -numerator : numerator;
+    const rounded = (absolute + denominator / 2n) / denominator;
+    return negative ? -rounded : rounded;
+}
+
+export const roundingMethods = ['nearest', 'up', 'down'] as const;
+export type RoundingMethod = (typeof roundingMethods)[number];
+
+// Nilai dibulatkan ke kelipatan step menurut metode (Inv. Rounding Type BC: Nearest, Up, Down; Metode_Pembulatan sistem
+// lama: 3 Ke Semua, 1 Ke Atas, 2 Ke Bawah). Step nol berarti tidak dibulatkan.
+export function roundToMultiple(
+    value: Decimal,
+    step: Decimal,
+    method: RoundingMethod,
+): Decimal {
+    if (step.compare(Decimal.of('0')) <= 0) return value;
+    const scale = Math.max(value.scale, step.scale);
+    const amount = BigInt(value.fixed(scale).replace('.', ''));
+    const unit = BigInt(step.fixed(scale).replace('.', ''));
+    const lower = (amount / unit) * unit - (amount % unit < 0n ? unit : 0n);
+    const remainder = amount - lower;
+    const rounded =
+        remainder === 0n
+            ? amount
+            : method === 'up'
+              ? lower + unit
+              : method === 'down'
+                ? lower
+                : remainder * 2n >= unit
+                  ? lower + unit
+                  : lower;
+    const digits = (rounded < 0n ? -rounded : rounded)
+        .toString()
+        .padStart(scale + 1, '0');
+    return Decimal.of(
+        `${rounded < 0n ? '-' : ''}${scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits}`,
+    );
+}
+
+const decimalWords = ['tanpa', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam'];
+
+// Akhir pesan isian angka yang mengikuti presisinya, misalnya "paling banyak dua angka di belakang koma". Satu kalimat
+// untuk uang (presisi mata uang), jumlah barang (quantityScale), dan persen (percentScale).
+export function decimalsHint(decimals: number): string {
+    return decimals === 0
+        ? 'tanpa angka di belakang koma'
+        : `paling banyak ${decimalWords[decimals] ?? String(decimals)} angka di belakang koma`;
+}
+
+// Persen memakai satu skala tetap, bukan setelan (DecimalPlaces 0:5 BC): empat angka di belakang koma.
+export const percentScale = 4;
+
+// Isian persen 0 sampai `max` dengan paling banyak percentScale angka di belakang koma; null bila tidak memenuhi. Hasilnya
+// teks desimal untuk kolom numeric(9,4).
+export function percentInput(raw: unknown, max = '100'): string | null {
+    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+    if (typeof raw === 'number' && !Number.isFinite(raw)) return null;
+    let value: Decimal;
+    try {
+        value = Decimal.of(String(raw).trim().replace(',', '.'));
+    } catch {
+        return null;
+    }
+    if (value.rounded(percentScale).compare(value) !== 0) return null;
+    if (value.compare(Decimal.of('0')) < 0) return null;
+    if (value.compare(Decimal.of(max)) > 0) return null;
+    return value.fixed(percentScale);
+}
+
+export const percentHint = (max = '100') =>
+    `Isi persen 0 sampai ${max.replace('.', ',')}, ${decimalsHint(percentScale)}.`;

@@ -27,7 +27,9 @@ export type ClerkClose = {
 };
 
 const zero = Decimal.of('0');
-const money = (value: Decimal) => value.fixed(2);
+// Jumlah yang dihitung di sini sudah berpresisi mata uang (isian diperiksa, penjualan dijumlah dari baris tersimpan), jadi
+// ditulis apa adanya tanpa dibulatkan lagi.
+const money = (value: Decimal) => value.normalized();
 
 export function countedMethods<M extends CountedMethod>(
     methods: M[],

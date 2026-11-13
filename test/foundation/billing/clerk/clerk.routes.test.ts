@@ -264,12 +264,17 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             [clerk.id],
         );
         expect([...stored]).toEqual([
-            { kode: 'BNK', sistem: '0.00', total: '0.00', selisih: '0.00' },
+            {
+                kode: 'BNK',
+                sistem: '0.0000',
+                total: '0.0000',
+                selisih: '0.0000',
+            },
             {
                 kode: 'TUN',
-                sistem: '0.00',
-                total: '125000.50',
-                selisih: '125000.50',
+                sistem: '0.0000',
+                total: '125000.5000',
+                selisih: '125000.5000',
             },
         ]);
         expect(

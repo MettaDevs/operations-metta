@@ -62,7 +62,7 @@ describe.skipIf(!process.env.DB_HOST)('merchants', () => {
             'select add_charge_debet::text as debet, add_charge_kredit::text as kredit from merchan where id = $1',
             [created.data.id],
         );
-        expect(row).toEqual({ debet: '1.50', kredit: '2.75' });
+        expect(row).toEqual({ debet: '1.5000', kredit: '2.7500' });
     });
 
     test('a percent outside 0 to 100 or with more than two decimals is refused per field', async () => {
@@ -74,7 +74,7 @@ describe.skipIf(!process.env.DB_HOST)('merchants', () => {
                         name: 'EDC BCA',
                         debit_surcharge_percent: '101',
                         credit_surcharge_percent: '-1',
-                        discount_percent: '0.125',
+                        discount_percent: '0.12345',
                     }),
                 ),
             ).sort(),

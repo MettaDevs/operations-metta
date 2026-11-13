@@ -20,21 +20,21 @@ test('a Kuta session closes to the same shortage as the legacy system when only 
         lines: [
             {
                 paymentMethodId: 'tunai',
-                system: '150000.00',
-                counted: '100000.00',
-                difference: '-50000.00',
+                system: '150000',
+                counted: '100000',
+                difference: '-50000',
             },
             {
                 paymentMethodId: 'kartu',
-                system: '0.00',
-                counted: '0.00',
-                difference: '0.00',
+                system: '0',
+                counted: '0',
+                difference: '0',
             },
         ],
         transactions: 2,
-        systemTotal: '150000.00',
-        clerkTotal: '100000.00',
-        differenceTotal: '-50000.00',
+        systemTotal: '150000',
+        clerkTotal: '100000',
+        differenceTotal: '-50000',
     });
 });
 
@@ -59,9 +59,9 @@ test('a guarantor sale counts toward the session total but not toward the differ
         'tunai',
         'kartu',
     ]);
-    expect(closed.systemTotal).toBe('425000.00');
-    expect(closed.clerkTotal).toBe('175000.50');
-    expect(closed.differenceTotal).toBe('0.50');
+    expect(closed.systemTotal).toBe('425000');
+    expect(closed.clerkTotal).toBe('175000.5');
+    expect(closed.differenceTotal).toBe('0.5');
 });
 
 test('an inactive counted method is closed only when it sold something in the session', () => {
@@ -79,7 +79,7 @@ test('an inactive counted method is closed only when it sold something in the se
     expect(
         closed.lines.map((line) => [line.paymentMethodId, line.difference]),
     ).toEqual([
-        ['tunai', '0.00'],
-        ['edc-lama', '-50000.00'],
+        ['tunai', '0'],
+        ['edc-lama', '-50000'],
     ]);
 });

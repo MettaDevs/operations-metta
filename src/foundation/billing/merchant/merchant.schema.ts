@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 
 // Merchan (SIMmMerchan sistem lama): bank atau mesin EDC yang dipilih saat bayar dengan kartu, milik legal entity
-// aktif. Persen ditulis sebagai teks desimal dua angka di belakang koma.
+// aktif. Persen ditulis sebagai teks desimal berskala persen tunggal (percentScale).
 export const merchantRowSchema = z.object({
     id: z.string(),
     code: z.string(),

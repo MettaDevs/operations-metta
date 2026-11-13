@@ -1,8 +1,11 @@
-import { Decimal } from '../../platform/money/index.ts';
+import { Decimal, decimalsHint } from '../../platform/money/index.ts';
 
 // Jumlah dalam satuan dasar dan harga satuan disimpan numeric(18,4), nilai numeric(18,2). Di kode ketiganya bigint
 // berskala, supaya stok yang dikurangi dan dijumlahkan tidak pernah bergeser karena pecahan biner.
 export const quantityScale = 4;
+
+// Batas angka di belakang koma jumlah barang, satu konstanta sistem (QtyRndPrecision BC), untuk pesan isian jumlah.
+export const quantityHint = decimalsHint(quantityScale);
 export const amountScale = 2;
 const limit = 10n ** 18n;
 
