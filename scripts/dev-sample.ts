@@ -96,12 +96,28 @@ const clinicSchema = z.object({
     procedure_categories: z
         .array(codeName.extend({ group: z.string() }))
         .default([]),
+    // Kelas, kategori operasi, kategori plafon, dan alat penunjang (kunci tarif dan pilihan kartu Jasa sistem lama).
+    care_classes: z.array(codeName).default([]),
+    operation_categories: z.array(codeName).default([]),
+    benefit_limit_categories: z.array(codeName).default([]),
+    supporting_devices: z.array(codeName).default([]),
     procedures: z
         .array(
             codeName.extend({
                 group: z.string(),
                 category: z.string(),
+                benefit_limit_category: z.string().optional(),
+                supporting_device: z.string().optional(),
                 sections: z.array(z.string()),
+            }),
+        )
+        .default([]),
+    // Spesialis dikenali dari namanya, sub spesialisnya ditulis sebagai nama.
+    specialties: z
+        .array(
+            z.object({
+                name: z.string(),
+                subspecialties: z.array(z.string()),
             }),
         )
         .default([]),
@@ -112,6 +128,7 @@ const clinicSchema = z.object({
             gender: z.string(),
             phone: z.string(),
             profession: z.string(),
+            specialty: z.string().optional(),
         }),
     ),
     patients: z.array(
@@ -278,12 +295,14 @@ export async function seedSample(
                 options.sample.clinic,
                 options.sample.workspace.unit,
             );
-        if (options.sample.clinic)
+        if (options.sample.clinic) {
             await seedProcedures(
                 api,
                 options.sample.clinic,
                 options.sample.workspace.unit,
             );
+            await seedSpecialties(api, options.sample.clinic);
+        }
         if (options.sample.pharmacy)
             await seedPharmacy(api, options.sample.pharmacy);
         return api.created();
@@ -759,6 +778,20 @@ async function seedProcedures(
         `${healthcareApi}/diagnosis-references/procedure-groups`,
         clinic.procedure_groups,
     );
+    const lists = `${healthcareApi}/diagnosis-references`;
+    await api.ensureEach(`${lists}/care-classes`, clinic.care_classes);
+    await api.ensureEach(
+        `${lists}/operation-categories`,
+        clinic.operation_categories,
+    );
+    const benefitLimitCategories = await api.ensureEach(
+        `${lists}/benefit-limit-categories`,
+        clinic.benefit_limit_categories,
+    );
+    const supportingDevices = await api.ensureEach(
+        `${lists}/supporting-devices`,
+        clinic.supporting_devices,
+    );
     const procedureCategories = await api.ensureEach(
         `${healthcareApi}/procedure-categories`,
         clinic.procedure_categories,
@@ -790,11 +823,77 @@ async function seedProcedures(
                     procedure.category,
                     'Kategori tindakan',
                 ),
+                benefit_limit_category_id: procedure.benefit_limit_category
+                    ? required(
+                          benefitLimitCategories,
+                          procedure.benefit_limit_category,
+                          'Kategori plafon',
+                      )
+                    : null,
+                supporting_device_id: procedure.supporting_device
+                    ? required(
+                          supportingDevices,
+                          procedure.supporting_device,
+                          'Alat penunjang',
+                      )
+                    : null,
                 section_ids: procedure.sections.map((name) =>
                     required(sections, name, 'Section'),
                 ),
             }),
     );
+}
+
+const practitionerRow = z.object({
+    id: z.string(),
+    name: z.string(),
+    profession_id: z.string(),
+    specialty_id: z.string().nullable(),
+    license_number: z.string().nullable(),
+    license_valid_until: z.string().nullable(),
+    bpjs_doctor_code: z.string().nullable(),
+    user_id: z.string().nullable(),
+    is_active: z.boolean(),
+    version: z.number(),
+});
+
+// Spesialis dikenali dari namanya. Nakes contoh dibuat seed klinik, jadi spesialisnya diisi sesudahnya, hanya bila nakes
+// itu belum punya spesialis; isian nakes lainnya dikirim kembali apa adanya.
+async function seedSpecialties(
+    api: SampleApi,
+    clinic: z.infer<typeof clinicSchema>,
+): Promise<void> {
+    const specialties = new Map<string, string>();
+    for (const specialty of clinic.specialties)
+        specialties.set(
+            specialty.name,
+            await api.ensure(
+                `${healthcareApi}/specialties`,
+                'name',
+                specialty.name,
+                {
+                    name: specialty.name,
+                    subspecialties: specialty.subspecialties.map((name) => ({
+                        name,
+                    })),
+                },
+            ),
+        );
+    for (const person of clinic.practitioners) {
+        if (!person.specialty) continue;
+        const found = await api.find(
+            practitionerRow,
+            `${healthcareApi}/practitioners`,
+            person.name,
+            (row) => row.name === person.name,
+        );
+        if (found?.specialty_id !== null) continue;
+        const { id, name: _name, ...columns } = found;
+        await api.call('PATCH', `${healthcareApi}/practitioners/${id}`, {
+            ...columns,
+            specialty_id: required(specialties, person.specialty, 'Spesialis'),
+        });
+    }
 }
 
 async function seedClinic(

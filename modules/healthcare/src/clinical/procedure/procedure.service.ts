@@ -33,6 +33,8 @@ const rowSql = `select * from (
                     select t.id, t.kode as code, t.nama as name, t.nama_internasional as international_name,
                            t.kelompok_id as group_id, k.nama as group_name,
                            t.kategori_id as category_id, c.nama as category_name,
+                           t.kategori_plafon_id as benefit_limit_category_id, kp.nama as benefit_limit_category_name,
+                           t.alat_penunjang_id as supporting_device_id, ap.nama as supporting_device_name,
                            t.cost_rs_persen::text as hospital_cost_percent,
                            t.cost_rs_rupiah::text as hospital_cost_amount,
                            t.kelompok_posting as posting_group, t.sumber_insentif as incentive_source,
@@ -47,6 +49,8 @@ const rowSql = `select * from (
                     from sim_m_tindakan t
                     left join sim_m_tindakan_kelompok k on k.tenant_id = t.tenant_id and k.id = t.kelompok_id
                     left join sim_m_tindakan_kategori c on c.tenant_id = t.tenant_id and c.id = t.kategori_id
+                    left join sim_m_kategori_plafon kp on kp.tenant_id = t.tenant_id and kp.id = t.kategori_plafon_id
+                    left join sim_m_alat_penunjang ap on ap.tenant_id = t.tenant_id and ap.id = t.alat_penunjang_id
                     where t.tenant_id = $1 and t.deleted_at is null) procedures
                 where true`;
 
@@ -74,8 +78,17 @@ function decimal(
 type Saved = {
     group_id: string | null;
     category_id: string | null;
+    benefit_limit_category_id: string | null;
+    supporting_device_id: string | null;
     sections: { id: string }[];
 };
+
+const choice = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    active: z.boolean(),
+});
 
 // Tindakan milik tenant, diisi lewat Setup atau dari baris Biaya Tindakan oleh yang boleh memeriksa. Tarif belum ada.
 export class Procedures {
@@ -84,7 +97,7 @@ export class Procedures {
         private readonly workspace: Workspace,
     ) {}
 
-    // Kelompok, kategori, dan section nonaktif ikut, supaya tindakan yang sudah memegangnya tetap terbaca namanya.
+    // Pilihan nonaktif ikut, supaya tindakan yang sudah memegangnya tetap terbaca namanya.
     async metadata() {
         this.workspace.guard('procedure', 'read');
         const has = (action: string) =>
@@ -97,13 +110,20 @@ export class Procedures {
                 delete: has('delete'),
             },
             groups: await this.db.rows(
-                z.object({
-                    id: z.string(),
-                    code: z.string(),
-                    name: z.string(),
-                    active: z.boolean(),
-                }),
+                choice,
                 `select id, kode as code, nama as name, aktif as active from sim_m_tindakan_kelompok
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                tenant,
+            ),
+            benefit_limit_categories: await this.db.rows(
+                choice,
+                `select id, kode as code, nama as name, aktif as active from sim_m_kategori_plafon
+                 where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+                tenant,
+            ),
+            supporting_devices: await this.db.rows(
+                choice,
+                `select id, kode as code, nama as name, aktif as active from sim_m_alat_penunjang
                  where tenant_id = $1 and deleted_at is null order by urutan, kode`,
                 tenant,
             ),
@@ -181,8 +201,21 @@ export class Procedures {
         return row;
     }
 
-    // Kelompok, kategori, dan section nonaktif hanya boleh tetap dipakai tindakan yang sudah memegangnya. Kategori harus
-    // milik kelompok tindakan, seperti pilihan kategori kartu Jasa sistem lama yang disaring menurut kelompoknya.
+    // Baris master yang masih ada. Yang nonaktif hanya boleh tetap dipakai tindakan yang sudah memegangnya.
+    private async pickable(table: string, id: string, held: string | null) {
+        return lookupId(id)
+            ? await this.db.one(
+                  found,
+                  `select 1 as found from ${table}
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                  [this.workspace.tenantId, id, held],
+              )
+            : undefined;
+    }
+
+    // Kelompok, kategori, kategori plafon, alat, dan section nonaktif hanya boleh tetap dipakai tindakan yang sudah
+    // memegangnya. Kategori harus milik kelompok tindakan, seperti pilihan kategori kartu Jasa sistem lama yang disaring
+    // menurut kelompoknya.
     private async checked(body: unknown, saved: Saved | null) {
         const parsed = procedureInputSchema.safeParse(body);
         const errors: Record<string, string> = {};
@@ -193,6 +226,9 @@ export class Procedures {
         const internationalName = data?.international_name?.trim() || null;
         const groupId = data?.group_id?.trim() || null;
         const categoryId = data?.category_id?.trim() || null;
+        const benefitLimitCategoryId =
+            data?.benefit_limit_category_id?.trim() || null;
+        const supportingDeviceId = data?.supporting_device_id?.trim() || null;
         if (!code) errors.code = 'Isi kode tindakan.';
         else if (code.length > 20) errors.code = 'Paling panjang 20 karakter.';
         if (!name) errors.name = 'Isi nama tindakan.';
@@ -200,17 +236,15 @@ export class Procedures {
             errors.name = 'Paling panjang 200 karakter.';
         if (internationalName !== null && internationalName.length > 200)
             errors.international_name = 'Paling panjang 200 karakter.';
-        if (groupId !== null) {
-            const group = lookupId(groupId)
-                ? await this.db.one(
-                      found,
-                      `select 1 as found from sim_m_tindakan_kelompok
-                       where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
-                      [tenantId, groupId, saved?.group_id ?? null],
-                  )
-                : undefined;
-            if (!group) errors.group_id = 'Pilih dari daftar.';
-        }
+        if (
+            groupId !== null &&
+            !(await this.pickable(
+                'sim_m_tindakan_kelompok',
+                groupId,
+                saved?.group_id ?? null,
+            ))
+        )
+            errors.group_id = 'Pilih dari daftar.';
         if (categoryId !== null) {
             const category = lookupId(categoryId)
                 ? await this.db.one(
@@ -225,6 +259,24 @@ export class Procedures {
                 errors.category_id =
                     'Pilih kategori dari kelompok tindakan ini.';
         }
+        if (
+            benefitLimitCategoryId !== null &&
+            !(await this.pickable(
+                'sim_m_kategori_plafon',
+                benefitLimitCategoryId,
+                saved?.benefit_limit_category_id ?? null,
+            ))
+        )
+            errors.benefit_limit_category_id = 'Pilih dari daftar.';
+        if (
+            supportingDeviceId !== null &&
+            !(await this.pickable(
+                'sim_m_alat_penunjang',
+                supportingDeviceId,
+                saved?.supporting_device_id ?? null,
+            ))
+        )
+            errors.supporting_device_id = 'Pilih dari daftar.';
         const hospitalCostPercent = decimal(data?.hospital_cost_percent, 1000);
         if (hospitalCostPercent === null)
             errors.hospital_cost_percent =
@@ -285,6 +337,8 @@ export class Procedures {
                 nama_internasional: internationalName,
                 kelompok_id: groupId,
                 kategori_id: categoryId,
+                kategori_plafon_id: benefitLimitCategoryId,
+                alat_penunjang_id: supportingDeviceId,
                 cost_rs_persen: hospitalCostPercent,
                 cost_rs_rupiah: hospitalCostAmount,
                 kelompok_posting: postingGroup,

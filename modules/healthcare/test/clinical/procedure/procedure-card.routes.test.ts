@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
+    createTenant,
+    entitle,
+    recordInstallation,
+} from '../../../../../test/support/tenant-fixtures.ts';
+import {
     api,
     createClinic,
     json,
+    login,
     refused,
     type Clinic,
 } from '../../support/examination-fixture.ts';
@@ -14,6 +20,10 @@ type Procedure = {
     international_name: string | null;
     category_id: string | null;
     category_name: string | null;
+    benefit_limit_category_id: string | null;
+    benefit_limit_category_name: string | null;
+    supporting_device_id: string | null;
+    supporting_device_name: string | null;
     hospital_cost_percent: string;
     hospital_cost_amount: string;
     posting_group: string;
@@ -25,9 +35,9 @@ type Procedure = {
     version: number;
 };
 
-// Isian kartu Jasa sistem lama di tindakan: nama internasional, kategori milik kelompoknya, Cost RS, tiga pilihan tetap,
-// centang status, dan section yang menawarkan tindakan. Pilihan Biaya Tindakan pemeriksaan memakai `section` untuk
-// menampilkan tindakan section itu saja, dan tanpa `section` (Tampil semua) menampilkan semuanya.
+// Isian kartu Jasa sistem lama di tindakan: nama internasional, kategori milik kelompoknya, kategori plafon, alat, Cost
+// RS, tiga pilihan tetap, centang status, dan section yang menawarkan tindakan. Pilihan Biaya Tindakan pemeriksaan
+// memakai `section` untuk menampilkan tindakan section itu saja, dan tanpa `section` (Tampil semua) menampilkan semuanya.
 describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -150,6 +160,87 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
         ]);
     });
 
+    test('Kategori Plafon and Menggunakan Alat are saved and read back, and an inactive or foreign row is refused per field', async () => {
+        const entry = async (list: string, code: string) =>
+            created<{ id: string; version: number }>(
+                `${api}/diagnosis-references/${list}`,
+                { code, name: `Nama ${code}` },
+            );
+        const outpatient = await entry('benefit-limit-categories', 'RJ');
+        const nebulizer = await entry('supporting-devices', 'NEB');
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'J-NEBU',
+            name: 'Nebulisasi',
+            benefit_limit_category_id: outpatient.id,
+            supporting_device_id: nebulizer.id,
+        });
+        expect(procedure).toMatchObject({
+            benefit_limit_category_id: outpatient.id,
+            benefit_limit_category_name: 'Nama RJ',
+            supporting_device_id: nebulizer.id,
+            supporting_device_name: 'Nama NEB',
+        });
+        const [row] = await pool.unsafe<
+            { plafon: string | null; alat: string | null }[]
+        >(
+            'select kategori_plafon_id as plafon, alat_penunjang_id as alat from sim_m_tindakan where id = $1',
+            [procedure.id],
+        );
+        expect(row).toEqual({ plafon: outpatient.id, alat: nebulizer.id });
+
+        // Kategori plafon nonaktif tetap boleh dipegang tindakan yang sudah memakainya, tetapi tidak dipilih tindakan lain.
+        await json(
+            await clinic.admin.patch(
+                `${api}/diagnosis-references/benefit-limit-categories/${outpatient.id}`,
+                {
+                    code: 'RJ',
+                    name: 'Nama RJ',
+                    is_active: false,
+                    version: outpatient.version,
+                },
+            ),
+            200,
+        );
+        await json(
+            await clinic.admin.patch(`${api}/procedures/${procedure.id}`, {
+                code: 'J-NEBU',
+                name: 'Nebulisasi diulang',
+                benefit_limit_category_id: outpatient.id,
+                supporting_device_id: nebulizer.id,
+                version: procedure.version,
+            }),
+            200,
+        );
+        const other = await createTenant(pool, 'Klinik Kartu Jasa Lain');
+        await entitle(pool, other, 'healthcare');
+        await recordInstallation(pool, other, 'healthcare');
+        const stranger = await login(pool, browser, other, [
+            'healthcare.clinical-setup.manage',
+        ]);
+        const foreignDevice = (
+            await json<{ data: { id: string } }>(
+                await stranger.post(
+                    `${api}/diagnosis-references/supporting-devices`,
+                    { code: 'EKG', name: 'EKG' },
+                ),
+                201,
+            )
+        ).data.id;
+        expect(
+            await refused(
+                await clinic.admin.post(`${api}/procedures`, {
+                    code: 'J-NEBU2',
+                    name: 'Nebulisasi lain',
+                    benefit_limit_category_id: outpatient.id,
+                    supporting_device_id: foreignDevice,
+                }),
+            ),
+        ).toEqual({
+            benefit_limit_category_id: ['Pilih dari daftar.'],
+            supporting_device_id: ['Pilih dari daftar.'],
+        });
+    }, 30_000);
+
     test('the examination lookup shows only the procedures of its section, and all of them when the section is left out', async () => {
         const offered = await created<Procedure>(`${api}/procedures`, {
             code: 'J-UMUM',
@@ -171,6 +262,7 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
             'J-BAWAAN',
             'J-GIGI',
             'J-LENGKAP',
+            'J-NEBU',
             'J-UMUM',
         ]);
         await json(

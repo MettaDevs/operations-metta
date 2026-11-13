@@ -169,13 +169,15 @@ Penjamin adalah party organisasi berperan `healthcare.guarantor`, dicatat untuk 
 
 Nakes (dokter, dokter gigi, bidan, perawat, apoteker, analis, lainnya) mengikuti pola pasien: party orang berperan `healthcare.practitioner` ("Tenaga kesehatan"), didaftarkan untuk legal entity aktif, dan dicatat di `sim_m_nakes` satu baris per orang per tenant (`sim_m_nakes_party_unique`). Ditambahkan `0012_practitioner.sql` (keputusan pemilik produk, 11 November 2026). Pendaftaran kunjungan kelak memilih nakes dari yang punya jadwal praktik (lihat [Jadwal praktik](#jadwal-praktik)).
 
-| Data                                               | Tempat                                                                                          |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Nama, jenis kelamin, NIK, nomor HP                 | party, nomor identitas, dan kontak party Core                                                   |
-| Profesi, spesialisasi, no. SIP, SIP berlaku sampai | `sim_m_nakes` (`profesi_id` ke `sim_m_profesi`, `spesialisasi`, `no_sip`, `sip_berlaku_sampai`) |
-| Kode dokter BPJS, akun login, status aktif         | `sim_m_nakes` (`kode_dokter_bpjs`, `user_id`, `aktif`)                                          |
+| Data                                       | Tempat                                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Nama, jenis kelamin, NIK, nomor HP         | party, nomor identitas, dan kontak party Core                                                                |
+| Profesi, no. SIP, SIP berlaku sampai       | `sim_m_nakes` (`profesi_id` ke `sim_m_profesi`, `no_sip`, `sip_berlaku_sampai`)                              |
+| Spesialis dan sub spesialis                | `sim_m_nakes` (`spesialisasi_id` ke `sim_m_spesialisasi`, `sub_spesialisasi_id` ke `sim_m_sub_spesialisasi`) |
+| Kode dokter BPJS, akun login, status aktif | `sim_m_nakes` (`kode_dokter_bpjs`, `user_id`, `aktif`)                                                       |
 
 - Profesi adalah master per tenant `sim_m_profesi`, dipilih dari lookup di kartu nakes; lihat [Profesi](#profesi).
+- Spesialis dan sub spesialis adalah master per tenant, dipilih di kartu nakes; lihat [Spesialis](#spesialis).
 
 ### Profesi
 
@@ -190,6 +192,17 @@ Keputusan pemilik produk, 12 November 2026: profesi tidak ditulis di kode, tetap
 - Sesudah dibuat, nama dan identitas diubah di Buku alamat; kartu nakes mengubah profesi, SIP, kode dokter BPJS, akun login, dan status.
 - Masa berlaku SIP hanya dicatat. Tidak ada aturan yang menolak nakes dengan SIP habis (keputusan pemilik produk: tidak menambah aturan bisnis sendiri).
 - Akun login opsional, dipilih dari anggota aktif tenant.
+
+### Spesialis
+
+Layar Specialist sistem lama (`admin/vendor/views/specialist/form.php`, `SIMmSpesialisasi` dan `SIMmSubSpesialis`) dipindah ke **Setup → Tenaga kesehatan → Spesialis** (`0032_tariff_dimension_masters.sql`): kartu Nama dengan baris **Sub Spesialis** (Nama per baris).
+
+- Spesialis tanpa kode: sistem lama tidak punya kode spesialis, dan kode sub spesialisnya dibuat otomatis tanpa diketik siapa pun.
+- Nama spesialis unik per tenant dan nama sub spesialis unik di spesialisnya, tanpa membedakan huruf besar. Fungsi tarif sistem lama (`GetTarifBiayaNonKerjasama_BUFF`) mencocokkan nama spesialis dokter dengan baris tarif; di sini cocoknya lewat id, dan keunikan nama menjaga hasilnya tetap sama.
+- Simpan kartu mengganti seluruh baris sub spesialis: baris yang dibuang diberi `deleted_at`. Sub spesialis yang masih dipegang nakes tidak bisa dibuang, dan spesialis yang masih dipakai nakes tidak bisa dihapus.
+- Kartu nakes memilih **Spesialis** lalu **Sub Spesialis** dari spesialis itu, seperti `populate_subspecialist` kartu dokter sistem lama; mengganti spesialis mengosongkan sub spesialis. Keduanya boleh kosong, karena tanda bintang di layar sistem lama hanya tampilan. Sub spesialis milik spesialis lain ditolak, juga oleh foreign key gabungan `sim_m_nakes_sub_spesialisasi_foreign`.
+- `0032` mengubah teks `sim_m_nakes.spesialisasi` nakes yang belum dihapus menjadi spesialis tenantnya (spasi dirapikan, satu baris untuk nama yang sama tanpa membedakan huruf besar) lalu menautkannya. Kolom teks itu tetap ada satu rilis untuk kode rilis sebelumnya selama pemutakhiran, dan tidak dibaca atau ditulis lagi.
+- Izin spesialis ikut duty nakes seperti profesi: `healthcare.practitioner.inquire` melihat, `healthcare.practitioner.manage` menambah, mengubah, dan menghapus.
 
 ## Endpoint
 
@@ -211,6 +224,8 @@ Semua di bawah `/api/modules/healthcare/v1`.
 | `GET, POST /guarantors`, `PATCH, DELETE /guarantors/{id}`                                                                                                                                                                | `guarantor.read` / `.update`                                   |
 | `GET /practitioners` (cari: nama, no. SIP; saring `profession_id`, status), `GET /practitioners/metadata`                                                                                                                | `practitioner.read`                                            |
 | `POST /practitioners`, `PATCH, DELETE /practitioners/{id}`, `GET /practitioners/users` (akun anggota tenant)                                                                                                             | `practitioner.update`                                          |
+| `GET /specialties` (cari: nama), `GET /specialties/metadata`                                                                                                                                                             | `specialty.read`                                               |
+| `POST /specialties`, `PATCH /specialties/{id}` (`subspecialties` dikirim lengkap), `DELETE /specialties/{id}`                                                                                                            | `specialty.create`, `.update`, `.delete`                       |
 | `GET /professions` (cari: kode, nama; saring status), `GET /professions/metadata`                                                                                                                                        | `profession.read`                                              |
 | `POST /professions`, `PATCH /professions/{id}`, `DELETE /professions/{id}`                                                                                                                                               | `profession.create`, `.update`, `.delete`                      |
 | `GET /practice-schedules/metadata` (section aktif, sesi, kalender, izin), `GET /practice-schedules/practitioners` (nakes aktif untuk pemilih)                                                                            | `practice-schedule.read`                                       |
@@ -224,7 +239,7 @@ Semua di bawah `/api/modules/healthcare/v1`.
 | `GET /visits/classification?patient_id=&pregnant=` (siklus hidup dan klaster hasil aturan, dan apakah status hamil ditanyakan)                                                                                           | `visit.read`                                                   |
 | `GET /clusters/metadata`, `GET, POST /clusters` (cari: kode, nama; saring `status`), `PATCH, DELETE /clusters/{id}`                                                                                                      | `cluster.read` / `.create` / `.update` / `.delete`             |
 | `GET /icd10/metadata`, `GET, POST /icd10` (cari: kode, nama; saring `status`), `PATCH, DELETE /icd10/{id}`                                                                                                               | `icd10.read` / `.create` / `.update` / `.delete`               |
-| `GET /diagnosis-references/{list}/metadata`, `GET, POST /diagnosis-references/{list}`, `PATCH, DELETE /diagnosis-references/{list}/{id}`; `list` = `diagnosis-types`, `diagnosis-cases`, `prognoses`, `chronic-diseases` | `diagnosis-reference.read` / `.create` / `.update` / `.delete` |
+| `GET /diagnosis-references/{list}/metadata`, `GET, POST /diagnosis-references/{list}`, `PATCH, DELETE /diagnosis-references/{list}/{id}`; `list` = nama daftar di `diagnosis-reference.schema.ts`, misalnya `prognoses`. | `diagnosis-reference.read` / `.create` / `.update` / `.delete` |
 | `GET /life-cycles/metadata` (klaster, jenis kelamin, izin), `GET, POST /life-cycles` (cari: kode, nama, klaster; saring `cluster_id`, `status`), `PATCH, DELETE /life-cycles/{id}`                                       | `life-cycle.read` / `.create` / `.update` / `.delete`          |
 | `GET /visits/{id}`                                                                                                                                                                                                       | `visit.read`                                                   |
 | `POST /visits` (header `Idempotency-Key` opsional)                                                                                                                                                                       | `visit.create`                                                 |
@@ -392,7 +407,7 @@ Pemeriksaan rawat jalan tahap 2, bagian E3 (keputusan pemilik produk, 12 Novembe
 - **Ikut Simpan rekam medis yang sama**, dengan batas ubah yang sama: hanya selama tujuan `diperiksa`. Kuncinya `procedures`, `prescriptions`, dan `drug_allergies`.
 - **Biaya Tindakan** (`sim_tr_pemeriksaan_tindakan`, padanan `SIMtrRJTransaksi`): Nama Tindakan, Qty, Nama Dokter, dan User & Jam (pengisi dan jam simpan pertama), urutan kolom `Services.php`. Tarif tidak dihitung dan tidak disimpan; tarif dan tagihan menyusul bersama kasir (keputusan pemilik produk). Satu tindakan sekali per pemeriksaan dengan pesan sistem lama "Biaya Tindakan {nama} sudah ada pada daftar Jasa", di layar saat memilih dan di server saat Simpan. Qty bilangan bulat 1 atau lebih ("Isi jumlah 1 atau lebih."); sistem lama diam-diam mengubah Qty di bawah 1 menjadi 1. Baris baru diisi Qty 1 dan dokter Anamnesa, seperti `#DokterIDAnamesa`. Nama Dokter mengikuti centang Dipilih sebagai Dokter / Tenaga Medis di profesi. Baris dikenali dari tindakannya, diubah di tempat, dan yang dibuang diberi `deleted_at`.
 - **Tindakan** (`sim_m_tindakan`, padanan `SIMmListJasa`), Setup → Klinis → Tindakan. Kartunya memindah kartu Jasa sistem lama (Admin → Setup Jasa → Jasa, `modules/admin/service/views/form.php`) 1:1, arahan pemilik produk 13 November 2026:
-    - FastTab **Umum**, urutan form sistem lama: Kode, Nama, Nama internasional (`JasaNameEnglish`), Kelompok (`sim_m_tindakan_kelompok`, padanan `SIMmGroupJasa`), Kategori (`sim_m_tindakan_kategori`, padanan `SIMmKategoriBiaya`, pilihannya hanya kategori kelompok yang dipilih seperti `dropdown_html` kategori per kelompok), Cost RS (%) dan Cost RS (Rp), Kelompok Posting, Sumber Insentif, dan Poliklinik, lalu centang Aktif, Paket Jasa, Klinik Reproduksi, Tarif Manual, Hari Rawat Inap, MCU, Auto System, KSO, Variabel Kategori Operasi, Variabel Cyto, Harus Dengan Dokter, dan Menggunakan Alat Penunjang. Pilihan Kelompok Posting (`GROUP JASA`, `KOMPONEN`), Sumber Insentif (`NONE`, `DETAIL`, `KOMPONEN`), dan Poliklinik (`NONE`, `UMUM`, `SPESIALIS`) adalah daftar tetap di kode sistem lama (`Service_model::dropdown_static`), jadi di sini katalog kode `procedure.options.ts` dengan kode yang sama; bawaannya `GROUP JASA` dan `NONE`, nilai semua jasa Kuta. Kategori Plafon dan Menggunakan Alat (pilihan alat) belum ada, karena masternya belum dibawa.
+    - FastTab **Umum**, urutan form sistem lama: Kode, Nama, Nama internasional (`JasaNameEnglish`), Kelompok (`sim_m_tindakan_kelompok`, padanan `SIMmGroupJasa`), Kategori (`sim_m_tindakan_kategori`, padanan `SIMmKategoriBiaya`, pilihannya hanya kategori kelompok yang dipilih seperti `dropdown_html` kategori per kelompok), Cost RS (%) dan Cost RS (Rp), Kelompok Posting, Sumber Insentif, dan Poliklinik, lalu centang Aktif, Paket Jasa, Klinik Reproduksi, Tarif Manual, Hari Rawat Inap, MCU, Auto System, KSO, Variabel Kategori Operasi, Variabel Cyto, Harus Dengan Dokter, dan Menggunakan Alat Penunjang. Pilihan Kelompok Posting (`GROUP JASA`, `KOMPONEN`), Sumber Insentif (`NONE`, `DETAIL`, `KOMPONEN`), dan Poliklinik (`NONE`, `UMUM`, `SPESIALIS`) adalah daftar tetap di kode sistem lama (`Service_model::dropdown_static`), jadi di sini katalog kode `procedure.options.ts` dengan kode yang sama; bawaannya `GROUP JASA` dan `NONE`, nilai semua jasa Kuta. Sesudah Kategori ada **Kategori Plafon** (`KategoriPlafon` → `kategori_plafon_id`) dan **Menggunakan Alat** (`KodeMappingAlat` → `alat_penunjang_id`), masing-masing dengan pilihan kosong seperti "-- None --" sistem lama; lihat [Master kunci tarif](#master-kunci-tarif).
     - FastTab **Section** (tab Detail Section, `SIMmListJasaSection` → `sim_m_tindakan_section`): section yang menawarkan tindakan. Tindakan yang sudah ada sebelum `0031` ditawarkan di semua section tenantnya.
     - Yang boleh memeriksa boleh menambah tindakan dengan Baru di baris (privilege `procedure.register`); tindakan baru dari pemeriksaan ditawarkan di section pemeriksaan itu.
     - Pilihan tindakan di Biaya Tindakan hanya menampilkan tindakan section pemeriksaan (`GET /procedures?section=`), dan saklar **Tampil semua** di toolbar panel membuang saringan itu, sama dengan `Services.php::datatable_charge_collection`.
@@ -451,6 +466,23 @@ Setiap kunjungan mencatat klaster Integrasi Layanan Primer, siklus hidup, dan st
 - Data bawaan diisi untuk tenant yang sudah memasang module, dan trigger `sim_isi_acuan_ilp` di `core_module_installations` mengisinya saat tenant lain memasang, pola yang sama dengan data acuan pendaftaran. Tabel yang sudah punya baris untuk tenant itu, termasuk yang dihapus, tidak diisi ulang.
 - Bawaan Ibu Hamil, Bersalin dan Nifas tidak membatasi umur, sesuai permintaan pemilik produk. Akibatnya status hamil juga ditanyakan untuk pasien perempuan balita; tenant yang tidak menginginkannya mengisi umur mulai di siklus hidup itu.
 
+## Master kunci tarif
+
+`0032_tariff_dimension_masters.sql` membawa master yang menjadi kunci tabel tarif sistem lama (`SIMdListHarga`) dan pilihan kartu Jasa yang menunggu masternya, sebelum tab tarif dan fungsi pencarian tarif dipindah. Semuanya dimulai kosong.
+
+| Sistem lama                                      | Di sini                                                                | Layar                                |
+| ------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------ |
+| `SIMmKelas` (KelasID, NamaKelas, Nomor, Active)  | `sim_m_kelas` (kode, nama, urutan berlabel Nomor, aktif)               | Setup → Klinis → Kelas               |
+| `SIMmKategoriOperasi` (KategoriID, KategoriName) | `sim_m_kategori_operasi`                                               | Setup → Klinis → Kategori operasi    |
+| `SIMmKategoriPlafon` (KategoriPlafon)            | `sim_m_kategori_plafon`, dipilih di Kategori Plafon kartu Jasa         | Setup → Klinis → Kategori plafon     |
+| `SIMmAlatPenunjang` (IDAlat, NamaAlat)           | `sim_m_alat_penunjang`, dipilih di Menggunakan Alat kartu Jasa         | Setup → Klinis → Alat penunjang      |
+| `SIMmSpesialisasi`, `SIMmSubSpesialis`           | `sim_m_spesialisasi`, `sim_m_sub_spesialisasi`, dipilih di kartu nakes | Setup → Tenaga kesehatan → Spesialis |
+
+- Empat daftar pertama memakai endpoint dan izin daftar pendek klinis (`diagnosis-references/{list}`, `diagnosis-reference.*`). Kode kelas dan alat dibuat otomatis di sistem lama, dan kategori plafon memakai namanya sebagai kunci; di sini kodenya pendek dan diketik pengguna, aturan repo untuk master setup kecil.
+- Baris wildcard sistem lama tidak dibuat: kelas dan dokter `XX`, spesialis 99 `ALL`, dan kategori operasi 1 `ALL`. Di tarif yang menyusul, isian kosong berarti "semua".
+- Yang tidak dipindah karena tidak punya layar dan tidak dibaca alur rawat jalan: `SIMmKategoriOperasi.Kategori_RL` dan `SIMmKategoriPlafon.Tipe`.
+- Kategori plafon dan alat yang dipakai tindakan tidak bisa dihapus. Kelas dan kategori operasi belum dipakai di mana pun sampai tarif dipindah.
+
 ## Dicatat untuk nanti
 
 - **Ambil data PCare dari NIK** untuk pasien BPJS kelak menjadi perilaku di katalog tipe pasien, dijalankan module BPJS. Belum dibangun.
@@ -465,6 +497,7 @@ Arahan pemilik produk 13 November 2026: sistem lama dipindah 1:1 lebih dulu, per
 - Langkah terakhir `GetTarifBiayaNonKerjasama_BUFF` dan `GetTarifBiayaJKN_BUFF` ("jasa saja, tipe apa pun") diam-diam memakai harga tipe pasien lain bila tipe itu tidak punya baris.
 - Langkah keempat `GetTarifBiayaNonKerjasama_BUFF` sama persis dengan langkah kedua, jadi tidak pernah berjalan.
 - `VW_ListHarga` memakai INNER JOIN ke kelas, dokter, spesialis, dan kategori, sehingga baris tarif yang kodenya tidak ada di master hilang dari pencarian tanpa pesan.
+- Kartu dokter memberi tanda bintang pada Spesialis dan Sub Spesialis, tetapi modelnya tidak mewajibkan keduanya (`admin/vendor/views/vendor/form.php:93-110`); tandanya menyesatkan.
 
 ## Belum dibuat
 

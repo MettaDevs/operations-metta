@@ -437,6 +437,22 @@
                     { "code": "TND", "name": "Tindakan", "group": "TM" },
                     { "code": "HEM", "name": "Hematologi", "group": "LAB" }
                 ],
+                "care_classes": [
+                    { "code": "K1", "name": "Kelas 1" },
+                    { "code": "K2", "name": "Kelas 2" }
+                ],
+                "operation_categories": [
+                    { "code": "KCL", "name": "Kecil" },
+                    { "code": "SDG", "name": "Sedang" }
+                ],
+                "benefit_limit_categories": [
+                    { "code": "RJ", "name": "Rawat Jalan" },
+                    { "code": "KCM", "name": "Kacamata" }
+                ],
+                "supporting_devices": [
+                    { "code": "NEB", "name": "Nebulizer" },
+                    { "code": "EKG", "name": "EKG" }
+                ],
                 "procedures": [
                     {
                         "code": "JAS0001",
@@ -458,7 +474,20 @@
                         "group": "LAB",
                         "category": "HEM",
                         "sections": ["Pusling"]
+                    },
+                    {
+                        "code": "JAS0004",
+                        "name": "Nebulisasi",
+                        "group": "TM",
+                        "category": "TND",
+                        "benefit_limit_category": "RJ",
+                        "supporting_device": "NEB",
+                        "sections": ["Poli Umum"]
                     }
+                ],
+                "specialties": [
+                    { "name": "Umum", "subspecialties": [] },
+                    { "name": "Gigi & Oral", "subspecialties": ["Bedah Mulut"] }
                 ],
                 "practitioners": [
                     {
@@ -466,7 +495,8 @@
                         "nik": "3171010503850003",
                         "gender": "female",
                         "phone": "081200000101",
-                        "profession": "dokter"
+                        "profession": "dokter",
+                        "specialty": "Umum"
                     }
                 ],
                 "patients": [

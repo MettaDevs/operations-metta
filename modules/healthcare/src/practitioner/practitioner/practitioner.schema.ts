@@ -1,14 +1,18 @@
 import { z } from 'zod';
 import { listParametersSchema } from '@core/platform/http/index.ts';
 
-// Tenaga kesehatan: party orang berperan nakes, dengan profesi, SIP, dan kode dokter BPJS. Nama adalah nama party-nya.
+// Tenaga kesehatan: party orang berperan nakes, dengan profesi, spesialis, SIP, dan kode dokter BPJS. Nama adalah nama
+// party-nya.
 export const practitionerRowSchema = z.object({
     id: z.string(),
     party_id: z.string(),
     name: z.string(),
     profession_id: z.string(),
     profession_name: z.string(),
-    specialization: z.string().nullable(),
+    specialty_id: z.string().nullable(),
+    specialty_name: z.string().nullable(),
+    subspecialty_id: z.string().nullable(),
+    subspecialty_name: z.string().nullable(),
     license_number: z.string().nullable(),
     license_valid_until: z.string().nullable(),
     bpjs_doctor_code: z.string().nullable(),
@@ -34,7 +38,9 @@ export const practitionerInputSchema = z.object({
     gender: z.string().nullable().optional(),
     phone: z.string().nullable().optional(),
     profession_id: z.string().nullable().optional(),
-    specialization: z.string().nullable().optional(),
+    specialty_id: z.string().nullable().optional(),
+    // Sub spesialis harus milik spesialis yang dipilih.
+    subspecialty_id: z.string().nullable().optional(),
     license_number: z.string().nullable().optional(),
     license_valid_until: z.string().nullable().optional(),
     bpjs_doctor_code: z.string().nullable().optional(),

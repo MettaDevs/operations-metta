@@ -22,8 +22,8 @@ type Entry = {
 
 const api = '/api/modules/healthcare/v1/diagnosis-references';
 
-// Setup jenis diagnosa, kasus diagnosa, prognosa, dan penyakit kronis: satu set endpoint untuk empat daftar, kode unik
-// per daftar, Delete lunak, izin setup klinis, dan batas tenant. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila
+// Setup daftar pendek klinis, dari jenis diagnosa sampai alat penunjang: satu set endpoint untuk semua daftar, kode unik
+// per daftar, Delete lunak yang ditahan selama barisnya dipakai, izin setup klinis, dan batas tenant. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila
 // DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('diagnosis reference lists', () => {
     if (!process.env.DB_HOST) return;
@@ -150,6 +150,126 @@ describe.skipIf(!process.env.DB_HOST)('diagnosis reference lists', () => {
         expect(
             (await list(admin, 'prognoses')).map((entry) => entry.id),
         ).not.toContain(added.id);
+    });
+
+    test('the tariff dimension lists start empty, keep codes unique ignoring case, and can be renamed and deleted', async () => {
+        for (const name of [
+            'care-classes',
+            'operation-categories',
+            'benefit-limit-categories',
+            'supporting-devices',
+        ]) {
+            expect(await list(admin, name)).toEqual([]);
+            const added = (
+                await json<{ data: Entry }>(
+                    await admin.post(`${api}/${name}`, {
+                        code: 'a1',
+                        name: 'Pertama',
+                        sort_order: 3,
+                    }),
+                    201,
+                )
+            ).data;
+            expect(
+                (
+                    await json<{ errors: Record<string, string[]> }>(
+                        await admin.post(`${api}/${name}`, {
+                            code: 'A1',
+                            name: 'Kembar',
+                        }),
+                        422,
+                    )
+                ).errors,
+            ).toEqual({ code: ['Kode ini sudah dipakai baris lain.'] });
+            const renamed = (
+                await json<{ data: Entry }>(
+                    await admin.patch(`${api}/${name}/${added.id}`, {
+                        code: 'A1',
+                        name: 'Diganti',
+                        sort_order: 4,
+                        version: added.version,
+                    }),
+                    200,
+                )
+            ).data;
+            expect(await list(admin, name)).toEqual([renamed]);
+            expect(
+                (
+                    await admin.delete(`${api}/${name}/${added.id}`, {
+                        version: renamed.version,
+                    })
+                ).status,
+            ).toBe(204);
+            expect(await list(admin, name)).toEqual([]);
+        }
+    });
+
+    test('a benefit limit category or device held by a procedure cannot be deleted until the procedure lets go', async () => {
+        const entry = async (name: string) =>
+            (
+                await json<{ data: Entry }>(
+                    await admin.post(`${api}/${name}`, {
+                        code: 'DIPAKAI',
+                        name: 'Dipakai',
+                    }),
+                    201,
+                )
+            ).data;
+        const category = await entry('benefit-limit-categories');
+        const device = await entry('supporting-devices');
+        const procedure = (
+            await json<{ data: { id: string; version: number } }>(
+                await admin.post('/api/modules/healthcare/v1/procedures', {
+                    code: 'J-ALAT',
+                    name: 'Nebulisasi',
+                    benefit_limit_category_id: category.id,
+                    supporting_device_id: device.id,
+                }),
+                201,
+            )
+        ).data;
+        for (const [name, row] of [
+            ['benefit-limit-categories', category],
+            ['supporting-devices', device],
+        ] as const)
+            expect(
+                (
+                    await json<{ errors: Record<string, string[]> }>(
+                        await admin.delete(`${api}/${name}/${row.id}`, {
+                            version: row.version,
+                        }),
+                        422,
+                    )
+                ).errors,
+            ).toEqual({
+                id: [
+                    'Baris ini sudah dipakai. Nonaktifkan saja supaya tidak dipilih lagi.',
+                ],
+            });
+        await json(
+            await admin.patch(
+                `/api/modules/healthcare/v1/procedures/${procedure.id}`,
+                {
+                    code: 'J-ALAT',
+                    name: 'Nebulisasi',
+                    benefit_limit_category_id: null,
+                    supporting_device_id: null,
+                    version: procedure.version,
+                },
+            ),
+            200,
+        );
+        for (const [name, row] of [
+            ['benefit-limit-categories', category],
+            ['supporting-devices', device],
+        ] as const)
+            expect(
+                (
+                    await admin.delete(`${api}/${name}/${row.id}`, {
+                        version: row.version,
+                    })
+                ).status,
+            ).toBe(204);
     });
 
     test('reading needs the clinical setup duty, changing needs the manage duty, and tenants stay apart', async () => {

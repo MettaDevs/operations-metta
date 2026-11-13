@@ -22,6 +22,7 @@ import { patientTypeRoutes } from './coverage/patient-type/patient-type.routes.t
 import { patientRoutes } from './patient/patient/patient.routes.ts';
 import { practitionerRoutes } from './practitioner/practitioner/practitioner.routes.ts';
 import { professionRoutes } from './practitioner/profession/profession.routes.ts';
+import { specialtyRoutes } from './practitioner/specialty/specialty.routes.ts';
 import { visitRoutes } from './registration/visit/visit.routes.ts';
 import { practiceScheduleRoutes } from './service/practice-schedule/practice-schedule.routes.ts';
 import { roomRoutes } from './service/room/room.routes.ts';
@@ -35,6 +36,7 @@ export function healthcareRoutes() {
         ...guarantorRoutes(),
         ...practitionerRoutes(),
         ...professionRoutes(),
+        ...specialtyRoutes(),
         ...sectionRoutes(),
         ...roomRoutes(),
         ...practiceScheduleRoutes(),
