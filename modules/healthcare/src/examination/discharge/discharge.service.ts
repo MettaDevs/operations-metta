@@ -69,7 +69,10 @@ const cleared = {
     tanggal_meninggal: null,
     jam_meninggal: null,
 } satisfies Record<string, Bind>;
-export type DischargeValues = Record<keyof typeof cleared, Bind>;
+// Keadaan pulang tidak termasuk cleared: rujuk internal mengganti status tanpa mengosongkannya.
+export type DischargeValues = Record<keyof typeof cleared, Bind> & {
+    keadaan_pulang_id?: Bind;
+};
 
 const statusRowSchema = z.object({
     id: z.string(),
@@ -148,10 +151,26 @@ export class Discharges {
         }));
     }
 
+    // Pilihan keadaan pulang milik tenant, dengan baris nonaktif seperti statuses.
+    async conditions() {
+        return this.db.rows(
+            z.object({
+                id: z.string(),
+                code: z.string(),
+                name: z.string(),
+                active: z.boolean(),
+            }),
+            `select id, kode as code, nama as name, aktif as active from sim_m_keadaan_pulang
+             where tenant_id = $1 and deleted_at is null order by urutan, kode`,
+            [this.tenantId],
+        );
+    }
+
     async present(destinationId: string): Promise<Discharge> {
         const saved = await this.db.one(
             z.object({
                 status_id: z.string().nullable(),
+                condition_id: z.string().nullable(),
                 follow_up: z.boolean().nullable(),
                 follow_up_date: z.string().nullable(),
                 consultant_id: z.string().nullable(),
@@ -162,7 +181,7 @@ export class Discharges {
                 death_date: z.string().nullable(),
                 death_time: z.string().nullable(),
             }),
-            `select status_pulang_id as status_id, kontrol_ulang as follow_up,
+            `select status_pulang_id as status_id, keadaan_pulang_id as condition_id, kontrol_ulang as follow_up,
                     tanggal_kontrol::text as follow_up_date, dokter_konsul_id as consultant_id,
                     rujuk_eksternal_tujuan as referral_destination, rujuk_eksternal_poli as referral_specialty,
                     rujuk_eksternal_alasan as referral_reason, waktu_meninggal as death_time_category,
@@ -224,10 +243,40 @@ export class Discharges {
         };
     }
 
+    // Keadaan pulang aktif tenant ini, atau yang sudah tersimpan walau sejak itu nonaktif.
+    private async condition(
+        raw: unknown,
+        saved: string | null,
+        errors: Errors,
+    ): Promise<string | null> {
+        if (raw === null || raw === undefined || raw === '') return null;
+        const id = typeof raw === 'string' ? lookupId(raw) : null;
+        const found = id
+            ? await this.db.one(
+                  z.object({ id: z.string() }),
+                  `select id from sim_m_keadaan_pulang
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                  [this.tenantId, id, saved],
+              )
+            : undefined;
+        if (!found)
+            add(
+                errors,
+                'discharge.condition_id',
+                'Pilih keadaan pulang dari daftar.',
+            );
+        return found?.id ?? null;
+    }
+
     // Kiriman panel Status Pasien. Hanya isian milik perilaku status yang dipilih yang dibaca; sisanya dikosongkan.
+    // Keadaan pulang dibaca apa pun statusnya.
     async read(
         raw: unknown,
-        saved: { status_id: string | null; consultant_id: string | null },
+        saved: {
+            status_id: string | null;
+            condition_id: string | null;
+            consultant_id: string | null;
+        },
         options: ReadonlyMap<OptionGroup, ReadonlySet<string>>,
         errors: Errors,
     ): Promise<DischargeValues> {
@@ -237,6 +286,11 @@ export class Discharges {
             add(errors, 'discharge', 'Isian ini tidak sah.');
             return values;
         }
+        values.keadaan_pulang_id = await this.condition(
+            raw.condition_id,
+            saved.condition_id,
+            errors,
+        );
         const status = await this.status(
             raw.status_id,
             saved.status_id,

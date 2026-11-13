@@ -24,6 +24,7 @@ type Referral = {
 };
 type Discharge = {
     status_id: string | null;
+    condition_id: string | null;
     follow_up: boolean | null;
     follow_up_date: string | null;
     consultant_id: string | null;
@@ -156,6 +157,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         const { destinationId } = await clinic.visit();
         expect(await discharge(destinationId)).toEqual({
             status_id: null,
+            condition_id: null,
             follow_up: null,
             follow_up_date: null,
             consultant_id: null,
@@ -619,5 +621,102 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
                 )
             ).status,
         ).toBe(403);
+    });
+
+    test('the condition at discharge is the Keadaan Pulang list, saved with any status and kept by an internal referral', async () => {
+        const conditions = async () =>
+            (
+                await json<{
+                    discharge_conditions: {
+                        id: string;
+                        code: string;
+                        name: string;
+                        active: boolean;
+                    }[];
+                }>(
+                    await clinic.admin.get(
+                        `${api}/examination/medical-record/metadata`,
+                    ),
+                    200,
+                )
+            ).discharge_conditions;
+        const seeded = await conditions();
+        expect(seeded.map((row) => [row.code, row.name, row.active])).toEqual([
+            ['Stabil', 'Stabil', true],
+            ['Tidak Stabil', 'Tidak Stabil', true],
+            ['Perbaikan', 'Perbaikan', true],
+            ['Lain-lain', 'Lain-lain', true],
+        ]);
+        const stable = seeded[0]!.id;
+        const better = seeded[2]!.id;
+
+        const { destinationId } = await started();
+        const save = async (value: Partial<Discharge>) =>
+            clinic.save(destinationId, {
+                discharge: { ...(await discharge(destinationId)), ...value },
+            });
+        // Tanpa status pun keadaan pulang tersimpan.
+        await json(await save({ condition_id: stable }), 200);
+        expect(await discharge(destinationId)).toMatchObject({
+            status_id: null,
+            condition_id: stable,
+        });
+        await json(
+            await save({
+                status_id: statuses.RawatJalan!.id,
+                condition_id: better,
+            }),
+            200,
+        );
+        const [row] = await pool.unsafe<{ kode: string }[]>(
+            `select k.kode from sim_tr_registrasi_tujuan d
+             join sim_m_keadaan_pulang k on k.id = d.keadaan_pulang_id where d.id = $1`,
+            [destinationId],
+        );
+        expect(row?.kode).toBe('Perbaikan');
+
+        expect(
+            await refused(await save({ condition_id: Bun.randomUUIDv7() })),
+        ).toEqual({
+            'discharge.condition_id': ['Pilih keadaan pulang dari daftar.'],
+        });
+        // Pilihan nonaktif tetap sah pada tujuan yang sudah menyimpannya, tetapi tidak untuk tujuan lain.
+        await pool.unsafe(
+            'update sim_m_keadaan_pulang set aktif = false where id = $1',
+            [better],
+        );
+        try {
+            await json(await save({ condition_id: better }), 200);
+            const other = await started();
+            expect(
+                await refused(
+                    await clinic.save(other.destinationId, {
+                        discharge: {
+                            ...(await discharge(other.destinationId)),
+                            condition_id: better,
+                        },
+                    }),
+                ),
+            ).toEqual({
+                'discharge.condition_id': ['Pilih keadaan pulang dari daftar.'],
+            });
+        } finally {
+            await pool.unsafe(
+                'update sim_m_keadaan_pulang set aktif = true where id = $1',
+                [better],
+            );
+        }
+
+        await json(
+            await refer(destinationId, {
+                section_id: clinic.dental,
+                practice_schedule_id: clinic.dentalSchedule,
+            }),
+            200,
+        );
+        expect(await discharge(destinationId)).toMatchObject({
+            status_id: statuses.RujukInternal!.id,
+            condition_id: better,
+        });
     });
 });
