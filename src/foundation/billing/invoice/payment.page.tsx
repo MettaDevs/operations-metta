@@ -247,6 +247,40 @@ function PaymentPage(): ReactNode {
                                         readOnly
                                     />
                                 </FormControl>
+                                {payment.discounts.map((discount, index) => (
+                                    <FormControl
+                                        key={`discount-${index}`}
+                                        hint={[
+                                            `${displayNumber(discount.percent)}%`,
+                                            discount.procedure_name,
+                                            discount.doctor_name,
+                                            discount.note,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · ')}
+                                    >
+                                        <Input
+                                            label={discount.name}
+                                            value={displayAmount(
+                                                discount.amount,
+                                                data.amount_decimals,
+                                            )}
+                                            readOnly
+                                        />
+                                    </FormControl>
+                                ))}
+                                {payment.discount !== '0' && (
+                                    <FormControl>
+                                        <Input
+                                            label="Nilai Discount"
+                                            value={displayAmount(
+                                                payment.discount,
+                                                data.amount_decimals,
+                                            )}
+                                            readOnly
+                                        />
+                                    </FormControl>
+                                )}
                                 {(payment.received !== '0' ||
                                     payment.change !== '0') && (
                                     <FormControl>

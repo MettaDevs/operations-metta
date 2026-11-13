@@ -105,6 +105,12 @@ components:
         value:
           type: string
           description: Nilai tagihan dalam mata uang lokal tenant, teks desimal.
+        discount:
+          type: string
+          description: |
+            Jumlah diskon kasir (tab Diskon, SIMtrKasirDiscount) dalam mata uang lokal, teks desimal. Field opsional sejak
+            14 November 2026; selalu dikirim kasir, 0 bila tanpa diskon. Jumlah `payments` sama dengan `value` dikurangi
+            `discount`, ditambah biaya tambahan kartu bila ada.
         payments:
           type: array
           description: |

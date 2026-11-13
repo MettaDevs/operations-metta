@@ -37,6 +37,12 @@ import {
     paymentInputSchema,
 } from './payment.schema.ts';
 import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
+import {
+    discountBase,
+    discountLine,
+    isDiscountKind,
+    type DiscountCharge,
+} from './payment.discount.ts';
 
 export const invoicePosted = 'billing.invoice.posted.v1' as const;
 export const invoiceCancelled = 'billing.invoice.cancelled.v1' as const;
@@ -93,6 +99,10 @@ const methodSchema = z.object({
 
 const chargeSchema = z.object({
     id: z.string(),
+    jenis_biaya_id: z.string(),
+    jenis_biaya_nama: z.string(),
+    dokter_id: z.string().nullable(),
+    dokter_nama: z.string().nullable(),
     kelompok_jasa_id: z.string().nullable(),
     kelompok_jasa_nama: z.string().nullable(),
     qty: z.string(),
@@ -176,8 +186,8 @@ async function openInvoice(
     );
     const charges = await db.rows(
         chargeSchema,
-        `select id, kelompok_jasa_id, kelompok_jasa_nama, qty::text, nilai::text, harga_orig::text,
-                disc::text, hext::text
+        `select id, jenis_biaya_id, jenis_biaya_nama, dokter_id, dokter_nama, kelompok_jasa_id, kelompok_jasa_nama,
+                qty::text, nilai::text, harga_orig::text, disc::text, hext::text
          from kunjungan_kasir_detail
          where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'terbuka'
            and deleted_at is null
@@ -229,6 +239,170 @@ const localDetail = (methodId: string, amount: bigint): PostedDetail => ({
     party: null,
 });
 
+// Satu baris tab Diskon yang sudah diperiksa: persen dan nilai dalam mata uang lokal.
+type PostedDiscount = {
+    discountId: string;
+    doctorId: string | null;
+    doctorName: string | null;
+    procedureId: string | null;
+    procedureName: string | null;
+    percent: string;
+    amount: string;
+    note: string | null;
+};
+
+const discountSchema = z.object({
+    id: z.string(),
+    jenis: z.string(),
+    komponen_biaya_id: z.string().nullable(),
+    kelompok_jasa_id: z.string().nullable(),
+});
+
+// Baris tab Diskon sistem lama, diperiksa dan dihitung ulang di server dengan rumus layar yang sama
+// (payment.discount.ts). Kesalahan ditulis ke errors per isian baris.
+async function checkedDiscounts(
+    db: Database,
+    scope: Scope,
+    input: {
+        lines: NonNullable<z.infer<typeof paymentInputSchema>['discounts']>;
+        charges: z.infer<typeof chargeSchema>[];
+        invoiceValue: string;
+        amountDecimals: number;
+        errors: Record<string, string>;
+    },
+): Promise<PostedDiscount[]> {
+    if (!input.lines.length) return [];
+    const masters = new Map(
+        (
+            await db.rows(
+                discountSchema,
+                `select id, jenis, komponen_biaya_id, kelompok_jasa_id from discount
+                 where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null`,
+                [scope.tenantId, scope.legalEntityId],
+            )
+        ).map((discount) => [discount.id, discount]),
+    );
+    const components = await db.rows(
+        z.object({ charge_id: z.string(), id: z.string(), value: z.string() }),
+        `select kunjungan_kasir_detail_id as charge_id, komponen_biaya_id as id, nilai::text as value
+         from kunjungan_kasir_detail_komponen
+         where tenant_id = $1 and kunjungan_kasir_detail_id = any($2::uuid[]) and deleted_at is null`,
+        [
+            scope.tenantId,
+            `{${input.charges.map((charge) => charge.id).join(',')}}`,
+        ],
+    );
+    const charges: DiscountCharge[] = input.charges.map((charge) => ({
+        procedureId: charge.jenis_biaya_id,
+        doctorId: charge.dokter_id,
+        quantity: charge.qty,
+        components: components
+            .filter((component) => component.charge_id === charge.id)
+            .map((component) => ({
+                componentId: component.id,
+                value: component.value,
+            })),
+    }));
+    const lines: PostedDiscount[] = [];
+    input.lines.forEach((line, index) => {
+        const field = `discounts.${index}`;
+        const master = masters.get(line.discount_id);
+        const kind = master?.jenis ?? '';
+        if (!master || !isDiscountKind(kind)) {
+            input.errors[`${field}.discount_id`] = 'Pilih diskon dari daftar.';
+            return;
+        }
+        const procedureId = line.procedure_id?.trim() || null;
+        const doctorId = line.doctor_id?.trim() || null;
+        const procedure = input.charges.find(
+            (charge) =>
+                charge.jenis_biaya_id === procedureId &&
+                (kind !== 'kelompok_jasa' ||
+                    charge.kelompok_jasa_id === master.kelompok_jasa_id),
+        );
+        const doctor = input.charges.find(
+            (charge) =>
+                charge.dokter_id !== null && charge.dokter_id === doctorId,
+        );
+        if (kind === 'komponen' && !procedureId)
+            input.errors[`${field}.procedure_id`] = 'Pilih jasa.';
+        else if (procedureId && !procedure)
+            input.errors[`${field}.procedure_id`] =
+                'Pilih jasa dari rincian biaya kunjungan ini.';
+        if (doctorId && !doctor)
+            input.errors[`${field}.doctor_id`] =
+                'Pilih dokter dari rincian biaya kunjungan ini.';
+        const note = line.note?.trim() || null;
+        if (note && note.length > 100)
+            input.errors[`${field}.note`] =
+                'Keterangan paling banyak 100 karakter.';
+        const typedPercent =
+            line.percent === null || line.percent === undefined
+                ? ''
+                : String(line.percent).trim();
+        const typedAmount =
+            line.amount === null || line.amount === undefined
+                ? ''
+                : String(line.amount).trim();
+        const percent = typedPercent ? percentInput(typedPercent) : null;
+        const amount = typedAmount
+            ? amountInput(typedAmount, input.amountDecimals)
+            : null;
+        if (typedPercent && percent === null)
+            input.errors[`${field}.percent`] = percentHint();
+        if (typedAmount && amount === null)
+            input.errors[`${field}.amount`] =
+                `Isi nilai diskon lebih dari 0, ${decimalsHint(input.amountDecimals)}.`;
+        if (!typedPercent && !typedAmount)
+            input.errors[`${field}.amount`] = 'Isi persen atau nilai diskon.';
+        const base = discountBase(kind, {
+            invoiceValue: input.invoiceValue,
+            componentId: master.komponen_biaya_id,
+            procedureId,
+            doctorId,
+            charges,
+        });
+        const computed =
+            amount !== null
+                ? discountLine(base, { amount }, input.amountDecimals)
+                : percent !== null
+                  ? discountLine(base, { percent }, input.amountDecimals)
+                  : null;
+        if (percent !== null && amount === null && base === null)
+            input.errors[`${field}.amount`] =
+                'Isi nilai diskon. Persen diskon kelompok jasa tidak dihitung.';
+        if (
+            !computed ||
+            input.errors[`${field}.procedure_id`] ||
+            input.errors[`${field}.doctor_id`]
+        )
+            return;
+        if (Decimal.of(computed.amount).compare(Decimal.of('0')) <= 0)
+            input.errors[`${field}.amount`] =
+                'Nilai diskon harus lebih dari 0.';
+        else if (base && Decimal.of(computed.amount).compare(base) > 0)
+            input.errors[`${field}.amount`] =
+                `Nilai diskon melebihi dasarnya, ${base.rounded(input.amountDecimals).normalized()}.`;
+        lines.push({
+            discountId: master.id,
+            doctorId: doctor?.dokter_id ?? null,
+            doctorName: doctor?.dokter_nama ?? null,
+            procedureId: procedure?.jenis_biaya_id ?? null,
+            procedureName: procedure?.jenis_biaya_nama ?? null,
+            percent: computed.percent,
+            amount: computed.amount,
+            note,
+        });
+    });
+    const total = lines.reduce(
+        (sum, line) => sum.plus(Decimal.of(line.amount)),
+        Decimal.of('0'),
+    );
+    if (total.compare(Decimal.of(input.invoiceValue)) > 0)
+        input.errors._form = 'Jumlah diskon melebihi Nilai tagihan.';
+    return lines;
+}
+
 // Tagihan dan pembayaran kunjungan: kasir, baris jenis bayar bukan nol, nilai per kelompok jasa, baris biaya ditagih,
 // dan event billing.invoice.posted.v1. Dipanggil di dalam transaksi yang sudah membuka tagihannya (openInvoice).
 async function postPayment(
@@ -246,8 +420,13 @@ async function postPayment(
         received: bigint;
         change: bigint;
         details: PostedDetail[];
+        discounts: PostedDiscount[];
     },
 ): Promise<{ id: string; number: string }> {
+    const discount = posting.discounts.reduce(
+        (sum, line) => sum + toMinor(line.amount),
+        0n,
+    );
     const id = Bun.randomUUIDv7();
     const stamp = nowSql();
     const details = posting.details.filter((detail) => detail.amount !== 0n);
@@ -274,7 +453,7 @@ async function postPayment(
         otomatis: posting.automatic,
         nilai: posting.totals.value,
         nilai_orig: posting.totals.originalValue,
-        nilai_discount: '0',
+        nilai_discount: fromMinor(discount),
         biaya_tambahan: fromMinor(posting.surcharge),
         jumlah_bayar: fromMinor(posting.received),
         nilai_kembalian: fromMinor(posting.change),
@@ -298,6 +477,22 @@ async function postPayment(
             biaya_tambahan_persen: detail.surchargePercent,
             biaya_tambahan: fromMinor(detail.surcharge),
             pihak_id: detail.party,
+            created_at: stamp,
+            updated_at: stamp,
+        });
+    for (const line of posting.discounts)
+        await db.insert('kasir_discount', {
+            id: Bun.randomUUIDv7(),
+            tenant_id: posting.tenantId,
+            kasir_id: id,
+            discount_id: line.discountId,
+            dokter_id: line.doctorId,
+            dokter_nama: line.doctorName,
+            jenis_biaya_id: line.procedureId,
+            jenis_biaya_nama: line.procedureName,
+            persen: line.percent,
+            nilai: line.amount,
+            keterangan: line.note,
             created_at: stamp,
             updated_at: stamp,
         });
@@ -341,6 +536,7 @@ async function postPayment(
             registration_number: posting.registrationNumber,
             date: posting.date,
             value: posting.totals.value,
+            discount: fromMinor(discount),
             payments: details.map((detail) => ({
                 payment_method_id: detail.methodId,
                 amount: fromMinor(detail.amount),
@@ -405,6 +601,7 @@ export async function settleAutomatically(
         received: 0n,
         change: 0n,
         details: [localDetail(method.id, toMinor(invoice.totals.value))],
+        discounts: [],
     });
 }
 
@@ -579,10 +776,20 @@ export class Payments {
                     };
                 }),
             );
+            const discounts = await checkedDiscounts(this.db, scope, {
+                lines: input.discounts ?? [],
+                charges,
+                invoiceValue: totals.value,
+                amountDecimals: precision.amount_decimals,
+                errors,
+            });
             if (Object.keys(errors).length) validation(errors);
             const amounts = paymentAmounts({
                 value: toMinor(totals.value),
-                discount: 0n,
+                discount: discounts.reduce(
+                    (sum, line) => sum + toMinor(line.amount),
+                    0n,
+                ),
                 received: toMinor(received ?? '0'),
                 lines: lines.map((line) => ({
                     amount: toMinor(line.amount),
@@ -657,6 +864,7 @@ export class Payments {
                         ? [localDetail(remainderMethod.id, amounts.remainder)]
                         : []),
                 ],
+                discounts,
             });
         });
         return {

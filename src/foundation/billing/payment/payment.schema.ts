@@ -21,6 +21,22 @@ export const paymentInputSchema = z.object({
         )
         .optional(),
     take_remainder: z.boolean().optional(),
+    // Baris tab Diskon. Layar mengirim isian yang diketik terakhir, persen atau nilai, dan server menghitung yang lain.
+    discounts: z
+        .array(
+            z.object({
+                discount_id: z.string(),
+                doctor_id: z.string().nullable().optional(),
+                procedure_id: z.string().nullable().optional(),
+                percent: z
+                    .union([z.number(), z.string()])
+                    .nullable()
+                    .optional(),
+                amount: z.union([z.number(), z.string()]).nullable().optional(),
+                note: z.string().nullable().optional(),
+            }),
+        )
+        .optional(),
 });
 
 // Batal pembayaran (modal Batal Pembayaran sistem lama): penyetuju mengetik email dan kata sandinya, lalu alasan batal.

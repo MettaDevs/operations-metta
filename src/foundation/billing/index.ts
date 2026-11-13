@@ -12,6 +12,7 @@ import {
 import { clerkRoutes } from './clerk/clerk.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';
 import { paymentRoutes } from './payment/payment.routes.ts';
+import { discountRoutes } from './discount/discount.routes.ts';
 import { merchantRoutes } from './merchant/merchant.routes.ts';
 import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
 
@@ -45,6 +46,7 @@ export function billingRoutes() {
     return {
         ...paymentMethodRoutes(),
         ...merchantRoutes(),
+        ...discountRoutes(),
         ...clerkRoutes(),
         ...invoiceRoutes(),
         ...paymentRoutes(),

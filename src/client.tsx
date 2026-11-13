@@ -49,6 +49,7 @@ import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../
 import { page as foundationBillingClerkClerkPage } from './foundation/billing/clerk/clerk.page.tsx';
 import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
+import { page as foundationBillingDiscountDiscountsPage } from './foundation/billing/discount/discounts.page.tsx';
 import { page as foundationBillingInvoicePaymentPage } from './foundation/billing/invoice/payment.page.tsx';
 import { page as foundationBillingInvoicePaymentsPage } from './foundation/billing/invoice/payments.page.tsx';
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
@@ -629,6 +630,14 @@ const foundationBillingDashboardDashboardRoute = createRoute({
     staticData: { title: foundationBillingDashboardDashboardPage.title },
 });
 
+const foundationBillingDiscountDiscountsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingDiscountDiscountsPage.path,
+    component: foundationBillingDiscountDiscountsPage.component,
+    validateSearch: foundationBillingDiscountDiscountsPage.validateSearch,
+    staticData: { title: foundationBillingDiscountDiscountsPage.title },
+});
+
 const foundationBillingInvoicePaymentRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationBillingInvoicePaymentPage.path,
@@ -1073,6 +1082,7 @@ const routeTree = rootRoute.addChildren([
         foundationBillingClerkClerkRoute,
         foundationBillingClerkClerksRoute,
         foundationBillingDashboardDashboardRoute,
+        foundationBillingDiscountDiscountsRoute,
         foundationBillingInvoicePaymentRoute,
         foundationBillingInvoicePaymentsRoute,
         foundationBillingMerchantMerchantsRoute,

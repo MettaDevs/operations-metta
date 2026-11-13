@@ -133,7 +133,12 @@ export class Invoices {
                     trim_scale(r.qty)::text as quantity, trim_scale(r.nilai)::text as value,
                     trim_scale(r.harga_orig)::text as original_price, trim_scale(r.disc)::text as discount_percent,
                     trim_scale(r.hext)::text as extra, r.section_nama as section_name, r.dokter_nama as doctor_name,
-                    r.tanggal::text as date, r.status
+                    r.tanggal::text as date, r.status, r.jenis_biaya_id as procedure_id, r.dokter_id as doctor_id,
+                    coalesce((select json_agg(json_build_object('charge_component_id', c.komponen_biaya_id,
+                                                                'value', trim_scale(c.nilai)::text))
+                              from kunjungan_kasir_detail_komponen c
+                              where c.tenant_id = r.tenant_id and c.kunjungan_kasir_detail_id = r.id
+                                and c.deleted_at is null), '[]'::json) as components
              from kunjungan_kasir_detail r
              where r.tenant_id = $1 and r.legal_entity_id = $2 and r.kunjungan_id = $3 and r.deleted_at is null
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
@@ -220,12 +225,39 @@ export class Invoices {
              where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null order by kode`,
             [this.scope.tenantId, this.scope.legalEntityId],
         );
+        const discounts = await this.db.rows(
+            z.object({
+                id: z.string(),
+                code: z.string(),
+                name: z.string(),
+                kind: z.string(),
+                charge_component_id: z.string().nullable(),
+                service_group_id: z.string().nullable(),
+            }),
+            `select id, kode as code, nama as name, jenis as kind, komponen_biaya_id as charge_component_id,
+                    kelompok_jasa_id as service_group_id
+             from discount
+             where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null
+             order by kode`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
         const payment = await this.db.one(
             z.object({
                 id: z.string(),
                 version: z.number(),
                 number: z.string(),
                 automatic: z.boolean(),
+                discount: z.string(),
+                discounts: z.array(
+                    z.object({
+                        name: z.string(),
+                        doctor_name: z.string().nullable(),
+                        procedure_name: z.string().nullable(),
+                        percent: z.string(),
+                        amount: z.string(),
+                        note: z.string().nullable(),
+                    }),
+                ),
                 received: z.string(),
                 change: z.string(),
                 cash_label: z.string().nullable(),
@@ -243,6 +275,14 @@ export class Invoices {
             // valuta melebihi uang yang diterima. Layar menampilkannya seperti saat kasir mengisi: uang diterima di bawah
             // label jenis bayar tunai, lalu Kembalian, jadi barisnya tidak ikut daftar jenis bayar lain.
             `select k.id, k.version, k.no_bukti as number, k.otomatis as automatic,
+                    trim_scale(k.nilai_discount)::text as discount,
+                    coalesce((select json_agg(json_build_object('name', m.nama, 'doctor_name', x.dokter_nama,
+                                                                'procedure_name', x.jenis_biaya_nama,
+                                                                'percent', trim_scale(x.persen)::text,
+                                                                'amount', trim_scale(x.nilai)::text,
+                                                                'note', x.keterangan) order by x.id)
+                              from kasir_discount x join discount m on m.tenant_id = x.tenant_id and m.id = x.discount_id
+                              where x.tenant_id = k.tenant_id and x.kasir_id = k.id), '[]'::json) as discounts,
                     trim_scale(k.jumlah_bayar)::text as received,
                     trim_scale(k.nilai_kembalian)::text as change,
                     coalesce((select coalesce(j.label_kasir, j.nama)
@@ -282,6 +322,7 @@ export class Invoices {
                 },
                 payment_methods: paymentMethods,
                 merchants,
+                discounts,
                 payment: payment ?? null,
                 can_pay: this.workspace.permissions.has('core.payment.update'),
                 can_change_rate: this.workspace.permissions.has(

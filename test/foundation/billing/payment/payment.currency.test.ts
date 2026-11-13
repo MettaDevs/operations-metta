@@ -322,6 +322,8 @@ describe.skipIf(!process.env.DB_HOST)(
                 version: 1,
                 number: expect.any(String),
                 automatic: false,
+                discount: '0',
+                discounts: [],
                 received: '0',
                 change: '694',
                 cash_label: 'TUN',
