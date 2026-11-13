@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+    afterAll,
+    beforeAll,
+    describe,
+    expect,
+    setSystemTime,
+    test,
+} from 'bun:test';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
 import { databaseSettingsSchema } from '../../../src/platform/config/index.ts';
@@ -367,6 +374,29 @@ describe.skipIf(!process.env.DB_HOST)('masuk lewat SSO', () => {
         const again = app.browser(host);
         await again.login(member.email, member.password);
         expect((await again.get('/api/v1/shell')).status).toBe(200);
+    });
+
+    test('login sesudah back-channel logout tetap berlaku walau jam proses ini tertinggal dari jam database', async () => {
+        const member = await memberWithPassword('jam');
+        const subject = `jam-${suffix}`;
+        await link(member.id, subject);
+        const logout = await app
+            .browser(base)
+            .request('POST', '/sso/backchannel-logout', {
+                form: {
+                    logout_token: await stub.sign(stub.logoutClaims(subject)),
+                },
+            });
+        expect(logout.status).toBe(200);
+        // Jam proses aplikasi dua detik di belakang jam database, seperti dua mesin yang jamnya bergeser.
+        setSystemTime(new Date(Date.now() - 2000));
+        try {
+            const again = app.browser(host);
+            await again.login(member.email, member.password);
+            expect((await again.get('/api/v1/shell')).status).toBe(200);
+        } finally {
+            setSystemTime();
+        }
     });
 
     test('logout token tanpa event logout atau dengan nonce ditolak', async () => {

@@ -235,7 +235,7 @@ test('successful login clears the Fortify key with two deletes and keeps the rou
         findUser,
         findUser,
         'delete from sessions where id=$1',
-        'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1',
+        'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1 returning extract(epoch from current_timestamp)::float8 as login_at',
         "select set_config('coreerp.user_id', $1, false) 019a6b3c-1d2e-7f40-8a5b-6c7d8e9f0a1b",
         'delete from cache where key in ($1,$2) Kf illuminate:cache:flexible:created:Kf',
         'delete from cache where key in ($1,$2) Kf:timer illuminate:cache:flexible:created:Kf:timer',
