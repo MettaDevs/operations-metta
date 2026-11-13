@@ -352,6 +352,12 @@ export const sysAdminArea: NavigationAreaEntry = {
                     href: '/sysadmin/currency/currencies',
                     permission: 'core.reference-data.read',
                 },
+                {
+                    id: 'exchange-rates',
+                    label: 'Kurs',
+                    href: '/sysadmin/currency/exchange-rates',
+                    permission: 'core.reference-data.read',
+                },
             ],
         },
         {

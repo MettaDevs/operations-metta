@@ -23,6 +23,17 @@ describe('currency amounts', () => {
         expect(Decimal.of('1e-3').fixed(6)).toBe('0.001000');
     });
 
+    test('multiplies two decimals exactly before any rounding', () => {
+        expect(
+            Decimal.of('12.35')
+                .multipliedBy(Decimal.of('16250.5'))
+                .normalized(),
+        ).toBe('200693.675');
+        expect(
+            Decimal.of('-0.5').multipliedBy(Decimal.of('0.000123')).fixed(9),
+        ).toBe('-0.000061500');
+    });
+
     test('allocation conserves each exact rounded total', () => {
         for (const input of ['0', '0.01', '1.005', '999999999999.995']) {
             for (const units of [1, 2, 3, 499]) {

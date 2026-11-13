@@ -21,6 +21,7 @@ export {
     unitAmountDecimalOptions,
 } from './currency.rules.ts';
 export { currencyRoutes } from './currency.routes.ts';
+export { exchangeRateRoutes } from './exchange-rate.routes.ts';
 export { localCurrencyCode } from '../../platform/money/index.ts';
 
 const precisionSchema = z.object({
@@ -45,14 +46,23 @@ const localDefault: Precision = localCurrencyPrecision;
 const isRoundingMethod = (value: string): value is RoundingMethod =>
     roundingMethods.some((method) => method === value);
 
+const rateSchema = z.object({ kurs: z.string() });
+
+// Tanggal untuk pesan, dd/mm/yyyy seperti layar.
+const displayDate = (date: string) => date.split('-').reverse().join('/');
+
 export class Currency {
     private readonly cache = new Map<string, Precision>();
+    private readonly rates = new Map<string, Decimal>();
 
     constructor(
         private readonly db: Database,
         private readonly tenantId: string,
     ) {
-        db.onTransactionBoundary(() => this.cache.clear());
+        db.onTransactionBoundary(() => {
+            this.cache.clear();
+            this.rates.clear();
+        });
     }
 
     async precision(code: string): Promise<Precision> {
@@ -79,6 +89,34 @@ export class Currency {
         this.cache.set(key, precision);
         return precision;
     }
+
+    // Kurs mata uang pada satu tanggal (yyyy-mm-dd): nilai satu satuan mata uang itu dalam mata uang lokal, dari baris
+    // dengan tanggal berlaku terakhir yang tidak lewat dari tanggal itu (Currency Exchange Rate BC). Mata uang lokal
+    // selalu 1. Kurs yang belum diisi ditolak di `field`.
+    async rate(
+        code: string,
+        date: string,
+        field = 'currency_code',
+    ): Promise<Decimal> {
+        const key = code.toUpperCase();
+        if (key === localCurrencyCode) return Decimal.of('1');
+        const cached = this.rates.get(`${key}:${date}`);
+        if (cached) return cached;
+        const row = await this.db.one(
+            rateSchema,
+            `select trim_scale(kurs)::text as kurs from tbj_his_currency
+             where tenant_id = $1 and currency_code = $2 and tanggal_berlaku <= $3::date and deleted_at is null
+             order by tanggal_berlaku desc limit 1`,
+            [this.tenantId, key, date],
+        );
+        if (!row)
+            validation({
+                [field]: `Kurs ${key} untuk ${displayDate(date)} belum diisi. Atur di Sys Admin › Kurs.`,
+            });
+        const rate = Decimal.of(row.kurs);
+        this.rates.set(`${key}:${date}`, rate);
+        return rate;
+    }
 }
 
 // Jumlah uang dibulatkan ke presisi jumlah mata uangnya (Round(x, Amount Rounding Precision) BC).
@@ -89,6 +127,16 @@ export function roundAmount(value: Decimal, precision: Precision): Decimal {
 // Harga satuan dibulatkan ke presisi harga satuan mata uangnya.
 export function roundUnitAmount(value: Decimal, precision: Precision): Decimal {
     return value.rounded(precision.unit_amount_decimals);
+}
+
+// Jumlah valuta dalam mata uang lokal: jumlah kali kurs, dibulatkan ke presisi jumlah mata uang lokal (ExchangeAmtFCYToLCY
+// lalu Round BC).
+export function toLocalAmount(
+    amount: Decimal,
+    rate: Decimal,
+    local: Precision,
+): Decimal {
+    return roundAmount(amount.multipliedBy(rate), local);
 }
 
 // Total tagihan: dibulatkan ke presisi jumlah, lalu ke kelipatan pembulatan tagihan menurut metodenya. Selisihnya kelak
