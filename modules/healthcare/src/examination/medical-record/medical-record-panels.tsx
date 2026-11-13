@@ -1115,6 +1115,23 @@ export function MedicalRecordPanels({
                             />
                         </FormGrid>
                     </div>
+                    {context.physical_measured_at && (
+                        <p className="mt-4 text-sm text-muted-foreground">
+                            Diukur{' '}
+                            {new Date(
+                                context.physical_measured_at,
+                            ).toLocaleString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            })}
+                            {context.physical_measured_by_name
+                                ? ` oleh ${context.physical_measured_by_name}`
+                                : ''}
+                        </p>
+                    )}
                 </CollapsibleSection>
             )}
 

@@ -1189,9 +1189,28 @@ export class MedicalRecords {
             );
         if (uses('discharge'))
             data.discharge = await this.discharges.present(destination.id);
+        const measurement =
+            uses('physical') && header
+                ? await this.db.one(
+                      z.object({
+                          measured_at: z.string(),
+                          measured_by_name: z.string().nullable(),
+                      }),
+                      `select to_char(f.diukur_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as measured_at,
+                              u.name as measured_by_name
+                       from sim_tr_pemeriksaan_fisik f
+                       left join users u on u.id = f.diukur_oleh
+                       where f.tenant_id = $1 and f.pemeriksaan_id = $2 and f.deleted_at is null`,
+                      [tenantId, header.id],
+                  )
+                : undefined;
         return {
             data,
             context: {
+                // Waktu ukur dan pengukur Periksa fisik yang tersimpan.
+                physical_measured_at: measurement?.measured_at ?? null,
+                physical_measured_by_name:
+                    measurement?.measured_by_name ?? null,
                 status: destination.status,
                 panels: active,
                 editable:
@@ -1611,7 +1630,10 @@ export class MedicalRecords {
                 values[key] ?? null,
             ]),
         );
-        if (existingId)
+        const measured = name === 'physical';
+        if (existingId && measured)
+            await this.updateMeasurement(existingId, columns, stamp);
+        else if (existingId)
             await this.update(table, existingId, {
                 ...columns,
                 updated_at: stamp,
@@ -1622,9 +1644,48 @@ export class MedicalRecords {
                 tenant_id: this.workspace.tenantId,
                 pemeriksaan_id: recordId,
                 ...columns,
+                ...(measured
+                    ? { diukur_pada: stamp, diukur_oleh: this.workspace.userId }
+                    : {}),
                 created_at: stamp,
                 updated_at: stamp,
             });
+    }
+
+    // Periksa fisik: waktu ukur dan pengukurnya hanya bergeser bila salah satu nilainya berubah, jadi Simpan bagian lain
+    // tidak mengubah waktu ukur tanda vital.
+    private async updateMeasurement(
+        id: string,
+        columns: Values,
+        stamp: string,
+    ): Promise<void> {
+        const names = Object.keys(columns);
+        if (names.some((column) => !/^[a-z_][a-z0-9_]*$/.test(column)))
+            throw new Error('Invalid internal SQL identifier.');
+        const params = names.map((_, index) => `$${index + 5}`);
+        // Pembanding memakai parameter sendiri: varchar = $n dan varchar is distinct from $n membuat PostgreSQL menebak
+        // dua tipe berbeda untuk parameter yang sama.
+        const changed = names
+            .map(
+                (column, index) =>
+                    `${column} is distinct from $${index + 5 + names.length}`,
+            )
+            .join(' or ');
+        await this.db.execute(
+            `update sim_tr_pemeriksaan_fisik
+             set ${names.map((column, index) => `${column} = ${params[index] ?? ''}`).join(', ')}, updated_at = $3,
+                 diukur_pada = case when ${changed} then $3 else diukur_pada end,
+                 diukur_oleh = case when ${changed} then $4 else diukur_oleh end
+             where tenant_id = $1 and id = $2`,
+            [
+                this.workspace.tenantId,
+                id,
+                stamp,
+                this.workspace.userId,
+                ...Object.values(columns),
+                ...Object.values(columns),
+            ],
+        );
     }
 
     // Alergi pasien: satu baris per pasien, diubah di tempat.
