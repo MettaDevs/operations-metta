@@ -21,6 +21,7 @@ type Shown = { data: Data; context: { editable: boolean } };
 type Section = {
     id: string;
     operating_unit_id: string;
+    code: string;
     name: string;
     kind: string;
     examination_panels: string[];
@@ -127,6 +128,7 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             await json<{ data: Section }>(
                 await admin.patch(`${api}/sections/${section.id}`, {
                     operating_unit_id: section.operating_unit_id,
+                    code: section.code,
                     name: section.name,
                     kind: section.kind,
                     examination_panels: panels,
@@ -362,6 +364,7 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             await refused(
                 await admin.patch(`${api}/sections/${dentistry.id}`, {
                     operating_unit_id: unit,
+                    code: dentistry.code,
                     name: dentistry.name,
                     kind: dentistry.kind,
                     examination_panels: ['odontogram'],
