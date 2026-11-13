@@ -65,7 +65,10 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
             )
         ).data;
     }
-    const endClerk = (clerk: { id: string; version: number }, counted: string) =>
+    const endClerk = (
+        clerk: { id: string; version: number },
+        counted: string,
+    ) =>
         cashier.post(`/api/v1/billing/clerks/${clerk.id}/end`, {
             password: testPassword,
             counts: { [cash]: counted },
@@ -174,7 +177,8 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         expect((await payment.response).status).toBe(201);
         const ended = await json<Ended>(await ending.response, 200);
         expect([ended.data.transactions, ended.data.system_total]).toEqual([
-            1, '100000',
+            1,
+            '100000',
         ]);
     });
 
@@ -205,7 +209,8 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         expect((await cancel.response).status).toBe(200);
         const ended = await json<Ended>(await ending.response, 200);
         expect([ended.data.transactions, ended.data.system_total]).toEqual([
-            1, '40000',
+            1,
+            '40000',
         ]);
     });
 
@@ -226,7 +231,8 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         await holder.done;
         const ended = await json<Ended>(await ending.response, 200);
         expect([ended.data.transactions, ended.data.system_total]).toEqual([
-            1, '30000',
+            1,
+            '30000',
         ]);
         expect(await refused(await payment.response)).toEqual({
             _form: [clerkNotStartedMessage],
