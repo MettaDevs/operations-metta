@@ -66,7 +66,7 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
         clinic = await createClinic(pool, browser, 'Klinik Uji Kartu Jasa');
         const group = async (code: string) =>
             (
-                await created(`${api}/diagnosis-references/procedure-groups`, {
+                await created(`${api}/procedure-groups`, {
                     code,
                     name: code,
                 })

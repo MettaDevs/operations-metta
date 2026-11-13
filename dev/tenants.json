@@ -430,8 +430,18 @@
                     }
                 ],
                 "procedure_groups": [
-                    { "code": "TM", "name": "Tindakan Medis" },
-                    { "code": "LAB", "name": "Laboratorium" }
+                    {
+                        "code": "TM",
+                        "name": "Tindakan Medis",
+                        "international_name": "Medical Procedures",
+                        "treatment_group": "ALL"
+                    },
+                    {
+                        "code": "LAB",
+                        "name": "Laboratorium",
+                        "international_name": "Laboratory",
+                        "treatment_group": "RJ"
+                    }
                 ],
                 "procedure_categories": [
                     { "code": "TND", "name": "Tindakan", "group": "TM" },

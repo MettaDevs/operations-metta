@@ -68,10 +68,10 @@ describe.skipIf(!process.env.DB_HOST)('procedure categories', () => {
         const group = async (code: string) =>
             (
                 await json<{ data: { id: string } }>(
-                    await admin.post(
-                        `${api}/diagnosis-references/procedure-groups`,
-                        { code, name: code },
-                    ),
+                    await admin.post(`${api}/procedure-groups`, {
+                        code,
+                        name: code,
+                    }),
                     201,
                 )
             ).data.id;
