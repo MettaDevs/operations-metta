@@ -388,13 +388,17 @@ export class Session {
         this.id = randomToken();
         this.data[guardKey] = user.id;
         this.data.password_hash_web = user.password;
-        this.data.login_at = Date.now() / 1000;
         this.data._token = randomToken();
         this.user = user;
-        await this.db.execute(
-            'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1',
+        // Waktu login dari jam database, jam yang sama dengan users.sessions_revoked_at yang dibandingkan dengannya.
+        // Jam proses ini bisa tertinggal dari jam database, dan login sesudah back-channel logout lalu terbaca sebagai
+        // login sebelum pencabutan.
+        const stamped = await this.db.one(
+            z.object({ login_at: z.number() }),
+            'update users set last_login_at=current_timestamp,updated_at=current_timestamp where id=$1 returning extract(epoch from current_timestamp)::float8 as login_at',
             [user.id],
         );
+        if (stamped) this.data.login_at = stamped.login_at;
         await this.db.actor(user.id);
         this.id = randomToken();
     }
