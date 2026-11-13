@@ -330,6 +330,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 'healthcare.visit.manage',
                 'healthcare.examination.manage',
                 'healthcare.clinical-setup.manage',
+                'core.pricing-setup.manage',
             ]);
             legalEntityId = (
                 await created(admin, '/api/v1/organizations', {
@@ -1401,6 +1402,7 @@ describe.skipIf(!process.env.DB_HOST)(
                     },
                     doctor: { id: doctor, name: 'Dokter Resep' },
                     section: { id: section.id, name: 'Poli Umum Resep' },
+                    price_group: null,
                     lines: [
                         {
                             order: 1,
@@ -1526,6 +1528,67 @@ describe.skipIf(!process.env.DB_HOST)(
             expect((await outboxEnvelopes(pool, tenantId, issued)).length).toBe(
                 before + 2,
             );
+        });
+
+        test("Kirim carries the price group of the visit's patient type for pharmacy prices", async () => {
+            const priceGroup = await created<{
+                id: string;
+                code: string;
+                name: string;
+            }>(admin, '/api/v1/pricing/price-groups', {
+                code: 'UMUM-RSP',
+                name: 'Umum resep',
+            });
+            const patientType = async () => {
+                const listed = await json<{
+                    data: {
+                        id: string;
+                        code: string;
+                        name: string;
+                        version: number;
+                    }[];
+                }>(await admin.get(`${api}/patient-types?q=UMUM`), 200);
+                const type = listed.data.find((row) => row.id === umum)!;
+                return type;
+            };
+            const assign = async (priceGroupId: string | null) => {
+                const type = await patientType();
+                await json(
+                    await admin.patch(`${api}/patient-types/${umum}`, {
+                        code: type.code,
+                        name: type.name,
+                        price_group_id: priceGroupId,
+                        version: type.version,
+                    }),
+                    200,
+                );
+            };
+            await assign(priceGroup.id);
+            try {
+                const id = await started();
+                const zinc = await drug('Zinc tablet harga');
+                await json(
+                    await save(admin, id, {
+                        prescriptions: [draft([single(zinc.id)])],
+                    }),
+                    200,
+                );
+                const before = await outboxEnvelopes(pool, tenantId, issued);
+                await json(await send(admin, id), 200);
+                const [event] = (
+                    await outboxEnvelopes(pool, tenantId, issued)
+                ).filter((row) => !before.some((old) => old.id === row.id));
+                expect(
+                    (await eventContract(issued)).safeParse(event).error,
+                ).toBeUndefined();
+                expect(event?.data.price_group).toEqual({
+                    id: priceGroup.id,
+                    code: 'UMUM-RSP',
+                    name: 'Umum resep',
+                });
+            } finally {
+                await assign(null);
+            }
         });
     },
 );

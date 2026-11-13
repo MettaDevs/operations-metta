@@ -105,6 +105,7 @@ const draftOf = (view: View['data']): Draft => ({
         batch: line.batch,
         reason: line.reason ?? '',
         taken: line.taken,
+        price: line.price,
     })),
 });
 
@@ -686,7 +687,14 @@ function DispensingForm({
                         <CollapsibleSection
                             value="lines"
                             title="Obat"
-                            summary={`${prescription.item_count} obat`}
+                            summary={[
+                                `${prescription.item_count} obat`,
+                                dispensing?.total_amount
+                                    ? `Rp${displayNumber(dispensing.total_amount)}`
+                                    : null,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
                         >
                             <div data-error-field="lines">
                                 <DispensingLines
@@ -707,6 +715,23 @@ function DispensingForm({
                                     portalContainer={portalContainer}
                                 />
                             </div>
+                            {prepared && dispensing?.total_amount ? (
+                                <p className="mt-3 text-sm">
+                                    Total{' '}
+                                    <span className="font-semibold tabular-nums">
+                                        Rp
+                                        {displayNumber(dispensing.total_amount)}
+                                    </span>
+                                </p>
+                            ) : (
+                                !prepared && (
+                                    <p className="mt-3 text-sm text-muted-foreground">
+                                        Harga obat dihitung dan dikunci saat
+                                        resep disiapkan, menurut kelompok harga
+                                        pasien dan grading harga obat.
+                                    </p>
+                                )
+                            )}
                         </CollapsibleSection>
                         {status === 'diserahkan' && (
                             <CollapsibleSection value="returns" title="Retur">

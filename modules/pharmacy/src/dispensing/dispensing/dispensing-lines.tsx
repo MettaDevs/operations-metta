@@ -33,6 +33,13 @@ export type Taken = {
 
 export type UnitOption = Reference & { quantity_per_unit: string };
 
+// Harga yang disalin ke baris saat disiapkan; kosong selama belum disiapkan.
+export type LinePrice = {
+    unit_price: string;
+    discount_percent: string;
+    amount: string;
+};
+
 // Isian satu obat resep. Jumlah disimpan sebagai teks yang tampil di isian (12,5) dan baru diubah ke angka API saat
 // dikirim.
 export type LineDraft = {
@@ -42,6 +49,7 @@ export type LineDraft = {
     batch: PickedBatch | null;
     reason: string;
     taken: Taken[];
+    price: LinePrice | null;
 };
 
 type BatchRow = Reference & { expiry_date: string | null; quantity: string };
@@ -375,31 +383,64 @@ export function DispensingLines({
                     text(draft.batch?.batch_number ?? 'Diambil otomatis')
                 ),
         },
-        {
-            id: 'reason',
-            header: 'Alasan bila kurang',
-            content,
-            minWidth: 200,
-            cell: ({ draft, index }) =>
-                draft === null ? null : editing ? (
-                    <FormControl error={error(index, 'reason')}>
-                        <Input
-                            label="Alasan"
-                            maxLength={200}
-                            data-error-field={field(index ?? 0, 'reason')}
-                            value={draft.reason}
-                            onChange={(event) =>
-                                update(draft.prescriptionLineId, {
-                                    reason: event.target.value,
-                                })
-                            }
-                        />
-                    </FormControl>
-                ) : (
-                    text(draft.reason)
-                ),
-        },
     );
+    if (prepared)
+        columns.push(
+            {
+                id: 'unit_price',
+                header: 'Harga satuan',
+                width: 120,
+                align: 'right',
+                cell: ({ draft }) =>
+                    draft?.price
+                        ? text(displayNumber(draft.price.unit_price))
+                        : null,
+            },
+            {
+                id: 'discount_percent',
+                header: 'Diskon %',
+                width: 90,
+                align: 'right',
+                cell: ({ draft }) =>
+                    draft?.price
+                        ? text(displayNumber(draft.price.discount_percent))
+                        : null,
+            },
+            {
+                id: 'amount',
+                header: 'Nilai',
+                width: 130,
+                align: 'right',
+                cell: ({ draft }) =>
+                    draft?.price
+                        ? text(displayNumber(draft.price.amount))
+                        : null,
+            },
+        );
+    columns.push({
+        id: 'reason',
+        header: 'Alasan bila kurang',
+        content,
+        minWidth: 200,
+        cell: ({ draft, index }) =>
+            draft === null ? null : editing ? (
+                <FormControl error={error(index, 'reason')}>
+                    <Input
+                        label="Alasan"
+                        maxLength={200}
+                        data-error-field={field(index ?? 0, 'reason')}
+                        value={draft.reason}
+                        onChange={(event) =>
+                            update(draft.prescriptionLineId, {
+                                reason: event.target.value,
+                            })
+                        }
+                    />
+                </FormControl>
+            ) : (
+                text(draft.reason)
+            ),
+    });
 
     return (
         <DocumentLines

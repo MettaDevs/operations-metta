@@ -49,6 +49,7 @@ export {
 export {
     createItem,
     deleteItem,
+    raiseBasePrices,
     updateItem,
     type ItemInput,
     type ItemScope,

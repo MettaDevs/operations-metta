@@ -3,6 +3,10 @@ import {
     CollapsibleSection,
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
+import {
+    displayNumber,
+    parseDisplayNumber,
+} from '@operations-metta/ui/display-number';
 import { FactBox } from '@operations-metta/ui/fact-box';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
@@ -77,6 +81,7 @@ const formOf = (item: Item | null) => ({
               ? ('refuse' as const)
               : ('allow' as const),
     isBlocked: item?.is_blocked ?? false,
+    basePrice: displayNumber(item?.base_price ?? '0'),
 });
 type ItemForm = ReturnType<typeof formOf>;
 
@@ -194,6 +199,7 @@ export function ItemCard({
             is_blocked: form.isBlocked,
             purchase_unit_id: form.purchaseUnit?.id ?? null,
             sales_unit_id: form.salesUnit?.id ?? null,
+            base_price: parseDisplayNumber(form.basePrice) ?? form.basePrice,
         };
         try {
             const { body: saved } = record
@@ -672,6 +678,34 @@ export function ItemCard({
                                                 })
                                             }
                                             portalContainer={portalContainer}
+                                        />
+                                    </FormControl>
+                                </FormGrid>
+                            </CollapsibleSection>
+                            <CollapsibleSection
+                                value="prices"
+                                title="Harga"
+                                summary={`Harga dasar ${form.basePrice || '0'}${form.baseUnit ? ` per ${form.baseUnit.code}` : ''}`}
+                            >
+                                <FormGrid>
+                                    <FormControl
+                                        error={errors.base_price?.[0]}
+                                        hint="Harga per satuan dasar, acuan harga jual obat di farmasi. Naik sendiri saat penerimaan barang diposting dengan harga beli per satuan dasar yang lebih tinggi, dan tidak turun saat penerimaan dibatalkan."
+                                    >
+                                        <Input
+                                            label="Harga dasar"
+                                            required
+                                            inputMode="decimal"
+                                            data-error-field="base_price"
+                                            value={form.basePrice}
+                                            readOnly={!editing}
+                                            onChange={(event) =>
+                                                setForm({
+                                                    ...form,
+                                                    basePrice:
+                                                        event.target.value,
+                                                })
+                                            }
                                         />
                                     </FormControl>
                                 </FormGrid>
