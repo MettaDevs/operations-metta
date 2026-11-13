@@ -95,13 +95,13 @@ describe.skipIf(!process.env.DB_HOST)(
                 200,
             );
             const record = await clinic.show(destination);
-            const draft = (
-                record.data.prescriptions as Prescription[] | undefined
-            )?.[0];
             await json(
                 await clinic.admin.post(
-                    `${api}/examination/destinations/${destination}/prescriptions/${draft?.id}/send`,
-                    { version: record.data.version },
+                    `${api}/examination/destinations/${destination}/prescriptions/send`,
+                    {
+                        version: record.data.version,
+                        prescriptions: record.data.prescriptions,
+                    },
                 ),
                 200,
             );

@@ -42,6 +42,7 @@ import {
     fallRiskSchema,
     historySchema,
     medicalRecordInputSchema,
+    prescriptionSendSchema,
     otherSchema,
     painSchema,
     physicalSchema,
@@ -818,15 +819,23 @@ export class MedicalRecords {
         return this.present(await this.destination(destinationId, false));
     }
 
-    // Kirim ke farmasi satu draf resep. Layar menyimpan perubahan yang belum disimpan lebih dulu, lalu mengirim versi
-    // pemeriksaan yang ia pegang. Batas ubahnya sama dengan Simpan: hanya selama tujuan diperiksa.
-    async sendPrescription(
-        destinationId: string,
-        prescriptionId: string,
-        body: unknown,
-    ) {
+    // Kirim ke farmasi menyimpan draf resep lalu mengirimnya dalam satu transaksi, seperti SubmitEresep sistem lama yang
+    // hanya membawa resep dan barisnya: isian rekam medis lain tidak ikut disimpan dan tidak diperiksa, jadi tetap di
+    // layar sampai Simpan. Dokter dan perawat resep diambil dari Anamnesa yang sedang diisi. Batas ubahnya sama dengan
+    // Simpan: hanya selama tujuan diperiksa, dengan versi pemeriksaan yang dipegang layar.
+    async sendPrescription(destinationId: string, body: unknown) {
         this.workspace.guard('examination', 'manage');
-        const version = isRecord(body) ? body.version : undefined;
+        const parsed = prescriptionSendSchema.safeParse(body);
+        if (!parsed.success)
+            validation(
+                Object.fromEntries(
+                    parsed.error.issues.map((issue) => [
+                        issue.path.join('.') || 'input',
+                        'Isian ini tidak sah.',
+                    ]),
+                ),
+            );
+        const input = parsed.data;
         await this.db.transaction(async () => {
             const destination = await this.destination(destinationId, true);
             if (destination.status === 'selesai')
@@ -844,9 +853,54 @@ export class MedicalRecords {
                         'Bagian E-Resep tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
                 });
             const header = await this.header(destination.id, true);
-            if (!header) validation({ prescription: 'Resep tidak ditemukan.' });
-            if (version !== header.version)
+            if (
+                header
+                    ? input.version !== header.version
+                    : input.version !== null && input.version !== undefined
+            )
                 coded(409, 'stale_version', staleMessage);
+            const errors: Errors = {};
+            const doctorId = await this.practitioner(
+                input.doctor_id,
+                'isi_tenaga_medis',
+                header?.doctor_id ?? null,
+                'anamnesis.doctor_id',
+                errors,
+            );
+            const nurseId = await this.practitioner(
+                input.nurse_id,
+                'isi_perawat',
+                header?.nurse_id ?? null,
+                'anamnesis.nurse_id',
+                errors,
+            );
+            const drafts = await this.orders.readPrescriptions(
+                input.prescriptions,
+                header?.id ?? null,
+                destination.legal_entity_id,
+                new Set(
+                    (
+                        await this.orders.drugAllergies(destination.patient_id)
+                    ).map((row) => row.drug_id),
+                ),
+                errors,
+            );
+            if (Object.keys(errors).length) validation(errors);
+            const stamp = nowSql();
+            let recordId = header?.id;
+            if (!recordId) {
+                recordId = Bun.randomUUIDv7();
+                await this.db.insert('sim_tr_pemeriksaan', {
+                    id: recordId,
+                    tenant_id: this.workspace.tenantId,
+                    tujuan_id: destination.id,
+                    registrasi_id: destination.visit_id,
+                    pasien_id: destination.patient_id,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+            }
+            await this.orders.writePrescriptions(recordId, drafts, stamp);
             const visit = await this.db.one(
                 z.object({ operating_unit_id: z.string(), date: z.string() }),
                 `select operating_unit_id, tanggal::text as date from sim_tr_registrasi
@@ -854,7 +908,10 @@ export class MedicalRecords {
                 [this.workspace.tenantId, destination.visit_id],
             );
             if (!visit) abort(404, 'Not Found');
-            await this.orders.send(header.id, prescriptionId, visit, nowSql());
+            await this.orders.send(recordId, visit, stamp, {
+                doctorId,
+                nurseId,
+            });
         });
         return this.present(await this.destination(destinationId, false));
     }

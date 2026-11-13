@@ -3733,7 +3733,7 @@
             "meta": {},
             "route": {
                 "method": "POST",
-                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/prescriptions/{prescriptionId}/send",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/prescriptions/send",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }

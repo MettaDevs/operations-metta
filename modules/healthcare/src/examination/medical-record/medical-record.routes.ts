@@ -7,7 +7,10 @@ import {
     type listParametersSchema,
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
-import type { MedicalRecordInput } from './medical-record.schema.ts';
+import type {
+    MedicalRecordInput,
+    PrescriptionSendInput,
+} from './medical-record.schema.ts';
 import { MedicalRecords } from './medical-record.service.ts';
 
 async function records(context: Context, body?: unknown) {
@@ -76,26 +79,19 @@ export function medicalRecordRoutes() {
             ),
         healthcarePrescriptionSend: route(
             'POST',
-            '/destinations/{id}/prescriptions/{prescriptionId}/send',
+            '/destinations/{id}/prescriptions/send',
         )
             .input(
                 z.object({
-                    params: z.object({
-                        id: z.string(),
-                        prescriptionId: z.string(),
-                    }),
-                    body: z.custom<{ version: number | null }>(),
+                    params: z.object({ id: z.string() }),
+                    body: z.custom<PrescriptionSendInput>(),
                 }),
             )
             .handler(async ({ context, input }) =>
                 ok(
                     await (
                         await records(context, input.body)
-                    ).sendPrescription(
-                        input.params.id,
-                        input.params.prescriptionId,
-                        input.body,
-                    ),
+                    ).sendPrescription(input.params.id, input.body),
                 ),
             ),
     };

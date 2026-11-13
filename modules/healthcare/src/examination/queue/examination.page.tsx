@@ -16,7 +16,7 @@ import {
 } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { CheckCircle2, ListOrdered, Save } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -129,6 +129,9 @@ function ExaminationPage(): ReactNode {
             select: (response) => response.body,
         }),
     );
+    // Isian yang belum disimpan, dibawa melewati pemasangan ulang form sesudah Kirim ke farmasi menaikkan versi
+    // pemeriksaan tanpa menyimpannya.
+    const [carried, setCarried] = useState<MedicalRecordDraft | null>(null);
     const record = useQuery(
         orpc.healthcareMedicalRecordShow.queryOptions({
             input: { params: { id: destinationId } },
@@ -170,6 +173,8 @@ function ExaminationPage(): ReactNode {
             setErrors={setErrors}
             message={message}
             setMessage={setMessage}
+            carried={carried}
+            setCarried={setCarried}
         />
     );
 }
@@ -183,6 +188,8 @@ function ExaminationRecord({
     setErrors,
     message,
     setMessage,
+    carried,
+    setCarried,
 }: {
     entry: Entry;
     shown: MedicalRecordShown;
@@ -192,6 +199,8 @@ function ExaminationRecord({
     setErrors: (errors: Errors) => void;
     message: string | null;
     setMessage: (message: string | null) => void;
+    carried: MedicalRecordDraft | null;
+    setCarried: (draft: MedicalRecordDraft | null) => void;
 }): ReactNode {
     const navigate = route.useNavigate();
     const queryClient = useQueryClient();
@@ -200,7 +209,12 @@ function ExaminationRecord({
             select: (response) => response.body,
         }),
     );
-    const [draft, setDraft] = useState<MedicalRecordDraft>(shown.data);
+    const [draft, setDraft] = useState<MedicalRecordDraft>(
+        carried ?? shown.data,
+    );
+    useEffect(() => {
+        if (carried) setCarried(null);
+    }, [carried, setCarried]);
     const [busy, setBusy] = useState(false);
     const editable = shown.context.editable;
     const dirty =
@@ -260,42 +274,40 @@ function ExaminationRecord({
         }
     };
 
-    // Kirim ke farmasi menyimpan perubahan yang belum disimpan lebih dulu, termasuk draf resep yang belum punya id,
-    // lalu mengirim draf itu dengan versi pemeriksaan hasil simpan.
-    const send = async (position: number) => {
+    // Kirim ke farmasi menyimpan dan mengirim draf resep saja, seperti E-Resep sistem lama: isian lain tidak ikut
+    // disimpan atau diperiksa. Isian lain tetap seperti di layar walau versi pemeriksaan naik, termasuk nilai awal
+    // pemeriksaan baru yang hanya diberikan server selama rekam medis belum pernah disimpan.
+    const send = async () => {
         setBusy(true);
-        let saved: MedicalRecordShown | null = null;
         try {
-            let current = shown;
-            if (dirty || !draft.prescriptions?.[position]?.id) {
-                ({ body: current } = await api.healthcareMedicalRecordSave({
-                    params: { id: entry.id },
-                    body: draft,
-                }));
-                saved = current;
-            }
-            const prescription = current.data.prescriptions?.find(
-                (row) => row.status === 'draf',
-            );
-            if (!prescription?.id) {
-                if (saved) showRecord(saved);
-                setErrors({ prescription: ['Resep belum berisi obat.'] });
-                setMessage(null);
-                return;
-            }
             const { body } = await api.healthcarePrescriptionSend({
-                params: { id: entry.id, prescriptionId: prescription.id },
-                body: { version: current.data.version },
+                params: { id: entry.id },
+                body: {
+                    version: draft.version,
+                    doctor_id: draft.anamnesis?.doctor_id ?? null,
+                    nurse_id: draft.anamnesis?.nurse_id ?? null,
+                    prescriptions: draft.prescriptions,
+                },
             });
             setErrors({});
             setMessage(null);
+            const before = new Set(
+                shown.data.prescriptions
+                    ?.filter((row) => row.status !== 'draf')
+                    .map((row) => row.id),
+            );
             const sent = body.data.prescriptions?.find(
-                (row) => row.id === prescription.id,
+                (row) => row.status !== 'draf' && !before.has(row.id),
             );
             toast.success(`Resep ${sent?.number ?? ''} dikirim ke farmasi.`);
+            setCarried({
+                ...draft,
+                id: body.data.id,
+                version: body.data.version,
+                prescriptions: body.data.prescriptions,
+            });
             showRecord(body);
         } catch (caught) {
-            if (saved) showRecord(saved);
             fail(caught, 'Resep belum dikirim ke farmasi.');
         } finally {
             setBusy(false);
@@ -554,7 +566,7 @@ function ExaminationRecord({
                                     metadata={recordMetadata}
                                     errors={errors}
                                     disabled={!editable || busy}
-                                    onSend={(position) => void send(position)}
+                                    onSend={() => void send()}
                                 />
                             </fieldset>
                             {editable && (
