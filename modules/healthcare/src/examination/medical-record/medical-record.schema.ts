@@ -178,8 +178,11 @@ export const prescriptionLineSchema = z.object({
     signa: text,
     usage_instruction_id: text,
     notes: text,
-    // Jumlah yang diserahkan farmasi; hanya dibaca, dan kosong selama belum diserahkan.
+    // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
+    // lama. Hanya dibaca; kosong selama belum diserahkan.
     dispensed_quantity: number.optional(),
+    // Total yang dikembalikan pasien ke farmasi; hanya dibaca, kosong bila belum pernah ada retur.
+    returned_quantity: number.optional(),
 });
 
 // Resep (SIMtrResep). Hanya draf yang diubah Simpan; nomor, status, waktu kirim, dokter, dan perawat hanya dibaca.

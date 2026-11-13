@@ -1117,7 +1117,7 @@ function PrescriptionLines({
                               {
                                   id: 'dispensed_quantity',
                                   header: 'Diserahkan',
-                                  minWidth: 100,
+                                  minWidth: 150,
                                   cell: ({
                                       row,
                                   }: {
@@ -1126,9 +1126,11 @@ function PrescriptionLines({
                                       <DataTableText>
                                           {isHeader(row)
                                               ? ''
-                                              : String(
-                                                    row.dispensed_quantity ?? 0,
-                                                )}
+                                              : `${String(row.dispensed_quantity ?? 0)}${
+                                                    row.returned_quantity
+                                                        ? ` (${String(row.returned_quantity)} dikembalikan)`
+                                                        : ''
+                                                }`}
                                       </DataTableText>
                                   ),
                               },

@@ -18,8 +18,8 @@ info:
       baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
     - Penerima: module layanan kesehatan (`modules/healthcare`), bila terpasang, mencatat waktu dan jumlah yang
       diserahkan pada resep E-Resep-nya. Isi yang tidak cocok dicatat ke log lalu dilewati.
-    - Retur obat sesudah diserahkan belum diterbitkan sebagai event: jumlah di sini adalah yang diserahkan, bukan
-      dikurangi retur.
+    - Jumlah di sini adalah yang diserahkan, bukan dikurangi retur. Retur sesudahnya diterbitkan sebagai
+      `pharmacy.return.posted.v1`, dan pembatalannya sebagai `pharmacy.return.reversed.v1`.
 channels:
   pharmacy.prescription.dispensed.v1:
     address: pharmacy.prescription.dispensed.v1

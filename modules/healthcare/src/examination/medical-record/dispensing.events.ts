@@ -22,6 +22,22 @@ const dispensedSchema = z.object({
     ),
 });
 
+// Retur yang diposting dan Batal retur membawa isi yang sama. Yang dibaca di sini hanya total retur per baris resep
+// dalam satuan dasar, satuan yang sama dengan jumlah resep dan jumlah yang diserahkan, jadi retur dalam satuan lain
+// (misalnya strip) tetap dikurangkan dengan benar.
+export const returnPosted = 'pharmacy.return.posted.v1' as const;
+export const returnReversed = 'pharmacy.return.reversed.v1' as const;
+
+const returnSchema = z.object({
+    prescription_id: idSchema,
+    lines: z.array(
+        z.object({
+            prescription_line_id: idSchema,
+            returned_base_quantity: decimalText,
+        }),
+    ),
+});
+
 function skip(envelope: EventEnvelope, reason: string, fields: string[] = []) {
     process.stderr.write(
         JSON.stringify({
@@ -79,6 +95,50 @@ export async function receiveDispensing(
              where tenant_id = $3 and resep_id = $4 and id = $5`,
             [
                 line.quantity,
+                stamp,
+                envelope.tenant_id,
+                prescription.id,
+                line.prescription_line_id,
+            ],
+        );
+}
+
+// Yang dipegang pasien adalah jumlah_diserahkan - jumlah_diretur, seperti "Obat Direalisasi" di CPPT sistem lama
+// (JmlObat - JmlRetur). Totalnya disalin, bukan ditambah atau dikurangi, jadi retur, Batal retur, dan event yang
+// diantar ulang selalu berakhir di angka yang sama.
+export async function receiveReturn(
+    db: Database,
+    envelope: EventEnvelope,
+): Promise<void> {
+    const parsed = returnSchema.safeParse(envelope.data);
+    if (!parsed.success) {
+        skip(
+            envelope,
+            'invalid-payload',
+            parsed.error.issues.map((issue) => issue.path.join('.')),
+        );
+        return;
+    }
+    const data = parsed.data;
+    const prescription = await db.one(
+        z.object({ id: z.string() }),
+        `select id from sim_tr_resep
+         where tenant_id = $1 and id = $2 and status = 'dikirim' and diserahkan_pada is not null
+           and deleted_at is null`,
+        [envelope.tenant_id, data.prescription_id],
+    );
+    if (!prescription) {
+        skip(envelope, 'unknown-dispensed-prescription');
+        return;
+    }
+    if (await alreadyProcessed(db, 'sim_processed_events', envelope)) return;
+    const stamp = nowSql();
+    for (const line of data.lines)
+        await db.execute(
+            `update sim_tr_resep_detail set jumlah_diretur = $1, updated_at = $2
+             where tenant_id = $3 and resep_id = $4 and id = $5`,
+            [
+                line.returned_base_quantity,
                 stamp,
                 envelope.tenant_id,
                 prescription.id,

@@ -29,6 +29,11 @@ import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { moduleId } from '../../module.ts';
 import { dispensingSource } from '../dispensing/dispensing.service.ts';
 import {
+    publishReturn,
+    returnPosted,
+    returnReversed,
+} from './dispensing-return.events.ts';
+import {
     returnInputSchema,
     returnReverseInputSchema,
 } from './dispensing-return.schema.ts';
@@ -412,6 +417,7 @@ export class DispensingReturns {
                 },
                 inbound,
             );
+            await publishReturn(this.db, this.scope, id, returnPosted);
         });
         return this.show(prescriptionId);
     }
@@ -453,6 +459,7 @@ export class DispensingReturns {
                 },
                 { type: returnSource, id: returnId },
             );
+            await publishReturn(this.db, this.scope, returnId, returnReversed);
         });
         return this.show(prescriptionId);
     }

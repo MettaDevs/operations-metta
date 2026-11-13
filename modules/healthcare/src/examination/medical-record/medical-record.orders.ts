@@ -162,6 +162,7 @@ const savedLineSchema = z.object({
     usage_instruction_id: z.string().nullable(),
     notes: z.string().nullable(),
     dispensed_quantity: z.number().nullable(),
+    returned_quantity: z.number().nullable(),
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
 
@@ -444,7 +445,8 @@ export class ExaminationOrders {
                     s.nama as unit_name, d.racikan_ke as compound, d.jumlah::float8 as quantity,
                     d.jumlah_permintaan::float8 as requested_quantity, d.signa,
                     d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes,
-                    d.jumlah_diserahkan::float8 as dispensed_quantity
+                    (d.jumlah_diserahkan - coalesce(d.jumlah_diretur, 0))::float8 as dispensed_quantity,
+                    d.jumlah_diretur::float8 as returned_quantity
              from sim_tr_resep_detail d
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
              left join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
