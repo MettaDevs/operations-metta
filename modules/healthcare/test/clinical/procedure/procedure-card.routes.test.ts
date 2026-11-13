@@ -96,8 +96,8 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
             name: 'Bawaan',
         });
         expect(procedure).toMatchObject({
-            hospital_cost_percent: '0.00',
-            hospital_cost_amount: '0.00',
+            hospital_cost_percent: '0',
+            hospital_cost_amount: '0',
             posting_group: 'GROUP JASA',
             incentive_source: 'NONE',
             polyclinic: 'NONE',
@@ -125,8 +125,8 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
         expect(procedure).toMatchObject({
             international_name: 'Wound suturing',
             category_name: 'Tindakan',
-            hospital_cost_percent: '12.50',
-            hospital_cost_amount: '25000.00',
+            hospital_cost_percent: '12.5',
+            hospital_cost_amount: '25000',
             posting_group: 'KOMPONEN',
             incentive_source: 'DETAIL',
             polyclinic: 'SPESIALIS',
@@ -158,6 +158,36 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
             'hospital_cost_amount',
             'posting_group',
         ]);
+    });
+
+    test('Cost RS takes the one percent scale and the amount precision of the currency', async () => {
+        expect(
+            await refused(
+                await clinic.admin.post(`${api}/procedures`, {
+                    code: 'COSTRS-1',
+                    name: 'Presisi',
+                    hospital_cost_percent: '12.12345',
+                    hospital_cost_amount: '25000.5',
+                }),
+            ),
+        ).toEqual({
+            hospital_cost_percent: [
+                'Isi persen 0 sampai 999,9999, paling banyak empat angka di belakang koma.',
+            ],
+            hospital_cost_amount: [
+                'Isi angka 0 atau lebih, tanpa angka di belakang koma.',
+            ],
+        });
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'COSTRS-1',
+            name: 'Presisi',
+            hospital_cost_percent: '150.1234',
+            hospital_cost_amount: '25000',
+        });
+        expect([
+            procedure.hospital_cost_percent,
+            procedure.hospital_cost_amount,
+        ]).toEqual(['150.1234', '25000']);
     });
 
     test('Kategori Plafon and Menggunakan Alat are saved and read back, and an inactive or foreign row is refused per field', async () => {

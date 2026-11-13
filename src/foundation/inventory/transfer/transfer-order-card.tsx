@@ -2,6 +2,7 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
@@ -78,7 +79,6 @@ export const transferModeLabels: Record<
     langsung: 'Langsung',
     kirim_terima: 'Kirim lalu terima',
 };
-const number = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 4 });
 const label = (entry: { code: string; name: string }) =>
     `${entry.code} - ${entry.name}`;
 const today = () => new Date().toLocaleDateString('sv-SE');
@@ -726,8 +726,9 @@ export function TransferOrderCard({
         ]);
 
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
+    // Jumlah barang dari API, teks desimal berskala jumlah barang.
     const amount = (value: string | undefined) =>
-        value === undefined ? '' : number.format(Number(value));
+        value === undefined ? '' : displayNumber(value);
     const quantityInput = (
         index: number,
         name: string,

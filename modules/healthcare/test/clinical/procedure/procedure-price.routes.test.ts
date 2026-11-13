@@ -7,6 +7,7 @@ import {
     createTenant,
     entitle,
     recordInstallation,
+    setCurrencyPrecision,
 } from '../../../../../test/support/tenant-fixtures.ts';
 import {
     api,
@@ -110,6 +111,13 @@ describe.skipIf(!process.env.DB_HOST)('procedure price tab', () => {
 
     beforeAll(async () => {
         clinic = await createClinic(pool, browser, 'Klinik Uji Detail Harga');
+        // Harga komponen di sini memakai desimal.
+        await setCurrencyPrecision(pool, clinic.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
         pricer = await login(pool, browser, clinic.tenantId, [
             'core.pricing-setup.manage',
         ]);

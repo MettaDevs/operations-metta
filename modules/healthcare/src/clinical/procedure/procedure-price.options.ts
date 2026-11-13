@@ -1,3 +1,5 @@
+import { Decimal } from '@core/platform/money/index.ts';
+
 // Isian tab Detail Harga kartu Jasa sistem lama (views/services/price/form.php dan form_component.php) dengan kolom
 // sim_m_tindakan_harga dan sim_m_tindakan_harga_komponen serta label sistem lama. Dipakai service untuk membaca dan
 // menulis, dan layar untuk label isian.
@@ -75,22 +77,30 @@ export const priceSumFields = {
 } as const;
 export type PriceSumField = keyof typeof priceSumFields;
 
+const hundredth = Decimal.of('0.01');
+
 // Harga Baru yang diisikan form komponen sistem lama begitu Harga Awal, Persen Insentif, atau Persen Pajak Titipan
 // ditinggalkan dan Include Insentif diubah (calculate_new_price di form_component.php): Harga Awal, ditambah insentif
-// bila tidak termasuk, ditambah pajak titipan. Hitungannya pecahan biner peramban lalu toFixed(2) mask_number, urutan
-// operasinya sama, supaya angkanya sama persis dengan sistem lama. Isian Harga Baru tetap boleh diubah sesudahnya.
+// bila tidak termasuk, ditambah pajak titipan. Rumusnya sama dengan sistem lama, tetapi dihitung desimal tepat lalu
+// dibulatkan sekali ke presisi harga satuan mata uang tenant, bukan pecahan biner peramban lalu toFixed(2). Isian
+// Harga Baru tetap boleh diubah sesudahnya.
 export function legacyNewPrice(
     initialPrice: string,
     incentivePercent: string,
     taxDepositPercent: string,
     includesIncentive: boolean,
+    decimals: number,
 ): string {
-    const initial = Number(initialPrice);
+    const initial = Decimal.of(initialPrice);
+    const percentOf = (percent: string) =>
+        initial.multipliedBy(Decimal.of(percent)).multipliedBy(hundredth);
     const incentive = includesIncentive
-        ? 0
-        : (initial * Number(incentivePercent)) / 100;
-    const tax = (initial * Number(taxDepositPercent)) / 100;
-    return (initial + incentive + tax).toFixed(2);
+        ? Decimal.of('0')
+        : percentOf(incentivePercent);
+    return initial
+        .plus(incentive)
+        .plus(percentOf(taxDepositPercent))
+        .fixed(decimals);
 }
 
 // Isian angka komponen, urutan form komponen sistem lama.

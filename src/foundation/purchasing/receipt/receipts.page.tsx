@@ -2,6 +2,7 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
+import { displayAmount } from '@operations-metta/ui/display-number';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
     PageDialog,
@@ -45,7 +46,6 @@ const statusLabels: Record<Row['status'], string> = {
     diposting: 'Diposting',
     dibatalkan: 'Dibatalkan',
 };
-const money = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
 
 function ReceiptsPage(): ReactNode {
     const search = route.useSearch();
@@ -60,6 +60,8 @@ function ReceiptsPage(): ReactNode {
     };
     const [permissions, setPermissions] =
         useState<ReceiptPermissions>(noPermissions);
+    // Presisi jumlah mata uang lokal untuk nilai di daftar dan kartu.
+    const [amountDecimals, setAmountDecimals] = useState(0);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingReceiptList(
@@ -75,6 +77,7 @@ function ReceiptsPage(): ReactNode {
                 { signal },
             );
             setPermissions(body.permissions);
+            setAmountDecimals(body.amount_decimals);
             return { items: body.data, nextCursor: body.next_cursor };
         },
         [],
@@ -90,6 +93,7 @@ function ReceiptsPage(): ReactNode {
                 params: { id: row.id },
             });
             setPermissions(body.permissions);
+            setAmountDecimals(body.amount_decimals);
             openCard(body.data);
         } catch (caught) {
             toast.error(errorText(caught, 'Penerimaan belum bisa dibuka.'));
@@ -204,7 +208,7 @@ function ReceiptsPage(): ReactNode {
                             align: 'right',
                             cell: (row) => (
                                 <DataTableText>
-                                    {money.format(Number(row.amount))}
+                                    {displayAmount(row.amount, amountDecimals)}
                                 </DataTableText>
                             ),
                         },
@@ -244,6 +248,7 @@ function ReceiptsPage(): ReactNode {
                             key={opened}
                             receipt={open === 'new' ? null : open}
                             permissions={permissions}
+                            amountDecimals={amountDecimals}
                             portalContainer={contentRef}
                             onSaved={(receipt) => {
                                 setOpen(receipt);

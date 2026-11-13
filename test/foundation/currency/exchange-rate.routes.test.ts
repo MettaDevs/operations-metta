@@ -98,7 +98,7 @@ describe.skipIf(!process.env.DB_HOST)('exchange rates', () => {
                 'Pilih mata uang yang sudah disetel di Sys Admin › Mata uang.',
             ],
             rate: [
-                'Isi kurs lebih dari 0, paling banyak 6 angka di belakang koma.',
+                'Isi kurs lebih dari 0, paling banyak enam angka di belakang koma.',
             ],
         });
     });

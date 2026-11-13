@@ -85,16 +85,18 @@ type LineDraft = {
 };
 
 // Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke rupiah sen.
-const lineAmountSql = (alias: string) =>
-    `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, 2)`;
+// Nilai baris dibulatkan ke presisi jumlah mata uang lokal; amountDecimals bilangan bulat 0 sampai 4 dari setelan
+// mata uang, bukan isian pengguna.
+const lineAmountSql = (alias: string, amountDecimals: number) =>
+    `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
 
-const rowSql = `select * from (
+const rowSql = (amountDecimals: number) => `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
                            h.no_dokumen_vendor as vendor_document_number, h.keterangan as description,
                            p.name as vendor_name, l.kode as location_code,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
-                           coalesce((select trim_scale(sum(${lineAmountSql('d')}))::text
+                           coalesce((select trim_scale(sum(${lineAmountSql('d', amountDecimals)}))::text
                                      from bl_tr_penerimaan_detail d
                                      where d.tenant_id = h.tenant_id and d.penerimaan_id = h.id
                                        and d.deleted_at is null), '0') as amount,
@@ -160,12 +162,18 @@ export class Receipts {
         };
     }
 
-    private async unitCostDecimals(): Promise<number> {
-        return unitAmountDecimals(
-            await new Currency(this.db, this.scope.tenantId).precision(
-                localCurrencyCode,
-            ),
+    private async precision() {
+        return new Currency(this.db, this.scope.tenantId).precision(
+            localCurrencyCode,
         );
+    }
+
+    private async unitCostDecimals(): Promise<number> {
+        return unitAmountDecimals(await this.precision());
+    }
+
+    private async amountDecimals(): Promise<number> {
+        return (await this.precision()).amount_decimals;
     }
 
     async list(parameters: URLSearchParams) {
@@ -181,7 +189,7 @@ export class Receipts {
             ? ` and status = $${bindings.push(status.data)}`
             : '';
         const batch = await incrementalList(this.db, {
-            query: `${rowSql}${filter}`,
+            query: `${rowSql(await this.amountDecimals())}${filter}`,
             bindings,
             parameters,
             columns: {
@@ -205,6 +213,7 @@ export class Receipts {
             data: batch.data.map((row) => receiptRowSchema.parse(row)),
             next_cursor: batch.next_cursor,
             permissions: this.permissions(),
+            amount_decimals: await this.amountDecimals(),
         };
     }
 
@@ -228,7 +237,7 @@ export class Receipts {
         const found = lookupId(id)
             ? await this.db.one(
                   receiptRowSchema,
-                  `${rowSql} and receipts.id = $3`,
+                  `${rowSql(await this.amountDecimals())} and receipts.id = $3`,
                   [this.scope.tenantId, this.scope.legalEntityId, id],
               )
             : undefined;
@@ -248,7 +257,7 @@ export class Receipts {
                     trim_scale(d.konversi)::text as quantity_per_unit, trim_scale(d.jumlah)::text as quantity,
                     trim_scale(d.harga_satuan)::text as unit_cost,
                     trim_scale(d.diskon_persen)::text as discount_percent,
-                    trim_scale(${lineAmountSql('d')})::text as amount,
+                    trim_scale(${lineAmountSql('d', await this.amountDecimals())})::text as amount,
                     d.no_batch as batch_number, d.kedaluwarsa::text as expiry_date,
                     ${reference('f')} as funding_source, ${reference('g')} as procurement_program,
                     d.tahun_anggaran as budget_year
@@ -271,6 +280,7 @@ export class Receipts {
         return {
             data: await this.document(id),
             permissions: this.permissions(),
+            amount_decimals: await this.amountDecimals(),
         };
     }
 

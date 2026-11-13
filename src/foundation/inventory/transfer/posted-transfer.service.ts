@@ -14,6 +14,7 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
+import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import { activeLegalEntity } from '../inventory.service.ts';
 import { reverseItemEntries } from '../item-ledger/item-ledger.posting.ts';
 import { transferModes } from '../item-ledger/stock-policy.ts';
@@ -90,6 +91,15 @@ export class PostedTransfers {
         };
     }
 
+    // Presisi jumlah mata uang lokal, untuk nilai yang ditampilkan layar.
+    private async amountDecimals(): Promise<number> {
+        return (
+            await new Currency(this.db, this.scope.tenantId).precision(
+                localCurrencyCode,
+            )
+        ).amount_decimals;
+    }
+
     private permissions() {
         return {
             reverse: this.workspace.permissions.has(
@@ -141,6 +151,7 @@ export class PostedTransfers {
             data: batch.data.map((row) => postedTransferRowSchema.parse(row)),
             next_cursor: batch.next_cursor,
             permissions: this.permissions(),
+            amount_decimals: await this.amountDecimals(),
         };
     }
 
@@ -180,7 +191,11 @@ export class PostedTransfers {
              order by d.urutan`,
             [this.scope.tenantId, header.id],
         );
-        return { ...header, lines };
+        return {
+            ...header,
+            lines,
+            amount_decimals: await this.amountDecimals(),
+        };
     }
 
     async show(id: string) {

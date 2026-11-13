@@ -1,6 +1,10 @@
 import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
@@ -21,6 +25,8 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import { divideRounded } from '../../../platform/money/index.ts';
+import { display, fromNumeric, quantityScale } from '../quantity.ts';
 
 export type PostedTransferKind = 'shipment' | 'receipt';
 export type PostedTransfer = ApiBody<'inventoryTransferShipmentShow'>['data'];
@@ -40,17 +46,18 @@ const modeLabels: Record<PostedTransfer['transfer_mode'], string> = {
     langsung: 'Langsung',
     kirim_terima: 'Kirim lalu terima',
 };
-const number = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 4 });
 const label = (entry: { code: string; name: string }) =>
     `${entry.code} - ${entry.name}`;
 
-// Jumlah baris terposting dalam satuan dasar; satuan kemasan amprahnya ditampilkan bila isinya habis dibagi.
+// Jumlah baris terposting dalam satuan dasar, lalu dalam satuan kemasan amprahnya, dibagi dengan bilangan bulat berskala
+// dan dibulatkan ke skala jumlah barang.
 function quantityText(line: PostedTransfer['lines'][number]) {
-    const base = Number(line.quantity);
-    const perUnit = Number(line.quantity_per_unit);
-    const inBase = `${number.format(base)} ${line.item.base_unit}`;
-    if (perUnit === 1) return inBase;
-    return `${number.format(base / perUnit)} ${line.unit.code} (${inBase})`;
+    const base = fromNumeric(line.quantity, quantityScale);
+    const perUnit = fromNumeric(line.quantity_per_unit, quantityScale);
+    const inBase = `${displayNumber(line.quantity)} ${line.item.base_unit}`;
+    if (perUnit === 10n ** BigInt(quantityScale)) return inBase;
+    const units = divideRounded(base * 10n ** BigInt(quantityScale), perUnit);
+    return `${displayNumber(display(units, quantityScale))} ${line.unit.code} (${inBase})`;
 }
 
 // Mutasi atau penerimaan mutasi yang sudah diposting: hanya dibaca, dan postingnya bisa dibatalkan selama barangnya
@@ -199,7 +206,10 @@ export function PostedTransferCard({
                         <Input
                             label="Nilai"
                             readOnly
-                            value={number.format(Number(document.amount))}
+                            value={displayAmount(
+                                document.amount,
+                                document.amount_decimals,
+                            )}
                         />
                     </FormControl>
                     <FormControl>
@@ -285,7 +295,12 @@ export function PostedTransferCard({
                             minWidth: 120,
                             align: 'right',
                             cell: (line) =>
-                                text(number.format(Number(line.amount))),
+                                text(
+                                    displayAmount(
+                                        line.amount,
+                                        document.amount_decimals,
+                                    ),
+                                ),
                         },
                     ]}
                 />

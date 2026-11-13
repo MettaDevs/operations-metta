@@ -1,5 +1,6 @@
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
+import { displayAmount } from '@operations-metta/ui/display-number';
 import { displayDate } from '@operations-metta/ui/date-picker';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
@@ -22,7 +23,6 @@ import {
 } from './posted-transfer-card.tsx';
 
 type Row = ApiBody<'inventoryTransferShipmentList'>['data'][number];
-const money = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
 
 const sources = {
     shipment: {
@@ -55,6 +55,8 @@ export function PostedTransferList({
         document: PostedTransfer;
         reverse: boolean;
     } | null>(null);
+    // Presisi jumlah mata uang lokal untuk kolom Nilai.
+    const [amountDecimals, setAmountDecimals] = useState(0);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query: q, cursor, sort, signal }) => {
             const { body } = await source.list(
@@ -69,6 +71,7 @@ export function PostedTransferList({
                 },
                 { signal },
             );
+            setAmountDecimals(body.amount_decimals);
             return { items: body.data, nextCursor: body.next_cursor };
         },
         [source],
@@ -182,7 +185,7 @@ export function PostedTransferList({
                             align: 'right',
                             cell: (row) => (
                                 <DataTableText>
-                                    {money.format(Number(row.amount))}
+                                    {displayAmount(row.amount, amountDecimals)}
                                 </DataTableText>
                             ),
                         },

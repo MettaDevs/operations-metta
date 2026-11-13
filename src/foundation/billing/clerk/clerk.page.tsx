@@ -5,6 +5,7 @@ import {
 } from '@operations-metta/ui/alert';
 import { Button } from '@operations-metta/ui/button';
 import {
+    displayAmount,
     displayNumber,
     parseDisplayNumber,
 } from '@operations-metta/ui/display-number';
@@ -26,6 +27,7 @@ import {
     orpc,
     PasswordInput,
 } from '../../../platform/shell/index.ts';
+import { fromMinor, toMinor } from '../payment/payment.amounts.ts';
 import { ClerkResult, dateTime, type Clerk } from './clerk-result.tsx';
 
 // Clerk kasir yang sedang masuk: Clerk Start bila belum ada clerk berjalan, Clerk End bila ada (layar Buat Clerk Baru dan
@@ -229,17 +231,20 @@ function ClerkEnd({
             ];
         }),
     );
-    // Total tampilan dalam sen, hanya jenis bayar mata uang lokal, supaya penjumlahan desimal tidak bergeser dan valuta
-    // tidak tercampur; angka yang tidak terbaca membuatnya kosong.
-    const cents = clerk.lines
-        .filter((line) => line.currency_code === clerk.local_currency)
+    // Total tampilan hanya jenis bayar mata uang lokal, supaya valuta tidak tercampur, dijumlah dalam satuan terkecil
+    // supaya desimal tidak bergeser, dan ditulis dengan presisi jumlah mata uang lokal. Angka yang tidak terbaca
+    // membuatnya kosong.
+    const localLines = clerk.lines.filter(
+        (line) => line.currency_code === clerk.local_currency,
+    );
+    const total = localLines
         .map((line) => amounts[line.payment_method_id] ?? '0')
-        .reduce<number | null>(
+        .reduce<bigint | null>(
             (sum, value) =>
-                sum === null || !Number.isFinite(Number(value))
+                sum === null || !/^\d+(\.\d+)?$/.test(value)
                     ? null
-                    : sum + Math.round(Number(value) * 100),
-            0,
+                    : sum + toMinor(value),
+            0n,
         );
     const end = async () => {
         setBusy(true);
@@ -357,12 +362,12 @@ function ClerkEnd({
                             <Input
                                 label={`Total ${clerk.local_currency}`}
                                 value={
-                                    cents === null
+                                    total === null
                                         ? ''
-                                        : displayNumber(
-                                              (cents / 100)
-                                                  .toFixed(2)
-                                                  .replace(/\.?0+$/, ''),
+                                        : displayAmount(
+                                              fromMinor(total),
+                                              localLines[0]?.amount_decimals ??
+                                                  0,
                                           )
                                 }
                                 readOnly

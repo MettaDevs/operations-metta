@@ -1,5 +1,6 @@
 import type { ApiBody } from '../../../platform/shell/index.ts';
 import type { Item } from '../item/item-lookup.tsx';
+import { quantityScale } from '../quantity.ts';
 
 // Bagian layar opname yang dipakai kartu, dialog Hitung baris, dan konfirmasi Post.
 
@@ -28,9 +29,9 @@ export const itemChoice = (item: Item): ItemChoice => ({
 export const label = (entry: { code: string; name: string }) =>
     `${entry.code} · ${entry.name}`;
 
-// Jumlah dari API berupa teks desimal dengan paling banyak empat angka di belakang koma, sama dengan kartu gudang.
-// Selisih dihitung dengan bigint berskala, supaya tidak bergeser seperti bila diubah ke Number.
-const scale = 4;
+// Jumlah dari API berupa teks desimal berskala jumlah barang, sama dengan kartu gudang. Selisih dihitung dengan bigint
+// berskala, supaya tidak bergeser seperti bila diubah ke Number.
+const scale = quantityScale;
 const factor = 10n ** BigInt(scale);
 
 export function scaled(text: string): bigint {

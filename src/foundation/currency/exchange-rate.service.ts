@@ -14,16 +14,16 @@ import {
     staleMessage,
     validation,
 } from '../../platform/http/index.ts';
-import { Decimal, localCurrencyCode } from '../../platform/money/index.ts';
-import { amountInput } from './currency.rules.ts';
+import {
+    Decimal,
+    decimalsHint,
+    localCurrencyCode,
+} from '../../platform/money/index.ts';
+import { amountInput, exchangeRateDecimals } from './currency.rules.ts';
 import {
     exchangeRateInputSchema,
     exchangeRateRowSchema,
 } from './exchange-rate.schema.ts';
-
-// Kurs disimpan dengan enam angka di belakang koma (kolom numeric(19,6)), cukup untuk mata uang yang satu satuannya
-// bernilai kurang dari satu rupiah.
-const rateDecimals = 6;
 
 const rowSql = `select id, currency_code, tanggal_berlaku::text as starting_date, trim_scale(kurs)::text as rate, version
                 from tbj_his_currency where tenant_id = $1 and deleted_at is null`;
@@ -100,9 +100,9 @@ export class ExchangeRates {
                 'Pilih mata uang yang sudah disetel di Sys Admin › Mata uang.';
         if (!dateSchema.safeParse(data?.starting_date).success)
             errors.starting_date = 'Isi tanggal yang benar.';
-        const rate = amountInput(data?.rate, rateDecimals);
+        const rate = amountInput(data?.rate, exchangeRateDecimals);
         if (rate === null || Decimal.of(rate).compare(Decimal.of('0')) <= 0)
-            errors.rate = `Isi kurs lebih dari 0, paling banyak ${rateDecimals} angka di belakang koma.`;
+            errors.rate = `Isi kurs lebih dari 0, ${decimalsHint(exchangeRateDecimals)}.`;
         if (Object.keys(errors).length || !data || rate === null)
             validation(errors);
         return {
