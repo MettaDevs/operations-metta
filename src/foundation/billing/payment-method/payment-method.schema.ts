@@ -19,6 +19,8 @@ export const paymentMethodRowSchema = z.object({
     counted_at_close: z.boolean(),
     shown_at_cashier: z.boolean(),
     is_active: z.boolean(),
+    // Mata uang asing yang diterima jenis bayar ini; null berarti mata uang lokal.
+    currency_code: z.string().nullable(),
     // IDBayar sistem lama untuk jenis bayar hasil impor.
     legacy_id: z.number().nullable(),
     version: z.number(),
@@ -43,6 +45,7 @@ export const paymentMethodInputSchema = z.object({
     counted_at_close: z.boolean().optional(),
     shown_at_cashier: z.boolean().optional(),
     is_active: z.boolean().optional(),
+    currency_code: z.string().nullable().optional(),
     version: z.number().optional(),
 });
 

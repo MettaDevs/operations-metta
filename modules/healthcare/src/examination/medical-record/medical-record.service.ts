@@ -52,6 +52,8 @@ import {
     statusSchema,
     type MedicalRecord,
 } from './medical-record.schema.ts';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
+import { moduleId } from '../../module.ts';
 
 type Errors = Record<string, string[]>;
 type Values = Record<string, Bind>;
@@ -837,6 +839,11 @@ export class MedicalRecords {
                     stamp,
                 );
             if (procedures) {
+                await lockChargeForChange(this.db, {
+                    tenantId: this.workspace.tenantId,
+                    sourceModule: moduleId,
+                    visitId: destination.visit_id,
+                });
                 await this.orders.writeProcedures(
                     recordId,
                     destination.visit_id,

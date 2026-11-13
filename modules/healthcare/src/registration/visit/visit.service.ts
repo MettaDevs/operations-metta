@@ -52,6 +52,7 @@ import {
     refusedTransition,
 } from './visit.statuses.ts';
 import { publishVisitCancelled } from './visit.events.ts';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 
 export const visitNumberReference = `${moduleId}.visit-number`;
 export const examinationNumberReference = `${moduleId}.examination-number`;
@@ -1128,6 +1129,11 @@ export class Visits {
                     reason,
                 ],
             );
+            await lockChargeForChange(this.db, {
+                tenantId: this.workspace.tenantId,
+                sourceModule: moduleId,
+                visitId: current.id,
+            });
             await publishVisitCancelled(
                 this.db,
                 this.workspace.tenantId,

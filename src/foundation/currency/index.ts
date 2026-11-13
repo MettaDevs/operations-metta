@@ -48,8 +48,9 @@ const isRoundingMethod = (value: string): value is RoundingMethod =>
 
 const rateSchema = z.object({ kurs: z.string() });
 
-// Tanggal untuk pesan, dd/mm/yyyy seperti layar.
-const displayDate = (date: string) => date.split('-').reverse().join('/');
+// Pesan kurs yang belum diisi untuk satu tanggal (yyyy-mm-dd), dengan tanggal dd/mm/yyyy seperti layar.
+export const missingRateMessage = (code: string, date: string) =>
+    `Kurs ${code.toUpperCase()} untuk ${date.split('-').reverse().join('/')} belum diisi. Atur di Sys Admin › Kurs.`;
 
 export class Currency {
     private readonly cache = new Map<string, Precision>();
@@ -98,6 +99,13 @@ export class Currency {
         date: string,
         field = 'currency_code',
     ): Promise<Decimal> {
+        const rate = await this.findRate(code, date);
+        if (!rate) validation({ [field]: missingRateMessage(code, date) });
+        return rate;
+    }
+
+    // Seperti rate, tetapi null bila kurs belum diisi, untuk layar yang menampilkan pesannya tanpa menolak.
+    async findRate(code: string, date: string): Promise<Decimal | null> {
         const key = code.toUpperCase();
         if (key === localCurrencyCode) return Decimal.of('1');
         const cached = this.rates.get(`${key}:${date}`);
@@ -109,10 +117,7 @@ export class Currency {
              order by tanggal_berlaku desc limit 1`,
             [this.tenantId, key, date],
         );
-        if (!row)
-            validation({
-                [field]: `Kurs ${key} untuk ${displayDate(date)} belum diisi. Atur di Sys Admin › Kurs.`,
-            });
+        if (!row) return null;
         const rate = Decimal.of(row.kurs);
         this.rates.set(`${key}:${date}`, rate);
         return rate;

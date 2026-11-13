@@ -7,7 +7,11 @@ import {
     lookupId,
     validation,
 } from '../../../platform/http/index.ts';
-import { Currency, localCurrencyCode } from '../../currency/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    missingRateMessage,
+} from '../../currency/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
 import {
     chargeRowSchema,
@@ -16,9 +20,9 @@ import {
 } from './invoice.schema.ts';
 import { invoiceTotals } from './invoice.totals.ts';
 
-// Sudah dibayar bila kunjungan punya pembayaran yang tidak batal. Pembayaran lahir bersama Simpan pembayaran; sampai
-// saat itu setiap kunjungan belum dibayar.
-const paidSql = 'false';
+// Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
+const paidSql = `exists (select 1 from kasir p where p.tenant_id = k.tenant_id and p.sumber_module = k.sumber_module
+                                and p.kunjungan_id = k.kunjungan_id and p.status = 'diposting')`;
 
 const visitSql = `select * from (
                       select k.kunjungan_id as id, k.no_reg as registration_number, k.tanggal::text as date,
@@ -133,6 +137,8 @@ export class Invoices {
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
             [this.scope.tenantId, this.scope.legalEntityId, visitId],
         );
+        const currency = new Currency(this.db, this.scope.tenantId);
+        const precision = await currency.precision(localCurrencyCode);
         const totals = invoiceTotals(
             charges.map((charge) => ({
                 serviceGroupId: charge.service_group_id,
@@ -142,9 +148,96 @@ export class Invoices {
                 discountPercent: charge.discount_percent,
                 extra: charge.extra,
             })),
-            await new Currency(this.db, this.scope.tenantId).precision(
-                localCurrencyCode,
-            ),
+            precision,
+        );
+        const today = await this.db.one(
+            z.object({ date: z.string() }),
+            `select (now() at time zone l.timezone)::date::text as date
+             from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
+        const date = today?.date ?? new Date().toISOString().slice(0, 10);
+        // Jenis bayar yang digambar form kasir, berurut letaknya, dan merchan aktif untuk isian kartu. Jenis bayar
+        // bermata uang asing membawa presisi mata uangnya dan kurs hari ini, atau pesan bila kursnya belum diisi.
+        const methodRows = await this.db.rows(
+            z.object({
+                id: z.string(),
+                label: z.string(),
+                behavior: z.string(),
+                party: z.string(),
+                requires_merchant: z.boolean(),
+                requires_reference: z.boolean(),
+                allows_surcharge: z.boolean(),
+                takes_remainder: z.boolean(),
+                currency_code: z.string().nullable(),
+            }),
+            `select id, coalesce(label_kasir, nama) as label, perilaku as behavior, pihak as party,
+                    wajib_merchan as requires_merchant, wajib_referensi as requires_reference,
+                    biaya_tambahan as allows_surcharge, menampung_sisa as takes_remainder, mata_uang as currency_code
+             from jenis_bayar
+             where tenant_id = $1 and legal_entity_id = $2 and aktif and tampil_di_kasir and deleted_at is null
+             order by urutan, kode`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
+        const paymentMethods = await Promise.all(
+            methodRows.map(async (method) => {
+                if (!method.currency_code)
+                    return {
+                        ...method,
+                        currency_decimals: precision.amount_decimals,
+                        rate: null,
+                        rate_message: null,
+                    };
+                const rate = await currency.findRate(
+                    method.currency_code,
+                    date,
+                );
+                return {
+                    ...method,
+                    currency_decimals: (
+                        await currency.precision(method.currency_code)
+                    ).amount_decimals,
+                    rate: rate?.normalized() ?? null,
+                    rate_message: rate
+                        ? null
+                        : missingRateMessage(method.currency_code, date),
+                };
+            }),
+        );
+        const merchants = await this.db.rows(
+            z.object({ id: z.string(), code: z.string(), name: z.string() }),
+            `select id, kode as code, nama as name from merchan
+             where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null order by kode`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
+        const payment = await this.db.one(
+            z.object({
+                number: z.string(),
+                received: z.string(),
+                change: z.string(),
+                lines: z.array(
+                    z.object({
+                        label: z.string(),
+                        amount: z.string(),
+                        currency_code: z.string(),
+                        currency_amount: z.string(),
+                        rate: z.string(),
+                    }),
+                ),
+            }),
+            `select k.no_bukti as number, trim_scale(k.jumlah_bayar)::text as received,
+                    trim_scale(k.nilai_kembalian)::text as change,
+                    coalesce((select json_agg(json_build_object('label', coalesce(j.label_kasir, j.nama),
+                                                                'amount', trim_scale(d.nilai)::text,
+                                                                'currency_code', d.mata_uang,
+                                                                'currency_amount', trim_scale(d.nilai_valuta)::text,
+                                                                'rate', trim_scale(d.kurs)::text)
+                                              order by j.urutan, j.kode)
+                              from kasir_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
+                              where d.tenant_id = k.tenant_id and d.kasir_id = k.id), '[]'::json) as lines
+             from kasir k
+             where k.tenant_id = $1 and k.legal_entity_id = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
+            [this.scope.tenantId, this.scope.legalEntityId, visitId],
         );
         return {
             data: {
@@ -154,6 +247,16 @@ export class Invoices {
                     value: totals.value,
                     original_value: totals.originalValue,
                 },
+                payment_methods: paymentMethods,
+                merchants,
+                payment: payment ?? null,
+                can_pay: this.workspace.permissions.has('core.payment.update'),
+                can_change_rate: this.workspace.permissions.has(
+                    'core.payment-rate.update',
+                ),
+                amount_decimals: precision.amount_decimals,
+                local_currency: localCurrencyCode,
+                date,
             },
         };
     }

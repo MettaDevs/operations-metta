@@ -61,16 +61,20 @@ const formOf = (method: PaymentMethod | null) => ({
     counted_at_close: method?.counted_at_close ?? false,
     shown_at_cashier: method?.shown_at_cashier ?? true,
     is_active: method?.is_active ?? true,
+    currency_code: method?.currency_code ?? '',
 });
 
 export function PaymentMethodCard({
     record,
     canManage,
+    currencies,
     onSaved,
     onClose,
 }: {
     record: PaymentMethod | null;
     canManage: boolean;
+    // Mata uang lokal tenant dan mata uang asing yang sudah disetel di Sys Admin › Mata uang.
+    currencies: { local: string; foreign: string[] };
     onSaved: (method: PaymentMethod) => void;
     onClose: () => void;
 }): ReactNode {
@@ -123,6 +127,9 @@ export function PaymentMethodCard({
         const body = {
             ...form,
             cashier_label: form.cashier_label.trim() || null,
+            currency_code: form.takes_remainder
+                ? null
+                : form.currency_code || null,
         };
         try {
             const { body: saved } = record
@@ -375,6 +382,46 @@ export function PaymentMethodCard({
                             />
                         ) : (
                             <Input label="Pihak" value={partyLabel} readOnly />
+                        )}
+                    </FormControl>
+                    <FormControl
+                        error={errors.currency_code?.[0]}
+                        hint="Isi bila jenis bayar ini hanya menerima satu mata uang asing, misalnya tunai valuta. Jumlahnya diisi dalam mata uang itu dan dihitung ke mata uang lokal dengan kurs hari pembayaran."
+                        data-error-field="currency_code"
+                    >
+                        {editing && !form.takes_remainder ? (
+                            <Select
+                                label="Mata uang"
+                                items={[
+                                    {
+                                        value: '',
+                                        label: `${currencies.local} (mata uang lokal)`,
+                                    },
+                                    ...currencies.foreign.map((code) => ({
+                                        value: code,
+                                        label: code,
+                                    })),
+                                ]}
+                                value={form.currency_code}
+                                onValueChange={(value) =>
+                                    setForm({
+                                        ...form,
+                                        currency_code: value ?? '',
+                                    })
+                                }
+                                searchPlaceholder="Cari mata uang"
+                                emptyMessage="Pilihan tidak ditemukan."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Mata uang"
+                                value={
+                                    form.currency_code ||
+                                    `${currencies.local} (mata uang lokal)`
+                                }
+                                readOnly
+                            />
                         )}
                     </FormControl>
                     {legacyId !== null && (

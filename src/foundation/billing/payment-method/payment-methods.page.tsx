@@ -43,6 +43,10 @@ function PaymentMethodsPage(): ReactNode {
     const [open, setOpen] = useState<PaymentMethod | 'new' | null>(null);
     const [importing, setImporting] = useState(false);
     const [canManage, setCanManage] = useState(false);
+    const [currencies, setCurrencies] = useState<{
+        local: string;
+        foreign: string[];
+    }>({ local: '', foreign: [] });
     const loader = useCallback<ListLoader<PaymentMethod>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.billingPaymentMethodList(
@@ -58,6 +62,10 @@ function PaymentMethodsPage(): ReactNode {
                 { signal },
             );
             setCanManage(body.can_manage);
+            setCurrencies({
+                local: body.local_currency,
+                foreign: body.currencies,
+            });
             return { items: body.data, nextCursor: body.next_cursor };
         },
         [],
@@ -223,6 +231,7 @@ function PaymentMethodsPage(): ReactNode {
                             }
                             record={open === 'new' ? null : open}
                             canManage={canManage}
+                            currencies={currencies}
                             onSaved={(method) => {
                                 setOpen(method);
                                 list.reload();

@@ -174,16 +174,20 @@ export class Clerks {
     private async detail(clerk: z.infer<typeof clerkRowSchema>) {
         const lines =
             clerk.status === 'start'
-                ? countedMethods(await this.methods(), clerkSales()).map(
-                      (method) => ({
-                          payment_method_id: method.id,
-                          code: method.code,
-                          name: method.name,
-                          system_amount: null,
-                          counted_amount: null,
-                          difference: null,
+                ? countedMethods(
+                      await this.methods(),
+                      await clerkSales(this.db, {
+                          tenantId: this.scope.tenantId,
+                          id: clerk.id,
                       }),
-                  )
+                  ).map((method) => ({
+                      payment_method_id: method.id,
+                      code: method.code,
+                      name: method.name,
+                      system_amount: null,
+                      counted_amount: null,
+                      difference: null,
+                  }))
                 : await this.db.rows(
                       clerkLineSchema,
                       `select d.jenis_bayar_id as payment_method_id, j.kode as code,
@@ -290,7 +294,10 @@ export class Clerks {
         if (!parsed.success)
             validation({ counts: 'Isi jumlah fisik per jenis bayar.' });
         await checkedPassword(parsed.data.password, password);
-        const sales = clerkSales();
+        const sales = await clerkSales(this.db, {
+            tenantId: this.scope.tenantId,
+            id: clerk.id,
+        });
         const methods = countedMethods(await this.methods(), sales);
         const allowed = new Set(methods.map((method) => method.id));
         const precision = await new Currency(
