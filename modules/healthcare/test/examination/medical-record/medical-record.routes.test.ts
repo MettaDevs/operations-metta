@@ -1106,6 +1106,108 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         expect(remeasured.measured_by).not.toBe(nurse.userId);
     });
 
+    test('the practitioner who measured the vital signs and recorded an allergy is the account link at that moment', async () => {
+        const id = await visit();
+        await start(id);
+        const staff = await createMember(pool, tenantId, [
+            'healthcare.examination.manage',
+        ]);
+        await grantAllOrganizations(pool, tenantId, staff.membershipId);
+        await pool.unsafe(
+            `insert into role_assignment_data_policy_scopes
+                 (id, tenant_id, role_assignment_id, policy_code, include_descendants, valid_from, created_at, updated_at)
+             select $1, $2, id, 'healthcare.patient-unit', false, now() - interval '1 day', now(), now()
+             from role_assignments where membership_id = $3`,
+            [Bun.randomUUIDv7(), tenantId, staff.membershipId],
+        );
+        const link = (...practitioners: string[]) =>
+            pool.unsafe(
+                `update sim_m_nakes set user_id = case when id = any($2::uuid[]) then $1::uuid end
+                 where tenant_id = $3 and (user_id = $1 or id = any($2::uuid[]))`,
+                [staff.userId, practitioners, tenantId],
+            );
+        const user = browser();
+        await user.login(staff.email, staff.password);
+        await link(nurse);
+        const opened = await show(user, id);
+        const saved = await json<Shown>(
+            await save(user, id, {
+                ...opened.data,
+                physical: { ...opened.data.physical, ...vitals },
+                allergy: {
+                    none: false,
+                    items: [
+                        ...opened.data.allergy.items,
+                        allergy({ category: 'lainnya', name: 'Plester' }),
+                    ],
+                },
+            }),
+            200,
+        );
+        const recorded = async () => ({
+            measured: (
+                await pool.unsafe<{ id: string | null }[]>(
+                    `select diukur_oleh_nakes_id as id from sim_tr_pemeriksaan_fisik
+                     where pemeriksaan_id = $1 and deleted_at is null`,
+                    [String(saved.data.id)],
+                )
+            )[0]?.id,
+            allergy: (
+                await pool.unsafe<{ id: string | null }[]>(
+                    `select dicatat_oleh_nakes_id as id from sim_m_pasien_alergi
+                     where pasien_id = $1 and nama = 'Plester' and deleted_at is null`,
+                    [patientId],
+                )
+            )[0]?.id,
+        });
+        expect(await recorded()).toEqual({ measured: nurse, allergy: nurse });
+
+        // Akun yang sesudahnya ditautkan ke nakes lain tidak mengubah catatan lama.
+        await link(doctor);
+        const plaster = saved.data.allergy.items.find(
+            (item) => item.name === 'Plester',
+        )!;
+        const edited = await json<Shown>(
+            await save(user, id, {
+                ...saved.data,
+                anamnesis: {
+                    ...saved.data.anamnesis,
+                    chief_complaint: 'Pusing',
+                },
+                allergy: {
+                    none: false,
+                    items: saved.data.allergy.items.map((item) =>
+                        item.id === plaster.id
+                            ? { ...item, reaction: 'Kemerahan' }
+                            : item,
+                    ),
+                },
+            }),
+            200,
+        );
+        expect(await recorded()).toEqual({ measured: nurse, allergy: nurse });
+
+        // Pengukuran baru memakai tautan saat itu, dan akun yang tertaut ke dua nakes aktif tidak punya nakes yang pasti.
+        const remeasured = await json<Shown>(
+            await save(user, id, {
+                ...edited.data,
+                physical: { ...edited.data.physical, pulse_rate: 91 },
+            }),
+            200,
+        );
+        expect((await recorded()).measured).toBe(doctor);
+        await link(doctor, nurse);
+        await json(
+            await save(user, id, {
+                ...remeasured.data,
+                physical: { ...remeasured.data.physical, pulse_rate: 92 },
+            }),
+            200,
+        );
+        expect((await recorded()).measured).toBeNull();
+        await link();
+    });
+
     test('a viewer reads but cannot save, and another tenant cannot see the record', async () => {
         const id = await visit();
         await start(id);

@@ -10,6 +10,7 @@ import { idSchema } from '@core/platform/http/index.ts';
 // contracts/events/pharmacy.prescription.dispensed.v1.yaml). Module ini tidak meng-import module farmasi, jadi bagian
 // isi yang dibacanya ditulis di sini; field lain dilewati. Jumlah yang diserahkan dicatat dalam satuan dasar:
 // base_quantity, atau quantity pada pesan lama yang belum membawanya, karena pesan itu ditulis dalam satuan dasar.
+// Apoteker dan asisten adalah pengguna; nakes-nya dicatat saat event diterima (healthcare 0046).
 export const prescriptionDispensed =
     'pharmacy.prescription.dispensed.v1' as const;
 
@@ -18,6 +19,8 @@ const dispensedSchema = z.object({
     prescription_id: idSchema,
     dispensing_number: z.string().min(1).max(50),
     dispensed_at: z.iso.datetime(),
+    pharmacist: z.object({ id: idSchema }).nullish(),
+    assistant: z.object({ id: idSchema }).nullish(),
     lines: z.array(
         z.object({
             prescription_line_id: idSchema,
@@ -84,7 +87,9 @@ export async function receiveDispensing(
     if (await alreadyProcessed(db, 'sim_processed_events', envelope)) return;
     const stamp = nowSql();
     await db.execute(
-        `update sim_tr_resep set diserahkan_pada = $1, nomor_penyerahan = $2, updated_at = $3
+        `update sim_tr_resep set diserahkan_pada = $1, nomor_penyerahan = $2, updated_at = $3,
+                apoteker_nakes_id = sim_nakes_milik_pengguna($4, $6),
+                asisten_apoteker_nakes_id = sim_nakes_milik_pengguna($4, $7)
          where tenant_id = $4 and id = $5`,
         [
             data.dispensed_at.replace('T', ' ').replace(/(\.\d+)?Z$/, ''),
@@ -92,6 +97,8 @@ export async function receiveDispensing(
             stamp,
             envelope.tenant_id,
             prescription.id,
+            data.pharmacist?.id ?? null,
+            data.assistant?.id ?? null,
         ],
     );
     for (const line of data.lines)

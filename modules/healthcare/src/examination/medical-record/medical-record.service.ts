@@ -34,7 +34,11 @@ import {
     activeDrugIdsOf,
     PatientAllergies,
 } from './medical-record.allergies.ts';
-import { ExaminationOrders, practitionerId } from './medical-record.orders.ts';
+import {
+    ExaminationOrders,
+    practitionerId,
+    practitionerOfUser,
+} from './medical-record.orders.ts';
 import {
     examinationPanels,
     sectionPanels,
@@ -1561,7 +1565,15 @@ export class MedicalRecords {
                 pemeriksaan_id: recordId,
                 ...columns,
                 ...(measured
-                    ? { diukur_pada: stamp, diukur_oleh: this.workspace.userId }
+                    ? {
+                          diukur_pada: stamp,
+                          diukur_oleh: this.workspace.userId,
+                          diukur_oleh_nakes_id: await practitionerOfUser(
+                              this.db,
+                              this.workspace.tenantId,
+                              this.workspace.userId,
+                          ),
+                      }
                     : {}),
                 created_at: stamp,
                 updated_at: stamp,
@@ -1591,7 +1603,9 @@ export class MedicalRecords {
             `update sim_tr_pemeriksaan_fisik
              set ${names.map((column, index) => `${column} = ${params[index] ?? ''}`).join(', ')}, updated_at = $3,
                  diukur_pada = case when ${changed} then $3 else diukur_pada end,
-                 diukur_oleh = case when ${changed} then $4 else diukur_oleh end
+                 diukur_oleh = case when ${changed} then $4 else diukur_oleh end,
+                 diukur_oleh_nakes_id = case when ${changed} then sim_nakes_milik_pengguna($1, $4)
+                                             else diukur_oleh_nakes_id end
              where tenant_id = $1 and id = $2`,
             [
                 this.workspace.tenantId,

@@ -151,6 +151,20 @@ export async function practitionerId(
     return found?.id ?? null;
 }
 
+// Nakes pelaku dicatat saat kejadian, karena tautan akun ke nakes bisa berubah sesudahnya (healthcare 0046).
+export async function practitionerOfUser(
+    db: Database,
+    tenantId: string,
+    userId: string,
+): Promise<string | null> {
+    const found = await db.one(
+        z.object({ id: z.string().nullable() }),
+        'select sim_nakes_milik_pengguna($1, $2) as id',
+        [tenantId, userId],
+    );
+    return found?.id ?? null;
+}
+
 type ProcedureLine = {
     procedure_id: string;
     quantity: number;
