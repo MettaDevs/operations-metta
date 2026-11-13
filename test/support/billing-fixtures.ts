@@ -98,23 +98,13 @@ export function visitCharges(
                 }),
             ),
         );
-    // Kunjungan selesai dengan satu baris tindakan per tarif.
-    async function completedVisit(visitId: string, tariffs: string[]) {
-        await publish('healthcare.visit.completed.v1', {
-            visit_id: visitId,
-            registration_number: `REG-${visitId.slice(-4)}`,
-            date: '2026-11-13',
-            registered_at: '2026-11-13T01:00:00Z',
-            patient: {
-                id: Bun.randomUUIDv7(),
-                medical_record_number: visitId.slice(-6),
-                name: 'Pasien Uji',
-            },
-            patient_type: { id: Bun.randomUUIDv7(), name: 'UMUM' },
-            guarantor: null,
-            card_number: null,
-            sections: [{ id: Bun.randomUUIDv7(), name: 'Poli Umum' }],
-        });
+    // Kunjungan selesai dengan satu baris tindakan per tarif. Biayanya dikirim lebih dulu, seperti Simpan rekam medis
+    // sebelum Selesai periksa; visit menambah atau mengganti isi potret kunjungan.
+    async function completedVisit(
+        visitId: string,
+        tariffs: string[],
+        visit: Record<string, unknown> = {},
+    ) {
         await publish('healthcare.examination.charges-replaced.v1', {
             examination_id: Bun.randomUUIDv7(),
             visit_id: visitId,
@@ -137,6 +127,22 @@ export function visitCharges(
                 date: '2026-11-13',
                 components: [],
             })),
+        });
+        await publish('healthcare.visit.completed.v1', {
+            visit_id: visitId,
+            registration_number: `REG-${visitId.slice(-4)}`,
+            date: '2026-11-13',
+            registered_at: '2026-11-13T01:00:00Z',
+            patient: {
+                id: Bun.randomUUIDv7(),
+                medical_record_number: visitId.slice(-6),
+                name: 'Pasien Uji',
+            },
+            patient_type: { id: Bun.randomUUIDv7(), name: 'UMUM' },
+            guarantor: null,
+            card_number: null,
+            sections: [{ id: Bun.randomUUIDv7(), name: 'Poli Umum' }],
+            ...visit,
         });
     }
     return { withDatabase, publish, completedVisit };

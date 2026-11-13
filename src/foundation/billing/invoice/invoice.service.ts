@@ -19,6 +19,7 @@ import {
     visitRowSchema,
 } from './invoice.schema.ts';
 import { invoiceTotals } from './invoice.totals.ts';
+import { patientTypeMessage } from '../payment/payment.service.ts';
 
 // Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
 const paidSql = `exists (select 1 from kasir p where p.tenant_id = k.tenant_id and p.sumber_module = k.sumber_module
@@ -29,7 +30,8 @@ const visitSql = `select * from (
                              ${isoSql('k.didaftarkan_pada')} as registered_at,
                              k.pasien_nrm as patient_medical_record_number, k.pasien_nama as patient_name,
                              k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
-                             ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number
+                             ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
+                             to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids
                       from kunjungan_kasir k
                       where k.tenant_id = $1 and k.legal_entity_id = $2 and k.status = 'selesai') visits
                   where true`;
@@ -179,11 +181,18 @@ export class Invoices {
              order by urutan, kode`,
             [this.scope.tenantId, this.scope.legalEntityId],
         );
+        // Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama; refusal membawa pesan yang
+        // ditampilkan layar saat jenis bayar itu diisi.
+        const restricted = new Set(visit.restricted_payment_method_ids);
         const paymentMethods = await Promise.all(
             methodRows.map(async (method) => {
+                const refusal = restricted.has(method.id)
+                    ? patientTypeMessage
+                    : null;
                 if (!method.currency_code)
                     return {
                         ...method,
+                        refusal,
                         currency_decimals: precision.amount_decimals,
                         rate: null,
                         rate_message: null,
@@ -194,6 +203,7 @@ export class Invoices {
                 );
                 return {
                     ...method,
+                    refusal,
                     currency_decimals: (
                         await currency.precision(method.currency_code)
                     ).amount_decimals,
@@ -215,6 +225,7 @@ export class Invoices {
                 id: z.string(),
                 version: z.number(),
                 number: z.string(),
+                automatic: z.boolean(),
                 received: z.string(),
                 change: z.string(),
                 cash_label: z.string().nullable(),
@@ -231,7 +242,8 @@ export class Invoices {
             // Tunai mata uang lokal tersimpan bersih (uang diterima dikurangi kembalian), dan negatif bila kembalian tunai
             // valuta melebihi uang yang diterima. Layar menampilkannya seperti saat kasir mengisi: uang diterima di bawah
             // label jenis bayar tunai, lalu Kembalian, jadi barisnya tidak ikut daftar jenis bayar lain.
-            `select k.id, k.version, k.no_bukti as number, trim_scale(k.jumlah_bayar)::text as received,
+            `select k.id, k.version, k.no_bukti as number, k.otomatis as automatic,
+                    trim_scale(k.jumlah_bayar)::text as received,
                     trim_scale(k.nilai_kembalian)::text as change,
                     coalesce((select coalesce(j.label_kasir, j.nama)
                               from kasir_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id

@@ -21,6 +21,12 @@ export const patientTypeRowSchema = z.object({
     // Kelompok harga yang tarif jasanya dicari. Kosong berarti kelompok harga tipe ini.
     procedure_tariff_price_group_id: z.string().nullable(),
     procedure_tariff_price_group_name: z.string().nullable(),
+    // Jenis bayar kasir (Core) yang hanya boleh dipakai tipe pasien yang menyebutnya. Jenis bayar yang tidak disebut tipe
+    // mana pun berlaku untuk semua tipe.
+    payment_method_ids: z.array(z.string()),
+    // Jenis bayar yang melunasi tagihan kunjungan begitu selesai, paling banyak satu per legal entity. Hanya untuk tipe
+    // yang menyalakan settles_automatically.
+    automatic_payment_method_ids: z.array(z.string()),
     version: z.number(),
 });
 
@@ -41,5 +47,7 @@ export const patientTypeInputSchema = z.object({
     price_group_id: z.string().nullable().optional(),
     procedure_tariff: z.string().optional(),
     procedure_tariff_price_group_id: z.string().nullable().optional(),
+    payment_method_ids: z.array(z.string()).optional(),
+    automatic_payment_method_ids: z.array(z.string()).optional(),
     version: z.number().optional(),
 });

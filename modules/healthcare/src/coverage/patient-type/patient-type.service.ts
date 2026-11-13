@@ -33,7 +33,16 @@ const rowSql = `select * from (
                            t.kelompok_harga_id as price_group_id, g.nama as price_group_name,
                            t.tarif_jasa as procedure_tariff,
                            t.kelompok_harga_tarif_id as procedure_tariff_price_group_id,
-                           tg.nama as procedure_tariff_price_group_name, t.version
+                           tg.nama as procedure_tariff_price_group_name,
+                           coalesce((select json_agg(j.jenis_bayar_id order by j.jenis_bayar_id)
+                                     from sim_m_tipe_pasien_jenis_bayar j
+                                     where j.tenant_id = t.tenant_id and j.tipe_pasien_id = t.id and j.deleted_at is null),
+                                    '[]'::json) as payment_method_ids,
+                           coalesce((select json_agg(o.jenis_bayar_id order by o.jenis_bayar_id)
+                                     from sim_m_tipe_pasien_jenis_bayar_otomatis o
+                                     where o.tenant_id = t.tenant_id and o.tipe_pasien_id = t.id and o.deleted_at is null),
+                                    '[]'::json) as automatic_payment_method_ids,
+                           t.version
                     from sim_m_tipe_pasien t
                     left join kelompok_harga g on g.tenant_id = t.tenant_id and g.id = t.kelompok_harga_id
                     left join kelompok_harga tg on tg.tenant_id = t.tenant_id and tg.id = t.kelompok_harga_tarif_id
@@ -69,6 +78,17 @@ function checked(body: unknown) {
     const procedureTariff = isProcedureTariff(rawTariff) ? rawTariff : null;
     if (procedureTariff === null)
         errors.procedure_tariff = 'Pilih tarif jasa dari daftar.';
+    const paymentMethodIds = [...new Set(data?.payment_method_ids ?? [])];
+    const automaticPaymentMethodIds = [
+        ...new Set(data?.automatic_payment_method_ids ?? []),
+    ];
+    const settles = behaviors.includes('settles_automatically');
+    if (!settles && automaticPaymentMethodIds.length)
+        errors.automatic_payment_method_ids =
+            'Jenis bayar otomatis hanya untuk tipe yang lunas otomatis di kasir.';
+    if (settles && !automaticPaymentMethodIds.length)
+        errors.automatic_payment_method_ids =
+            'Pilih jenis bayar yang melunasi tagihan tipe ini.';
     if (Object.keys(errors).length || !data || procedureTariff === null)
         validation(errors);
     return {
@@ -82,8 +102,31 @@ function checked(body: unknown) {
         procedure_tariff: procedureTariff,
         procedure_tariff_price_group_id:
             data.procedure_tariff_price_group_id?.trim() || null,
+        payment_method_ids: paymentMethodIds,
+        automatic_payment_method_ids: automaticPaymentMethodIds,
     };
 }
+
+type CheckedPatientType = ReturnType<typeof checked>;
+
+// Jenis bayar kasir (Core) yang bisa dipilih kartu tipe pasien. Jenis bayar otomatis tidak boleh meminta isian kasir:
+// tunai dihitung di laci, sedangkan merchan, nomor referensi, biaya tambahan, dan pihak bon diketik kasir saat membayar.
+const paymentMethodSchema = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    legal_entity_id: z.string(),
+    legal_entity_name: z.string(),
+    active: z.boolean(),
+    settles_automatically: z.boolean(),
+});
+const paymentMethodSql = `select j.id, j.kode as code, j.nama as name, j.legal_entity_id, o.name as legal_entity_name,
+                                 j.aktif as active,
+                                 j.perilaku <> 'tunai' and not j.wajib_merchan and not j.wajib_referensi
+                                     and not j.biaya_tambahan and j.pihak <> 'pilih_pihak' as settles_automatically
+                          from jenis_bayar j
+                          join organizations o on o.tenant_id = j.tenant_id and o.id = j.legal_entity_id
+                          where j.tenant_id = $1 and j.deleted_at is null`;
 
 function codeTaken(error: unknown): void {
     if (
@@ -116,6 +159,11 @@ export class PatientTypes {
     async metadata() {
         this.workspace.guard('patient-type', 'read');
         return {
+            payment_methods: await this.db.rows(
+                paymentMethodSchema,
+                `${paymentMethodSql} order by o.name, j.urutan, j.kode`,
+                [this.workspace.tenantId],
+            ),
             price_groups: await this.db.rows(
                 z.object({
                     id: z.string(),
@@ -157,6 +205,70 @@ export class PatientTypes {
             ))
         )
             errors.procedure_tariff_price_group_id = 'Pilih dari daftar.';
+        if (Object.keys(errors).length) validation(errors);
+    }
+
+    // Jenis bayar khusus dan jenis bayar otomatis. Jenis bayar otomatis wajib aktif, tidak meminta isian kasir, paling
+    // banyak satu per legal entity, dan boleh dipakai tipe ini: jenis bayar yang dikhususkan tipe lain harus ikut
+    // dikhususkan tipe ini juga.
+    private async checkedPaymentMethods(
+        data: CheckedPatientType,
+        typeId: string | null,
+    ): Promise<void> {
+        const ids = [
+            ...data.payment_method_ids,
+            ...data.automatic_payment_method_ids,
+        ];
+        const valid = ids.every((id) => lookupId(id) !== null);
+        const known = new Map(
+            (valid
+                ? await this.db.rows(
+                      paymentMethodSchema,
+                      `${paymentMethodSql} and j.id = any($2::uuid[])`,
+                      [this.workspace.tenantId, `{${ids.join(',')}}`],
+                  )
+                : []
+            ).map((method) => [method.id, method]),
+        );
+        const errors: Record<string, string> = {};
+        if (!data.payment_method_ids.every((id) => known.has(id)))
+            errors.payment_method_ids = 'Pilih jenis bayar dari daftar.';
+        const automatic = data.automatic_payment_method_ids.map((id) =>
+            known.get(id),
+        );
+        const legalEntities = automatic.map(
+            (method) => method?.legal_entity_id,
+        );
+        const elsewhere = valid
+            ? await this.db.rows(
+                  z.object({ id: z.string() }),
+                  `select distinct jenis_bayar_id as id from sim_m_tipe_pasien_jenis_bayar
+                   where tenant_id = $1 and jenis_bayar_id = any($2::uuid[]) and deleted_at is null
+                     and tipe_pasien_id is distinct from $3::uuid`,
+                  [
+                      this.workspace.tenantId,
+                      `{${data.automatic_payment_method_ids.join(',')}}`,
+                      typeId,
+                  ],
+              )
+            : [];
+        if (
+            automatic.some(
+                (method) => !method?.active || !method.settles_automatically,
+            )
+        )
+            errors.automatic_payment_method_ids =
+                'Pilih jenis bayar aktif yang tidak meminta isian kasir, misalnya bukan tunai atau kartu.';
+        else if (new Set(legalEntities).size !== legalEntities.length)
+            errors.automatic_payment_method_ids =
+                'Pilih paling banyak satu jenis bayar otomatis per legal entity.';
+        else if (
+            elsewhere.some(
+                (method) => !data.payment_method_ids.includes(method.id),
+            )
+        )
+            errors.automatic_payment_method_ids =
+                'Jenis bayar ini khusus tipe pasien lain. Tambahkan juga ke Jenis bayar khusus tipe ini.';
         if (Object.keys(errors).length) validation(errors);
     }
 
@@ -219,6 +331,7 @@ export class PatientTypes {
         this.workspace.guard('patient-type', 'update');
         const data = checked(body);
         await this.checkedPriceGroups(data, null);
+        await this.checkedPaymentMethods(data, null);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -243,6 +356,7 @@ export class PatientTypes {
                     updated_at: stamp,
                 });
                 await this.writeBehaviors(id, data.behaviors);
+                await this.writePaymentMethods(id, data);
             });
         } catch (error) {
             codeTaken(error);
@@ -256,6 +370,7 @@ export class PatientTypes {
         const current = await this.row(id);
         const data = checked(body);
         await this.checkedPriceGroups(data, current);
+        await this.checkedPaymentMethods(data, current.id);
         const version = expectedVersion(request, body);
         let updated = 0;
         try {
@@ -282,8 +397,10 @@ export class PatientTypes {
                         data.procedure_tariff_price_group_id,
                     ],
                 );
-                if (updated)
+                if (updated) {
                     await this.writeBehaviors(current.id, data.behaviors);
+                    await this.writePaymentMethods(current.id, data);
+                }
             });
         } catch (error) {
             codeTaken(error);
@@ -318,6 +435,42 @@ export class PatientTypes {
             'update sim_m_tipe_pasien set bawaan = false, updated_at = $1 where tenant_id = $2 and bawaan and id <> $3 and deleted_at is null',
             [nowSql(), this.workspace.tenantId, keepId],
         );
+    }
+
+    // Jenis bayar khusus dan otomatis tipe ini: yang tidak dipilih lagi diarsipkan, yang baru ditambah.
+    private async writePaymentMethods(
+        typeId: string,
+        data: CheckedPatientType,
+    ): Promise<void> {
+        const stamp = nowSql();
+        for (const [table, ids] of [
+            ['sim_m_tipe_pasien_jenis_bayar', data.payment_method_ids],
+            [
+                'sim_m_tipe_pasien_jenis_bayar_otomatis',
+                data.automatic_payment_method_ids,
+            ],
+        ] as const) {
+            await this.db.execute(
+                `update ${table} set deleted_at = $1, updated_at = $1
+                 where tenant_id = $2 and tipe_pasien_id = $3 and deleted_at is null
+                   and not (jenis_bayar_id = any($4::uuid[]))`,
+                [stamp, this.workspace.tenantId, typeId, `{${ids.join(',')}}`],
+            );
+            for (const id of ids)
+                await this.db.execute(
+                    `insert into ${table} (id, tenant_id, tipe_pasien_id, jenis_bayar_id, created_at, updated_at)
+                     select $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::timestamp, $5::timestamp
+                     where not exists (select 1 from ${table} where tenant_id = $2 and tipe_pasien_id = $3
+                                       and jenis_bayar_id = $4 and deleted_at is null)`,
+                    [
+                        Bun.randomUUIDv7(),
+                        this.workspace.tenantId,
+                        typeId,
+                        id,
+                        stamp,
+                    ],
+                );
+        }
     }
 
     // Perilaku yang dinyalakan tipe ini: yang tidak dipilih lagi diarsipkan, yang baru ditambah.

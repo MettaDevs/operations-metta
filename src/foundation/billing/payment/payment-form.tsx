@@ -29,6 +29,7 @@ import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 // nomor referensi, atau pihak bila jenis bayarnya memintanya. Angka dihitung dengan rumus yang sama dengan server.
 // Jenis bayar bermata uang asing diisi dalam mata uang itu; kursnya bawaan Sys Admin › Kurs hari ini, bisa diubah oleh
 // pemegang izin ubah kurs, dan nilainya dalam mata uang lokal ikut ditampilkan. Kembalian selalu mata uang lokal.
+// Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama, dan menolak isian dengan pesannya.
 
 type Form = ApiBody<'billingVisitShow'>['data'];
 type Method = Form['payment_methods'][number];
@@ -81,6 +82,16 @@ export function PaymentForm({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
+    // Jenis bayar yang baru saja menolak isian karena dikhususkan tipe pasien lain.
+    const [refused, setRefused] = useState<Method | null>(null);
+    const refusal = (method: Method) =>
+        refused?.id === method.id ? (method.refusal ?? undefined) : undefined;
+    // Isian jenis bayar yang ditolak tetap kosong, seperti layar lama yang mengosongkannya.
+    const accepts = (method: Method) => {
+        if (method.refusal === null) return true;
+        setRefused(method);
+        return false;
+    };
     const { confirm, confirmation } = useConfirmation();
     const switchId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
@@ -209,16 +220,19 @@ export function PaymentForm({
                 <>
                     <h3 className="text-sm font-semibold">Data Jumlah Bayar</h3>
                     <FormGrid>
-                        <FormControl error={errors.received?.[0]}>
+                        <FormControl
+                            error={errors.received?.[0] ?? refusal(cash)}
+                        >
                             <Input
                                 label={cash.label}
                                 inputMode="decimal"
                                 autoFocus
                                 data-error-field="received"
                                 value={received}
-                                onChange={(event) =>
-                                    setReceived(event.target.value)
-                                }
+                                onChange={(event) => {
+                                    if (accepts(cash))
+                                        setReceived(event.target.value);
+                                }}
                             />
                         </FormControl>
                         {readOnly('Kembalian', amounts.change)}
@@ -237,6 +251,7 @@ export function PaymentForm({
                         <FormControl
                             error={
                                 errors[field(index, 'amount')]?.[0] ??
+                                refusal(method) ??
                                 method.rate_message ??
                                 undefined
                             }
@@ -250,11 +265,12 @@ export function PaymentForm({
                                 inputMode="decimal"
                                 data-error-field={field(index, 'amount')}
                                 value={line(method.id).amount}
-                                onChange={(event) =>
-                                    setLine(method.id, {
-                                        amount: event.target.value,
-                                    })
-                                }
+                                onChange={(event) => {
+                                    if (accepts(method))
+                                        setLine(method.id, {
+                                            amount: event.target.value,
+                                        });
+                                }}
                             />
                         </FormControl>
                         {method.currency_code && method.rate !== null && (
@@ -367,12 +383,18 @@ export function PaymentForm({
                 );
             })}
             {remainderMethod && (
-                <FormControl hint="Sisa tagihan dicatat sebagai piutang pasien.">
+                <FormControl
+                    hint="Sisa tagihan dicatat sebagai piutang pasien."
+                    error={refusal(remainderMethod)}
+                >
                     <Field orientation="horizontal" className="w-auto">
                         <Switch
                             id={switchId}
                             checked={takeRemainder}
-                            onCheckedChange={setTakeRemainder}
+                            onCheckedChange={(checked) => {
+                                if (!checked || accepts(remainderMethod))
+                                    setTakeRemainder(checked);
+                            }}
                         />
                         <FieldLabel htmlFor={switchId} className="font-normal">
                             {remainderMethod.label}

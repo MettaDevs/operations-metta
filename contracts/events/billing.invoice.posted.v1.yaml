@@ -5,7 +5,8 @@ info:
   description: |
     Pembayaran kasir disimpan: tagihan kunjungan sekaligus pembayarannya, seperti satu baris SIMtrKasir sistem lama.
     Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di transaksi Simpan yang sama,
-    sesudah baris biaya kunjungan ditandai ditagih.
+    sesudah baris biaya kunjungan ditandai ditagih. Pembayaran otomatis untuk tipe pasien yang lunas otomatis di kasir
+    diterbitkan di transaksi Selesai periksa layanan kesehatan, saat kasir menerima `healthcare.visit.completed.v1`.
 
     Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime dan belum ada penerima. Layanan kesehatan tidak
     perlu menandai kunjungan Sudah Bayar, karena kasir yang memegang status itu, dan perubahan biaya sesudah bayar

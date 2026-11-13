@@ -4,6 +4,7 @@ import {
     alreadyProcessed,
     type EventEnvelope,
 } from '../../../platform/events/index.ts';
+import { settleAutomatically } from '../payment/payment.service.ts';
 
 // Penerima event biaya dan kunjungan dari module. Core tidak meng-import module, jadi nama event dan bentuk datanya
 // ditulis di sini sesuai kontraknya (contracts/events/). Isi yang tidak cocok dicatat ke log lalu dilewati, karena
@@ -61,6 +62,9 @@ const visitSchema = z.object({
     guarantor: z.object({ id: z.string(), name: z.string() }).nullable(),
     card_number: z.string().nullable(),
     sections: z.array(z.object({ id: z.string(), name: z.string() })),
+    // Field opsional sejak 14 November 2026, dari pengaturan tipe pasien di layanan kesehatan.
+    restricted_payment_method_ids: z.array(z.uuid()).optional(),
+    automatic_payment_method_id: z.string().nullable().optional(),
 });
 
 const visitIdSchema = z.object({ visit_id: z.string() });
@@ -186,7 +190,8 @@ async function retireComponents(
     );
 }
 
-// Kunjungan selesai masuk Daftar Pembayaran. Kunjungan yang dikirim lagi memperbarui potretnya.
+// Kunjungan selesai masuk Daftar Pembayaran. Kunjungan yang dikirim lagi memperbarui potretnya, termasuk jenis bayar
+// yang dikhususkan tipe pasien lain. Tipe pasien yang lunas otomatis langsung dibayar dengan jenis bayar otomatisnya.
 export async function receiveVisitCompleted(
     db: Database,
     envelope: EventEnvelope,
@@ -210,6 +215,7 @@ export async function receiveVisitCompleted(
         penjamin_nama: data.guarantor?.name ?? null,
         no_kartu: data.card_number,
         section_nama: data.sections.map((section) => section.name).join(', '),
+        jenis_bayar_dibatasi: `{${(data.restricted_payment_method_ids ?? []).join(',')}}`,
         status: 'selesai',
     };
     const columns = Object.entries(values);
@@ -236,6 +242,13 @@ export async function receiveVisitCompleted(
             ...values,
             created_at: stamp,
             updated_at: stamp,
+        });
+    if (data.automatic_payment_method_id)
+        await settleAutomatically(db, {
+            tenantId: envelope.tenant_id,
+            legalEntityId: envelope.legal_entity_id,
+            visitId: data.visit_id,
+            paymentMethodId: data.automatic_payment_method_id,
         });
 }
 
