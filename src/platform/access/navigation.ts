@@ -384,6 +384,25 @@ export const billingArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'clerk',
+            label: 'Clerk',
+            icon: 'wallet',
+            items: [
+                {
+                    id: 'clerk',
+                    label: 'Clerk Start / End',
+                    href: '/billing/clerk',
+                    permission: 'core.clerk.read',
+                },
+                {
+                    id: 'clerks',
+                    label: 'Daftar Clerk',
+                    href: '/billing/clerks',
+                    permission: 'core.clerk.read',
+                },
+            ],
+        },
+        {
             id: 'setup',
             label: 'Setup',
             icon: 'settings',

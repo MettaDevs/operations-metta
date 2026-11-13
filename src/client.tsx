@@ -45,6 +45,8 @@ import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../module
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
 import { page as modulesPharmacySrcDrugSetupPharmacySetupPage } from '../modules/pharmacy/src/drug/setup/pharmacy-setup.page.tsx';
+import { page as foundationBillingClerkClerkPage } from './foundation/billing/clerk/clerk.page.tsx';
+import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
@@ -583,6 +585,21 @@ const modulesPharmacySrcDrugSetupPharmacySetupRoute = createRoute({
     staticData: { title: modulesPharmacySrcDrugSetupPharmacySetupPage.title },
 });
 
+const foundationBillingClerkClerkRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingClerkClerkPage.path,
+    component: foundationBillingClerkClerkPage.component,
+    staticData: { title: foundationBillingClerkClerkPage.title },
+});
+
+const foundationBillingClerkClerksRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingClerkClerksPage.path,
+    component: foundationBillingClerkClerksPage.component,
+    validateSearch: foundationBillingClerkClerksPage.validateSearch,
+    staticData: { title: foundationBillingClerkClerksPage.title },
+});
+
 const foundationBillingDashboardDashboardRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationBillingDashboardDashboardPage.path,
@@ -1001,6 +1018,8 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDrugDrugDrugsRoute,
         modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
         modulesPharmacySrcDrugSetupPharmacySetupRoute,
+        foundationBillingClerkClerkRoute,
+        foundationBillingClerkClerksRoute,
         foundationBillingDashboardDashboardRoute,
         foundationBillingMerchantMerchantsRoute,
         foundationBillingPaymentMethodPaymentMethodsRoute,
