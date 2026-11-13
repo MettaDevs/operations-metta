@@ -41,7 +41,9 @@ export {
 } from './item-ledger/source-entries.ts';
 export {
     defaultUnit,
+    itemUnits,
     unitConversion,
+    type ItemUnitOption,
     type UnitUse,
 } from './item-unit/item-unit.service.ts';
 export {

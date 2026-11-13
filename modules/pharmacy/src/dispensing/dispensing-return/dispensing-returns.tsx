@@ -14,11 +14,12 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
+import { Select } from '@operations-metta/ui/select';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
     api,
@@ -38,6 +39,17 @@ export const returnsKey = (prescriptionId: string) => [
 
 const numberFormat =
     'Tulis angka seperti 2 atau 2,5. Titik untuk ribuan, koma untuk desimal.';
+
+const baseText = (quantity: string, row: Returnable) =>
+    `${displayNumber(quantity)} ${row.base_unit?.code ?? ''}`;
+
+const unitChoices = (row: Returnable) =>
+    row.unit && !row.units.some((unit) => unit.id === row.unit?.id)
+        ? [
+              { ...row.unit, quantity_per_unit: row.quantity_per_unit ?? '1' },
+              ...row.units,
+          ]
+        : row.units;
 
 const batchText = (row: Returnable) =>
     row.batch
@@ -63,13 +75,16 @@ function useReturns(prescriptionId: string, enabled = true) {
 export function ReturnCard({
     prescriptionId,
     onDone,
+    portalContainer,
 }: {
     prescriptionId: string;
     onDone: () => void;
+    portalContainer: RefObject<HTMLElement | null>;
 }): ReactNode {
     const queryClient = useQueryClient();
     const stored = useReturns(prescriptionId);
     const [quantities, setQuantities] = useState<Record<string, string>>({});
+    const [units, setUnits] = useState<Record<string, string>>({});
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -78,6 +93,7 @@ export function ReturnCard({
     const rows = stored.data?.data.returnable ?? [];
     const key = (row: Returnable) =>
         `${row.dispensing_line_id}:${row.batch?.id ?? '-'}`;
+    const unitOf = (row: Returnable) => units[key(row)] ?? row.unit?.id ?? null;
 
     const save = async () => {
         const invalid: Record<string, string[]> = {};
@@ -90,6 +106,7 @@ export function ReturnCard({
                 dispensing_line_id: row.dispensing_line_id,
                 batch_id: row.batch?.id ?? null,
                 quantity: quantity ?? typed,
+                unit_id: unitOf(row),
             };
         });
         setMessage(null);
@@ -207,7 +224,7 @@ export function ReturnCard({
                                 align: 'right',
                                 cell: ({ row }) => (
                                     <DataTableText>
-                                        {displayNumber(row.dispensed)}
+                                        {baseText(row.dispensed, row)}
                                     </DataTableText>
                                 ),
                             },
@@ -218,8 +235,46 @@ export function ReturnCard({
                                 align: 'right',
                                 cell: ({ row }) => (
                                     <DataTableText>
-                                        {displayNumber(row.returned)}
+                                        {baseText(row.returned, row)}
                                     </DataTableText>
+                                ),
+                            },
+                            {
+                                id: 'unit',
+                                header: 'Satuan',
+                                content: 'control',
+                                minWidth: 150,
+                                cell: ({ row, index }) => (
+                                    <FormControl
+                                        error={
+                                            errors[
+                                                `lines.${index}.unit_id`
+                                            ]?.[0]
+                                        }
+                                        data-error-field={`lines.${index}.unit_id`}
+                                    >
+                                        <Select
+                                            label="Satuan"
+                                            required
+                                            items={unitChoices(row).map(
+                                                (unit) => ({
+                                                    value: unit.id,
+                                                    label: `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`,
+                                                }),
+                                            )}
+                                            value={unitOf(row)}
+                                            onValueChange={(value) =>
+                                                setUnits((current) => ({
+                                                    ...current,
+                                                    [key(row)]:
+                                                        value ??
+                                                        row.unit?.id ??
+                                                        '',
+                                                }))
+                                            }
+                                            portalContainer={portalContainer}
+                                        />
+                                    </FormControl>
                                 ),
                             },
                             {
@@ -358,7 +413,7 @@ export function ReturnsSection({
                             <DataTableText multiline>
                                 {row.lines.map((line, at) => (
                                     <span key={at} className="block">
-                                        {`${line.item_name} · ${line.batch_number ?? 'tanpa batch'} · ${displayNumber(line.quantity)}`}
+                                        {`${line.item_name} · ${line.batch_number ?? 'tanpa batch'} · ${displayNumber(line.quantity)} ${line.unit_code}`}
                                     </span>
                                 ))}
                             </DataTableText>

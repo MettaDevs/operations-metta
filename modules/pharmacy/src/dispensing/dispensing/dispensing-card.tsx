@@ -33,7 +33,7 @@ import {
     RotateCcw,
     Undo2,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
@@ -54,7 +54,11 @@ import {
     ReturnsSection,
     useCanReturn,
 } from '../dispensing-return/dispensing-returns.tsx';
-import { DispensingLines, type LineDraft } from './dispensing-lines.tsx';
+import {
+    DispensingLines,
+    type LineDraft,
+    type UnitOption,
+} from './dispensing-lines.tsx';
 
 type View = ApiBody<'pharmacyDispensingShow'>;
 type Dispensing = NonNullable<View['data']['dispensing']>;
@@ -97,6 +101,7 @@ const draftOf = (view: View['data']): Draft => ({
     lines: view.lines.map((line) => ({
         prescriptionLineId: line.prescription_line_id,
         quantity: displayNumber(line.quantity),
+        unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         batch: line.batch,
         reason: line.reason ?? '',
         taken: line.taken,
@@ -256,6 +261,7 @@ function DispensingForm({
     const [message, setMessage] = useState<string | null>(null);
     const [action, setAction] = useState<Action>('save');
     const [returning, setReturning] = useState(false);
+    const returnContent = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const canReturn = useCanReturn(
         prescription.id,
@@ -289,6 +295,9 @@ function DispensingForm({
     const stock = new Map(
         view.data.stock.map((row) => [row.item_id, row.quantity]),
     );
+    const units = new Map<string, UnitOption[]>(
+        view.data.lines.map((line) => [line.prescription_line_id, line.units]),
+    );
 
     const run = async (next: Action, request: () => Promise<View>) => {
         setAction(next);
@@ -318,6 +327,7 @@ function DispensingForm({
             return {
                 prescription_line_id: line.prescriptionLineId,
                 quantity: quantity ?? line.quantity,
+                unit_id: line.unit.id,
                 batch_id: line.batch?.id ?? null,
                 reason: line.reason.trim() || null,
             };
@@ -692,6 +702,7 @@ function DispensingForm({
                                     prepared={prepared}
                                     errors={errors}
                                     stock={stock}
+                                    units={units}
                                     locationId={draft.location?.id ?? null}
                                     portalContainer={portalContainer}
                                 />
@@ -715,10 +726,11 @@ function DispensingForm({
                         if (!next) setReturning(false);
                     }}
                 >
-                    <PageDialogContent title="Retur obat">
+                    <PageDialogContent ref={returnContent} title="Retur obat">
                         <ReturnCard
                             prescriptionId={prescription.id}
                             onDone={() => setReturning(false)}
+                            portalContainer={returnContent}
                         />
                     </PageDialogContent>
                 </PageDialog>

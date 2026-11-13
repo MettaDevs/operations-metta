@@ -88,6 +88,62 @@ describe.skipIf(!process.env.DB_HOST)(
             ]);
         });
 
+        test('a line keeps the unit the doctor wrote and its isi, and an older message without the isi counts in the base unit', async () => {
+            const strip = await pharmacy.created(
+                '/api/v1/inventory/units-of-measure',
+                { code: 'STRIP', name: 'Strip' },
+            );
+            const { prescriptionId } = await pharmacy.issue([
+                {
+                    item: amoxicillin,
+                    quantity: '2',
+                    unit: strip,
+                    quantity_per_unit: '10',
+                },
+            ]);
+            const older = await pharmacy.issue([], {
+                data: {
+                    lines: [
+                        {
+                            id: Bun.randomUUIDv7(),
+                            order: 1,
+                            item: {
+                                id: amoxicillin.id,
+                                code: amoxicillin.code,
+                                name: amoxicillin.name,
+                            },
+                            compound: null,
+                            quantity: '15',
+                            unit: {
+                                id: pharmacy.uom.id,
+                                code: pharmacy.uom.code,
+                                name: pharmacy.uom.name,
+                            },
+                            requested_quantity: null,
+                            signa: null,
+                            usage_instruction: null,
+                            notes: null,
+                        },
+                    ],
+                },
+            });
+            const stored = async (id: string) =>
+                pool.unsafe<
+                    { jumlah: string; kode_satuan: string; konversi: string }[]
+                >(
+                    `select trim_scale(d.jumlah)::text as jumlah, d.kode_satuan, trim_scale(d.konversi)::text as konversi
+                     from far_tr_resep_detail d join far_tr_resep r on r.id = d.resep_id
+                     where r.tenant_id = $1 and r.resep_sumber_id = $2`,
+                    [pharmacy.tenantId, id],
+                );
+            expect([...(await stored(prescriptionId))]).toEqual([
+                { jumlah: '2', kode_satuan: 'STRIP', konversi: '10' },
+            ]);
+            expect([...(await stored(older.prescriptionId))]).toEqual([
+                { jumlah: '15', kode_satuan: 'TAB', konversi: '1' },
+            ]);
+        });
+
         test('the same event delivered twice, or the same prescription in a second event, is queued once', async () => {
             const { envelope, prescriptionId, data } = await pharmacy.issue([
                 { item: amoxicillin, quantity: '6' },

@@ -132,7 +132,17 @@ components:
     line:
       type: object
       additionalProperties: false
-      description: Jumlah ditulis sebagai teks desimal dalam satuan dasar barang (`unit`). `quantity` boleh 0.
+      description: |
+        Jumlah ditulis sebagai teks desimal. `quantity` boleh 0 dan ditulis dalam `unit`, satuan yang dipakai farmasi
+        saat menyerahkan; satuan itu boleh berbeda dari satuan resep selama milik barang yang sama. `quantity_per_unit`
+        adalah isi `unit` dalam satuan dasar barang (`base_unit`), dan `base_quantity` adalah `quantity` dalam satuan
+        dasar, yang dipakai penerima untuk menghitung yang dipegang pasien. `prescribed_quantity` ditulis dalam
+        `prescribed_unit`, satuan yang ditulis dokter. Jumlah batch dalam satuan dasar, seperti stok.
+
+        Field `quantity_per_unit`, `base_unit`, `base_quantity`, dan `prescribed_unit` ditambahkan sesudah versi ini
+        terbit, jadi opsional; penerbit selalu mengisinya. Pesan yang belum membawanya ditulis dalam satuan dasar:
+        `unit` adalah satuan dasar barang, `base_quantity` sama dengan `quantity`, dan `prescribed_unit` sama dengan
+        `unit`.
       required:
         [
           prescription_line_id,
@@ -152,18 +162,32 @@ components:
           $ref: '#/components/schemas/reference'
         unit:
           $ref: '#/components/schemas/reference'
+        quantity_per_unit:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Isi `unit` dalam satuan dasar barang, misalnya 10 untuk strip berisi 10 tablet.
+        base_unit:
+          $ref: '#/components/schemas/reference'
+        base_quantity:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: '`quantity` dalam satuan dasar (`base_unit`).'
+        prescribed_unit:
+          $ref: '#/components/schemas/reference'
         prescribed_quantity:
           type: string
           pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Jumlah yang ditulis dokter, dalam `prescribed_unit`.
         quantity:
           type: string
           pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Jumlah yang diserahkan, dalam `unit`.
         reason:
           type: [string, 'null']
           description: Alasan bila yang diserahkan kurang dari resep.
         batches:
           type: array
-          description: Batch yang diambil dari stok; kosong bila tidak ada yang diserahkan.
+          description: Batch yang diambil dari stok, jumlahnya dalam satuan dasar; kosong bila tidak ada yang diserahkan.
           items:
             $ref: '#/components/schemas/batch'
     batch:

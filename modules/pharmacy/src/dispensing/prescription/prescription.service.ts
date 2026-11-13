@@ -180,7 +180,8 @@ export class Prescriptions {
                     case when d.barang_id is null then null else json_build_object(
                         'id', d.barang_id, 'code', d.kode_barang, 'name', d.nama_barang) end as item,
                     case when d.satuan_id is null then null else json_build_object(
-                        'id', d.satuan_id, 'code', d.kode_satuan, 'name', d.nama_satuan) end as unit
+                        'id', d.satuan_id, 'code', d.kode_satuan, 'name', d.nama_satuan) end as unit,
+                    trim_scale(d.konversi)::text as quantity_per_unit
              from far_tr_resep_detail d
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,

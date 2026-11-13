@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
+import {
+    defaultUnit,
+    itemUnits,
+    quantityScale,
+    toNumeric,
+    unitConversion,
+} from '@core/foundation/inventory/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import {
     isoSql,
@@ -17,6 +24,12 @@ import {
 } from './medical-record.messages.ts';
 import type { MedicalRecord } from './medical-record.schema.ts';
 import { publishPrescriptionIssued } from './prescription.events.ts';
+import {
+    baseQuantityText,
+    numberText,
+    quantityOf,
+    type LineUnit,
+} from './prescription.units.ts';
 
 // Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama, beserta alergi obat pasien yang diperiksa resep.
 // Ditulis di dalam Simpan rekam medis yang sama; Kirim ke farmasi menutup draf resep.
@@ -109,8 +122,10 @@ type ProcedureLine = {
     doctor_id: string | null;
 };
 
+type ChosenUnit = { id: string; conversion: string };
 type PrescriptionLine = {
     drug_id: string | null;
+    unit: ChosenUnit | null;
     compound: number | null;
     quantity: number | null;
     requested_quantity: number | null;
@@ -154,15 +169,19 @@ const savedLineSchema = z.object({
     drug_id: z.string().nullable(),
     drug_code: z.string().nullable(),
     drug_name: z.string().nullable(),
+    unit_id: z.string().nullable(),
+    unit_code: z.string().nullable(),
     unit_name: z.string().nullable(),
+    conversion: z.string().nullable(),
+    base_unit_code: z.string().nullable(),
     compound: z.number().nullable(),
     quantity: z.number().nullable(),
     requested_quantity: z.number().nullable(),
     signa: z.string().nullable(),
     usage_instruction_id: z.string().nullable(),
     notes: z.string().nullable(),
-    dispensed_quantity: z.number().nullable(),
-    returned_quantity: z.number().nullable(),
+    dispensed: z.string().nullable(),
+    returned: z.string().nullable(),
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
 
@@ -442,30 +461,88 @@ export class ExaminationOrders {
         return this.db.rows(
             savedLineSchema,
             `select d.id, d.urutan, d.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name,
-                    s.nama as unit_name, d.racikan_ke as compound, d.jumlah::float8 as quantity,
+                    d.satuan_id as unit_id, s.kode as unit_code, s.nama as unit_name, d.konversi::text as conversion,
+                    bs.kode as base_unit_code, d.racikan_ke as compound, d.jumlah::float8 as quantity,
                     d.jumlah_permintaan::float8 as requested_quantity, d.signa,
                     d.aturan_pakai_id as usage_instruction_id, d.keterangan as notes,
-                    (d.jumlah_diserahkan - coalesce(d.jumlah_diretur, 0))::float8 as dispensed_quantity,
-                    d.jumlah_diretur::float8 as returned_quantity
+                    d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned
              from sim_tr_resep_detail d
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
-             left join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+             left join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
+             left join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.tenantId, prescriptionId],
         );
     }
 
-    async prescriptions(recordId: string | null): Promise<Prescription[]> {
+    async prescriptions(
+        recordId: string | null,
+        legalEntityId: string,
+    ): Promise<Prescription[]> {
         if (!recordId) return [];
         const result: Prescription[] = [];
-        for (const prescription of await this.savedPrescriptions(recordId))
+        for (const prescription of await this.savedPrescriptions(recordId)) {
+            const lines = await this.savedLines(prescription.id);
+            const units = await itemUnits(
+                this.db,
+                { tenantId: this.tenantId, legalEntityId },
+                lines.flatMap((line) => (line.drug_id ? [line.drug_id] : [])),
+            );
             result.push({
                 ...prescription,
-                lines: (await this.savedLines(prescription.id)).map(
-                    ({ id: _id, urutan: _urutan, ...line }) => line,
-                ),
+                lines: lines.map((line) => {
+                    const unit: LineUnit | null =
+                        line.unit_code && line.conversion
+                            ? {
+                                  code: line.unit_code,
+                                  quantityPerUnit: quantityOf(line.conversion),
+                              }
+                            : null;
+                    const shown = (base: bigint) =>
+                        unit
+                            ? baseQuantityText(
+                                  base,
+                                  unit,
+                                  line.base_unit_code ?? '',
+                              )
+                            : null;
+                    const returned =
+                        line.returned === null
+                            ? null
+                            : quantityOf(line.returned);
+                    return {
+                        drug_id: line.drug_id,
+                        drug_code: line.drug_code,
+                        drug_name: line.drug_name,
+                        unit_id: line.unit_id,
+                        unit_code: line.unit_code,
+                        unit_name: line.unit_name,
+                        quantity_per_unit: unit
+                            ? numberText(unit.quantityPerUnit)
+                            : null,
+                        units: line.drug_id
+                            ? (units.get(line.drug_id) ?? [])
+                            : [],
+                        compound: line.compound,
+                        quantity: line.quantity,
+                        requested_quantity: line.requested_quantity,
+                        signa: line.signa,
+                        usage_instruction_id: line.usage_instruction_id,
+                        notes: line.notes,
+                        dispensed_quantity:
+                            line.dispensed === null
+                                ? null
+                                : shown(
+                                      quantityOf(line.dispensed) -
+                                          (returned ?? 0n),
+                                  ),
+                        returned_quantity:
+                            returned === null ? null : shown(returned),
+                    };
+                }),
             });
+        }
         return result;
     }
 
@@ -569,6 +646,7 @@ export class ExaminationOrders {
                     add(errors, field('quantity'), 'Isian ini tidak sah.');
                 lines.push({
                     drug_id: null,
+                    unit: null,
                     compound,
                     quantity: null,
                     requested_quantity: amount(
@@ -626,8 +704,17 @@ export class ExaminationOrders {
             const quantity = amount(row.quantity, field('quantity'), errors);
             if (quantity === null && missing(row.quantity))
                 add(errors, field('quantity'), 'Isi jumlah lebih dari 0.');
+            const unit = await this.lineUnit(
+                row.unit_id,
+                drug.id,
+                saved,
+                legalEntityId,
+                field('unit_id'),
+                errors,
+            );
             lines.push({
                 drug_id: drug.id,
+                unit,
                 compound,
                 quantity,
                 requested_quantity: null,
@@ -640,6 +727,45 @@ export class ExaminationOrders {
             if (!compounds.has(component.compound))
                 add(errors, component.field, invalidCompoundMessage);
         return lines;
+    }
+
+    // Bawaannya satuan jual obat, seperti baris penjualan BC yang mengisi Unit of Measure Code dari
+    // Sales Unit of Measure barang. Satuan lain harus satuan obat itu sendiri. Baris tersimpan yang satuannya tidak
+    // berubah memakai isi yang sudah disalin, walau isi kemasan sejak itu diubah.
+    private async lineUnit(
+        raw: unknown,
+        drugId: string,
+        saved: SavedLine[],
+        legalEntityId: string,
+        field: string,
+        errors: Errors,
+    ): Promise<ChosenUnit | null> {
+        const scope = { tenantId: this.tenantId, legalEntityId };
+        if (missing(raw)) {
+            const unit = await defaultUnit(this.db, scope, drugId, 'sales');
+            if (unit)
+                return {
+                    id: unit.unitId,
+                    conversion: toNumeric(unit.conversion, quantityScale),
+                };
+        } else {
+            const id = typeof raw === 'string' ? lookupId(raw) : null;
+            const kept = saved.find(
+                (line) => line.drug_id === drugId && line.unit_id === id,
+            );
+            if (id && kept?.conversion)
+                return { id, conversion: kept.conversion };
+            const conversion = id
+                ? await unitConversion(this.db, scope, drugId, id)
+                : null;
+            if (id && conversion !== null)
+                return {
+                    id,
+                    conversion: toNumeric(conversion, quantityScale),
+                };
+        }
+        add(errors, field, 'Pilih satuan obat ini dari daftar.');
+        return null;
     }
 
     private async usageInstruction(
@@ -736,6 +862,8 @@ export class ExaminationOrders {
             const values = {
                 urutan: index + 1,
                 racikan_ke: line.compound,
+                satuan_id: line.unit?.id ?? null,
+                konversi: line.unit?.conversion ?? null,
                 jumlah: line.quantity,
                 jumlah_permintaan: line.requested_quantity,
                 signa: line.signa,
@@ -758,6 +886,8 @@ export class ExaminationOrders {
             else if (
                 match.urutan !== values.urutan ||
                 match.compound !== values.racikan_ke ||
+                match.unit_id !== values.satuan_id ||
+                match.conversion !== values.konversi ||
                 match.quantity !== values.jumlah ||
                 match.requested_quantity !== values.jumlah_permintaan ||
                 match.signa !== values.signa ||

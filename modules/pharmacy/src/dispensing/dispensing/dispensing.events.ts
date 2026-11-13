@@ -62,6 +62,10 @@ export async function publishPrescriptionDispensed(
             prescription_line_id: z.string(),
             item: reference,
             unit: reference,
+            quantity_per_unit: z.string(),
+            base_unit: reference,
+            base_quantity: z.string(),
+            prescribed_unit: reference,
             prescribed_quantity: z.string(),
             quantity: z.string(),
             reason: z.string().nullable(),
@@ -69,11 +73,19 @@ export async function publishPrescriptionDispensed(
         `select d.id, rd.baris_sumber_id as prescription_line_id,
                 json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item,
                 json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
+                trim_scale(d.konversi)::text as quantity_per_unit,
+                json_build_object('id', bs.id, 'code', bs.kode, 'name', bs.nama) as base_unit,
+                trim_scale(d.jumlah * d.konversi)::text as base_quantity,
+                case when rd.satuan_id is null
+                     then json_build_object('id', bs.id, 'code', bs.kode, 'name', bs.nama)
+                     else json_build_object('id', rd.satuan_id, 'code', rd.kode_satuan, 'name', rd.nama_satuan)
+                end as prescribed_unit,
                 rd.jumlah::text as prescribed_quantity, d.jumlah::text as quantity, d.alasan as reason
          from bill_farmasi_detail d
          join far_tr_resep_detail rd on rd.tenant_id = d.tenant_id and rd.id = d.resep_detail_id
          join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
-         join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+         join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
+         join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
          where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null
          order by d.urutan, d.id`,
         [scope.tenantId, dispensingId],
@@ -123,6 +135,10 @@ export async function publishPrescriptionDispensed(
                     prescription_line_id: line.prescription_line_id,
                     item: line.item,
                     unit: line.unit,
+                    quantity_per_unit: line.quantity_per_unit,
+                    base_unit: line.base_unit,
+                    base_quantity: line.base_quantity,
+                    prescribed_unit: line.prescribed_unit,
                     prescribed_quantity: text(
                         fromNumeric(line.prescribed_quantity, quantityScale),
                     ),

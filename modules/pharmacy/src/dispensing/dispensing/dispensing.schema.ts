@@ -38,12 +38,21 @@ export const dispensingHeaderSchema = z.object({
     version: z.number(),
 });
 
+const reference = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+});
+
 // Baris penyerahan untuk satu baris obat resep. id kosong berarti usulan untuk penyerahan yang belum disimpan: jumlah
-// resep, batch diambil otomatis. taken: batch yang benar-benar diambil saat disiapkan, dari kartu gudang.
+// dan satuan resep, batch diambil otomatis. taken: batch yang benar-benar diambil saat disiapkan, dari kartu gudang.
 export const dispensingLineSchema = z.object({
     id: z.string().nullable(),
     prescription_line_id: z.string(),
     quantity: z.string(),
+    unit: reference,
+    quantity_per_unit: z.string(),
+    units: z.array(reference.extend({ quantity_per_unit: z.string() })),
     batch: batch.nullable(),
     reason: z.string().nullable(),
     taken: z.array(
@@ -54,6 +63,7 @@ export const dispensingLineSchema = z.object({
         }),
     ),
 });
+export type DispensingLine = z.infer<typeof dispensingLineSchema>;
 
 export const dispensingInputSchema = z.object({
     location_id: z.string().nullable().optional(),
@@ -65,6 +75,8 @@ export const dispensingInputSchema = z.object({
             z.object({
                 prescription_line_id: z.string(),
                 quantity: z.union([z.string(), z.number()]),
+                // Kosong berarti satuan resep.
+                unit_id: z.string().nullable().optional(),
                 batch_id: z.string().nullable().optional(),
                 reason: z.string().nullable().optional(),
             }),

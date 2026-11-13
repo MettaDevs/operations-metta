@@ -19,8 +19,9 @@ info:
     Return Receipt atas Sales Shipment yang sudah diposting.
 
     Keadaan sebenarnya, 13 November 2026:
-    - Retur hanya dalam satuan dasar barang, jadi `unit` sama dengan `base_unit` dan `quantity` sama dengan
-      `base_quantity`. Satuan lain dengan konversi belum ada di retur maupun penyerahan.
+    - Retur dicatat per baris penyerahan dan batch dalam satuan yang dipilih petugas farmasi, bawaannya satuan saat
+      diserahkan. Bila semua baris retur atas satu baris resep memakai satuan yang sama, `unit` dan `quantity` memakai
+      satuan itu; kalau tidak, satuan dasar, sehingga `quantity` sama dengan `base_quantity`.
     - Event hanya diantar di dalam runtime ke handler module yang terpasang. Belum ada pengirim ke luar runtime, jadi
       baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
     - Penerima: module layanan kesehatan (`modules/healthcare`), bila terpasang, menyalin `returned_base_quantity` ke
@@ -144,8 +145,9 @@ components:
       type: object
       additionalProperties: false
       description: |
-        Satu baris per obat resep yang diretur (obat tunggal atau komponen racikan). `unit` dan `quantity` berbentuk
-        sama dengan baris pharmacy.prescription.dispensed.v1: satuan dan jumlah seperti yang dicatat farmasi.
+        Satu baris per obat resep yang diretur (obat tunggal atau komponen racikan). `unit` dan `quantity` adalah
+        satuan dan jumlah seperti yang dicatat farmasi: satuan baris retur bila semua batch baris resep itu diretur
+        dalam satuan yang sama, kalau tidak satuan dasar.
         `base_unit` dan `base_quantity` adalah jumlah yang sama dalam satuan dasar barang, yang dipakai penerima untuk
         menghitung selisih dengan yang diserahkan. Jumlah ditulis sebagai teks desimal.
       required:

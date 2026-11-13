@@ -14,9 +14,10 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    baseQuantity,
     decimalInput,
-    fromNumeric,
     issuedSlices,
+    itemUnits,
     parseInput,
     postItemLines,
     quantityScale,
@@ -24,10 +25,19 @@ import {
     toNumeric,
     type InboundLine,
     type IssuedSlice,
+    type ItemUnitOption,
 } from '@core/foundation/inventory/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { moduleId } from '../../module.ts';
-import { dispensingSource } from '../dispensing/dispensing.service.ts';
+import {
+    dispensingSource,
+    inexactBaseMessage,
+} from '../dispensing/dispensing.service.ts';
+import {
+    baseQuantityText,
+    quantityOf,
+    quantityText,
+} from '../dispensing/dispensing.units.ts';
 import {
     publishReturn,
     returnPosted,
@@ -41,11 +51,47 @@ import {
 const returnSource = 'retur_farmasi';
 const returnNumberReference = 'pharmacy.return-number';
 
-const text = (value: bigint) =>
-    toNumeric(value, quantityScale).replace(/\.?0+$/, '');
-const quantityOf = (value: string) => fromNumeric(value, quantityScale);
 const batchKey = (lineId: string, batchId: string | null) =>
     `${lineId}:${batchId ?? '-'}`;
+
+const reference = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+});
+
+const dispensedLineSchema = z.object({
+    id: z.string(),
+    item_id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    unit: reference,
+    conversion: z.string(),
+    base_unit: reference,
+});
+type DispensedLine = z.infer<typeof dispensedLineSchema> & {
+    units: ItemUnitOption[];
+};
+
+// Bawaannya satuan saat diserahkan, dengan isi yang disalin waktu itu; satuan lain harus satuan barang itu sendiri,
+// dengan isinya sekarang.
+function returnUnit(raw: string | null | undefined, line: DispensedLine) {
+    const unitId = raw || line.unit.id;
+    if (unitId === line.unit.id)
+        return {
+            id: unitId,
+            code: line.unit.code,
+            quantityPerUnit: quantityOf(line.conversion),
+        };
+    const option = line.units.find((unit) => unit.id === unitId);
+    return option
+        ? {
+              id: option.id,
+              code: option.code,
+              quantityPerUnit: quantityOf(option.quantity_per_unit),
+          }
+        : null;
+}
 
 const messages = {
     reason: 'Tulis alasan obat dikembalikan.',
@@ -53,6 +99,7 @@ const messages = {
     dispensing_line_id: 'Muat ulang resep ini, lalu ulangi returmu.',
     batch_id: 'Muat ulang resep ini, lalu ulangi returmu.',
     quantity: 'Isi jumlah lebih dari 0.',
+    unit_id: 'Pilih satuan obat ini dari daftar.',
     version: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
 };
 
@@ -100,6 +147,35 @@ export class DispensingReturns {
              from bill_farmasi
              where tenant_id = $1 and resep_id = $2 and status = 'diserahkan' and deleted_at is null`,
             [this.scope.tenantId, prescription.id],
+        );
+    }
+
+    private async dispensingLines(
+        dispensingId: string,
+    ): Promise<Map<string, DispensedLine>> {
+        const rows = await this.db.rows(
+            dispensedLineSchema,
+            `select d.id, d.barang_id as item_id, b.kode as code, b.nama as name,
+                    json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
+                    d.konversi::text as conversion,
+                    json_build_object('id', bs.id, 'code', bs.kode, 'name', bs.nama) as base_unit
+             from bill_farmasi_detail d
+             join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+             join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
+             join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
+             where d.tenant_id = $1 and d.bill_farmasi_id = $2`,
+            [this.scope.tenantId, dispensingId],
+        );
+        const units = await itemUnits(
+            this.db,
+            this.scope,
+            rows.map((row) => row.item_id),
+        );
+        return new Map(
+            rows.map((row) => [
+                row.id,
+                { ...row, units: units.get(row.item_id) ?? [] },
+            ]),
         );
     }
 
@@ -214,21 +290,7 @@ export class DispensingReturns {
                 },
             };
         const groups = await this.remaining(dispensing.id);
-        const names = new Map(
-            (
-                await this.db.rows(
-                    z.object({
-                        id: z.string(),
-                        code: z.string(),
-                        name: z.string(),
-                    }),
-                    `select d.id, b.kode as code, b.nama as name from bill_farmasi_detail d
-                     join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
-                     where d.tenant_id = $1 and d.bill_farmasi_id = $2`,
-                    [this.scope.tenantId, dispensing.id],
-                )
-            ).map((row) => [row.id, row]),
-        );
+        const lines = await this.dispensingLines(dispensing.id);
         const returns = await this.db.rows(
             z.object({
                 id: z.string(),
@@ -243,16 +305,19 @@ export class DispensingReturns {
                         item_name: z.string(),
                         batch_number: z.string().nullable(),
                         quantity: z.string(),
+                        unit_code: z.string(),
                     }),
                 ),
             }),
             `select h.id, h.nomor as number, h.status, h.tanggal::text as posting_date, h.alasan as reason,
                     ${isoSql('h.diposting_pada')} as posted_at, h.version,
                     coalesce((select json_agg(json_build_object('item_name', b.nama, 'batch_number', t.no_batch,
-                                                                'quantity', trim_scale(d.jumlah)::text)
+                                                                'quantity', trim_scale(d.jumlah)::text,
+                                                                'unit_code', s.kode)
                                               order by d.urutan)
                               from retur_farmasi_detail d
                               join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+                              join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
                               left join gd_m_batch t on t.tenant_id = d.tenant_id and t.id = d.batch_id
                               where d.tenant_id = h.tenant_id and d.retur_farmasi_id = h.id
                                 and d.deleted_at is null), '[]') as lines
@@ -263,19 +328,30 @@ export class DispensingReturns {
         );
         return {
             data: {
-                returnable: [...groups.values()].map((group) => ({
-                    dispensing_line_id: group.lineId,
-                    item: names.get(group.lineId) ?? null,
-                    batch: group.batch
-                        ? {
-                              id: group.batch.id,
-                              batch_number: group.batch.number,
-                              expiry_date: group.batch.expiry,
-                          }
-                        : null,
-                    dispensed: text(group.dispensed),
-                    returned: text(group.returned),
-                })),
+                returnable: [...groups.values()].map((group) => {
+                    const line = lines.get(group.lineId);
+                    return {
+                        dispensing_line_id: group.lineId,
+                        item: line
+                            ? { id: line.id, code: line.code, name: line.name }
+                            : null,
+                        unit: line?.unit ?? null,
+                        quantity_per_unit: line
+                            ? quantityText(quantityOf(line.conversion))
+                            : null,
+                        base_unit: line?.base_unit ?? null,
+                        units: line?.units ?? [],
+                        batch: group.batch
+                            ? {
+                                  id: group.batch.id,
+                                  batch_number: group.batch.number,
+                                  expiry_date: group.batch.expiry,
+                              }
+                            : null,
+                        dispensed: quantityText(group.dispensed),
+                        returned: quantityText(group.returned),
+                    };
+                }),
                 returns,
             },
             permissions: {
@@ -295,6 +371,8 @@ export class DispensingReturns {
                     _form: 'Obat resep ini belum diserahkan, jadi belum ada yang bisa diretur.',
                 });
             const groups = await this.remaining(dispensing.id);
+            const dispensed = await this.dispensingLines(dispensing.id);
+            const taken = new Set<string>();
             const errors: Record<string, string> = {};
             const reason = data.reason.trim();
             if (!reason) errors.reason = messages.reason;
@@ -316,20 +394,36 @@ export class DispensingReturns {
                               batchKey(line.dispensing_line_id, line.batch_id),
                           )
                         : undefined;
-                if (!group) {
+                const source = group && dispensed.get(group.lineId);
+                if (
+                    !group ||
+                    !source ||
+                    taken.has(batchKey(line.dispensing_line_id, line.batch_id))
+                ) {
                     errors[`${field}.dispensing_line_id`] =
                         messages.dispensing_line_id;
                     return [];
                 }
+                taken.add(batchKey(line.dispensing_line_id, line.batch_id));
+                const chosen = returnUnit(line.unit_id, source);
+                if (!chosen) {
+                    errors[`${field}.unit_id`] = messages.unit_id;
+                    return [];
+                }
+                const base = baseQuantity(quantity, chosen.quantityPerUnit);
+                if (base === null) {
+                    errors[`${field}.quantity`] = inexactBaseMessage;
+                    return [];
+                }
                 const open = group.dispensed - group.returned;
-                if (quantity > open) {
+                if (base > open) {
                     errors[`${field}.quantity`] =
                         open > 0n
-                            ? `Paling banyak ${text(open)}: yang diserahkan dikurangi yang sudah diretur.`
+                            ? `Paling banyak ${baseQuantityText(open, chosen, source.base_unit.code)}: yang diserahkan dikurangi yang sudah diretur.`
                             : 'Obat batch ini sudah diretur seluruhnya.';
                     return [];
                 }
-                return [{ index, group, quantity }];
+                return [{ index, group, quantity, unit: chosen, base }];
             });
             if (!Object.keys(errors).length && !lines.length)
                 errors.lines = messages.lines;
@@ -381,10 +475,15 @@ export class DispensingReturns {
                     barang_id: line.group.itemId,
                     batch_id: line.group.batch?.id ?? null,
                     jumlah: toNumeric(line.quantity, quantityScale),
+                    satuan_id: line.unit.id,
+                    konversi: toNumeric(
+                        line.unit.quantityPerUnit,
+                        quantityScale,
+                    ),
                     created_at: stamp,
                     updated_at: stamp,
                 });
-                let left = line.quantity;
+                let left = line.base;
                 for (const part of line.group.open) {
                     if (left === 0n) break;
                     const quantity =

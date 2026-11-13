@@ -27,6 +27,10 @@ type ProcedureLine = {
 };
 type Line = {
     drug_id: string | null;
+    unit_id?: string | null;
+    unit_code?: string | null;
+    quantity_per_unit?: string | null;
+    units?: { id: string; code: string; quantity_per_unit: string }[];
     compound: number | null;
     quantity: number | string | null;
     requested_quantity?: number | string | null;
@@ -114,6 +118,7 @@ describe.skipIf(!process.env.DB_HOST)(
         let doctor: string;
         let nurse: string;
         let unitTab: string;
+        let unitStrip: string;
         let legalEntityId: string;
         let metadata: Metadata;
         let drugCount = 0;
@@ -241,18 +246,44 @@ describe.skipIf(!process.env.DB_HOST)(
             overrides: Record<string, unknown> = {},
         ) {
             drugCount += 1;
-            return created<{ id: string; code: string; name: string }>(
-                as,
-                `${api}/drugs`,
+            return created<{
+                id: string;
+                code: string;
+                name: string;
+                version: number;
+            }>(as, `${api}/drugs`, {
+                code: `RSP${drugCount}`,
+                name,
+                base_unit_id: unitTab,
+                dosage_form_id: null,
+                is_prescribable: true,
+                ...overrides,
+            });
+        }
+
+        async function packaged(name: string) {
+            const item = await drug(name);
+            const entry = await created<{ entry_id: string; version: number }>(
+                admin,
+                '/api/v1/inventory/item-units',
                 {
-                    code: `RSP${drugCount}`,
-                    name,
-                    base_unit_id: unitTab,
-                    dosage_form_id: null,
-                    is_prescribable: true,
-                    ...overrides,
+                    item_id: item.id,
+                    unit_id: unitStrip,
+                    quantity_per_unit: 10,
                 },
             );
+            await json(
+                await admin.patch(`/api/v1/inventory/items/${item.id}`, {
+                    code: item.code,
+                    name: item.name,
+                    base_unit_id: unitTab,
+                    category_id: null,
+                    version: item.version,
+                    sales_unit_id: unitStrip,
+                }),
+                200,
+            );
+            return { ...item, entry };
         }
 
         const single = (
@@ -385,6 +416,12 @@ describe.skipIf(!process.env.DB_HOST)(
                     name: 'Tablet',
                 })
             ).id;
+            unitStrip = (
+                await created(admin, '/api/v1/inventory/units-of-measure', {
+                    code: 'STRIP',
+                    name: 'Strip',
+                })
+            ).id;
         }, 120_000);
 
         test('aturan pakai is seeded from the old system, drug units are not, and both panels are on by default', async () => {
@@ -402,7 +439,7 @@ describe.skipIf(!process.env.DB_HOST)(
                         (select count(*)::int from sim_m_satuan_obat where tenant_id = $1) as module`,
                 [tenantId],
             );
-            expect(units).toEqual({ core: 1, module: 0 });
+            expect(units).toEqual({ core: 2, module: 0 });
             const id = await visit();
             const shown = await show(admin, id);
             expect(shown.data.procedures).toEqual([]);
@@ -698,6 +735,127 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(
                 after.filter((row) => row.deleted_at).map((row) => row.obat_id),
             ).toEqual([ctm.id]);
+        });
+
+        test('a drug line takes the sales unit unless another unit of that drug is chosen, and keeps the isi copied when its unit was chosen', async () => {
+            const id = await started();
+            const antacid = await packaged('Antasida tablet kunyah');
+            const ctm = await drug('CTM 4 mg dalam strip');
+            const offered = await json<{
+                data: {
+                    id: string;
+                    sales_unit_id: string;
+                    units: { code: string; quantity_per_unit: string }[];
+                }[];
+            }>(
+                await admin.get(
+                    `${api}/drugs?prescribable=true&q=${encodeURIComponent('Antasida tablet')}`,
+                ),
+                200,
+            );
+            expect(offered.data).toMatchObject([
+                {
+                    id: antacid.id,
+                    sales_unit_id: unitStrip,
+                    units: [
+                        { code: 'TAB', quantity_per_unit: '1' },
+                        { code: 'STRIP', quantity_per_unit: '10' },
+                    ],
+                },
+            ]);
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                single(antacid.id, 2),
+                                { ...single(ctm.id, 2), unit_id: unitStrip },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.unit_id': [
+                    'Pilih satuan obat ini dari daftar.',
+                ],
+            });
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [draft([single(antacid.id, 2)])],
+                }),
+                200,
+            );
+            const prescription = saved.data.prescriptions![0]!;
+            expect(prescription.lines[0]).toMatchObject({
+                unit_id: unitStrip,
+                unit_code: 'STRIP',
+                quantity: 2,
+                quantity_per_unit: '10',
+                units: [
+                    { id: unitTab, code: 'TAB', quantity_per_unit: '1' },
+                    { id: unitStrip, code: 'STRIP', quantity_per_unit: '10' },
+                ],
+            });
+            const stored = async () =>
+                (
+                    await pool.unsafe<
+                        { satuan_id: string; konversi: string }[]
+                    >(
+                        `select satuan_id, trim_scale(konversi)::text as konversi from sim_tr_resep_detail
+                         where resep_id = $1 and deleted_at is null`,
+                        [prescription.id],
+                    )
+                )[0];
+            expect(await stored()).toEqual({
+                satuan_id: unitStrip,
+                konversi: '10',
+            });
+            await json(
+                await admin.patch(
+                    `/api/v1/inventory/item-units/${antacid.entry.entry_id}`,
+                    {
+                        item_id: antacid.id,
+                        unit_id: unitStrip,
+                        quantity_per_unit: 12,
+                        version: antacid.entry.version,
+                    },
+                ),
+                200,
+            );
+            await json(
+                await save(admin, id, { prescriptions: [prescription] }),
+                200,
+            );
+            expect(await stored()).toEqual({
+                satuan_id: unitStrip,
+                konversi: '10',
+            });
+            const withUnit = (row: Prescription, unitId: string) => ({
+                ...row,
+                lines: row.lines.map((line) => ({ ...line, unit_id: unitId })),
+            });
+            const inTablets = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [withUnit(prescription, unitTab)],
+                }),
+                200,
+            );
+            expect(await stored()).toEqual({
+                satuan_id: unitTab,
+                konversi: '1',
+            });
+            await json(
+                await save(admin, id, {
+                    prescriptions: [
+                        withUnit(inTablets.data.prescriptions![0]!, unitStrip),
+                    ],
+                }),
+                200,
+            );
+            expect(await stored()).toEqual({
+                satuan_id: unitStrip,
+                konversi: '12',
+            });
         });
 
         test('a drug allergy belongs to the patient and blocks that drug with the old message, also in the same Simpan', async () => {
@@ -1160,6 +1318,7 @@ describe.skipIf(!process.env.DB_HOST)(
             const id = await started();
             const amoxicillin = await drug('Amoxicillin 500 mg kapsul');
             const ctm = await drug('CTM 4 mg tablet');
+            const antacid = await packaged('Antasida DOEN');
             await json(
                 await save(admin, id, {
                     anamnesis: {
@@ -1191,6 +1350,7 @@ describe.skipIf(!process.env.DB_HOST)(
                                     usage_instruction_id: null,
                                     notes: null,
                                 },
+                                single(antacid.id, '2'),
                             ],
                             'Habiskan antibiotik',
                         ),
@@ -1252,6 +1412,13 @@ describe.skipIf(!process.env.DB_HOST)(
                             compound: null,
                             quantity: '15',
                             unit: { id: unitTab, code: 'TAB', name: 'Tablet' },
+                            quantity_per_unit: '1',
+                            base_unit: {
+                                id: unitTab,
+                                code: 'TAB',
+                                name: 'Tablet',
+                            },
+                            base_quantity: '15',
                             requested_quantity: null,
                             signa: '3x1',
                             usage_instruction: 'Setelah Makan',
@@ -1263,6 +1430,9 @@ describe.skipIf(!process.env.DB_HOST)(
                             compound: 1,
                             quantity: null,
                             unit: null,
+                            quantity_per_unit: null,
+                            base_unit: null,
+                            base_quantity: null,
                             requested_quantity: '10',
                             signa: '3x1 bungkus',
                             usage_instruction: null,
@@ -1277,8 +1447,27 @@ describe.skipIf(!process.env.DB_HOST)(
                             },
                             compound: 1,
                             quantity: '2.5',
+                            base_quantity: '2.5',
                             requested_quantity: null,
                             signa: null,
+                        },
+                        {
+                            order: 4,
+                            item: { id: antacid.id, name: 'Antasida DOEN' },
+                            compound: null,
+                            quantity: '2',
+                            unit: {
+                                id: unitStrip,
+                                code: 'STRIP',
+                                name: 'Strip',
+                            },
+                            quantity_per_unit: '10',
+                            base_unit: {
+                                id: unitTab,
+                                code: 'TAB',
+                                name: 'Tablet',
+                            },
+                            base_quantity: '20',
                         },
                     ],
                 },

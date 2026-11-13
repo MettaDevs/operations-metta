@@ -49,8 +49,10 @@ export const cpptSchema = z.object({
             case_name: z.string(),
         }),
     ),
-    // P: terapi, tindakan, dan resep yang ditulis (sistem lama membaca obat yang sudah diserahkan farmasi; module
-    // farmasi belum ada).
+    // P: terapi, tindakan, dan resep. Resep yang sudah diserahkan farmasi ditulis sebagai "Obat Direalisasi" sistem lama
+    // (BILLFarmasiDetail.JmlObat - JmlRetur): obat yang dipegang pasien, yaitu yang diserahkan dikurangi yang diretur,
+    // dan obat yang habis diretur tidak ditulis. Resep yang belum diserahkan, misalnya di klinik tanpa module farmasi,
+    // ditulis seperti yang diresepkan beserta statusnya.
     plan: z.object({
         drug_therapy: text,
         non_drug_therapy: text,
@@ -60,13 +62,13 @@ export const cpptSchema = z.object({
         prescriptions: z.array(
             z.object({
                 number: text,
-                status: z.string(),
+                status: z.enum(['draf', 'dikirim']),
+                handed_over: z.boolean(),
                 lines: z.array(
                     z.object({
                         compound: number,
                         drug_name: text,
-                        unit_name: text,
-                        quantity: number,
+                        quantity: text,
                         requested_quantity: number,
                         signa: text,
                         usage_instruction: text,

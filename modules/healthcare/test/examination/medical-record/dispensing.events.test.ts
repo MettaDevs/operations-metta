@@ -25,8 +25,8 @@ type Prescription = {
     dispensing_number?: string | null;
     lines: {
         drug_id: string | null;
-        dispensed_quantity?: number | null;
-        returned_quantity?: number | null;
+        dispensed_quantity?: string | null;
+        returned_quantity?: string | null;
     }[];
 };
 
@@ -278,7 +278,7 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(shown?.dispensed_at).toBe('2026-11-13T03:20:00.000000Z');
             expect(shown?.dispensing_number).toBe('U1-FAR-00000001');
             expect(shown?.lines.map((line) => line.dispensed_quantity)).toEqual(
-                [10, 4],
+                ['10 TAB', '4 TAB'],
             );
         });
 
@@ -317,14 +317,14 @@ describe.skipIf(!process.env.DB_HOST)(
             const returnId = Bun.randomUUIDv7();
             await giveBack(posted, prescription.id, returnId, '3', '3');
             expect(await lines()).toEqual([
-                [7, 3],
-                [4, null],
+                ['7 TAB', '3 TAB'],
+                ['4 TAB', null],
             ]);
             expect(await storedReturns()).toEqual(['3', null]);
             await giveBack(reversed, prescription.id, returnId, '3', '0');
             expect(await lines()).toEqual([
-                [10, 0],
-                [4, null],
+                ['10 TAB', '0 TAB'],
+                ['4 TAB', null],
             ]);
             expect(await storedReturns()).toEqual(['0', null]);
         });
@@ -357,8 +357,8 @@ describe.skipIf(!process.env.DB_HOST)(
             }
             expect(await storedReturns()).toEqual(['5', null]);
             expect(await lines()).toEqual([
-                [5, 5],
-                [4, null],
+                ['5 TAB', '5 TAB'],
+                ['4 TAB', null],
             ]);
             const [processed] = await pool.unsafe<{ found: number }[]>(
                 'select count(*)::int as found from sim_processed_events where event_id = $1',
@@ -394,8 +394,8 @@ describe.skipIf(!process.env.DB_HOST)(
             );
             expect(await storedReturns()).toEqual(['10', null]);
             expect(await lines()).toEqual([
-                [0, 10],
-                [4, null],
+                ['0 TAB', '10 TAB'],
+                ['4 TAB', null],
             ]);
         });
     },

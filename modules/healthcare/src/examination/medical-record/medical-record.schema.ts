@@ -164,14 +164,27 @@ export const procedureSchema = z.object({
     added_at: text,
 });
 
+export const drugUnitSchema = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    quantity_per_unit: z.string(),
+});
+
 // Baris resep (SIMtrResepDetail): obat tunggal (compound kosong), kepala racikan "Racikan N" (drug_id kosong,
 // compound N), atau komponen racikan (drug_id dan compound terisi). Baris dikenali dari obatnya, atau dari nomor
-// racikannya untuk kepala racikan. Kode, nama, dan satuan obat hanya dibaca.
+// racikannya untuk kepala racikan. Kode dan nama obat hanya dibaca.
 export const prescriptionLineSchema = z.object({
     drug_id: text,
     drug_code: text,
     drug_name: text,
+    // Satuan jumlah baris obat; kosong saat disimpan berarti satuan jual obat. Kode, nama, isi, dan pilihan satuan hanya
+    // dibaca.
+    unit_id: text,
+    unit_code: text,
     unit_name: text,
+    quantity_per_unit: text,
+    units: z.array(drugUnitSchema),
     compound: number,
     quantity: number,
     requested_quantity: number,
@@ -180,9 +193,9 @@ export const prescriptionLineSchema = z.object({
     notes: text,
     // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
     // lama. Hanya dibaca; kosong selama belum diserahkan.
-    dispensed_quantity: number.optional(),
+    dispensed_quantity: text.optional(),
     // Total yang dikembalikan pasien ke farmasi; hanya dibaca, kosong bila belum pernah ada retur.
-    returned_quantity: number.optional(),
+    returned_quantity: text.optional(),
 });
 
 // Resep (SIMtrResep). Hanya draf yang diubah Simpan; nomor, status, waktu kirim, dokter, dan perawat hanya dibaca.
