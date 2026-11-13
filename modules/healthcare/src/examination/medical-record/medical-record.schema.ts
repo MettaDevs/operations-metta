@@ -175,12 +175,15 @@ export const diagnosisSchema = z.object({
 
 // Baris Biaya Tindakan (SIMtrRJTransaksi). Satu tindakan sekali per pemeriksaan, jadi baris dikenali dari tindakannya.
 // Kode, nama, tarif, pengisi, dan jamnya hanya dibaca; tarif dihitung server saat baris pertama kali disimpan.
+// diagnosis_icd10_id: diagnosa pemeriksaan ini yang menjadi alasan tindakan (Procedure.reasonReference SATUSEHAT), menurut
+// kode ICD-10-nya. Opsional dan tidak tampil di layar, karena sistem lama tidak punya tautan ini.
 export const procedureSchema = z.object({
     procedure_id: text,
     procedure_code: text,
     procedure_name: text,
     quantity: number,
     doctor_id: text,
+    diagnosis_icd10_id: text,
     tariff: text,
     added_by: text,
     added_at: text,
@@ -228,6 +231,9 @@ export const prescriptionLineSchema = z.object({
     // d.t.d., false dibagi rata) dan bentuk sediaan hasilnya dari daftar bentuk sediaan tenant.
     dtd: flag,
     dosage_form_id: text,
+    // Diagnosa pemeriksaan ini yang menjadi alasan obat tunggal atau racikan (MedicationRequest.reasonReference
+    // SATUSEHAT), menurut kode ICD-10-nya; kosong pada komponen racikan. Opsional dan tidak tampil di layar.
+    diagnosis_icd10_id: text,
     notes: text,
     // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
     // lama. Hanya dibaca; kosong selama belum diserahkan.

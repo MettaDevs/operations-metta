@@ -22,6 +22,7 @@ type ProcedureLine = {
     procedure_name?: string | null;
     quantity: number | string | null;
     doctor_id: string | null;
+    diagnosis_icd10_id?: string | null;
     added_by?: string | null;
     added_at?: string | null;
 };
@@ -45,6 +46,7 @@ type Line = {
     duration_days?: number | string | null;
     dtd?: boolean | string | null;
     dosage_form_id?: string | null;
+    diagnosis_icd10_id?: string | null;
     notes?: string | null;
     drug_name?: string | null;
     unit_name?: string | null;
@@ -1715,6 +1717,151 @@ describe.skipIf(!process.env.DB_HOST)(
                     'Bagian E-Resep tidak dipakai di poli ini. Muat ulang halaman pemeriksaan.',
                 ],
             });
+        });
+
+        test('a prescription line and a procedure line point at one of the examination diagnoses, kept through Kirim and released when the diagnosis is dropped', async () => {
+            const id = await started();
+            const icd = async (code: string, name: string) =>
+                (
+                    await created<{ id: string }>(admin, `${api}/icd10`, {
+                        code,
+                        name,
+                    })
+                ).id;
+            const fever = await icd('R50.9', 'Demam');
+            const cough = await icd('R05', 'Batuk');
+            const other = await icd('K30', 'Dispepsia');
+            const first = async (table: string) =>
+                (
+                    await pool.unsafe<{ id: string }[]>(
+                        `select id from ${table} where tenant_id = $1 and deleted_at is null order by urutan, kode limit 1`,
+                        [tenantId],
+                    )
+                )[0]!.id;
+            const type = await first('sim_m_diagnosa_jenis');
+            const kind = await first('sim_m_diagnosa_kasus');
+            const diagnosis = (icd10Id: string) => ({
+                icd10_id: icd10Id,
+                type_id: type,
+                case_id: kind,
+                doctor_id: doctor,
+                nurse_id: null,
+            });
+            const injection = await procedure('JD01', 'Injeksi Demam');
+            const paracetamol = await drug('Parasetamol Diagnosa');
+            const ctm = await drug('CTM Diagnosa');
+            const header: Line = {
+                is_compound_header: true,
+                drug_id: null,
+                compound: 1,
+                quantity: null,
+                requested_quantity: 10,
+                signa: '3x1',
+                ...dosage,
+                ...preparation,
+            };
+            const lines = (reason: string | null): Line[] => [
+                { ...single(paracetamol.id), diagnosis_icd10_id: fever },
+                { ...header, diagnosis_icd10_id: reason },
+                { drug_id: ctm.id, compound: 1, quantity: 1 },
+            ];
+            const pick = (reason: string) => ({
+                procedure_id: injection.id,
+                quantity: 1,
+                doctor_id: doctor,
+                diagnosis_icd10_id: reason,
+            });
+            const both = [diagnosis(fever), diagnosis(cough)];
+
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        diagnoses: both,
+                        procedures: [pick(other)],
+                        prescriptions: [
+                            draft([
+                                ...lines(cough).slice(0, 2),
+                                {
+                                    drug_id: ctm.id,
+                                    compound: 1,
+                                    quantity: 1,
+                                    diagnosis_icd10_id: cough,
+                                },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'procedures.0.diagnosis_icd10_id': [
+                    'Pilih diagnosa dari diagnosa pemeriksaan ini.',
+                ],
+                'prescriptions.0.lines.2.diagnosis_icd10_id': [
+                    'Diagnosa komponen racikan diisi pada baris racikannya.',
+                ],
+            });
+
+            // Diagnosa yang baru ditambahkan pada Simpan yang sama sudah bisa ditunjuk.
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    diagnoses: both,
+                    procedures: [pick(cough)],
+                    prescriptions: [draft(lines(cough))],
+                }),
+                200,
+            );
+            expect(
+                saved.data.procedures?.map((row) => row.diagnosis_icd10_id),
+            ).toEqual([cough]);
+            expect(
+                saved.data.prescriptions?.[0]?.lines.map(
+                    (row) => row.diagnosis_icd10_id,
+                ),
+            ).toEqual([fever, cough, null]);
+            const record = await recordId(id);
+            const stored = async () =>
+                pool.unsafe<{ source: string; icd10_id: string | null }[]>(
+                    `select 'resep' as source, dg.icd10_id from sim_tr_resep_detail d
+                     join sim_tr_resep r on r.id = d.resep_id
+                     left join sim_tr_pemeriksaan_diagnosa dg on dg.id = d.diagnosa_id
+                     where r.pemeriksaan_id = $1 and d.deleted_at is null
+                     union all
+                     select 'tindakan', dg.icd10_id from sim_tr_pemeriksaan_tindakan t
+                     left join sim_tr_pemeriksaan_diagnosa dg on dg.id = t.diagnosa_id
+                     where t.pemeriksaan_id = $1 and t.deleted_at is null
+                     order by 1, 2 nulls last`,
+                    [record],
+                );
+            expect([...(await stored())]).toEqual([
+                { source: 'resep', icd10_id: fever },
+                { source: 'resep', icd10_id: cough },
+                { source: 'resep', icd10_id: null },
+                { source: 'tindakan', icd10_id: cough },
+            ]);
+
+            // Kirim ke farmasi membawa tautannya.
+            await json(await send(admin, id), 200);
+            expect([...(await stored())]).toHaveLength(4);
+            expect(
+                (await show(admin, id)).data.prescriptions?.[0]?.lines.map(
+                    (row) => row.diagnosis_icd10_id,
+                ),
+            ).toEqual([fever, cough, null]);
+
+            // Membuang Batuk melepas tautan tindakan yang masih dikirim layar; resep yang sudah dikirim tidak berubah.
+            const opened = await show(admin, id);
+            await json(
+                await save(admin, id, {
+                    diagnoses: [diagnosis(fever)],
+                    procedures: opened.data.procedures,
+                }),
+                200,
+            );
+            expect([...(await stored())]).toEqual([
+                { source: 'resep', icd10_id: fever },
+                { source: 'resep', icd10_id: cough },
+                { source: 'resep', icd10_id: null },
+                { source: 'tindakan', icd10_id: null },
+            ]);
         });
 
         test('another tenant cannot use this tenant’s drugs and procedures or see its records', async () => {
