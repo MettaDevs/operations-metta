@@ -38,6 +38,8 @@ type Record_ = {
 type Shown = {
     data: Record_;
     context: {
+        physical_measured_at: string | null;
+        physical_measured_by_name: string | null;
         status: string;
         editable: boolean;
         gender: string | null;
@@ -748,6 +750,85 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
                 [tenantId],
             );
         }
+    });
+
+    test('the vital signs keep their measured time and measurer until a value changes', async () => {
+        const id = await visit();
+        await start(id);
+        const nurse = await createMember(pool, tenantId, [
+            'healthcare.examination.manage',
+        ]);
+        await grantAllOrganizations(pool, tenantId, nurse.membershipId);
+        await pool.unsafe(
+            `insert into role_assignment_data_policy_scopes
+                 (id, tenant_id, role_assignment_id, policy_code, include_descendants, valid_from, created_at, updated_at)
+             select $1, $2, id, 'healthcare.patient-unit', false, now() - interval '1 day', now(), now()
+             from role_assignments where membership_id = $3`,
+            [Bun.randomUUIDv7(), tenantId, nurse.membershipId],
+        );
+        const measurer = browser();
+        await measurer.login(nurse.email, nurse.password);
+        const opened = await show(measurer, id);
+        expect(opened.context.physical_measured_at).toBeNull();
+        const measured = await json<Shown>(
+            await save(measurer, id, {
+                ...opened.data,
+                physical: { ...opened.data.physical, ...vitals },
+            }),
+            200,
+        );
+        expect(measured.context.physical_measured_at).not.toBeNull();
+        const physical = async () =>
+            (
+                await pool.unsafe<
+                    {
+                        measured_at: string;
+                        measured_by: string | null;
+                        updated_at: string;
+                    }[]
+                >(
+                    `select f.diukur_pada::text as measured_at, f.diukur_oleh as measured_by, f.updated_at::text
+                     from sim_tr_pemeriksaan_fisik f
+                     where f.pemeriksaan_id = $1 and f.deleted_at is null`,
+                    [String(measured.data.id)],
+                )
+            )[0]!;
+        expect((await physical()).measured_by).toBe(nurse.userId);
+
+        // Simpan lain oleh dokter tanpa mengubah Periksa fisik tidak menggeser waktu ukur maupun pengukurnya.
+        await pool.unsafe(
+            `update sim_tr_pemeriksaan_fisik set diukur_pada = '2026-01-02 03:04:05'
+             where pemeriksaan_id = $1`,
+            [String(measured.data.id)],
+        );
+        const kept = await json<Shown>(
+            await save(admin, id, {
+                ...measured.data,
+                anamnesis: {
+                    ...measured.data.anamnesis,
+                    chief_complaint: 'Batuk',
+                },
+            }),
+            200,
+        );
+        expect(await physical()).toMatchObject({
+            measured_at: '2026-01-02 03:04:05',
+            measured_by: nurse.userId,
+        });
+        expect(kept.context.physical_measured_at).toBe('2026-01-02T03:04:05Z');
+
+        // Nilai yang berubah mencatat waktu ukur dan pengukur baru.
+        await json(
+            await save(admin, id, {
+                ...kept.data,
+                physical: { ...kept.data.physical, pulse_rate: 96 },
+            }),
+            200,
+        );
+        const remeasured = await physical();
+        expect(remeasured.measured_at).not.toBe('2026-01-02 03:04:05');
+        expect(remeasured.measured_at).toBe(remeasured.updated_at);
+        expect(remeasured.measured_by).not.toBe(nurse.userId);
     });
 
     test('a viewer reads but cannot save, and another tenant cannot see the record', async () => {
