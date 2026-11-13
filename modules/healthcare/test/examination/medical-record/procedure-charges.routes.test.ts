@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
+import type { Browser } from '../../../../../test/support/operations-app.ts';
 import {
     api,
     createClinic,
     json,
     login,
+    openCashier,
     refused,
     vitals,
     type Clinic,
@@ -13,7 +15,6 @@ import {
     eventContract,
     outboxEnvelopes,
 } from '../../../../../test/support/event-contracts.ts';
-import { testPassword } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Entry = { id: string; version: number };
 type Line = {
@@ -39,16 +40,19 @@ type StoredComponent = {
     deleted: boolean;
 };
 const pricing = '/api/v1/pricing';
+const chargeLocked =
+    'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.';
 
 // Tarif Biaya Tindakan: dihitung server dengan pencarian tarif sistem lama saat baris pertama kali disimpan, lalu
 // dibekukan bersama komponennya, dan sama dengan tarif yang ditampilkan saat tindakan dipilih. Biayanya sampai ke kasir,
-// juga saat diubah sesudah Selesai periksa, sampai kasir membayarnya. Butuh PostgreSQL yang sudah dimigrasi; dilewati
-// bila DB_HOST kosong.
+// juga saat diubah sesudah Selesai periksa, sampai kasir membayarnya. Sesudah dibayar hanya perubahan biaya yang
+// ditolak. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
     afterAll(close);
     let clinic: Clinic;
+    let cashier: Browser;
     let groups: { general: string; bpjs: string };
     let types: { general: string; bpjs: string; none: string };
     let procedures: {
@@ -142,6 +146,36 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         ];
     }
 
+    async function visitOf(id: string) {
+        const [visit] = await pool.unsafe<{ id: string }[]>(
+            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
+            [id],
+        );
+        return visit!.id;
+    }
+
+    async function cashierLines(visitId: string) {
+        return [
+            ...(await pool.unsafe<
+                { kode: string; qty: string; nilai: string; status: string }[]
+            >(
+                `select jenis_biaya_kode as kode, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai, status
+                 from kunjungan_kasir_detail
+                 where tenant_id = $1 and kunjungan_id = $2 and deleted_at is null
+                 order by jenis_biaya_kode`,
+                [clinic.tenantId, visitId],
+            )),
+        ];
+    }
+
+    const pay = async (visitId: string) =>
+        json(
+            await cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+                received: '1000000',
+            }),
+            201,
+        );
+
     async function pickedTariff(id: string, procedureId: string) {
         return (
             await json<{ data: { tariff: string } }>(
@@ -155,6 +189,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
 
     beforeAll(async () => {
         clinic = await createClinic(pool, browser, 'Klinik Uji Tarif Tindakan');
+        cashier = await openCashier(pool, browser, clinic.tenantId);
         const pricer = await login(pool, browser, clinic.tenantId, [
             'core.pricing-setup.manage',
         ]);
@@ -510,7 +545,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             ).status,
         ).toBe(404);
     });
-    test('saving procedures sends the frozen charges to the cashier, and saving again replaces them instead of adding', async () => {
+    test('saving procedures sends the frozen charges to the cashier, saving a change replaces them, and saving the same lines sends nothing', async () => {
         const id = await examination(types.general);
         await saved(id, [
             line(procedures.injection, 3),
@@ -518,10 +553,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         ]);
         await saved(id, [line(procedures.injection, 2)]);
         await saved(id, [line(procedures.injection, 2)]);
-        const [visit] = await pool.unsafe<{ id: string }[]>(
-            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
-            [id],
-        );
+        const visitId = await visitOf(id);
         const contract = await eventContract(
             'healthcare.examination.charges-replaced.v1',
         );
@@ -531,8 +563,8 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                 clinic.tenantId,
                 'healthcare.examination.charges-replaced.v1',
             )
-        ).filter((envelope) => envelope.data.visit_id === visit?.id);
-        expect(sent).toHaveLength(3);
+        ).filter((envelope) => envelope.data.visit_id === visitId);
+        expect(sent).toHaveLength(2);
         for (const envelope of sent)
             expect(contract.safeParse(envelope).error).toBeUndefined();
         expect(
@@ -559,7 +591,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                     r.deleted_at is null as live
              from kunjungan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
              order by r.deleted_at nulls first, r.jenis_biaya_kode`,
-            [clinic.tenantId, visit!.id],
+            [clinic.tenantId, visitId],
         );
         expect([...charges]).toEqual([
             {
@@ -583,56 +615,16 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         const id = await examination(types.general);
         await saved(id, [line(procedures.injection, 3)]);
         await json(await clinic.finish(id), 200);
-        const [visit] = await pool.unsafe<{ id: string }[]>(
-            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
-            [id],
-        );
-        const charges = async () => [
-            ...(await pool.unsafe<
-                { kode: string; qty: string; nilai: string; status: string }[]
-            >(
-                `select jenis_biaya_kode as kode, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai, status
-                 from kunjungan_kasir_detail
-                 where tenant_id = $1 and kunjungan_id = $2 and deleted_at is null
-                 order by jenis_biaya_kode`,
-                [clinic.tenantId, visit!.id],
-            )),
-        ];
+        const visitId = await visitOf(id);
         await saved(id, [
             line(procedures.injection),
             line(procedures.unpriced),
         ]);
-        expect(await charges()).toEqual([
+        expect(await cashierLines(visitId)).toEqual([
             { kode: 'J-INJ', qty: '1', nilai: '50000', status: 'terbuka' },
             { kode: 'J-KOSONG', qty: '1', nilai: '0', status: 'terbuka' },
         ]);
-
-        const cashier = await login(pool, browser, clinic.tenantId, [
-            'core.billing-setup.manage',
-            'core.clerk.operate',
-            'core.payment.operate',
-        ]);
-        await json(
-            await cashier.post('/api/v1/billing/payment-methods', {
-                code: 'TUN',
-                name: 'Tunai',
-                behavior: 'tunai',
-                counted_at_close: true,
-            }),
-            201,
-        );
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
-        await json(
-            await cashier.post(`/api/v1/billing/visits/${visit!.id}/payments`, {
-                received: '1000000',
-            }),
-            201,
-        );
+        await pay(visitId);
         const current = await clinic.show(id);
         expect(
             await refused(
@@ -645,14 +637,112 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                     procedures: [line(procedures.injection, 5)],
                 }),
             ),
-        ).toEqual({
-            _form: [
-                'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.',
-            ],
-        });
-        expect(await charges()).toEqual([
+        ).toEqual({ _form: [chargeLocked] });
+        expect(await cashierLines(visitId)).toEqual([
             { kode: 'J-INJ', qty: '1', nilai: '50000', status: 'ditagih' },
             { kode: 'J-KOSONG', qty: '1', nilai: '0', status: 'ditagih' },
         ]);
+    });
+
+    test('after payment, clinical edits still save without touching the cashier, and charge edits wait until the payment is cancelled', async () => {
+        const id = await examination(types.general);
+        await saved(id, [line(procedures.injection, 2)]);
+        await json(await clinic.finish(id), 200);
+        const visitId = await visitOf(id);
+        await pay(visitId);
+        const sent = async () =>
+            (
+                await outboxEnvelopes(
+                    pool,
+                    clinic.tenantId,
+                    'healthcare.examination.charges-replaced.v1',
+                )
+            ).filter((envelope) => envelope.data.visit_id === visitId).length;
+        const sentBefore = await sent();
+        const metadata = await json<{
+            diagnosis_types: { id: string; code: string }[];
+            diagnosis_cases: { id: string; code: string }[];
+        }>(
+            await clinic.admin.get(
+                `${api}/examination/medical-record/metadata`,
+            ),
+            200,
+        );
+        const icd10 = await created(`${api}/icd10`, {
+            code: 'A09',
+            name: 'Diare dan gastroenteritis',
+        });
+        const current = await clinic.show(id);
+        const updated = await json<{
+            data: {
+                anamnesis: { chief_complaint: string | null };
+                diagnoses: { icd10_id: string }[];
+                procedures: Line[];
+            };
+        }>(
+            await clinic.admin.put(clinic.recordPath(id), {
+                ...current.data,
+                anamnesis: {
+                    ...(current.data.anamnesis as object),
+                    doctor_id: clinic.doctor,
+                    chief_complaint: 'Diare sejak kemarin',
+                },
+                diagnoses: [
+                    {
+                        icd10_id: icd10.id,
+                        type_id: metadata.diagnosis_types.find(
+                            (row) => row.code === 'PRIMER',
+                        )!.id,
+                        case_id: metadata.diagnosis_cases.find(
+                            (row) => row.code === 'BARU',
+                        )!.id,
+                        doctor_id: clinic.doctor,
+                        nurse_id: clinic.nurse,
+                    },
+                ],
+            }),
+            200,
+        );
+        expect(updated.data.anamnesis.chief_complaint).toBe(
+            'Diare sejak kemarin',
+        );
+        expect(updated.data.diagnoses).toMatchObject([{ icd10_id: icd10.id }]);
+        expect(updated.data.procedures).toMatchObject([
+            { procedure_id: procedures.injection, quantity: 2 },
+        ]);
+        expect(await sent()).toBe(sentBefore);
+        expect(await cashierLines(visitId)).toEqual([
+            { kode: 'J-INJ', qty: '2', nilai: '50000', status: 'ditagih' },
+        ]);
+
+        // Menambah atau membuang baris, atau mengubah Qty atau dokternya, mengubah biaya.
+        for (const changed of [
+            [line(procedures.injection, 3)],
+            [{ ...line(procedures.injection, 2), doctor_id: clinic.dentist }],
+            [line(procedures.injection, 2), line(procedures.unpriced)],
+            [],
+        ]) {
+            const shown = await clinic.show(id);
+            expect(
+                await refused(
+                    await clinic.admin.put(clinic.recordPath(id), {
+                        ...shown.data,
+                        procedures: changed,
+                    }),
+                ),
+            ).toEqual({ _form: [chargeLocked] });
+        }
+        expect(await sent()).toBe(sentBefore);
+
+        // Pengganti API batal pembayaran kasir (irisan 6) sampai API itu ada; lane kasir menggantinya dengan panggilan API.
+        await pool.unsafe(
+            "update kasir set status = 'batal' where tenant_id = $1 and kunjungan_id = $2",
+            [clinic.tenantId, visitId],
+        );
+        const after = await saved(id, [line(procedures.injection, 3)]);
+        expect(after.data.procedures).toMatchObject([
+            { procedure_id: procedures.injection, quantity: 3 },
+        ]);
+        expect(await sent()).toBe(sentBefore + 1);
     });
 });

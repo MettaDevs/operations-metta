@@ -6,6 +6,7 @@ import {
     entitle,
     grantAllOrganizations,
     recordInstallation,
+    testPassword,
 } from '../../../../test/support/tenant-fixtures.ts';
 
 // Klinik sintetis untuk test halaman pemeriksaan: satu unit dengan Poli Umum (tanpa jadwal) dan Poli Gigi (jadwal
@@ -75,6 +76,35 @@ export async function login(
     const session = browser();
     await session.login(account.email, account.password);
     return session;
+}
+
+// Petugas kasir yang sudah Clerk Start dengan jenis bayar tunai, untuk membayar kunjungan lewat API kasir.
+export async function openCashier(
+    pool: postgres.Sql,
+    browser: () => Browser,
+    tenant: string,
+) {
+    const cashier = await login(pool, browser, tenant, [
+        'core.billing-setup.manage',
+        'core.clerk.operate',
+        'core.payment.operate',
+    ]);
+    await json(
+        await cashier.post('/api/v1/billing/payment-methods', {
+            code: 'TUN',
+            name: 'Tunai',
+            behavior: 'tunai',
+            counted_at_close: true,
+        }),
+        201,
+    );
+    await json(
+        await cashier.post('/api/v1/billing/clerks/start', {
+            password: testPassword,
+        }),
+        201,
+    );
+    return cashier;
 }
 
 export type Clinic = Awaited<ReturnType<typeof createClinic>>;

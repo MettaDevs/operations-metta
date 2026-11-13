@@ -29,6 +29,11 @@ import { paymentInputSchema } from './payment.schema.ts';
 import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 
 export const invoicePosted = 'billing.invoice.posted.v1' as const;
+
+// Kunjungan yang dibuka kembali poli (rujuk internal sesudah Selesai periksa) belum siap dibayar.
+export const reopenedMessage =
+    'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.';
+
 const source = 'healthcare';
 const numberReference = 'core.payment-number';
 
@@ -133,13 +138,18 @@ export class Payments {
             const date = today?.date ?? stamp.slice(0, 10);
             await lockVisit(this.db, scope.tenantId, visitId);
             const visit = await this.db.one(
-                z.object({ registration_number: z.string() }),
-                `select no_reg as registration_number from kunjungan_kasir
+                z.object({
+                    registration_number: z.string(),
+                    status: z.string(),
+                }),
+                `select no_reg as registration_number, status from kunjungan_kasir
                  where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and kunjungan_id = $4
-                   and status = 'selesai'`,
+                   and status in ('selesai', 'dibuka')`,
                 [scope.tenantId, scope.legalEntityId, source, visitId],
             );
             if (!visit) abort(404, 'Not Found');
+            if (visit.status === 'dibuka')
+                validation({ _form: reopenedMessage });
             const already = await this.db.one(
                 z.object({ id: z.string() }),
                 `select id from kasir where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3

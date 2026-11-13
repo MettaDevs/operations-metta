@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+    eventContract,
+    outboxEnvelopes,
+} from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
     api,
     createClinic,
     json,
     login,
+    openCashier,
     refused,
     type Clinic,
 } from '../../support/examination-fixture.ts';
@@ -38,13 +43,13 @@ type Status = {
     active: boolean;
 };
 
-const finished =
-    'Pemeriksaan ini sudah selesai, jadi tidak dapat menambah rujuk internal.';
+const paid =
+    'Kunjungan ini sudah dibayar di kasir. Batalkan pembayarannya dulu untuk menambah rujuk internal.';
 
 // Panel Status Pasien dan rujuk internal halaman pemeriksaan: data acuan dari sistem lama, setiap status tersimpan
 // beserta isiannya, rujuk internal membuat tujuan baru dengan antrean dan NoBukti, poli ganda ditolak, pemeriksaan
-// rujukan menunggu poli asal selesai, status kunjungan, batas tenant, dan izin. Butuh PostgreSQL yang sudah dimigrasi;
-// dilewati bila DB_HOST kosong.
+// rujukan menunggu poli asal selesai, status kunjungan, rujuk internal sesudah Selesai periksa sampai dibayar, batas
+// tenant, dan izin. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -438,11 +443,6 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         await json(await clinic.examineBy(destinationId), 200);
         await json(await clinic.finish(destinationId), 200);
         expect(await visitStatus(visitId)).toBe('diperiksa');
-        expect(
-            await refused(
-                await refer(destinationId, { section_id: clinic.lab }),
-            ),
-        ).toEqual({ status: [finished] });
 
         const called = await json<{ data: { id: string } }>(
             await clinic.admin.post(`${api}/examination/queue/call-next`, {
@@ -485,6 +485,91 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         expect(referred.data.discharge.internal_referrals).toMatchObject([
             { section_name: 'Poli KIA', practitioner_name: null },
         ]);
+    });
+
+    test('a referral after Selesai periksa reopens the unpaid visit and takes it off the cashier list until the new poli finishes, and a paid visit refuses it', async () => {
+        const { visitId, destinationId } = await started();
+        await json(await clinic.examineBy(destinationId), 200);
+        await json(await clinic.finish(destinationId), 200);
+        const visit = async () =>
+            (
+                await pool.unsafe<{ status: string; finished: boolean }[]>(
+                    'select status, selesai_pada is not null as finished from sim_tr_registrasi where id = $1',
+                    [visitId],
+                )
+            )[0];
+        expect(await visit()).toEqual({ status: 'selesai', finished: true });
+        const cashier = await openCashier(pool, browser, clinic.tenantId);
+        const payable = async () =>
+            (
+                await json<{ data: { id: string }[] }>(
+                    await cashier.get(
+                        `/api/v1/billing/visits?from=${clinic.today}&to=${clinic.today}`,
+                    ),
+                    200,
+                )
+            ).data.some((row) => row.id === visitId);
+        expect(await payable()).toBe(true);
+
+        const referred = await json<{ data: { discharge: Discharge } }>(
+            await refer(destinationId, { section_id: clinic.lab }),
+            200,
+        );
+        const [referral] = referred.data.discharge.internal_referrals;
+        expect(referral).toMatchObject({
+            section_name: 'Poli KIA',
+            status: 'menunggu',
+        });
+        expect(await visit()).toEqual({ status: 'diperiksa', finished: false });
+        expect(await payable()).toBe(false);
+        expect(
+            await refused(
+                await cashier.post(
+                    `/api/v1/billing/visits/${visitId}/payments`,
+                    { received: '0' },
+                ),
+            ),
+        ).toEqual({
+            _form: [
+                'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.',
+            ],
+        });
+        const contract = await eventContract('healthcare.visit.reopened.v1');
+        const sent = (
+            await outboxEnvelopes(
+                pool,
+                clinic.tenantId,
+                'healthcare.visit.reopened.v1',
+            )
+        ).filter((envelope) => envelope.data.visit_id === visitId);
+        expect(sent).toHaveLength(1);
+        expect(contract.safeParse(sent[0]).error).toBeUndefined();
+
+        // Poli asal sudah selesai, jadi rujukan bisa langsung diperiksa; kunjungan selesai lagi dan kembali ke kasir.
+        await json(await clinic.start(referral!.id), 200);
+        await json(await clinic.examineBy(referral!.id), 200);
+        await json(await clinic.finish(referral!.id), 200);
+        expect(await visit()).toEqual({ status: 'selesai', finished: true });
+        expect(await payable()).toBe(true);
+
+        await json(
+            await cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+                received: '0',
+            }),
+            201,
+        );
+        expect(
+            await refused(
+                await refer(destinationId, {
+                    section_id: clinic.dental,
+                    practice_schedule_id: clinic.dentalSchedule,
+                }),
+            ),
+        ).toEqual({ status: [paid] });
+        expect(await visit()).toEqual({ status: 'selesai', finished: true });
+        expect(
+            (await discharge(destinationId)).internal_referrals,
+        ).toHaveLength(1);
     });
 
     test('a referral is refused before the examination starts', async () => {

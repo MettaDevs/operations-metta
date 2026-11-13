@@ -602,11 +602,7 @@ function ExaminationRecord({
                                     metadata={recordMetadata}
                                     errors={errors}
                                     disabled={!editable || busy}
-                                    onRefer={
-                                        shown.context.status === 'diperiksa'
-                                            ? refer
-                                            : null
-                                    }
+                                    onRefer={editable ? refer : null}
                                 />
                             )}
                             <Card>

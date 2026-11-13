@@ -4,8 +4,10 @@ import {
     receiveCharges,
     receiveVisitCancelled,
     receiveVisitCompleted,
+    receiveVisitReopened,
     visitCancelled,
     visitCompleted,
+    visitReopened,
 } from './charge/charge.events.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';
@@ -33,6 +35,7 @@ export function registerBillingEventHandlers(): void {
     onEvent(chargesReplaced, 'core', receiveCharges);
     onEvent(visitCompleted, 'core', receiveVisitCompleted);
     onEvent(visitCancelled, 'core', receiveVisitCancelled);
+    onEvent(visitReopened, 'core', receiveVisitReopened);
 }
 
 export function billingRoutes() {

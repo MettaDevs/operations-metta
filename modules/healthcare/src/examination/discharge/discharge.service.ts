@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
@@ -9,11 +10,13 @@ import {
 import {
     abort,
     dateSchema,
+    HttpFailure,
     isRecord,
     lookupId,
     validation,
 } from '@core/platform/http/index.ts';
 import { moduleId } from '../../module.ts';
+import { publishVisitReopened } from '../../registration/visit/visit.events.ts';
 import {
     examinationNumberReference,
     nextQueueNumber,
@@ -21,6 +24,7 @@ import {
     takeSchedule,
     visitVisibility,
 } from '../../registration/visit/visit.service.ts';
+import { visitStatuses } from '../../registration/visit/visit.statuses.ts';
 import {
     ensurePracticeSchedule,
     schedulesForRegistration,
@@ -28,11 +32,14 @@ import {
 import { isQueueMode } from '../../service/section/section.queue-modes.ts';
 import type { OptionGroup } from '../medical-record/medical-record.fields.ts';
 import { practitionerId } from '../medical-record/medical-record.orders.ts';
-import { notStartedMessage } from '../queue/queue.statuses.ts';
+import {
+    destinationStatuses,
+    recordLockedMessage,
+} from '../queue/queue.statuses.ts';
 import {
     duplicateReferralMessage,
-    finishedReferralMessage,
     isDischargeBehavior,
+    paidReferralMessage,
     type DischargeBehavior,
 } from './discharge.behaviors.ts';
 import {
@@ -364,12 +371,13 @@ export class Discharges {
             ? await this.db.one(
                   z.object({
                       id: z.string(),
-                      status: z.string(),
+                      status: z.enum(destinationStatuses),
                       visit_id: z.string(),
+                      visit_status: z.enum(visitStatuses),
                       date: z.string(),
                       operating_unit_id: z.string(),
                   }),
-                  `select d.id, d.status, r.id as visit_id, r.tanggal::text as date,
+                  `select d.id, d.status, r.id as visit_id, r.status as visit_status, r.tanggal::text as date,
                           r.operating_unit_id
                    from sim_tr_registrasi_tujuan d
                    join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
@@ -428,9 +436,35 @@ export class Discharges {
         return { data };
     }
 
+    // Rujuk internal dari kunjungan yang semua polinya sudah selesai membuka kunjungan itu kembali; sistem lama tidak
+    // memeriksa status saat merujuk (statuspasien_helper::RujukInternalFormSubmit). Hanya sebelum dibayar: kunci kasir
+    // menolak kunjungan yang sudah dibayar. Kasir mendapat healthcare.visit.reopened.v1, jadi kunjungan ini keluar dari
+    // Daftar Pembayaran sampai poli rujukan Selesai periksa dan kunjungan selesai lagi.
+    private async reopen(visitId: string, stamp: string): Promise<void> {
+        try {
+            await lockChargeForChange(this.db, {
+                tenantId: this.tenantId,
+                sourceModule: moduleId,
+                visitId,
+            });
+        } catch (error) {
+            // Pesan kunci kasir menyebut tarif, BHP, dan resep; pengguna yang merujuk perlu tahu jalan keluarnya.
+            if (error instanceof HttpFailure)
+                validation({ status: paidReferralMessage });
+            throw error;
+        }
+        await this.db.execute(
+            `update sim_tr_registrasi set status = 'diperiksa', selesai_pada = null, updated_at = $3
+             where tenant_id = $1 and id = $2`,
+            [this.tenantId, visitId, stamp],
+        );
+        await publishVisitReopened(this.db, this.tenantId, visitId);
+    }
+
     // Tambah Rujuk Internal: tujuan baru di kunjungan yang sama, dengan nomor antrean dari penghitung poli tujuan dan
-    // NoBukti sendiri, menunjuk tujuan ini sebagai asalnya. Poli yang sudah ada di kunjungan ditolak dengan pesan sistem
-    // lama. Status pasien tujuan ini menjadi status rujuk internal yang dipilih, dan isian perilaku lain dikosongkan.
+    // NoBukti sendiri, menunjuk tujuan ini sebagai asalnya. Boleh selama rekam medis tujuan ini boleh diubah, juga sesudah
+    // Selesai periksa. Poli yang sudah ada di kunjungan ditolak dengan pesan sistem lama. Status pasien tujuan ini menjadi
+    // status rujuk internal yang dipilih, dan isian perilaku lain dikosongkan.
     async refer(destinationId: string, body: unknown): Promise<void> {
         this.workspace.guard('examination', 'manage');
         const parsed = internalReferralInputSchema.safeParse(body ?? {});
@@ -438,10 +472,11 @@ export class Discharges {
         const input = parsed.data;
         await this.db.transaction(async () => {
             const destination = await this.destination(destinationId, true);
-            if (destination.status === 'selesai')
-                validation({ status: finishedReferralMessage });
-            if (destination.status !== 'diperiksa')
-                validation({ status: notStartedMessage });
+            const locked = recordLockedMessage(destination.status);
+            if (locked) validation({ status: locked });
+            const stamp = nowSql();
+            if (destination.visit_status === 'selesai')
+                await this.reopen(destination.visit_id, stamp);
             const errors: Errors = {};
             const status = await this.status(
                 input.status_id,
@@ -517,7 +552,6 @@ export class Discharges {
                  where tenant_id = $1 and registrasi_id = $2`,
                 [this.tenantId, destination.visit_id],
             );
-            const stamp = nowSql();
             await this.db.insert('sim_tr_registrasi_tujuan', {
                 id,
                 tenant_id: this.tenantId,

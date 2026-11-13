@@ -253,6 +253,11 @@ const savedLineSchema = z.object({
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
 
+// Yang dibawa satu baris tindakan ke kasir dan bisa diubah layar: tindakannya, Qty, dan dokternya. Tarif baris yang
+// sudah tersimpan dibekukan, dan urutan baris tidak sampai ke kasir.
+const chargeOf = (line: ProcedureLine) =>
+    `${line.procedure_id}|${line.quantity}|${line.doctor_id ?? ''}`;
+
 // Tanpa tarif berarti 0: Tarif kosong dari layar sistem lama tersimpan 0 di SIMtrRJTransaksi.Tarif yang NOT NULL.
 const tariffOf = (charge: ProcedurePriceLookup) =>
     Decimal.of(charge.price?.price ?? '0').normalized();
@@ -542,6 +547,21 @@ export class ExaminationOrders {
                 created_at: stamp,
                 updated_at: stamp,
             });
+    }
+
+    // Benar bila Simpan ini mengubah biaya kasir: baris tindakan bertambah atau berkurang, atau Qty atau dokternya
+    // berubah. Satu tindakan sekali per pemeriksaan, jadi dua daftar yang sama panjang dan sama isinya berarti sama.
+    async proceduresChargeChanged(
+        recordId: string,
+        rows: readonly ProcedureLine[],
+    ): Promise<boolean> {
+        const saved = new Set(
+            (await this.savedProcedures(recordId)).map(chargeOf),
+        );
+        return (
+            saved.size !== rows.length ||
+            rows.some((row) => !saved.has(chargeOf(row)))
+        );
     }
 
     // Baris dikenali dari tindakannya: yang masih dikirim diubah di tempat tanpa menyentuh tarifnya, yang baru disisipkan
