@@ -23,6 +23,7 @@ type Drug = {
     name: string;
     base_unit_id: string;
     base_unit_name: string;
+    kfa_code: string | null;
     dosage_form_id: string | null;
     dosage_form_name: string | null;
     is_prescribable: boolean;
@@ -305,6 +306,44 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
                 .map((row) => row.id)
                 .sort(),
         ).toEqual([drug.id, resting.id].sort());
+    });
+
+    test('the KFA code typed on the drug card is the KFA code of its item, and Core refuses a malformed one', async () => {
+        const drug = await create(admin, {
+            name: 'Amlodipine 5 mg',
+            kfa_code: '93001019',
+        });
+        expect(drug.kfa_code).toBe('93001019');
+        const item = (
+            await json<{ data: (Item & { kfa_code: string | null })[] }>(
+                await admin.get(`${inventoryApi}/items?q=${drug.code}`),
+                200,
+            )
+        ).data[0];
+        expect(item?.kfa_code).toBe('93001019');
+        const cleared = (
+            await json<{ data: Drug }>(
+                await admin.patch(`${api}/drugs/${drug.id}`, {
+                    ...body({
+                        code: drug.code,
+                        name: drug.name,
+                        kfa_code: null,
+                    }),
+                    version: drug.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(cleared.kfa_code).toBeNull();
+        expect(
+            await refused(
+                await admin.post(`${api}/drugs`, body({ kfa_code: 'A1' })),
+            ),
+        ).toEqual({
+            kfa_code: [
+                'Isi kode KFA dengan angka saja, paling banyak 20 angka.',
+            ],
+        });
     });
 
     test('Delete removes the drug with its item, but not while a prescription, an allergy, or stock uses it', async () => {
