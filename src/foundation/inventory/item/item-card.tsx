@@ -82,6 +82,7 @@ const formOf = (item: Item | null) => ({
               : ('allow' as const),
     isBlocked: item?.is_blocked ?? false,
     basePrice: displayNumber(item?.base_price ?? '0'),
+    kfaCode: item?.kfa_code ?? '',
 });
 type ItemForm = ReturnType<typeof formOf>;
 
@@ -200,6 +201,7 @@ export function ItemCard({
             purchase_unit_id: form.purchaseUnit?.id ?? null,
             sales_unit_id: form.salesUnit?.id ?? null,
             base_price: parseDisplayNumber(form.basePrice) ?? form.basePrice,
+            kfa_code: form.kfaCode,
         };
         try {
             const { body: saved } = record
@@ -494,6 +496,25 @@ export function ItemCard({
                                             />
                                         </>
                                     )}
+                                    <FormControl
+                                        error={errors.kfa_code?.[0]}
+                                        hint="Kode obat atau alat kesehatan di Kamus Farmasi dan Alat Kesehatan (KFA) Kemenkes, untuk SATUSEHAT. Boleh kosong."
+                                    >
+                                        <Input
+                                            label="Kode KFA"
+                                            maxLength={20}
+                                            inputMode="numeric"
+                                            data-error-field="kfa_code"
+                                            value={form.kfaCode}
+                                            readOnly={!editing}
+                                            onChange={(event) =>
+                                                setForm({
+                                                    ...form,
+                                                    kfaCode: event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </FormControl>
                                     <FormControl
                                         error={errors.is_blocked?.[0]}
                                         hint="Barang yang diblokir tidak bisa dipilih di dokumen stok baru."

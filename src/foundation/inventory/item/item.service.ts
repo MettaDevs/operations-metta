@@ -47,7 +47,7 @@ const defaultUnitSql = (column: string) =>
 const rowSql = `select * from (
                     select b.id, b.kode as code, b.nama as name, b.tolak_stok_minus as refuse_negative_stock,
                            b.diblokir as is_blocked, b.version, b.kategori_id as category_id,
-                           trim_scale(b.harga_dasar)::text as base_price,
+                           trim_scale(b.harga_dasar)::text as base_price, b.kode_kfa as kfa_code,
                            b.satuan_dasar_id as base_unit_id, b.profil_pelacakan_id as tracking_code_id,
                            ${reference('unit')} as base_unit, ${defaultUnitSql('satuan_beli_id')} as purchase_unit,
                            ${defaultUnitSql('satuan_jual_id')} as sales_unit, ${reference('category')} as category,
@@ -76,10 +76,13 @@ const storedSchema = z.object({
     satuan_beli_id: z.string().nullable(),
     satuan_jual_id: z.string().nullable(),
     profil_pelacakan_id: z.string().nullable(),
+    kode_kfa: z.string().nullable(),
 });
 
 const defaultUnitMessage =
     'Pilih satuan dasar atau salah satu satuan kemasan barang ini.';
+const kfaCodeMessage =
+    'Isi kode KFA dengan angka saja, paling banyak 20 angka.';
 
 async function isPackagingUnit(
     db: Database,
@@ -144,6 +147,7 @@ async function checked(
         base_unit_id: 'Pilih satuan dasar dari daftar.',
         category_id: 'Pilih kategori dari daftar.',
         tracking_code_id: 'Pilih profil pelacakan dari daftar.',
+        kfa_code: kfaCodeMessage,
     });
     const { code, name } = codeAndName(data, errors, 'barang', {
         code: 20,
@@ -172,6 +176,10 @@ async function checked(
             : unitCostInput(data.base_price, priceDecimals);
     if (basePrice === null)
         errors.base_price = `Isi harga dasar 0 atau lebih, ${decimalsHint(priceDecimals)}.`;
+    const kfaCode =
+        data.kfa_code === undefined ? undefined : data.kfa_code?.trim() || null;
+    if (typeof kfaCode === 'string' && !/^\d{1,20}$/.test(kfaCode))
+        errors.kfa_code = kfaCodeMessage;
     if (Object.keys(errors).length) validation(errors);
     return {
         code,
@@ -184,6 +192,7 @@ async function checked(
         purchaseUnitId: data.purchase_unit_id,
         salesUnitId: data.sales_unit_id,
         basePrice: basePrice ?? undefined,
+        kfaCode,
     };
 }
 
@@ -244,6 +253,7 @@ export async function createItem(
             tolak_stok_minus: data.refuseNegative,
             diblokir: data.isBlocked,
             harga_dasar: toNumeric(data.basePrice ?? 0n, quantityScale),
+            kode_kfa: data.kfaCode ?? null,
             created_at: stamp,
             updated_at: stamp,
         });
@@ -272,7 +282,8 @@ export async function updateItem(
             const stored = lookupId(id)
                 ? await db.one(
                       storedSchema,
-                      `select id, satuan_dasar_id, satuan_beli_id, satuan_jual_id, profil_pelacakan_id from gd_m_barang
+                      `select id, satuan_dasar_id, satuan_beli_id, satuan_jual_id, profil_pelacakan_id, kode_kfa
+                       from gd_m_barang
                        where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
                        for update`,
                       [scope.tenantId, scope.legalEntityId, id],
@@ -316,8 +327,9 @@ export async function updateItem(
             updated = await db.execute(
                 `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
                         profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, satuan_beli_id = $8,
-                        satuan_jual_id = $9, harga_dasar = coalesce($10::numeric, harga_dasar), updated_at = $11
-                 where tenant_id = $12 and id = $13 and version = $14 and deleted_at is null`,
+                        satuan_jual_id = $9, harga_dasar = coalesce($10::numeric, harga_dasar), kode_kfa = $11,
+                        updated_at = $12
+                 where tenant_id = $13 and id = $14 and version = $15 and deleted_at is null`,
                 [
                     data.code,
                     data.name,
@@ -331,6 +343,7 @@ export async function updateItem(
                     data.basePrice === undefined
                         ? null
                         : toNumeric(data.basePrice, quantityScale),
+                    data.kfaCode === undefined ? stored.kode_kfa : data.kfaCode,
                     nowSql(),
                     scope.tenantId,
                     stored.id,

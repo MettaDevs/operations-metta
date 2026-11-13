@@ -109,6 +109,47 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
         expect(stored?.price).toBe('1250.5');
     });
 
+    test('the KFA code is saved trimmed, kept when a caller does not send it, cleared with null or blank, and refused unless it is up to 20 digits', async () => {
+        type Coded = Item & { kfa_code: string | null };
+        const kfaRefused = {
+            kfa_code: [
+                'Isi kode KFA dengan angka saja, paling banyak 20 angka.',
+            ],
+        };
+        expect((await business.item<Coded>('KFA-0')).kfa_code).toBeNull();
+        const item = await business.item<Coded>('KFA-1', {
+            kfa_code: ' 93001019 ',
+        });
+        expect(item.kfa_code).toBe('93001019');
+        const renamed = await json<{ data: Coded }>(
+            await change(item, { name: 'Nama baru' }),
+            200,
+        );
+        expect(renamed.data.kfa_code).toBe('93001019');
+        for (const kfa_code of ['9300-1019', 'KFA93001019', '1'.repeat(21), 93])
+            expect(
+                await refused(await change(renamed.data, { kfa_code })),
+            ).toEqual(kfaRefused);
+        const cleared = await json<{ data: Coded }>(
+            await change(renamed.data, { kfa_code: null }),
+            200,
+        );
+        expect(cleared.data.kfa_code).toBeNull();
+        const typed = await json<{ data: Coded }>(
+            await change(cleared.data, { kfa_code: '1'.repeat(20) }),
+            200,
+        );
+        const blanked = await json<{ data: Coded }>(
+            await change(typed.data, { kfa_code: '  ' }),
+            200,
+        );
+        const [stored] = await pool.unsafe<{ kode_kfa: string | null }[]>(
+            'select kode_kfa from gd_m_barang where id = $1',
+            [blanked.data.id],
+        );
+        expect(stored).toEqual({ kode_kfa: null });
+    });
+
     test('the tracking profile changes freely until the first entry, then is refused', async () => {
         const item = await business.item<Item>('LACAK-1', {
             tracking_code_id: lot.id,
