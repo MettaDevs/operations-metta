@@ -393,9 +393,11 @@ export function NumberSequenceCard({
         },
         enabled: !creating,
     });
-    const [draft, setDraft] = useState<Draft | null>(() =>
+    // Draft hanya diganti saat pengguna mengubah isian, jadi draft yang berbeda dari awalnya berarti belum disimpan.
+    const [initialDraft] = useState<Draft | null>(() =>
         creating ? emptyDraft(metadata.references[0]) : null,
     );
+    const [draft, setDraft] = useState(initialDraft);
     // Pengaturan tersimpan langsung terbuka untuk diubah bila pengguna berhak mengubahnya. Field cakupan tetap
     // terkunci setelah dibuat.
     const editing = creating || metadata.canManage;
@@ -541,6 +543,7 @@ export function NumberSequenceCard({
     return (
         <PageDialog
             open
+            dirty={draft !== initialDraft}
             onOpenChange={(next) => {
                 if (!next && !busy) onClose();
             }}

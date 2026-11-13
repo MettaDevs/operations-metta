@@ -70,11 +70,13 @@ function CategoryCard({
     const { confirm, confirmation } = useConfirmation();
     const activeId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: category
             ? `${category.code} ${category.name}`
             : 'Kategori tindakan baru',
         editing,
+        dirty,
     });
     const groups = metadata.groups.filter(
         (group) => group.active || group.id === category?.group_id,

@@ -121,9 +121,11 @@ function PractitionerCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: practitioner?.name ?? 'Nakes baru',
         editing,
+        dirty,
     });
     const error = (field: string) => errors[field]?.[0];
     const personLoader = useCallback<LookupLoader<Person>>(

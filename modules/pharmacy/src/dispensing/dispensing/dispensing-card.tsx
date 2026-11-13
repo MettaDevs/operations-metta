@@ -306,6 +306,7 @@ function DispensingForm({
             </span>
         ),
         editing,
+        dirty,
         recordUrl: `/pharmacy/dispensing/prescriptions?prescription=${prescription.id}`,
     });
     const stock = new Map(

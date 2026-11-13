@@ -345,7 +345,7 @@ function AdjustmentsPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(open) => {
-                        if (!open) transition.request(closeCard);
+                        if (!open) closeCard();
                     }}
                 >
                     <PageDialogContent

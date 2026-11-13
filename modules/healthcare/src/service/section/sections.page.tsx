@@ -118,9 +118,11 @@ function SectionCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: section?.name ?? 'Section baru',
         editing,
+        dirty,
     });
     const units = metadata.operating_units.map((unit) => ({
         value: unit.id,

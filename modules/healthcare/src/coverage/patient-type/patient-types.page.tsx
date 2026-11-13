@@ -118,9 +118,11 @@ function PatientTypeCard({
             select: (response) => response.body,
         }),
     );
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: type ? `${type.code} · ${type.name}` : 'Tipe pasien baru',
         editing,
+        dirty,
     });
     const priceGroups = (metadata?.price_groups ?? []).filter(
         (group) => group.active || group.id === type?.price_group_id,

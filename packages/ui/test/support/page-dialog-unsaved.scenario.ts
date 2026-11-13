@@ -25,6 +25,29 @@ function Card(): React.ReactNode {
     });
 }
 
+// Pemanggil yang memegang isian dan merender PageDialog sendiri, tanpa komponen kartu di dalamnya.
+function Owner(): React.ReactNode {
+    const [name, setName] = React.useState('');
+    return h(
+        PageDialog,
+        {
+            open: true,
+            dirty: name !== '',
+            onOpenChange: (open: boolean) => closes.push(open),
+        },
+        h(
+            PageDialogContent,
+            { title: 'Pekerjaan' },
+            h('input', {
+                'aria-label': 'Nama',
+                value: name,
+                onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+                    setName(event.target.value),
+            }),
+        ),
+    );
+}
+
 const field = () =>
     document.querySelector<HTMLInputElement>('input[aria-label="Nama"]')!;
 const typeName = (value: string) =>
@@ -104,6 +127,39 @@ try {
         closes,
         [false],
         'the card closes after the user chooses to discard',
+    );
+    closes.length = 0;
+
+    await React.act(async () => {
+        root.render(h(Owner, { key: 'owner' }));
+        await tick();
+    });
+    await escape();
+    assert.deepEqual(
+        closes,
+        [false],
+        'an untouched dialog owned by its caller closes on Escape',
+    );
+    closes.length = 0;
+
+    await typeName('Petani');
+    await escape();
+    assert.deepEqual(
+        closes,
+        [],
+        'Escape does not close a dialog whose caller reports dirty',
+    );
+    assert.ok(
+        confirmation()?.textContent.includes(
+            'Buang perubahan yang belum disimpan?',
+        ),
+        'the caller-owned dialog asks before discarding',
+    );
+    await press(button('Buang perubahan'));
+    assert.deepEqual(
+        closes,
+        [false],
+        'the caller-owned dialog closes after the user chooses to discard',
     );
     console.log(
         'A card with unsaved changes asks before Escape or close discards them.',

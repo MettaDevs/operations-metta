@@ -72,6 +72,18 @@ const rules: { name: string; bad: string; good: string; message: string }[] = [
         message: 'Tombol Simpan memakai ActionButton',
     },
     {
+        name: 'an editable card reports unsaved changes',
+        bad: `usePageDialogRecord({ recordTitle: 'Lokasi baru', editing });`,
+        good: `usePageDialogRecord({ recordTitle: 'Lokasi baru', editing, dirty }); usePageDialogRecord({ recordTitle: 'Mutasi', editing: false }); usePageDialogRecord({ recordTitle: 'Clerk' });`,
+        message: 'melaporkan isian yang belum disimpan lewat `dirty`',
+    },
+    {
+        name: 'a caller that holds the form reports unsaved changes on PageDialog',
+        bad: `<PageDialog open onOpenChange={close}><PageDialogContent title="Pekerjaan" editing><Input label="Nama" /></PageDialogContent></PageDialog>;`,
+        good: `<><PageDialog open dirty={name !== ''} onOpenChange={close}><PageDialogContent title="Pekerjaan" editing /></PageDialog><PageDialog open onOpenChange={close}><PageDialogContent title="Mutasi" editing={false} /></PageDialog><PageDialog open onOpenChange={close}><PageDialogContent title="Lokasi"><LocationCard /></PageDialogContent></PageDialog></>;`,
+        message: 'melaporkan isian yang belum disimpan lewat `dirty`',
+    },
+    {
         name: 'no HTML table',
         bad: `<table><tbody /></table>;`,
         good: `import { DataTable } from '@operations-metta/ui/data-table'; <DataTable data={[]} columns={[]} />;`,

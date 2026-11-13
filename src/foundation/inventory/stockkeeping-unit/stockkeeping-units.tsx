@@ -72,11 +72,13 @@ function LevelCard({
     const [operation, setOperation] = useState('belum disimpan');
     const { confirm, confirmation } = useConfirmation();
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: level
             ? `${item.code} di ${level.location.code}`
             : `Stok minimum dan maksimum baru ${item.code}`,
         editing,
+        dirty,
     });
 
     const save = async () => {

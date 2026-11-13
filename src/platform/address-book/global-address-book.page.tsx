@@ -416,11 +416,9 @@ function GlobalAddressBookPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(open) => {
-                        if (!open && !busy)
-                            transition.request(() => {
-                                setCreating(false);
-                                closeParty();
-                            });
+                        if (open || busy) return;
+                        setCreating(false);
+                        closeParty();
                     }}
                 >
                     <PageDialogContent

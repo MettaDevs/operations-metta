@@ -118,6 +118,8 @@ const filterControls = new Set([
 ]);
 const tableStyle =
     /\[&|(?:^|\s|["'`])(?:text|font|bg|border|rounded|p[xy]?|h)-/;
+const unsavedHint =
+    'Kartu yang bisa diubah melaporkan isian yang belum disimpan lewat `dirty` (usePageDialogRecord, atau PageDialog bila pemanggil memegang isiannya), supaya Escape, Kembali, dan Tutup bertanya sebelum membuangnya.';
 
 // Layar: daftar, tabel, dan susunan form.
 for (const file of screens) {
@@ -168,6 +170,42 @@ for (const file of screens) {
                 node,
                 'Record tersimpan langsung terbuka dalam mode Ubah bila pengguna berhak mengubahnya; turunkan `editing` dari izin, bukan dari useState.',
             );
+        // Escape, Kembali, dan Tutup hanya bertanya sebelum membuang isian kartu yang melaporkan `dirty`. Kartu baca
+        // saja menulis `editing: false`.
+        if (
+            ts.isCallExpression(node) &&
+            node.expression.getText() === 'usePageDialogRecord' &&
+            node.arguments[0] &&
+            ts.isObjectLiteralExpression(node.arguments[0])
+        ) {
+            const properties = node.arguments[0].properties;
+            const editing = properties.find(
+                (property) => property.name?.getText() === 'editing',
+            );
+            if (
+                editing &&
+                !(
+                    ts.isPropertyAssignment(editing) &&
+                    editing.initializer.kind === ts.SyntaxKind.FalseKeyword
+                ) &&
+                !properties.some(
+                    (property) => property.name?.getText() === 'dirty',
+                )
+            )
+                report(node, unsavedHint);
+        }
+        if (
+            ts.isJsxElement(node) &&
+            node.openingElement.tagName.getText() === 'PageDialog' &&
+            !attribute(node.openingElement, 'dirty') &&
+            elementsUnder(node).some(
+                (element) =>
+                    element.tagName.getText() === 'PageDialogContent' &&
+                    attribute(element, 'editing') &&
+                    literal(attribute(element, 'editing')) !== 'false',
+            )
+        )
+            report(node, unsavedHint);
         ts.forEachChild(node, visit);
     };
     visit(source);

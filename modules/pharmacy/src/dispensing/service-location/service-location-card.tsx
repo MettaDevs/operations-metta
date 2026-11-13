@@ -56,11 +56,13 @@ export function ServiceLocationCard({
     const includesServiceId = useId();
     const { confirm, confirmation } = useConfirmation();
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.operating_unit.name} · ${record.section?.name ?? 'Semua section'}`
             : 'Lokasi layanan resep baru',
         editing: canManage,
+        dirty,
     });
 
     const run = async (

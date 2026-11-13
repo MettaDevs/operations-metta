@@ -87,11 +87,13 @@ export function PaymentMethodCard({
     const { confirm, confirmation } = useConfirmation();
     const switchId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Jenis bayar baru',
         editing,
+        dirty,
     });
     const rule = isPaymentMethodBehavior(form.behavior)
         ? behaviorRule(form.behavior)

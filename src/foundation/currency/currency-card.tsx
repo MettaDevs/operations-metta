@@ -70,9 +70,11 @@ export function CurrencyCard({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record ? record.currency_code : 'Mata uang baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

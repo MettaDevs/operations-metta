@@ -370,11 +370,9 @@ function PatientsPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(open) => {
-                        if (!open && !busy)
-                            transition.request(() => {
-                                setCreating(false);
-                                closePatient();
-                            });
+                        if (open || busy) return;
+                        setCreating(false);
+                        closePatient();
                     }}
                 >
                     <PageDialogContent

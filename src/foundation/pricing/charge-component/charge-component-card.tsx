@@ -71,11 +71,13 @@ export function ChargeComponentCard({
     const activeId = useId();
     const flagId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Komponen biaya baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

@@ -89,7 +89,14 @@ export function ReturnCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
-    usePageDialogRecord({ recordTitle: 'Retur obat baru', editing: true });
+    usePageDialogRecord({
+        recordTitle: 'Retur obat baru',
+        editing: true,
+        dirty:
+            reason !== '' ||
+            Object.values(quantities).some((typed) => typed.trim() !== '') ||
+            Object.keys(units).length > 0,
+    });
     const rows = stored.data?.data.returnable ?? [];
     const key = (row: Returnable) =>
         `${row.dispensing_line_id}:${row.batch?.id ?? '-'}`;

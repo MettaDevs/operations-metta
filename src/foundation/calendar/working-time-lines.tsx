@@ -34,8 +34,10 @@ export const linesOf = (
         ends_next_day: boolean;
     }[],
 ): LineDraft[] =>
-    lines.map((line) => ({
-        key: crypto.randomUUID(),
+    // Key baris tersimpan tetap dari urutannya, supaya isian yang belum diubah sama dengan record dan kartu tidak
+    // menganggapnya perubahan yang belum disimpan.
+    lines.map((line, index) => ({
+        key: `saved-${index}`,
         day_of_week: line.day_of_week ?? 0,
         from: line.from,
         to: line.to,

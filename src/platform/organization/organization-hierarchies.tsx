@@ -165,6 +165,7 @@ function CreateHierarchyDialog({
     return (
         <PageDialog
             open={open}
+            dirty={JSON.stringify(data) !== JSON.stringify(blank)}
             onOpenChange={(next) => {
                 if (save.processing) return;
                 if (!next) {
@@ -702,6 +703,7 @@ function CreateVersionDraftAction({
     return (
         <PageDialog
             open={open}
+            dirty={effectiveFrom !== ''}
             onOpenChange={(next) => {
                 if (draft.processing) return;
                 if (!next) {

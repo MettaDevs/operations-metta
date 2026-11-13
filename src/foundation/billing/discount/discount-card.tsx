@@ -79,9 +79,11 @@ export function DiscountCard({
             select: (response) => response.body,
         }),
     );
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record ? `${record.code} ${record.name}` : 'Diskon baru',
         editing,
+        dirty,
     });
     const components = [
         ...(metadata?.charge_components ?? [])

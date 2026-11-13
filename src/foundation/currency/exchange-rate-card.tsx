@@ -55,11 +55,14 @@ export function ExchangeRateCard({
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
     const { confirm, confirmation } = useConfirmation();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty =
+        JSON.stringify(form) !== JSON.stringify(formOf(record, currencies));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.currency_code} ${record.starting_date.split('-').reverse().join('/')}`
             : 'Kurs baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

@@ -350,6 +350,7 @@ export function ReceiptCard({
             ? `${receipt.number} ${receipt.vendor.name}`
             : 'Penerimaan baru',
         editing: editable,
+        dirty: !pristine,
     });
 
     const error = (field: string) => errors[field]?.join(' ');
