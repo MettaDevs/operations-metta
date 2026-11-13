@@ -231,6 +231,7 @@ export function ProcedurePriceTab({
                 scrollMode="inline"
                 data={componentRows}
                 getRowKey={(row) => row.key}
+                actions={editing ? rowActions : []}
                 getRowActions={(row) =>
                     editing && row.component ? rowActions : []
                 }
