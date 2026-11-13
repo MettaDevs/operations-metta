@@ -92,6 +92,13 @@ const noDosage = {
     route_id: null,
     duration_days: null,
 } satisfies Partial<PrescriptionLine>;
+// Jenis racikan Medication SATUSEHAT: d.t.d. (SD) atau dibagi rata (EP), diisi pada kepala racikan.
+const compoundKinds = [
+    { value: 'dtd', label: 'd.t.d.', dtd: true },
+    { value: 'divided', label: 'Dibagi rata', dtd: false },
+] as const;
+const compoundKindOf = (dtd: boolean | null) =>
+    compoundKinds.find((kind) => kind.dtd === dtd);
 const compoundLabel = (compound: number | string) => `Racikan ${compound}`;
 const drugLabel = (drug: { code: string | null; name: string }) =>
     drug.code ? `${drug.code} - ${drug.name}` : drug.name;
@@ -879,6 +886,8 @@ function PrescriptionLines({
         signa: null,
         usage_instruction_id: null,
         ...noDosage,
+        dtd: null,
+        dosage_form_id: null,
         notes: null,
     };
     const pick = (line: number, drug: Drug) => {
@@ -932,6 +941,7 @@ function PrescriptionLines({
         });
     const usage = metadata.usage_instructions;
     const routes = metadata.medication_routes;
+    const dosageForms = metadata.dosage_forms;
     // Satuan dosis: satuan legal entity tempat kerja, sumber yang sama dengan satuan di kartu obat.
     const { data: doseUnits = [] } = useQuery(
         orpc.healthcareDrugMetadata.queryOptions({
@@ -1164,6 +1174,112 @@ function PrescriptionLines({
                                     />
                                 </FormControl>
                             ),
+                    },
+                    {
+                        id: 'dtd',
+                        header: 'Jenis racikan',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 140,
+                        cell: ({ index: line, row }) =>
+                            readOnly || !isHeader(row) ? (
+                                <DataTableText>
+                                    {compoundKindOf(row.dtd)?.label ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <FormControl
+                                    error={error(field(line, 'dtd'))}
+                                    data-error-field={field(line, 'dtd')}
+                                >
+                                    <Select
+                                        label="Jenis racikan"
+                                        required
+                                        placeholder="Pilih jenis"
+                                        items={compoundKinds.map(
+                                            ({ value, label }) => ({
+                                                value,
+                                                label,
+                                            }),
+                                        )}
+                                        value={
+                                            compoundKindOf(row.dtd)?.value ?? ''
+                                        }
+                                        onValueChange={(value) =>
+                                            change(line, {
+                                                dtd:
+                                                    compoundKinds.find(
+                                                        (kind) =>
+                                                            kind.value ===
+                                                            value,
+                                                    )?.dtd ?? null,
+                                            })
+                                        }
+                                    />
+                                </FormControl>
+                            ),
+                    },
+                    {
+                        id: 'dosage_form_id',
+                        header: 'Bentuk sediaan',
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 150,
+                        cell: ({ index: line, row }) => {
+                            const current =
+                                dosageForms.find(
+                                    (item) => item.id === row.dosage_form_id,
+                                ) ?? null;
+                            return readOnly || !isHeader(row) ? (
+                                <DataTableText>
+                                    {current?.name ?? ''}
+                                </DataTableText>
+                            ) : (
+                                <FormControl
+                                    error={error(field(line, 'dosage_form_id'))}
+                                    data-error-field={field(
+                                        line,
+                                        'dosage_form_id',
+                                    )}
+                                >
+                                    <InlineLookup
+                                        label="Bentuk sediaan"
+                                        required
+                                        items={dosageForms.filter(
+                                            (item) =>
+                                                item.active ||
+                                                item.id === row.dosage_form_id,
+                                        )}
+                                        value={current}
+                                        displayValue={current?.name ?? ''}
+                                        onValueChange={(item) =>
+                                            change(line, {
+                                                dosage_form_id: item.id,
+                                            })
+                                        }
+                                        getItemValue={(item) => item.id}
+                                        getItemLabel={(item) => item.name}
+                                        getSearchText={(item) =>
+                                            `${item.code} ${item.name}`
+                                        }
+                                        emptyMessage="Bentuk sediaan tidak ditemukan."
+                                        showDetails={false}
+                                        showFullList={false}
+                                        columns={[
+                                            {
+                                                id: 'code',
+                                                header: 'Kode',
+                                                width: 80,
+                                                cell: (item) => item.code,
+                                            },
+                                            {
+                                                id: 'name',
+                                                header: 'Nama',
+                                                width: 180,
+                                                cell: (item) => item.name,
+                                            },
+                                        ]}
+                                    />
+                                </FormControl>
+                            );
+                        },
                     },
                     {
                         id: 'signa',

@@ -187,7 +187,9 @@ export class Prescriptions {
                         'id', ds.id, 'code', ds.kode, 'name', ds.nama) end as dose_unit,
                     case when d.rute_kode is null then null else json_build_object(
                         'code', d.rute_kode, 'name', d.rute_nama) end as route,
-                    d.lama_hari as duration_days
+                    d.lama_hari as duration_days, d.dtd,
+                    case when d.bentuk_sediaan_kode is null then null else json_build_object(
+                        'code', d.bentuk_sediaan_kode, 'name', d.bentuk_sediaan_nama) end as dosage_form
              from far_tr_resep_detail d
              left join gd_m_satuan ds on ds.tenant_id = d.tenant_id and ds.id = d.dosis_satuan_id
              where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null

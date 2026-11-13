@@ -109,6 +109,8 @@ const clinicSchema = z.object({
     operation_categories: z.array(codeName).default([]),
     benefit_limit_categories: z.array(codeName).default([]),
     supporting_devices: z.array(codeName).default([]),
+    // Bentuk sediaan hasil racikan yang dipilih dokter di E-Resep (daftar SIMmRacikan sistem lama klinik).
+    dosage_forms: z.array(codeName).default([]),
     procedures: z
         .array(
             codeName.extend({
@@ -860,6 +862,7 @@ async function seedProcedures(
         `${lists}/supporting-devices`,
         clinic.supporting_devices,
     );
+    await api.ensureEach(`${lists}/dosage-forms`, clinic.dosage_forms);
     const procedureCategories = await api.ensureEach(
         `${healthcareApi}/procedure-categories`,
         clinic.procedure_categories,

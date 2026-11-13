@@ -43,6 +43,7 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 - Kelompok harga pembeli (`price_group`, kelompok harga tipe pasien kunjungan) disimpan di `far_tr_resep.kelompok_harga_id` untuk harga obat. Pesan tanpa `price_group` disimpan kosong.
 - Patient KTP kunjungan (`patient.ktp`) disimpan di `far_tr_resep.pasien_ktp` untuk harga obat. Pesan tanpa `patient.ktp` disimpan `true`, bawaan sistem lama.
 - Dosis baris (`0009_prescription_dosage.sql`): kali sehari, dosis dan satuan dosisnya (satuan Core legal entity resep), rute sebagai kode dan nama yang disalin dari event karena daftar rute milik layanan kesehatan, dan lama hari. Layar penyerahan menampilkannya di samping signa, misalnya "3 x sehari 1 Tablet, Oral, 5 hari". Pesan yang belum membawa dosis disimpan tanpa dosis.
+- Jenis racikan dan bentuk sediaan hasilnya (`0010_compound_type_form.sql`), pada baris racikan: `dtd` (d.t.d. atau dibagi rata) dan bentuk sediaan sebagai kode dan nama yang disalin dari event, karena daftarnya milik layanan kesehatan. Layar penyerahan menampilkannya pada baris racikan, misalnya "Racikan 1 · 10 Puyer · d.t.d.". Pesan yang belum membawanya disimpan tanpa keduanya.
 - Event yang sama diantar dua kali, atau resep yang sama dalam event lain, dicatat sekali (`far_processed_events` dan indeks unik `resep_sumber_id`).
 - Handler hanya berjalan untuk tenant yang memasang module ini.
 

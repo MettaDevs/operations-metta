@@ -40,6 +40,13 @@ const issuedLineSchema = z.object({
         .nullable()
         .optional(),
     duration_days: positiveSmallint.nullable().optional(),
+    // Jenis racikan (true d.t.d., false dibagi rata) dan bentuk sediaan hasilnya, pada kepala racikan. Pesan yang belum
+    // membawanya ditulis sebelum keduanya dicatat.
+    dtd: z.boolean().nullable().optional(),
+    dosage_form: z
+        .object({ code: text(40), name: text(150) })
+        .nullable()
+        .optional(),
     notes: text(500).nullable(),
 });
 export const issuedPrescriptionSchema = z.object({
@@ -137,6 +144,8 @@ export const prescriptionLineSchema = z.object({
     dose_unit: locationSchema.nullable(),
     route: z.object({ code: z.string(), name: z.string() }).nullable(),
     duration_days: z.number().nullable(),
+    dtd: z.boolean().nullable(),
+    dosage_form: z.object({ code: z.string(), name: z.string() }).nullable(),
     notes: z.string().nullable(),
 });
 

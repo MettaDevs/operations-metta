@@ -42,6 +42,8 @@ type Line = {
     dose_unit_code?: string | null;
     route_id?: string | null;
     duration_days?: number | string | null;
+    dtd?: boolean | string | null;
+    dosage_form_id?: string | null;
     notes?: string | null;
     drug_name?: string | null;
     unit_name?: string | null;
@@ -56,6 +58,10 @@ type Dosage = Required<
         | 'duration_days'
     >
 >;
+type CompoundPreparation = {
+    dtd: boolean | null;
+    dosage_form_id: string | null;
+};
 type Prescription = {
     id: string | null;
     number?: string | null;
@@ -80,6 +86,7 @@ type Reference = { id: string; code: string; name: string; active: boolean };
 type Metadata = {
     usage_instructions: Reference[];
     medication_routes: Reference[];
+    dosage_forms: Reference[];
     permissions: { create_procedure: boolean; create_drug: boolean };
 };
 type Section = {
@@ -137,6 +144,8 @@ describe.skipIf(!process.env.DB_HOST)(
         let legalEntityId: string;
         let metadata: Metadata;
         let dosage: Dosage;
+        let preparation: CompoundPreparation;
+        let puyer: { id: string; version: number };
         let drugCount = 0;
 
         async function json<T>(response: Response, status: number): Promise<T> {
@@ -450,6 +459,12 @@ describe.skipIf(!process.env.DB_HOST)(
                 )!.id,
                 duration_days: 5,
             };
+            puyer = await created(
+                admin,
+                `${api}/diagnosis-references/dosage-forms`,
+                { code: 'PUYER', name: 'Puyer' },
+            );
+            preparation = { dtd: true, dosage_form_id: puyer.id };
         }, 120_000);
 
         test('aturan pakai is seeded from the old system, drug units are not, and both panels are on by default', async () => {
@@ -666,6 +681,7 @@ describe.skipIf(!process.env.DB_HOST)(
                     signa: '3x1',
                     usage_instruction_id: metadata.usage_instructions[0]!.id,
                     ...dosage,
+                    ...preparation,
                 },
                 { drug_id: amoxicillin.id, compound: 1, quantity: 0.5 },
                 { drug_id: ctm.id, compound: 1, quantity: 1 },
@@ -783,6 +799,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 compound: 1,
                 quantity: null,
                 requested_quantity: 10,
+                ...preparation,
             };
             const component: Line = {
                 drug_id: ctm.id,
@@ -1031,6 +1048,155 @@ describe.skipIf(!process.env.DB_HOST)(
             );
         });
 
+        test('a racikan states d.t.d. or dibagi rata and its dosage form, other lines state neither, and a form turned off stays on the racikan that saved it', async () => {
+            const id = await started();
+            const syrup = await drug('Parasetamol sirup racikan');
+            const ctm = await drug('CTM 4 mg racikan');
+            const lactose = await drug('Laktosa racikan');
+            const forms = `${api}/diagnosis-references/dosage-forms`;
+            const capsule = await created<{ id: string; version: number }>(
+                admin,
+                forms,
+                { code: 'KAPSUL', name: 'Kapsul' },
+            );
+            const header = (compound: number): Line => ({
+                drug_id: null,
+                compound,
+                quantity: null,
+                requested_quantity: 10,
+                ...dosage,
+            });
+            const component = (drugId: string, compound: number): Line => ({
+                drug_id: drugId,
+                compound,
+                quantity: 2,
+            });
+            const onlyOnHeader =
+                'Jenis racikan dan bentuk sediaan hanya diisi pada baris racikan.';
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                {
+                                    ...single(syrup.id),
+                                    dtd: false,
+                                    dosage_form_id: puyer.id,
+                                },
+                                header(1),
+                                { ...component(ctm.id, 1), dtd: true },
+                                {
+                                    ...header(2),
+                                    dtd: 'ya',
+                                    dosage_form_id: Bun.randomUUIDv7(),
+                                },
+                                component(lactose.id, 2),
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.0.dtd': [onlyOnHeader],
+                'prescriptions.0.lines.0.dosage_form_id': [onlyOnHeader],
+                'prescriptions.0.lines.1.dtd': [
+                    'Pilih jenis racikan: d.t.d. atau dibagi rata.',
+                ],
+                'prescriptions.0.lines.1.dosage_form_id': [
+                    'Pilih bentuk sediaan hasil racikan.',
+                ],
+                'prescriptions.0.lines.2.dtd': [onlyOnHeader],
+                'prescriptions.0.lines.3.dtd': ['Isian ini tidak sah.'],
+                'prescriptions.0.lines.3.dosage_form_id': [
+                    'Pilih bentuk sediaan dari daftar.',
+                ],
+            });
+
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [
+                        draft([
+                            single(syrup.id),
+                            {
+                                ...header(1),
+                                dtd: true,
+                                dosage_form_id: capsule.id,
+                            },
+                            component(ctm.id, 1),
+                        ]),
+                    ],
+                }),
+                200,
+            );
+            const [prescription] = saved.data.prescriptions!;
+            expect(prescription!.lines).toMatchObject([
+                { drug_id: syrup.id, dtd: null, dosage_form_id: null },
+                { compound: 1, dtd: true, dosage_form_id: capsule.id },
+                { drug_id: ctm.id, dtd: null, dosage_form_id: null },
+            ]);
+            expect([
+                ...(await pool.unsafe<
+                    { dtd: boolean | null; bentuk_sediaan_id: string | null }[]
+                >(
+                    `select dtd, bentuk_sediaan_id from sim_tr_resep_detail
+                     where resep_id = $1 and deleted_at is null order by urutan`,
+                    [prescription!.id],
+                )),
+            ]).toEqual([
+                { dtd: null, bentuk_sediaan_id: null },
+                { dtd: true, bentuk_sediaan_id: capsule.id },
+                { dtd: null, bentuk_sediaan_id: null },
+            ]);
+
+            expect(
+                await refused(
+                    await admin.delete(`${forms}/${capsule.id}`, {
+                        version: capsule.version,
+                    }),
+                ),
+            ).toEqual({
+                id: [
+                    'Baris ini sudah dipakai. Nonaktifkan saja supaya tidak dipilih lagi.',
+                ],
+            });
+            await json(
+                await admin.patch(`${forms}/${capsule.id}`, {
+                    code: 'KAPSUL',
+                    name: 'Kapsul',
+                    is_active: false,
+                    version: capsule.version,
+                }),
+                200,
+            );
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            {
+                                ...prescription!,
+                                lines: [
+                                    ...prescription!.lines,
+                                    {
+                                        ...header(2),
+                                        dtd: false,
+                                        dosage_form_id: capsule.id,
+                                    },
+                                    component(lactose.id, 2),
+                                ],
+                            },
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.3.dosage_form_id': [
+                    'Pilih bentuk sediaan dari daftar.',
+                ],
+            });
+            await json(
+                await save(admin, id, { prescriptions: [prescription!] }),
+                200,
+            );
+        });
+
         test('a drug line takes the sales unit unless another unit of that drug is chosen, and keeps the isi copied when its unit was chosen', async () => {
             const id = await started();
             const antacid = await packaged('Antasida tablet kunyah');
@@ -1195,6 +1361,7 @@ describe.skipIf(!process.env.DB_HOST)(
                                     compound: 1,
                                     quantity: null,
                                     ...dosage,
+                                    ...preparation,
                                 },
                                 {
                                     drug_id: ibuprofen.id,
@@ -1644,6 +1811,8 @@ describe.skipIf(!process.env.DB_HOST)(
                                     dose_unit_id: unitStrip,
                                     route_id: dosage.route_id,
                                     duration_days: 3,
+                                    dtd: false,
+                                    dosage_form_id: puyer.id,
                                     notes: 'Puyer',
                                 },
                                 {
@@ -1737,6 +1906,8 @@ describe.skipIf(!process.env.DB_HOST)(
                             },
                             route: { code: 'O', name: 'Oral' },
                             duration_days: 5,
+                            dtd: null,
+                            dosage_form: null,
                             notes: null,
                         },
                         {
@@ -1760,6 +1931,8 @@ describe.skipIf(!process.env.DB_HOST)(
                             },
                             route: { code: 'O', name: 'Oral' },
                             duration_days: 3,
+                            dtd: false,
+                            dosage_form: { code: 'PUYER', name: 'Puyer' },
                             notes: 'Puyer',
                         },
                         {
@@ -1779,6 +1952,8 @@ describe.skipIf(!process.env.DB_HOST)(
                             dose_unit: null,
                             route: null,
                             duration_days: null,
+                            dtd: null,
+                            dosage_form: null,
                         },
                         {
                             order: 4,

@@ -53,6 +53,13 @@ export type IssuedDosage = {
     duration_days: number | null;
 };
 
+// Jenis dan bentuk sediaan racikan seperti dikirim layanan kesehatan. Baris tanpanya meniru pesan yang terbit sebelum
+// keduanya dicatat.
+export type IssuedCompoundPreparation = {
+    dtd: boolean | null;
+    dosage_form: { code: string; name: string } | null;
+};
+
 export type IssuedLine = {
     item?: Reference | null;
     compound?: number | null;
@@ -62,6 +69,7 @@ export type IssuedLine = {
     requested_quantity?: string | null;
     signa?: string | null;
     dosage?: IssuedDosage;
+    preparation?: IssuedCompoundPreparation;
 };
 
 let issuedContract: Promise<z.ZodType> | null = null;
@@ -193,6 +201,7 @@ export async function createPharmacy(
                         ? reference(line.dosage.dose_unit)
                         : null,
                 }),
+                ...line.preparation,
                 notes: null,
             })),
             ...overrides.data,

@@ -10,6 +10,21 @@ export type PrescriptionLine = Prescription['lines'][number];
 export const isCompoundHeader = (line: PrescriptionLine) =>
     line.item === null && line.compound !== null;
 
+// Kepala racikan dengan jumlah, bentuk sediaan, dan jenisnya, misalnya "Racikan 1 · 10 Puyer · d.t.d."; resep yang
+// ditulis sebelum jenis dan bentuk sediaan racikan dicatat tampil "Racikan 1 · 10 racikan".
+export function compoundText(line: PrescriptionLine): string {
+    const form = line.dosage_form?.name ?? null;
+    return [
+        `Racikan ${line.compound ?? ''}`,
+        line.requested_quantity
+            ? `${displayNumber(line.requested_quantity)} ${form ?? 'racikan'}`
+            : form,
+        line.dtd === null ? null : line.dtd ? 'd.t.d.' : 'dibagi rata',
+    ]
+        .filter(Boolean)
+        .join(' · ');
+}
+
 // Dosis yang ditulis dokter, misalnya "3 x sehari 1 Tablet, Oral, 5 hari"; kosong pada resep yang ditulis sebelum dosis
 // dicatat dan pada komponen racikan.
 export function dosageText(line: PrescriptionLine): string {

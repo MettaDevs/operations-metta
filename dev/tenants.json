@@ -472,6 +472,11 @@
                     { "code": "NEB", "name": "Nebulizer" },
                     { "code": "EKG", "name": "EKG" }
                 ],
+                "dosage_forms": [
+                    { "code": "PUYER", "name": "Puyer" },
+                    { "code": "KAPSUL", "name": "Kapsul" },
+                    { "code": "SALEP", "name": "Salep" }
+                ],
                 "procedures": [
                     {
                         "code": "JAS0001",

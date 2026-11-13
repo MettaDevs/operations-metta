@@ -12,7 +12,7 @@ info:
     adalah barang persediaan Core milik legal entity itu, jadi farmasi mengeluarkan stoknya dari lokasi di legal entity
     yang sama.
 
-    Keadaan sebenarnya, 13 November 2026:
+    Keadaan sebenarnya, 14 November 2026:
     - Event hanya diantar di dalam runtime ke handler module yang terpasang. Belum ada pengirim ke luar runtime, jadi
       baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
     - Penerima: module farmasi (`modules/pharmacy`), bila terpasang untuk tenant itu, mencatat resep di antrean
@@ -26,6 +26,11 @@ info:
       terbit, jadi opsional. Penerbit selalu mengirim kelimanya: terisi pada obat tunggal dan kepala racikan, karena
       layanan kesehatan menolak menyimpan resep tanpa dosis, dan kosong pada komponen racikan. Pesan tanpa field itu
       berarti resepnya ditulis sebelum dosis dicatat; farmasi menampilkannya tanpa dosis.
+    - Jenis racikan (`dtd`) dan bentuk sediaan hasil racikan (`dosage_form`) ditambahkan sesudah versi ini terbit, jadi
+      opsional. Penerbit selalu mengirim keduanya: terisi pada kepala racikan, karena layanan kesehatan menolak menyimpan
+      racikan tanpa keduanya, dan kosong pada obat tunggal dan komponen racikan. Kepala racikan yang drafnya disimpan
+      sebelum keduanya dicatat harus dilengkapi dokter sebelum resepnya bisa dikirim. Pesan tanpa field itu berarti
+      resepnya ditulis sebelum keduanya dicatat; farmasi menampilkannya tanpa keduanya.
     - Belum ada event pembatalan resep: layar tidak menawarkan membatalkan resep yang sudah dikirim, dan kunjungan hanya
       bisa dibatalkan sebelum diperiksa, jadi status `dibatalkan` belum pernah ditulis.
 channels:
@@ -178,6 +183,11 @@ components:
         Dosis (MedicationRequest.dosageInstruction SATUSEHAT) ada pada obat tunggal dan kepala racikan, dan kosong pada
         komponen racikan: `frequency_per_day` kali sehari, masing-masing `dose` dalam `dose_unit`, lewat `route`, selama
         `duration_days` hari. Kelimanya ditambahkan sesudah versi ini terbit, jadi opsional.
+
+        Medication SATUSEHAT untuk racikan ada pada kepala racikan dan kosong pada baris lain: `dtd` (jenis racikan) dan
+        `dosage_form` (bentuk sediaan hasil racikan). Pada kedua jenis racikan, `base_quantity` komponen tetap total yang
+        diambil dari stok untuk seluruh racikan, jadi takaran per bungkus adalah `base_quantity` dibagi
+        `requested_quantity` kepala racikannya. Keduanya ditambahkan sesudah versi ini terbit, jadi opsional.
       required: [id, order, item, compound, quantity, unit, requested_quantity, signa, usage_instruction, notes]
       properties:
         id:
@@ -248,8 +258,29 @@ components:
           type: [integer, 'null']
           minimum: 1
           description: Lama pemberian dalam hari (dispenseRequest.expectedSupplyDuration).
+        dtd:
+          type: [boolean, 'null']
+          description: |
+            Jenis racikan (extension MedicationType Medication SATUSEHAT): `true` racikan d.t.d. (SD), `false` racikan
+            dibagi rata (EP).
+        dosage_form:
+          description: |
+            Bentuk sediaan hasil racikan (Medication.form), misalnya Puyer, disalin dari daftar bentuk sediaan layanan
+            kesehatan saat resep dikirim. Kode dan namanya milik tenant.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/dosageForm'
         notes:
           type: [string, 'null']
+    dosageForm:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
     route:
       type: object
       additionalProperties: false

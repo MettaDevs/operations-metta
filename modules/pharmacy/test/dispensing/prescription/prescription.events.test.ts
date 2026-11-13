@@ -290,6 +290,96 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(await processed(envelope.id)).toBe(0);
         });
 
+        test('a compound header keeps d.t.d. or dibagi rata and its dosage form, and an older message keeps neither', async () => {
+            const puyer = { code: 'PUYER', name: 'Puyer' };
+            const { prescriptionId } = await pharmacy.issue([
+                {
+                    compound: 1,
+                    requested_quantity: '10',
+                    preparation: { dtd: true, dosage_form: puyer },
+                },
+                { item: amoxicillin, compound: 1, quantity: '2' },
+                {
+                    compound: 2,
+                    requested_quantity: '6',
+                    preparation: { dtd: false, dosage_form: puyer },
+                },
+                {
+                    item: amoxicillin,
+                    quantity: '1',
+                    preparation: { dtd: null, dosage_form: null },
+                },
+            ]);
+            const older = await pharmacy.issue([
+                { compound: 1, requested_quantity: '10' },
+                { item: amoxicillin, compound: 1, quantity: '2' },
+            ]);
+            const stored = async (id: string) =>
+                pool.unsafe<
+                    {
+                        dtd: boolean | null;
+                        bentuk_sediaan_kode: string | null;
+                        bentuk_sediaan_nama: string | null;
+                    }[]
+                >(
+                    `select d.dtd, d.bentuk_sediaan_kode, d.bentuk_sediaan_nama
+                     from far_tr_resep_detail d join far_tr_resep r on r.id = d.resep_id
+                     where r.tenant_id = $1 and r.resep_sumber_id = $2 order by d.urutan`,
+                    [pharmacy.tenantId, id],
+                );
+            const none = {
+                dtd: null,
+                bentuk_sediaan_kode: null,
+                bentuk_sediaan_nama: null,
+            };
+            expect([...(await stored(prescriptionId))]).toEqual([
+                {
+                    dtd: true,
+                    bentuk_sediaan_kode: 'PUYER',
+                    bentuk_sediaan_nama: 'Puyer',
+                },
+                none,
+                {
+                    dtd: false,
+                    bentuk_sediaan_kode: 'PUYER',
+                    bentuk_sediaan_nama: 'Puyer',
+                },
+                none,
+            ]);
+            expect([...(await stored(older.prescriptionId))]).toEqual([
+                none,
+                none,
+            ]);
+
+            const [queued] = await pharmacy.queued(prescriptionId);
+            const shown = (
+                await json<{
+                    data: {
+                        lines: {
+                            dtd: boolean | null;
+                            dosage_form: { code: string; name: string } | null;
+                        }[];
+                    };
+                }>(
+                    await pharmacy.admin.get(
+                        `${api}/prescriptions/${queued?.id}`,
+                    ),
+                    200,
+                )
+            ).data;
+            expect(
+                shown.lines.map(({ dtd, dosage_form }) => ({
+                    dtd,
+                    dosage_form,
+                })),
+            ).toEqual([
+                { dtd: true, dosage_form: puyer },
+                { dtd: null, dosage_form: null },
+                { dtd: false, dosage_form: puyer },
+                { dtd: null, dosage_form: null },
+            ]);
+        });
+
         test('the queue keeps the Patient KTP of the visit, and an older message without it counts as KTP', async () => {
             const withoutKtp = await pharmacy.issue(
                 [{ item: amoxicillin, quantity: '1' }],

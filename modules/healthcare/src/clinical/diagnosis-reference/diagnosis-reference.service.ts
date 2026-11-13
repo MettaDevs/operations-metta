@@ -48,7 +48,10 @@ const tables = {
     },
     'dosage-forms': {
         table: 'sim_m_bentuk_sediaan',
-        uses: [{ table: 'sim_m_obat', column: 'bentuk_sediaan_id' }],
+        uses: [
+            { table: 'sim_m_obat', column: 'bentuk_sediaan_id' },
+            { table: 'sim_tr_resep_detail', column: 'bentuk_sediaan_id' },
+        ],
     },
     'usage-instructions': {
         table: 'sim_m_aturan_pakai',

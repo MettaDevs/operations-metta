@@ -15,6 +15,7 @@ import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api } from '@core/platform/shell/index.ts';
 import {
+    compoundText,
     instructionText,
     isCompoundHeader,
     type Prescription,
@@ -239,10 +240,7 @@ export function DispensingLines({
                 isCompoundHeader(line) ? (
                     <DataTableText multiline>
                         <span className="block font-medium">
-                            Racikan {line.compound}
-                            {line.requested_quantity
-                                ? ` · ${displayNumber(line.requested_quantity)} racikan`
-                                : ''}
+                            {compoundText(line)}
                         </span>
                         {instructionText(line) && (
                             <span className="block text-muted-foreground">
