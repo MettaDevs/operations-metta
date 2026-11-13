@@ -18,6 +18,7 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
@@ -38,6 +39,10 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import {
+    isProcedureTariff,
+    procedureTariffs,
+} from '../../clinical/procedure/procedure-price.options.ts';
+import {
     isPatientTypeBehavior,
     patientTypeBehaviors,
     type PatientTypeBehavior,
@@ -57,6 +62,13 @@ type PatientType = ApiBody<'healthcarePatientTypeList'>['data'][number];
 type PriceGroup =
     ApiBody<'healthcarePatientTypeMetadata'>['price_groups'][number];
 type Errors = Record<string, string[]>;
+const tariffItems = Object.entries(procedureTariffs).map(([value, label]) => ({
+    value,
+    label,
+}));
+// Pilihan "Sama dengan kelompok harga" di Kelompok harga tarif jasa, dikirim kosong: tarif dicari di kelompok harga tipe
+// itu sendiri.
+const SAME_PRICE_GROUP = '__same__';
 const searchSchema = z.object({ q: z.string().max(200).optional() });
 
 function PatientTypeCard({
@@ -85,6 +97,9 @@ function PatientTypeCard({
         // Kelompok harga boleh kosong; pilihan rujukan tidak bisa dikosongkan, jadi ia dibuka lewat saklar.
         has_price_group: (type?.price_group_id ?? null) !== null,
         price_group_id: type?.price_group_id ?? null,
+        procedure_tariff: type?.procedure_tariff ?? 'general',
+        procedure_tariff_price_group_id:
+            type?.procedure_tariff_price_group_id ?? null,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -117,6 +132,27 @@ function PatientTypeCard({
                   active: false,
               }
             : null);
+    const tariffPriceGroups = [
+        { value: SAME_PRICE_GROUP, label: 'Sama dengan kelompok harga' },
+        ...(metadata?.price_groups ?? [])
+            .filter(
+                (group) =>
+                    group.active ||
+                    group.id === type?.procedure_tariff_price_group_id,
+            )
+            .map((group) => ({ value: group.id, label: group.name })),
+    ];
+    const tariffLabel = isProcedureTariff(form.procedure_tariff)
+        ? procedureTariffs[form.procedure_tariff]
+        : form.procedure_tariff;
+    const tariffPriceGroupLabel =
+        tariffPriceGroups.find(
+            (item) =>
+                item.value ===
+                (form.procedure_tariff_price_group_id ?? SAME_PRICE_GROUP),
+        )?.label ??
+        type?.procedure_tariff_price_group_name ??
+        '';
     const { has_price_group: hasPriceGroup, ...fields } = form;
     const payload = {
         ...fields,
@@ -309,6 +345,72 @@ function PatientTypeCard({
                                     },
                                 ]}
                             />
+                        </FormControl>
+                    )}
+                    <FormControl
+                        error={errors.procedure_tariff?.[0]}
+                        data-error-field="procedure_tariff"
+                        hint="Cara mencari tarif tindakan untuk pasien bertipe ini. Tarif umum memakai Harga Baru, tarif BPJS memakai Harga Baru BPJS. Pilihan yang menyebut tanpa tarif lain tidak mengambil tarif kelas, dokter, atau kelompok harga lain bila tidak ada yang cocok, sehingga tindakan tampil tanpa harga."
+                    >
+                        {editing ? (
+                            <Select
+                                label="Tarif jasa"
+                                required
+                                items={tariffItems}
+                                value={form.procedure_tariff}
+                                onValueChange={(value) =>
+                                    setForm({
+                                        ...form,
+                                        procedure_tariff: value ?? 'general',
+                                    })
+                                }
+                                searchPlaceholder="Cari tarif jasa"
+                                emptyMessage="Pilihan tidak ditemukan."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Tarif jasa"
+                                value={tariffLabel}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
+                    {form.procedure_tariff !== 'none' && (
+                        <FormControl
+                            error={errors.procedure_tariff_price_group_id?.[0]}
+                            data-error-field="procedure_tariff_price_group_id"
+                            hint="Kelompok harga yang tarif tindakannya dipakai pasien bertipe ini, misalnya tipe BPJS yang memakai tarif kelompok Umum. Harga obat tetap mengikuti kelompok harga di atas."
+                        >
+                            {editing ? (
+                                <Select
+                                    label="Kelompok harga tarif jasa"
+                                    items={tariffPriceGroups}
+                                    value={
+                                        form.procedure_tariff_price_group_id ??
+                                        SAME_PRICE_GROUP
+                                    }
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            procedure_tariff_price_group_id:
+                                                value === null ||
+                                                value === SAME_PRICE_GROUP
+                                                    ? null
+                                                    : value,
+                                        })
+                                    }
+                                    searchPlaceholder="Cari kelompok harga"
+                                    emptyMessage="Kelompok harga tidak ditemukan. Tambahkan di Sys Admin, menu Harga."
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Kelompok harga tarif jasa"
+                                    value={tariffPriceGroupLabel}
+                                    readOnly
+                                />
+                            )}
                         </FormControl>
                     )}
                     <FormControl

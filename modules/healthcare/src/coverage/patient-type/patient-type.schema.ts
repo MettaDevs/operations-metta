@@ -16,6 +16,11 @@ export const patientTypeRowSchema = z.object({
     // Kelompok harga Core yang menentukan tarif pasien bertipe ini. Kosong berarti hanya harga untuk semua kelompok.
     price_group_id: z.string().nullable(),
     price_group_name: z.string().nullable(),
+    // Cara mendapat tarif jasa, kode dari procedureTariffs (procedure-price.options.ts).
+    procedure_tariff: z.string(),
+    // Kelompok harga yang tarif jasanya dicari. Kosong berarti kelompok harga tipe ini.
+    procedure_tariff_price_group_id: z.string().nullable(),
+    procedure_tariff_price_group_name: z.string().nullable(),
     version: z.number(),
 });
 
@@ -34,5 +39,7 @@ export const patientTypeInputSchema = z.object({
         .union([z.number(), z.string()])
         .optional(),
     price_group_id: z.string().nullable().optional(),
+    procedure_tariff: z.string().optional(),
+    procedure_tariff_price_group_id: z.string().nullable().optional(),
     version: z.number().optional(),
 });
