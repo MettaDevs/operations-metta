@@ -7,6 +7,7 @@ import {
     type Business,
 } from '../../../support/inventory-fixtures.ts';
 import { operationsTestApp } from '../../../support/operations-app.ts';
+import { setCurrencyPrecision } from '../../../support/tenant-fixtures.ts';
 
 type Item = {
     id: string;
@@ -66,14 +67,32 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
         expect(chosen.tracking_code).toBeNull();
     });
 
-    test('the base price is kept when a caller does not send it, and a negative or malformed one is refused', async () => {
+    test('the base price follows the unit price precision of the currency, is kept when a caller does not send it, and a negative or malformed one is refused', async () => {
         const item = await business.item<Item & { base_price: string }>(
             'HARGA-1',
-            { base_price: '1250.5' },
+            { base_price: '1250' },
         );
-        expect(item.base_price).toBe('1250.5');
+        // Tenant baru memakai rupiah utuh, jadi harga dasar tanpa angka di belakang koma.
+        expect(
+            await refused(await change(item, { base_price: '1250.5' })),
+        ).toEqual({
+            base_price: [
+                'Isi harga dasar 0 atau lebih, tanpa angka di belakang koma.',
+            ],
+        });
+        await setCurrencyPrecision(pool, business.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
+        const priced = await json<{ data: Item & { base_price: string } }>(
+            await change(item, { base_price: '1250.5' }),
+            200,
+        );
+        expect(priced.data.base_price).toBe('1250.5');
         const renamed = await json<{ data: Item & { base_price: string } }>(
-            await change(item, { name: 'Harga tetap' }),
+            await change(priced.data, { name: 'Harga tetap' }),
             200,
         );
         expect(renamed.data.base_price).toBe('1250.5');

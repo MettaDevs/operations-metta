@@ -16,7 +16,12 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
-import { decimalInput, quantityScale, toNumeric } from '../quantity.ts';
+import {
+    decimalInput,
+    quantityHint,
+    quantityScale,
+    toNumeric,
+} from '../quantity.ts';
 import {
     stockkeepingUnitInputSchema,
     stockkeepingUnitRowSchema,
@@ -37,10 +42,8 @@ const rowSql = `select * from (
 const messages = {
     item_id: 'Pilih barang dari daftar.',
     location_id: 'Pilih lokasi dari daftar.',
-    minimum_quantity:
-        'Isi stok minimum 0 atau lebih, paling banyak empat angka di belakang koma.',
-    maximum_quantity:
-        'Isi stok maksimum 0 atau lebih, paling banyak empat angka di belakang koma.',
+    minimum_quantity: `Isi stok minimum 0 atau lebih, ${quantityHint}.`,
+    maximum_quantity: `Isi stok maksimum 0 atau lebih, ${quantityHint}.`,
 };
 
 const storedSchema = z.object({ id: z.string(), item_id: z.string() });

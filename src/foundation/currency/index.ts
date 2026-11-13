@@ -129,9 +129,17 @@ export function roundAmount(value: Decimal, precision: Precision): Decimal {
     return value.rounded(precision.amount_decimals);
 }
 
+// Harga satuan disimpan numeric(18,4) di persediaan, pembelian, dan farmasi, jadi presisi harga satuan di atas empat
+// dibaca sebagai empat: kolomnya tidak menyimpan lebih, dan PostgreSQL akan membulatkan sisanya diam-diam.
+export const unitAmountStorageDecimals = 4;
+
+export function unitAmountDecimals(precision: Precision): number {
+    return Math.min(precision.unit_amount_decimals, unitAmountStorageDecimals);
+}
+
 // Harga satuan dibulatkan ke presisi harga satuan mata uangnya.
 export function roundUnitAmount(value: Decimal, precision: Precision): Decimal {
-    return value.rounded(precision.unit_amount_decimals);
+    return value.rounded(unitAmountDecimals(precision));
 }
 
 // Jumlah valuta dalam mata uang lokal: jumlah kali kurs, dibulatkan ke presisi jumlah mata uang lokal (ExchangeAmtFCYToLCY

@@ -16,6 +16,7 @@ import {
     type Business,
 } from '../../../support/inventory-fixtures.ts';
 import { operationsTestApp } from '../../../support/operations-app.ts';
+import { setCurrencyPrecision } from '../../../support/tenant-fixtures.ts';
 
 type Batch = { id: string; batch_number: string; expiry_date: string | null };
 
@@ -31,6 +32,13 @@ describe.skipIf(!process.env.DB_HOST)('item ledger posting', () => {
 
     beforeAll(async () => {
         business = await createBusiness(pool, browser, 'Klinik Uji Stok');
+        // Harga satuan di sini memakai desimal.
+        await setCurrencyPrecision(pool, business.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
         tracked = await business.trackingCode('OBAT', {
             batch_required: true,
             expiry_required: true,
@@ -395,6 +403,12 @@ describe.skipIf(!process.env.DB_HOST)('item ledger posting', () => {
             browser,
             'Klinik Uji Mutasi',
         );
+        await setCurrencyPrecision(pool, lenient.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
         const setup = await json<{ data: { version: number } }>(
             await lenient.admin.get(`${inventoryApi}/setup`),
             200,
@@ -652,5 +666,34 @@ describe.skipIf(!process.env.DB_HOST)('item ledger posting', () => {
             { source: 'apply-b', open: '5' },
         ]);
         expect(await business.stock(item.id, target.id)).toEqual({ SAME: 3 });
+    });
+
+    test('the ledger value is rounded once to the amount precision of the currency', async () => {
+        const whole = await createBusiness(pool, browser, 'Klinik Uji Nilai');
+        const location = await whole.location('GUDANG');
+        const item = await whole.item('NILAI-1');
+        const values = async () =>
+            (
+                await pool.unsafe<{ value: string }[]>(
+                    `select trim_scale(nilai)::text as value from gd_tr_kartu_gudang
+                     where tenant_id = $1 and barang_id = $2 order by id`,
+                    [whole.tenantId, item.id],
+                )
+            ).map((row) => row.value);
+        // 1,5 x 333 = 499,5: rupiah utuh menyimpan 500, presisi dua angka menyimpan 499,5.
+        await whole.posted('masuk', location.id, [
+            receipt(item.id, 1.5, null, null, 333),
+        ]);
+        expect(await values()).toEqual(['500']);
+        await setCurrencyPrecision(pool, whole.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
+        await whole.posted('masuk', location.id, [
+            receipt(item.id, 1.5, null, null, 333),
+        ]);
+        expect(await values()).toEqual(['500', '499.5']);
     });
 });

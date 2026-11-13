@@ -27,6 +27,7 @@ import {
 import {
     baseQuantity,
     decimalInput,
+    quantityHint,
     display,
     quantityScale,
 } from '../quantity.ts';
@@ -142,8 +143,7 @@ const messages = {
     batch_id: 'Pilih batch dari daftar.',
     batch_number: 'Isi nomor batch yang benar.',
     expiry_date: 'Isi tanggal kedaluwarsa yang benar.',
-    quantity_counted:
-        'Isi jumlah dihitung 0 atau lebih, paling banyak empat angka di belakang koma.',
+    quantity_counted: `Isi jumlah dihitung 0 atau lebih, ${quantityHint}.`,
     item_ids: 'Pilih barang dari daftar.',
     category_id: 'Pilih kategori dari daftar.',
     only_in_stock: 'Pilih ya atau tidak.',
@@ -427,7 +427,7 @@ export class StockCounts {
                 else if (conversion !== undefined && base === null)
                     fail(
                         'quantity_counted',
-                        'Jumlah ini dalam satuan dasar punya lebih dari empat angka di belakang koma atau terlalu besar. Ubah jumlah atau satuannya.',
+                        `Jumlah ini dalam satuan dasar harus ${quantityHint} dan tidak terlalu besar. Ubah jumlah atau satuannya.`,
                     );
                 counted = base;
             }

@@ -1,12 +1,17 @@
-import { Decimal, decimalsHint } from '../../platform/money/index.ts';
+import {
+    Decimal,
+    decimalsHint,
+    divideRounded,
+} from '../../platform/money/index.ts';
 
-// Jumlah dalam satuan dasar dan harga satuan disimpan numeric(18,4), nilai numeric(18,2). Di kode ketiganya bigint
+// Jumlah dalam satuan dasar dan harga satuan disimpan numeric(18,4), nilai numeric(19,4). Di kode ketiganya bigint
 // berskala, supaya stok yang dikurangi dan dijumlahkan tidak pernah bergeser karena pecahan biner.
 export const quantityScale = 4;
 
 // Batas angka di belakang koma jumlah barang, satu konstanta sistem (QtyRndPrecision BC), untuk pesan isian jumlah.
 export const quantityHint = decimalsHint(quantityScale);
-export const amountScale = 2;
+// Skala kolom nilai. Nilai dibulatkan ke presisi jumlah mata uang tenant, paling banyak skala ini.
+export const amountScale = 4;
 const limit = 10n ** 18n;
 
 const fixedPattern = /^(-?)(\d+)(?:\.(\d+))?$/;
@@ -51,6 +56,16 @@ export function decimalInput(raw: unknown): bigint | null {
     return value <= -limit || value >= limit ? null : value;
 }
 
+// Isian harga satuan 0 atau lebih dengan paling banyak `decimals` angka di belakang koma (presisi harga satuan mata
+// uang tenant, lihat unitAmountDecimals), berskala quantityScale. null bila tidak memenuhi.
+export function unitCostInput(raw: unknown, decimals: number): bigint | null {
+    const value = decimalInput(raw);
+    if (value === null || value < 0n) return null;
+    return value % 10n ** BigInt(quantityScale - decimals) === 0n
+        ? value
+        : null;
+}
+
 // Jumlah dalam satuan dasar: jumlah baris x isi satuannya. null bila hasilnya punya lebih dari empat angka di belakang
 // koma atau melewati batas kolom kartu gudang, karena kartu gudang tidak membulatkan jumlah.
 export function baseQuantity(
@@ -64,14 +79,21 @@ export function baseQuantity(
     return base < limit ? base : null;
 }
 
-// Nilai jumlah × harga satuan, dibulatkan sekali ke dua angka di belakang koma (setengah menjauhi nol).
-export function amountOf(parts: { quantity: bigint; unitCost: bigint }[]) {
+// Nilai jumlah × harga satuan berskala amountScale, dibulatkan sekali ke `amountDecimals` angka di belakang koma
+// (presisi jumlah mata uang tenant, setengah menjauhi nol).
+export function amountOf(
+    parts: { quantity: bigint; unitCost: bigint }[],
+    amountDecimals: number,
+): bigint {
     const exact = parts.reduce(
         (sum, part) => sum + part.quantity * part.unitCost,
         0n,
     );
-    const divisor = 10n ** BigInt(quantityScale * 2 - amountScale);
-    const magnitude = exact < 0n ? -exact : exact;
-    const rounded = (magnitude + divisor / 2n) / divisor;
-    return exact < 0n ? -rounded : rounded;
+    const step = 10n ** BigInt(amountScale - amountDecimals);
+    return (
+        divideRounded(
+            exact,
+            10n ** BigInt(quantityScale * 2 - amountScale) * step,
+        ) * step
+    );
 }

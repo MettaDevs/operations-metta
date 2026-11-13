@@ -15,6 +15,12 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
+import { decimalsHint } from '../../../platform/money/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    unitAmountDecimals,
+} from '../../currency/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import { activeLegalEntity, exists, parseInput } from '../inventory.service.ts';
 import {
@@ -25,8 +31,10 @@ import {
 import {
     decimalInput,
     fromNumeric,
+    quantityHint,
     quantityScale,
     toNumeric,
+    unitCostInput,
 } from '../quantity.ts';
 import {
     adjustmentDirections,
@@ -315,6 +323,11 @@ export class Adjustments {
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
         if (!(await exists(this.db, 'gd_m_alasan', this.scope, data.reason_id)))
             errors.reason_id = messages.reason_id;
+        const unitCostDecimals = unitAmountDecimals(
+            await new Currency(this.db, this.scope.tenantId).precision(
+                localCurrencyCode,
+            ),
+        );
         const lines: LineDraft[] = [];
         for (const [index, line] of data.lines.entries()) {
             const field = `lines.${index}`;
@@ -330,7 +343,7 @@ export class Adjustments {
             const quantity = decimalInput(line.quantity);
             if (quantity === null || quantity <= 0n)
                 errors[`${field}.quantity`] =
-                    'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.';
+                    `Isi jumlah lebih dari 0, ${quantityHint}.`;
             const draft: LineDraft = {
                 id: line.id ?? null,
                 itemId: line.item_id,
@@ -362,10 +375,10 @@ export class Adjustments {
                     draft.unitCost =
                         line.unit_cost === null || line.unit_cost === undefined
                             ? null
-                            : decimalInput(line.unit_cost);
-                    if (draft.unitCost === null || draft.unitCost < 0n)
+                            : unitCostInput(line.unit_cost, unitCostDecimals);
+                    if (draft.unitCost === null)
                         errors[`${field}.unit_cost`] =
-                            'Isi harga satuan 0 atau lebih, paling banyak empat angka di belakang koma.';
+                            `Isi harga satuan 0 atau lebih, ${decimalsHint(unitCostDecimals)}.`;
                     break;
                 }
                 case 'keluar': {

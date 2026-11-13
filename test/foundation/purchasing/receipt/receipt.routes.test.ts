@@ -11,6 +11,7 @@ import { operationsTestApp } from '../../../support/operations-app.ts';
 import {
     createMember,
     grantAllOrganizations,
+    setCurrencyPrecision,
 } from '../../../support/tenant-fixtures.ts';
 
 type Reference = { id: string; code: string; name: string };
@@ -85,6 +86,13 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
             'Klinik Uji Penerimaan',
             receiptDuties,
         );
+        // Harga satuan di sini memakai desimal.
+        await setCurrencyPrecision(pool, business.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 4,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
         const make = setup(business);
         location = await business.location('GUDANG');
         const tracked = await business.trackingCode('OBAT', {
@@ -169,7 +177,7 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
             }[]
         >(
             `select trim_scale(k.jumlah)::text as quantity, trim_scale(k.sisa)::text as open,
-                    trim_scale(k.harga_satuan)::text as unit_cost, k.nilai::text as amount, k.jenis as kind,
+                    trim_scale(k.harga_satuan)::text as unit_cost, trim_scale(k.nilai)::text as amount, k.jenis as kind,
                     t.no_batch as batch, k.kedaluwarsa::text as expiry, k.sumber_dana_id as funding,
                     k.program_pengadaan_id as program, k.tahun_anggaran as year,
                     k.dibalik_dari is not null as reversal
@@ -198,7 +206,7 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
                 quantity: '200',
                 open: '200',
                 unit_cost: '1350',
-                amount: '270000.00',
+                amount: '270000',
                 kind: 'penerimaan',
                 batch: 'B-001',
                 expiry: '2027-06-30',

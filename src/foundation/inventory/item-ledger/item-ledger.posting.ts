@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import { validation } from '../../../platform/http/index.ts';
+import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import {
     lockInventoryPeriods,
     refuseClosedPeriod,
@@ -239,6 +240,14 @@ export async function lockItemLocations(
         );
 }
 
+async function localAmountDecimals(
+    db: Database,
+    tenantId: string,
+): Promise<number> {
+    return (await new Currency(db, tenantId).precision(localCurrencyCode))
+        .amount_decimals;
+}
+
 function settings(
     legalEntity: LegalEntitySettings,
     location: Location,
@@ -280,6 +289,8 @@ class Ledger {
         readonly tenantId: string,
         readonly legalEntityId: string,
         private readonly userId: string | null,
+        // Presisi jumlah mata uang lokal tenant, untuk membulatkan nilai baris.
+        readonly amountDecimals: number,
     ) {}
 
     nextKey(lineKey: string) {
@@ -418,6 +429,7 @@ export async function postItemLines(
         context.tenantId,
         context.legalEntityId,
         context.userId,
+        await localAmountDecimals(db, context.tenantId),
     );
     for (const entry of prepared) {
         switch (entry.kind) {
@@ -814,9 +826,10 @@ async function receive(
         postingDate: context.postingDate,
         quantity: entry.quantity,
         unitCost: entry.unitCost,
-        amount: amountOf([
-            { quantity: entry.quantity, unitCost: entry.unitCost },
-        ]),
+        amount: amountOf(
+            [{ quantity: entry.quantity, unitCost: entry.unitCost }],
+            ledger.amountDecimals,
+        ),
         source: context.source,
         sourceLineId: entry.sourceLineId,
         reversedFrom: null,
@@ -937,6 +950,7 @@ async function issue(
                     quantity: slice.quantity,
                     unitCost: slice.entry.unitCost,
                 })),
+                ledger.amountDecimals,
             ),
             source: context.source,
             sourceLineId: line.sourceLineId,
@@ -1109,7 +1123,13 @@ export async function reverseItemEntries(
         validation({
             _form: 'Stok yang masuk lewat dokumen ini sudah dipakai, jadi postingnya tidak bisa dibatalkan.',
         });
-    const ledger = new Ledger(db, tenantId, legalEntityId, context.userId);
+    const ledger = new Ledger(
+        db,
+        tenantId,
+        legalEntityId,
+        context.userId,
+        await localAmountDecimals(db, tenantId),
+    );
     for (const entry of entries) {
         const quantity = quantityOf(entry.quantity);
         const reversal = {
@@ -1170,7 +1190,10 @@ export async function reverseItemEntries(
                 expiry: part.expiry,
                 quantity: partQuantity,
                 unitCost,
-                amount: amountOf([{ quantity: partQuantity, unitCost }]),
+                amount: amountOf(
+                    [{ quantity: partQuantity, unitCost }],
+                    ledger.amountDecimals,
+                ),
                 funding: fundingOf(part),
             });
         }

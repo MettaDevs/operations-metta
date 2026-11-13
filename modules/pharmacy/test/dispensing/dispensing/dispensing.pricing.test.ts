@@ -130,7 +130,11 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
                     200,
                 )
             ).data.find((reason) => reason.code === 'SALDO-AWAL')?.id ?? '';
+        // Harga dasar barang ini dua angka di belakang koma, jadi presisi harga satuan disetel sebelum barangnya dibuat,
+        // lalu kembali ke rupiah utuh.
+        await setting(4);
         item = await pharmacy.item('HRG-1', { base_price: '84.38' });
+        await setting(0);
         strip = await pharmacy.created(`${inventoryApi}/units-of-measure`, {
             code: 'STRIP',
             name: 'Strip',
@@ -287,6 +291,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
     });
 
     test('Siapkan rounds the unit price to the pharmacy setting of that time: four decimals stay, the line amount is rounded to sen, and a later setting change leaves the line', async () => {
+        await setting(4);
         await json(
             await pharmacy.admin.patch(`${inventoryApi}/items/${item.id}`, {
                 code: item.code,
@@ -309,7 +314,6 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             )),
         ];
 
-        await setting(4);
         const exact = await prepare(await prescribe(null));
         const exactBill = exact.dispensing?.id ?? '';
         expect(await columns(exactBill)).toEqual([

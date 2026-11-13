@@ -18,6 +18,7 @@ import {
 } from '../inventory.service.ts';
 import {
     decimalInput,
+    quantityHint,
     fromNumeric,
     quantityScale,
     toNumeric,
@@ -245,8 +246,7 @@ export class ItemUnits {
                 'Satuan ini satuan dasar barang, yang isinya selalu 1. Pilih satuan kemasan lain.';
         const conversion = decimalInput(data.quantity_per_unit);
         if (conversion === null || conversion <= 0n)
-            errors.quantity_per_unit =
-                'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.';
+            errors.quantity_per_unit = `Isi jumlah lebih dari 0, ${quantityHint}.`;
         if (Object.keys(errors).length || conversion === null)
             validation(errors);
         return {
