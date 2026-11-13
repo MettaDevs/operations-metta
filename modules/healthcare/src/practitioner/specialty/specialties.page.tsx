@@ -1,4 +1,8 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
+import {
+    CollapsibleSection,
+    CollapsibleSectionGroup,
+} from '@operations-metta/ui/collapsible-section';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
@@ -201,98 +205,115 @@ function SpecialtyCard({
                         />
                     </FormControl>
                 </FormGrid>
-                <div className="mt-4" data-error-field="subspecialties">
-                    <DocumentLines
+                <CollapsibleSectionGroup
+                    className="mt-4"
+                    defaultValue={['subspecialties']}
+                >
+                    <CollapsibleSection
+                        value="subspecialties"
                         title="Sub Spesialis"
-                        data={form.lines}
-                        getRowKey={(line) => line.key}
-                        getRowLabel={(line) => line.name}
-                        readOnly={!editing || busy}
-                        portalContainer={portalContainer}
-                        selection={
-                            editing
-                                ? {
-                                      selectedKeys: selected,
-                                      onSelectedKeysChange: (keys) =>
-                                          setSelected(keys.map(String)),
-                                  }
-                                : undefined
-                        }
-                        onAddRow={
-                            editing
-                                ? () =>
-                                      setForm({
-                                          ...form,
-                                          lines: [
-                                              ...form.lines,
-                                              {
-                                                  key: crypto.randomUUID(),
-                                                  id: null,
-                                                  name: '',
-                                              },
-                                          ],
-                                      })
-                                : undefined
-                        }
-                        onDeleteRows={
-                            editing
-                                ? (removed) =>
-                                      setForm({
-                                          ...form,
-                                          lines: form.lines.filter(
-                                              (line) => !removed.includes(line),
-                                          ),
-                                      })
-                                : undefined
-                        }
-                        emptyMessage={
-                            editing
-                                ? 'Belum ada sub spesialis. Pilih Tambah untuk menambahkan.'
-                                : 'Tidak ada sub spesialis.'
-                        }
-                        columns={[
-                            {
-                                id: 'name',
-                                header: 'Nama',
-                                content: 'control',
-                                minWidth: 260,
-                                cell: (line) => {
-                                    const field = `subspecialties.${form.lines.indexOf(line)}.name`;
-                                    return editing ? (
-                                        <FormControl error={errors[field]?.[0]}>
-                                            <Input
-                                                label="Nama"
-                                                required
-                                                maxLength={200}
-                                                data-error-field={field}
-                                                value={line.name}
-                                                onChange={(event) =>
-                                                    setLine(
-                                                        line.key,
-                                                        event.target.value,
-                                                    )
-                                                }
-                                            />
-                                        </FormControl>
-                                    ) : (
-                                        <DataTableText>
-                                            {line.name}
-                                        </DataTableText>
-                                    );
-                                },
-                            },
-                        ]}
-                    />
-                    {errors.subspecialties?.map((text) => (
-                        <p
-                            key={text}
-                            role="alert"
-                            className="mt-2 text-sm text-destructive"
-                        >
-                            {text}
-                        </p>
-                    ))}
-                </div>
+                        summary={`${String(form.lines.length)} sub spesialis`}
+                    >
+                        <div data-error-field="subspecialties">
+                            <DocumentLines
+                                title="Sub Spesialis"
+                                data={form.lines}
+                                getRowKey={(line) => line.key}
+                                getRowLabel={(line) => line.name}
+                                readOnly={!editing || busy}
+                                portalContainer={portalContainer}
+                                selection={
+                                    editing
+                                        ? {
+                                              selectedKeys: selected,
+                                              onSelectedKeysChange: (keys) =>
+                                                  setSelected(keys.map(String)),
+                                          }
+                                        : undefined
+                                }
+                                onAddRow={
+                                    editing
+                                        ? () =>
+                                              setForm({
+                                                  ...form,
+                                                  lines: [
+                                                      ...form.lines,
+                                                      {
+                                                          key: crypto.randomUUID(),
+                                                          id: null,
+                                                          name: '',
+                                                      },
+                                                  ],
+                                              })
+                                        : undefined
+                                }
+                                onDeleteRows={
+                                    editing
+                                        ? (removed) =>
+                                              setForm({
+                                                  ...form,
+                                                  lines: form.lines.filter(
+                                                      (line) =>
+                                                          !removed.includes(
+                                                              line,
+                                                          ),
+                                                  ),
+                                              })
+                                        : undefined
+                                }
+                                emptyMessage={
+                                    editing
+                                        ? 'Belum ada sub spesialis. Pilih Tambah untuk menambahkan.'
+                                        : 'Tidak ada sub spesialis.'
+                                }
+                                columns={[
+                                    {
+                                        id: 'name',
+                                        header: 'Nama',
+                                        content: 'control',
+                                        minWidth: 260,
+                                        cell: (line) => {
+                                            const field = `subspecialties.${form.lines.indexOf(line)}.name`;
+                                            return editing ? (
+                                                <FormControl
+                                                    error={errors[field]?.[0]}
+                                                >
+                                                    <Input
+                                                        label="Nama"
+                                                        required
+                                                        maxLength={200}
+                                                        data-error-field={field}
+                                                        value={line.name}
+                                                        onChange={(event) =>
+                                                            setLine(
+                                                                line.key,
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                    />
+                                                </FormControl>
+                                            ) : (
+                                                <DataTableText>
+                                                    {line.name}
+                                                </DataTableText>
+                                            );
+                                        },
+                                    },
+                                ]}
+                            />
+                            {errors.subspecialties?.map((text) => (
+                                <p
+                                    key={text}
+                                    role="alert"
+                                    className="mt-2 text-sm text-destructive"
+                                >
+                                    {text}
+                                </p>
+                            ))}
+                        </div>
+                    </CollapsibleSection>
+                </CollapsibleSectionGroup>
             </PageDialogBody>
             {confirmation}
         </form>
