@@ -24,12 +24,14 @@ import {
     parseInput,
     postItemLines,
     quantityScale,
+    raiseBasePrices,
     reverseItemEntries,
     toNumeric,
     unitConversion,
 } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
+    receiptBasePrices,
     receiptItemLine,
     sourceType,
     type StoredReceiptLine,
@@ -703,6 +705,11 @@ export class Receipts {
                 validation({
                     lines: 'Tambahkan sedikitnya satu baris sebelum posting.',
                 });
+            await raiseBasePrices(
+                this.db,
+                this.scope,
+                receiptBasePrices(lines),
+            );
             await postItemLines(
                 this.db,
                 {

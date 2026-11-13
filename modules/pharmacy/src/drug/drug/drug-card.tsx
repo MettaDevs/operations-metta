@@ -17,7 +17,7 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -28,11 +28,16 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import { DrugClassCard } from '../drug-class/drug-class-card.tsx';
+import { GradingGroupCard } from '../grading-group/grading-group-card.tsx';
+import { GradingGroupLookup } from '../grading-group/grading-group-lookup.tsx';
 
 export type Drug = ApiBody<'pharmacyDrugList'>['data'][number];
 
 const formOf = (drug: Drug) => ({
     drugClass: drug.drug_class,
+    // Kelompok grading boleh kosong; pilihan rujukan tidak bisa dikosongkan, jadi ia dibuka lewat saklar.
+    hasGradingGroup: drug.grading_group !== null,
+    gradingGroup: drug.grading_group,
     isGeneric: drug.is_generic,
     isFormulary: drug.is_formulary,
 });
@@ -64,7 +69,8 @@ export function DrugCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
-    const [creatingClass, setCreatingClass] = useState(false);
+    const [creating, setCreating] = useState<'class' | 'grading' | null>(null);
+    const gradingSwitchId = useId();
     const portalContainer = useRef<HTMLDivElement>(null);
     usePageDialogRecord({
         recordTitle: `${drug.code} ${drug.name}`,
@@ -72,6 +78,10 @@ export function DrugCard({
     });
 
     const save = async () => {
+        if (form.hasGradingGroup && !form.gradingGroup) {
+            setErrors({ grading_group_id: ['Pilih kelompok grading.'] });
+            return;
+        }
         setBusy(true);
         setErrors({});
         setMessage(null);
@@ -80,6 +90,9 @@ export function DrugCard({
                 params: { id: drug.id },
                 body: {
                     drug_class_id: form.drugClass?.id ?? null,
+                    grading_group_id: form.hasGradingGroup
+                        ? (form.gradingGroup?.id ?? null)
+                        : null,
                     is_generic: form.isGeneric,
                     is_formulary: form.isFormulary,
                     version: drug.version,
@@ -193,13 +206,54 @@ export function DrugCard({
                             portalContainer={portalContainer}
                             onCreate={
                                 canManage
-                                    ? () => setCreatingClass(true)
+                                    ? () => setCreating('class')
                                     : undefined
                             }
                             noun="Golongan obat"
                             load={loadDrugClasses}
                             columns={[codeColumn(160), nameColumn(220)]}
                         />
+                        <FormControl hint="Kelompok grading menentukan % naik harga obat ini di Grading harga obat. Tanpa kelompok, hanya grading untuk semua barang yang berlaku.">
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id={gradingSwitchId}
+                                    checked={form.hasGradingGroup}
+                                    disabled={!canManage}
+                                    onCheckedChange={(hasGradingGroup) =>
+                                        setForm((current) => ({
+                                            ...current,
+                                            hasGradingGroup,
+                                        }))
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={gradingSwitchId}
+                                    className="font-normal"
+                                >
+                                    Pakai kelompok grading
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
+                        {form.hasGradingGroup && (
+                            <GradingGroupLookup
+                                required
+                                value={form.gradingGroup}
+                                onChange={(gradingGroup) =>
+                                    setForm((current) => ({
+                                        ...current,
+                                        gradingGroup,
+                                    }))
+                                }
+                                disabled={!canManage}
+                                error={errors.grading_group_id?.[0]}
+                                portalContainer={portalContainer}
+                                onCreate={
+                                    canManage
+                                        ? () => setCreating('grading')
+                                        : undefined
+                                }
+                            />
+                        )}
                         {toggle(
                             'drug-generic',
                             'Obat generik',
@@ -223,11 +277,11 @@ export function DrugCard({
                     </FormGrid>
                 </PageDialogBody>
             </form>
-            {creatingClass && (
+            {creating === 'class' && (
                 <PageDialog
                     open
                     onOpenChange={(next) => {
-                        if (!next) setCreatingClass(false);
+                        if (!next) setCreating(null);
                     }}
                 >
                     <PageDialogContent title="Golongan obat">
@@ -235,7 +289,7 @@ export function DrugCard({
                             record={null}
                             canManage
                             onSaved={(drugClass) => {
-                                setCreatingClass(false);
+                                setCreating(null);
                                 setForm((current) => ({
                                     ...current,
                                     drugClass: {
@@ -245,7 +299,34 @@ export function DrugCard({
                                     },
                                 }));
                             }}
-                            onClose={() => setCreatingClass(false)}
+                            onClose={() => setCreating(null)}
+                        />
+                    </PageDialogContent>
+                </PageDialog>
+            )}
+            {creating === 'grading' && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setCreating(null);
+                    }}
+                >
+                    <PageDialogContent title="Kelompok grading">
+                        <GradingGroupCard
+                            record={null}
+                            canManage
+                            onSaved={(group) => {
+                                setCreating(null);
+                                setForm((current) => ({
+                                    ...current,
+                                    hasGradingGroup: true,
+                                    gradingGroup: {
+                                        id: group.id,
+                                        name: group.name,
+                                    },
+                                }));
+                            }}
+                            onClose={() => setCreating(null)}
                         />
                     </PageDialogContent>
                 </PageDialog>

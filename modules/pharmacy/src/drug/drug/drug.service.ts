@@ -24,11 +24,14 @@ const rowSql = `select * from (
                            coalesce(o.generik, false) as is_generic, coalesce(o.formularium, false) as is_formulary,
                            coalesce(o.version, 0) as version, g.id as drug_class_id, coalesce(g.kode, '') as drug_class_code,
                            case when g.id is null then null
-                                else json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) end as drug_class
+                                else json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) end as drug_class,
+                           case when k.id is null then null
+                                else json_build_object('id', k.id, 'name', k.nama) end as grading_group
                     from gd_m_barang b
                     join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
                     left join far_m_obat o on o.tenant_id = b.tenant_id and o.id = b.id and o.deleted_at is null
                     left join far_m_golongan_obat g on g.tenant_id = o.tenant_id and g.id = o.golongan_obat_id
+                    left join far_m_kelompok_grading k on k.tenant_id = o.tenant_id and k.id = o.kelompok_grading_id
                     where b.tenant_id = $1 and b.legal_entity_id = $2 and b.deleted_at is null) drugs
                 where true`;
 
@@ -105,6 +108,7 @@ export class Drugs {
         const current = await this.row(id);
         const data = parseInput(drugInputSchema, body, {
             drug_class_id: 'Pilih golongan obat dari daftar.',
+            grading_group_id: 'Pilih kelompok grading dari daftar.',
             is_generic: 'Pilih ya atau tidak.',
             is_formulary: 'Pilih ya atau tidak.',
             version: 'Muat ulang data obat ini, lalu ulangi perubahanmu.',
@@ -124,13 +128,39 @@ export class Drugs {
             )
         )
             validation({ drug_class_id: 'Pilih golongan obat dari daftar.' });
+        // Kelompok nonaktif hanya boleh tetap dipegang obat yang sudah memegangnya.
+        const gradingGroupId =
+            data.grading_group_id === undefined
+                ? (current.grading_group?.id ?? null)
+                : data.grading_group_id || null;
+        if (
+            gradingGroupId !== null &&
+            !(
+                lookupId(gradingGroupId) &&
+                (await this.db.one(
+                    z.object({ id: z.string() }),
+                    `select id from far_m_kelompok_grading
+                     where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
+                       and (aktif or id = $4::uuid)`,
+                    [
+                        scope.tenantId,
+                        scope.legalEntityId,
+                        gradingGroupId,
+                        current.grading_group?.id ?? null,
+                    ],
+                ))
+            )
+        )
+            validation({
+                grading_group_id: 'Pilih kelompok grading dari daftar.',
+            });
         const stamp = nowSql();
         const written =
             data.version === 0
                 ? await this.db.execute(
                       `insert into far_m_obat (id, tenant_id, legal_entity_id, golongan_obat_id, generik, formularium,
-                                               created_at, updated_at)
-                       values ($1, $2, $3, $4, $5, $6, $7, $7)
+                                               kelompok_grading_id, created_at, updated_at)
+                       values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
                        on conflict (id) do nothing`,
                       [
                           current.id,
@@ -139,16 +169,19 @@ export class Drugs {
                           drugClassId,
                           data.is_generic,
                           data.is_formulary,
+                          gradingGroupId,
                           stamp,
                       ],
                   )
                 : await this.db.execute(
-                      `update far_m_obat set golongan_obat_id = $1, generik = $2, formularium = $3, updated_at = $4
-                       where tenant_id = $5 and id = $6 and version = $7`,
+                      `update far_m_obat set golongan_obat_id = $1, generik = $2, formularium = $3,
+                              kelompok_grading_id = $4, updated_at = $5
+                       where tenant_id = $6 and id = $7 and version = $8`,
                       [
                           drugClassId,
                           data.is_generic,
                           data.is_formulary,
+                          gradingGroupId,
                           stamp,
                           scope.tenantId,
                           current.id,

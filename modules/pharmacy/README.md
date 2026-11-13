@@ -16,18 +16,20 @@ Resep tanpa ketiganya tetap masuk antrean dan tampil sebagai "Belum ada lokasi".
 
 Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILLFarmasi) dan `retur_farmasi` (RETURFARMASI). `bun run check:boundaries` menolak ketiganya di kode Core.
 
-| Tabel                  | Isi                                                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `far_processed_events` | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                  |
-| `far_m_golongan_obat`  | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode |
-| `far_m_obat`           | Perluasan barang Core berkunci id barang: golongan, generik, formularium                                      |
-| `far_m_lokasi_layanan` | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                          |
-| `far_tr_resep`         | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                       |
-| `far_tr_resep_detail`  | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                    |
-| `bill_farmasi`         | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, dan waktu setiap langkah    |
-| `bill_farmasi_detail`  | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep                    |
-| `retur_farmasi`        | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                           |
-| `retur_farmasi_detail` | Satu baris per obat dan batch yang kembali                                                                    |
+| Tabel                    | Isi                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                     |
+| `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode    |
+| `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                       |
+| `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                    |
+| `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, dan rentang harga dasar (SIMmGradingHargaObat)         |
+| `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                             |
+| `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                          |
+| `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                       |
+| `bill_farmasi`           | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, dan waktu setiap langkah       |
+| `bill_farmasi_detail`    | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan |
+| `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                              |
+| `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                       |
 
 ## Resep masuk lewat event
 
@@ -37,6 +39,7 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 - Isi diperiksa schema zod milik module ini (`prescription.schema.ts`) yang mengikuti kontrak. Field yang tidak dikenal dilewati, supaya field opsional baru di versi yang sama tidak membuat resep terlewat.
 - Isi yang tidak cocok (bentuk salah, teks lebih panjang dari kolom, barang yang bukan milik legal entity itu) dicatat ke log `pharmacy-event-skipped` lalu dilewati, tidak dilempar: lemparan membatalkan resep dokter. Event yang dilewati tidak dicatat sebagai sudah diproses.
 - Baris obat menyimpan satuan yang ditulis dokter dan isinya dalam satuan dasar (`konversi`, dari `quantity_per_unit`). Pesan yang belum membawa `quantity_per_unit` ditulis dalam satuan dasar, jadi isinya 1.
+- Kelompok harga pembeli (`price_group`, kelompok harga tipe pasien kunjungan) disimpan di `far_tr_resep.kelompok_harga_id` untuk harga obat. Pesan tanpa `price_group` disimpan kosong.
 - Event yang sama diantar dua kali, atau resep yang sama dalam event lain, dicatat sekali (`far_processed_events` dan indeks unik `resep_sumber_id`).
 - Handler hanya berjalan untuk tenant yang memasang module ini.
 
@@ -44,17 +47,29 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 
 Satu penyerahan aktif (`bill_farmasi`) per resep, dibuka dari antrean. Polanya pengiriman pesanan penjualan BC: Post Ship mencatat stok keluar, dan Undo Shipment membaliknya sebelum faktur.
 
-| Langkah       | Yang terjadi                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Simpan (draf) | Jumlah diserahkan dalam satuan resep atau satuan lain barang yang sama, dengan isi satuan disalin ke baris (0 sampai jumlah resep, dibandingkan dalam satuan dasar; kurang dari resep wajib beralasan), batch pilihan, lokasi, apoteker, asisten, catatan. Nomor dari `pharmacy.dispensing-number` per operating unit resep.                                                                                                                  |
-| Siapkan       | Isian disimpan lalu stok keluar diposting lewat `postItemLines` (jenis `penyerahan`) sebanyak jumlah x isi satuan, dalam satuan dasar, di lokasi yang melayani resep, di transaksi yang sama. Batch kosong diambil menurut cara pengambilan lokasi (FEFO bawaan); lokasi pilih manual mewajibkan batch. Stok kurang ditolak bila lokasi menolak stok minus, dan tidak ada yang tersimpan. Asisten diisi pengguna yang menyiapkan bila kosong. |
-| Panggil       | Waktu dan pemanggil dicatat; Panggil ulang memperbarui waktunya.                                                                                                                                                                                                                                                                                                                                                                              |
-| Serahkan      | Waktu dan penyerah dicatat; apoteker diisi penyerah bila kosong.                                                                                                                                                                                                                                                                                                                                                                              |
-| Batal siapkan | Hanya sebelum diserahkan. Stok kembali lewat `reverseItemEntries`, penyerahan ditutup sebagai dibatalkan, dan resep kembali menunggu. Siapkan berikutnya membuat penyerahan baru dengan isian yang sama, karena kunci posting kartu gudang penyerahan lama sudah terpakai (sama dengan batal posting dokumen persediaan Core).                                                                                                                |
+| Langkah       | Yang terjadi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Simpan (draf) | Jumlah diserahkan dalam satuan resep atau satuan lain barang yang sama, dengan isi satuan disalin ke baris (0 sampai jumlah resep, dibandingkan dalam satuan dasar; kurang dari resep wajib beralasan), batch pilihan, lokasi, apoteker, asisten, catatan. Nomor dari `pharmacy.dispensing-number` per operating unit resep.                                                                                                                                                                                                |
+| Siapkan       | Isian disimpan, harga obat dihitung dan disalin ke baris (bagian [Harga obat](#harga-obat)), lalu stok keluar diposting lewat `postItemLines` (jenis `penyerahan`) sebanyak jumlah x isi satuan, dalam satuan dasar, di lokasi yang melayani resep, di transaksi yang sama. Batch kosong diambil menurut cara pengambilan lokasi (FEFO bawaan); lokasi pilih manual mewajibkan batch. Stok kurang ditolak bila lokasi menolak stok minus, dan tidak ada yang tersimpan. Asisten diisi pengguna yang menyiapkan bila kosong. |
+| Panggil       | Waktu dan pemanggil dicatat; Panggil ulang memperbarui waktunya.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Serahkan      | Waktu dan penyerah dicatat; apoteker diisi penyerah bila kosong.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Batal siapkan | Hanya sebelum diserahkan. Stok kembali lewat `reverseItemEntries`, penyerahan ditutup sebagai dibatalkan, dan resep kembali menunggu. Siapkan berikutnya membuat penyerahan baru dengan isian yang sama, karena kunci posting kartu gudang penyerahan lama sudah terpakai (sama dengan batal posting dokumen persediaan Core).                                                                                                                                                                                              |
 
 Setiap perubahan mengunci baris resep (`for update`), jadi Siapkan yang ditekan beberapa orang bersamaan memposting sekali; indeks unik kunci posting kartu gudang menjadi penjaga terakhir. Batch yang diambil dibaca dari kartu gudang lewat `issuedSlices` Core, bukan disalin ke tabel farmasi.
 
 Apoteker dan asisten adalah pengguna tenant (`users`), dipilih dengan namanya. Di Kuta 1 keduanya dipilih di setiap penyerahan (`Pharmacy_id`, `Pharmacy_assistant_id`; 6 apoteker dan 7 asisten dalam 12.177 penyerahan, 425 di antaranya orang yang sama), jadi di sini keduanya boleh dipilih, dan terisi otomatis dari pengguna yang menyiapkan dan menyerahkan bila dibiarkan kosong.
+
+## Harga obat
+
+Makna fungsi sistem lama `GetHargaObatNew_WithStok` (Seroja dan Penta; Kuta 1 memakai rumus yang sama). Keputusan pemilik produk 13 November 2026 (opsi 8.3 A): grading tinggal di module ini, harga dihitung saat Siapkan dan disalin ke `bill_farmasi_detail`, dan kasir tidak menghitung ulang.
+
+- **Harga dasar** milik barang Core (`gd_m_barang.harga_dasar`, Harga_Jual `mBarang`), per satuan dasar. Posting penerimaan menaikkannya ke harga beli per satuan dasar sebelum diskon bila lebih tinggi; batal posting tidak menurunkannya, dan pengguna boleh mengubahnya di kartu barang (FastTab Harga).
+- **Kelompok grading** (Setup → Harga obat → Kelompok grading) dipasang di data obat farmasi. Obat tanpa kelompok sama dengan `'ALL'` sistem lama. Kelompok XX sistem lama adalah kelompok biasa.
+- **Grading harga obat** (Setup → Harga obat → Grading harga obat): per kelompok harga (master Core), kelompok grading atau semua barang, rentang harga dasar (kedua batas termasuk), % naik, % diskon, dan tanggal berlaku mulai. Rentang yang bertumpuk dengan baris lain berkunci sama (kelompok harga, kelompok grading, tanggal berlaku) ditolak. Kelompok harga yang dipakai baris grading tidak bisa dihapus di Core.
+- **Aturan** (`drug-price.calculation.ts`, fungsi murni): baris kelompok grading obat yang cocok dulu, lalu baris semua barang, lalu 0 %; di antara yang cocok, tanggal berlaku terakhir yang sudah lewat pada tanggal penyerahan. Resep tanpa kelompok harga dihargai harga dasar. Harga satuan baris = harga dasar x (1 + % naik / 100) x isi satuan baris, dibulatkan ke rupiah setengah menjauhi nol sesudah dikali isi satuan (urutan `ConvertAmountByUnitOfMeasure` BC; sistem lama tidak pernah menjual dalam satuan lain). % diskon disimpan terpisah, dan nilai baris = jumlah x harga satuan x (100 - % diskon) / 100.
+- **Disalin saat Siapkan**: harga dasar, baris grading yang dipakai, % naik, harga satuan, dan % diskon. Perubahan grading atau harga dasar sesudahnya tidak mengubah baris itu; Batal siapkan lalu Siapkan lagi menghitung ulang. Kartu penyerahan menampilkan harga satuan, diskon, nilai per baris, dan totalnya.
+- **Golden test** terhadap fungsi SQL sistem lama: `test/drug/drug-price/legacy-drug-prices.test.ts` memakai keluaran oracle `legacy-drug-prices.sql` (dijalankan read-only di Kuta 1, Seroja, dan Penta) yang disimpan di `legacy-drug-prices.json`. Setiap kasus wajib sama dengan harga sistem lama kecuali yang tercatat di `expected_differences` beserta alasannya: salinan Seroja tidak membulatkan harga dan mencocokkan kelas barang.
+- **Tidak dibawa sebagai kode**: dimensi KTP (lokal dan asing adalah kelompok harga), TipePelayanan, kontrak penjamin dan HargaObatDigunakan, BPJS + Fornas tanpa kenaikan (cukup baris grading 0 %), dan diskon karyawan; semuanya bergantung pada id yang ditulis mati di sistem lama.
 
 ## Obat diserahkan: event ke layanan kesehatan
 
@@ -80,13 +95,13 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                             |
-| ----------------------------- | --------------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                             |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                    |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, dan retur (apoteker) |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat            |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat           |
+| Duty                          | Isi                                                                   |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                   |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                          |
+| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, dan retur (apoteker)       |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat, dan harga obat  |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat, dan harga obat |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
@@ -95,6 +110,6 @@ Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). 
 - Pembatasan akses per lokasi atau unit kerja (petugas pusling hanya melihat resep pusling).
 - Layar antrean di TV (display board).
 - Obat bebas tanpa resep (OTC) dan resep luar. Di Kuta 1 keduanya hampir tidak dipakai (2 dan 0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
-- Harga dan tagihan; menyusul lewat billing/kasir di Foundation.
+- Tagihan; menyusul lewat billing/kasir di Foundation, yang membaca harga yang sudah disalin ke baris penyerahan.
 - Mengganti obat resep dengan obat lain (Item Substitution BC) dan menutup resep yang tidak pernah diambil pasien.
 - Cetak etiket dan kuitansi; menunggu mesin cetak.

@@ -1,0 +1,1543 @@
+{
+    "about": [
+        "Output of the legacy SQL function dbo.GetHargaObatNew_WithStok, run read-only on 13 November 2026 with (price group, 'xx', KTP 1, item, CustomerKerjasamaID 0, '', 0) by legacy-drug-prices.sql. Master values and prices only, no patient data. Gradings are the SIMmGradingHargaObat rows for KTP 1 and TipePelayanan STANDARD; grading_group null would mean the legacy ALL rows (none in these sources).",
+        "Every case is fed to the pure price rule with conversion 1. A case must give legacy_price unless it is listed in expected_differences, which states the price our rule gives and why."
+    ],
+    "case_columns": [
+        "grading_group",
+        "base_price",
+        "price_group",
+        "legacy_price",
+        "legacy_discount"
+    ],
+    "sources": {
+        "kuta": {
+            "database": "Puskesmas Kuta 1 (dev copy)",
+            "legacy_rounds_price": true,
+            "gradings": [
+                {
+                    "price_group": "IKS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "10",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                }
+            ],
+            "cases": [
+                ["XX", "0.515", "IKS", "1", "0"],
+                ["XX", "0.515", "UMUM", "1", "0"],
+                ["XX", "0.515", "BPJS", "1", "0"],
+                ["XX", "0.545", "IKS", "1", "0"],
+                ["XX", "0.545", "UMUM", "1", "0"],
+                ["XX", "0.545", "BPJS", "1", "0"],
+                ["XX", "1", "IKS", "1", "0"],
+                ["XX", "1", "UMUM", "1", "0"],
+                ["XX", "1", "BPJS", "1", "0"],
+                ["XX", "495", "IKS", "545", "0"],
+                ["XX", "495", "UMUM", "495", "0"],
+                ["XX", "495", "BPJS", "495", "0"],
+                ["XX", "11877", "IKS", "13065", "0"],
+                ["XX", "11877", "UMUM", "11877", "0"],
+                ["XX", "11877", "BPJS", "11877", "0"],
+                ["XX", "5488636", "IKS", "6037500", "0"],
+                ["XX", "5488636", "UMUM", "5488636", "0"],
+                ["XX", "5488636", "BPJS", "5488636", "0"],
+                ["XX", "4437570432", "IKS", "4437570432", "0"],
+                ["XX", "4437570432", "UMUM", "4437570432", "0"],
+                ["XX", "4437570432", "BPJS", "4437570432", "0"]
+            ]
+        },
+        "penta": {
+            "database": "Klinik Penta (demo copy)",
+            "legacy_rounds_price": true,
+            "gradings": [
+                {
+                    "price_group": "IKS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "10",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "GRADING 10",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "10",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "GRADING 20",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "20",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G1 (BPJS 10%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G2 (BPJS 10%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "24.32",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G3 (BPJS 10%, APT 25%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "38.75",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "11",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G4 (BPJS 0%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "22.1",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G5 (BPJS 10%, APT 20%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "33.2",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "UMUM",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "WNA",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "233",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "11",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EKSPATRIAT",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "55.4",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "TOURIST INSURANCE",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "344",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "APOTEK",
+                    "grading_group": "PENTA G6 (BPJS 0%, APT 12%)",
+                    "price_from": "0",
+                    "price_to": "1000000000",
+                    "markup_percent": "24.32",
+                    "discount_percent": "0"
+                }
+            ],
+            "cases": [
+                ["PENTA G1 (BPJS 10%)", "56.25", "IKS", "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "UMUM", "87", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "WNA", "187", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "BPJS", "69", "0"],
+                ["PENTA G1 (BPJS 10%)", "56.25", "EKSPATRIAT", "87", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "56.25",
+                    "TOURIST INSURANCE",
+                    "250",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "56.25", "APOTEK", "56", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "IKS", "23330", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "UMUM", "36255", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "WNA", "77689", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "BPJS", "28486", "0"],
+                ["PENTA G1 (BPJS 10%)", "23330", "EKSPATRIAT", "36255", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "23330",
+                    "TOURIST INSURANCE",
+                    "103585",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "23330", "APOTEK", "23330", "0"],
+                ["PENTA G1 (BPJS 10%)", "25000000", "IKS", "25000000", "0"],
+                ["PENTA G1 (BPJS 10%)", "25000000", "UMUM", "38850000", "0"],
+                ["PENTA G1 (BPJS 10%)", "25000000", "WNA", "83250000", "0"],
+                ["PENTA G1 (BPJS 10%)", "25000000", "BPJS", "30525000", "0"],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "EKSPATRIAT",
+                    "38850000",
+                    "0"
+                ],
+                [
+                    "PENTA G1 (BPJS 10%)",
+                    "25000000",
+                    "TOURIST INSURANCE",
+                    "111000000",
+                    "0"
+                ],
+                ["PENTA G1 (BPJS 10%)", "25000000", "APOTEK", "25000000", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "IKS", "107", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "UMUM", "166", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "WNA", "356", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "106.82", "BPJS", "130", "0"],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "EKSPATRIAT",
+                    "166",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "TOURIST INSURANCE",
+                    "474",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "106.82",
+                    "APOTEK",
+                    "133",
+                    "0"
+                ],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "IKS", "14630", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "UMUM", "22735", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "WNA", "48718", "0"],
+                ["PENTA G2 (BPJS 10%, APT 12%)", "14630", "BPJS", "17863", "0"],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "EKSPATRIAT",
+                    "22735",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "TOURIST INSURANCE",
+                    "64957",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "14630",
+                    "APOTEK",
+                    "18188",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "IKS",
+                    "405223",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "UMUM",
+                    "629717",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "WNA",
+                    "1349393",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "BPJS",
+                    "494777",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "EKSPATRIAT",
+                    "629717",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "TOURIST INSURANCE",
+                    "1799190",
+                    "0"
+                ],
+                [
+                    "PENTA G2 (BPJS 10%, APT 12%)",
+                    "405223",
+                    "APOTEK",
+                    "503773",
+                    "0"
+                ],
+                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "IKS", "45", "0"],
+                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "UMUM", "70", "0"],
+                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "WNA", "149", "0"],
+                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "BPJS", "55", "0"],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "EKSPATRIAT",
+                    "70",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "44.89",
+                    "TOURIST INSURANCE",
+                    "199",
+                    "0"
+                ],
+                ["PENTA G3 (BPJS 10%, APT 25%)", "44.89", "APOTEK", "62", "0"],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "IKS",
+                    "13963",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "UMUM",
+                    "21699",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "WNA",
+                    "46497",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "BPJS",
+                    "17049",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "EKSPATRIAT",
+                    "21699",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "TOURIST INSURANCE",
+                    "61996",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "13963.04",
+                    "APOTEK",
+                    "19374",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "IKS",
+                    "1776000",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "UMUM",
+                    "2759904",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "WNA",
+                    "5914080",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "BPJS",
+                    "2168496",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "EKSPATRIAT",
+                    "2759904",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "TOURIST INSURANCE",
+                    "7885440",
+                    "0"
+                ],
+                [
+                    "PENTA G3 (BPJS 10%, APT 25%)",
+                    "1776000",
+                    "APOTEK",
+                    "2464200",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "125", "IKS", "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "UMUM", "194", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "WNA", "416", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "BPJS", "139", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "EKSPATRIAT", "194", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "TOURIST INSURANCE", "555", "0"],
+                ["PENTA G4 (BPJS 0%)", "125", "APOTEK", "125", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "IKS", "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "UMUM", "44261", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "WNA", "94845", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "BPJS", "31615", "0"],
+                ["PENTA G4 (BPJS 0%)", "28482", "EKSPATRIAT", "44261", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "28482",
+                    "TOURIST INSURANCE",
+                    "126460",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "28482", "APOTEK", "28482", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "IKS", "5049000", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "UMUM", "7846146", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "WNA", "16813170", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "BPJS", "5604390", "0"],
+                ["PENTA G4 (BPJS 0%)", "5049000", "EKSPATRIAT", "7846146", "0"],
+                [
+                    "PENTA G4 (BPJS 0%)",
+                    "5049000",
+                    "TOURIST INSURANCE",
+                    "22417560",
+                    "0"
+                ],
+                ["PENTA G4 (BPJS 0%)", "5049000", "APOTEK", "5049000", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "IKS", "78", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "UMUM", "121", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "WNA", "259", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "BPJS", "95", "0"],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "EKSPATRIAT",
+                    "121",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "77.73",
+                    "TOURIST INSURANCE",
+                    "345",
+                    "0"
+                ],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "77.73", "APOTEK", "104", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "IKS", "4750", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "UMUM", "7382", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "WNA", "15818", "0"],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "BPJS", "5800", "0"],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "EKSPATRIAT",
+                    "7382",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "4750",
+                    "TOURIST INSURANCE",
+                    "21090",
+                    "0"
+                ],
+                ["PENTA G5 (BPJS 10%, APT 20%)", "4750", "APOTEK", "6327", "0"],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "IKS",
+                    "276667",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "UMUM",
+                    "429941",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "WNA",
+                    "921301",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "BPJS",
+                    "337810",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "EKSPATRIAT",
+                    "429941",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "TOURIST INSURANCE",
+                    "1228401",
+                    "0"
+                ],
+                [
+                    "PENTA G5 (BPJS 10%, APT 20%)",
+                    "276667",
+                    "APOTEK",
+                    "368520",
+                    "0"
+                ],
+                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "IKS", "20349", "0"],
+                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "UMUM", "31622", "0"],
+                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "WNA", "67762", "0"],
+                ["PENTA G6 (BPJS 0%, APT 12%)", "20349", "BPJS", "22587", "0"],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "EKSPATRIAT",
+                    "31622",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "TOURIST INSURANCE",
+                    "90350",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "20349",
+                    "APOTEK",
+                    "25298",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "IKS",
+                    "46836",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "UMUM",
+                    "72784",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "WNA",
+                    "155965",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "BPJS",
+                    "51988",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "EKSPATRIAT",
+                    "72784",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "TOURIST INSURANCE",
+                    "207953",
+                    "0"
+                ],
+                [
+                    "PENTA G6 (BPJS 0%, APT 12%)",
+                    "46836.28",
+                    "APOTEK",
+                    "58227",
+                    "0"
+                ]
+            ]
+        },
+        "seroja": {
+            "database": "Klinik Seroja (copy on the Penta dev server)",
+            "legacy_rounds_price": false,
+            "gradings": [
+                {
+                    "price_group": "IKS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "45",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "LOCAL",
+                    "grading_group": "INJEKSI",
+                    "price_from": "1",
+                    "price_to": "10000000",
+                    "markup_percent": "50",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "LOCAL",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "30",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "BPJS",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "1000000000",
+                    "markup_percent": "0",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "DOMESTIC",
+                    "grading_group": "INJEKSI",
+                    "price_from": "1",
+                    "price_to": "1000000000000",
+                    "markup_percent": "100",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "EXPART",
+                    "grading_group": "XX",
+                    "price_from": "1000",
+                    "price_to": "10000000",
+                    "markup_percent": "60",
+                    "discount_percent": "0"
+                },
+                {
+                    "price_group": "FOREIGN",
+                    "grading_group": "XX",
+                    "price_from": "1",
+                    "price_to": "100000000",
+                    "markup_percent": "80",
+                    "discount_percent": "0"
+                }
+            ],
+            "cases": [
+                ["ANTIBIOTIK ORAL", "899.1", "IKS", "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "LOCAL", "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "BPJS", "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "DOMESTIC", "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "EXPART", "899.1", "0"],
+                ["ANTIBIOTIK ORAL", "899.1", "FOREIGN", "899.1", "0"],
+                ["BHP", "50000", "IKS", "50000", "0"],
+                ["BHP", "50000", "LOCAL", "50000", "0"],
+                ["BHP", "50000", "BPJS", "50000", "0"],
+                ["BHP", "50000", "DOMESTIC", "50000", "0"],
+                ["BHP", "50000", "EXPART", "50000", "0"],
+                ["BHP", "50000", "FOREIGN", "50000", "0"],
+                ["BHP", "128847", "IKS", "128847", "0"],
+                ["BHP", "128847", "LOCAL", "128847", "0"],
+                ["BHP", "128847", "BPJS", "128847", "0"],
+                ["BHP", "128847", "DOMESTIC", "128847", "0"],
+                ["BHP", "128847", "EXPART", "128847", "0"],
+                ["BHP", "128847", "FOREIGN", "128847", "0"],
+                ["BHP", "149850", "IKS", "149850", "0"],
+                ["BHP", "149850", "LOCAL", "149850", "0"],
+                ["BHP", "149850", "BPJS", "149850", "0"],
+                ["BHP", "149850", "DOMESTIC", "149850", "0"],
+                ["BHP", "149850", "EXPART", "149850", "0"],
+                ["BHP", "149850", "FOREIGN", "149850", "0"],
+                ["INJEKSI", "2220", "IKS", "2220", "0"],
+                ["INJEKSI", "2220", "LOCAL", "3330", "0"],
+                ["INJEKSI", "2220", "BPJS", "2220", "0"],
+                ["INJEKSI", "2220", "DOMESTIC", "4440", "0"],
+                ["INJEKSI", "2220", "EXPART", "2220", "0"],
+                ["INJEKSI", "2220", "FOREIGN", "2220", "0"],
+                ["INJEKSI", "11475", "IKS", "11475", "0"],
+                ["INJEKSI", "11475", "LOCAL", "17212.5", "0"],
+                ["INJEKSI", "11475", "BPJS", "11475", "0"],
+                ["INJEKSI", "11475", "DOMESTIC", "22950", "0"],
+                ["INJEKSI", "11475", "EXPART", "11475", "0"],
+                ["INJEKSI", "11475", "FOREIGN", "11475", "0"],
+                ["INJEKSI", "532800", "IKS", "532800", "0"],
+                ["INJEKSI", "532800", "LOCAL", "799200", "0"],
+                ["INJEKSI", "532800", "BPJS", "532800", "0"],
+                ["INJEKSI", "532800", "DOMESTIC", "1065600", "0"],
+                ["INJEKSI", "532800", "EXPART", "532800", "0"],
+                ["INJEKSI", "532800", "FOREIGN", "532800", "0"],
+                ["OBAT ORAL", "87.52", "IKS", "87.52", "0"],
+                ["OBAT ORAL", "87.52", "LOCAL", "87.52", "0"],
+                ["OBAT ORAL", "87.52", "BPJS", "87.52", "0"],
+                ["OBAT ORAL", "87.52", "DOMESTIC", "87.52", "0"],
+                ["OBAT ORAL", "87.52", "EXPART", "87.52", "0"],
+                ["OBAT ORAL", "87.52", "FOREIGN", "87.52", "0"],
+                ["OBAT ORAL", "783.82", "IKS", "783.82", "0"],
+                ["OBAT ORAL", "783.82", "LOCAL", "783.82", "0"],
+                ["OBAT ORAL", "783.82", "BPJS", "783.82", "0"],
+                ["OBAT ORAL", "783.82", "DOMESTIC", "783.82", "0"],
+                ["OBAT ORAL", "783.82", "EXPART", "783.82", "0"],
+                ["OBAT ORAL", "783.82", "FOREIGN", "783.82", "0"],
+                ["OBAT ORAL", "109840.05", "IKS", "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "LOCAL", "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "BPJS", "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "DOMESTIC", "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "EXPART", "109840.05", "0"],
+                ["OBAT ORAL", "109840.05", "FOREIGN", "109840.05", "0"],
+                ["TOPIKAL", "500", "IKS", "500", "0"],
+                ["TOPIKAL", "500", "LOCAL", "500", "0"],
+                ["TOPIKAL", "500", "BPJS", "500", "0"],
+                ["TOPIKAL", "500", "DOMESTIC", "500", "0"],
+                ["TOPIKAL", "500", "EXPART", "500", "0"],
+                ["TOPIKAL", "500", "FOREIGN", "500", "0"],
+                ["TOPIKAL", "21367.5", "IKS", "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "LOCAL", "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "BPJS", "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "DOMESTIC", "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "EXPART", "21367.5", "0"],
+                ["TOPIKAL", "21367.5", "FOREIGN", "21367.5", "0"],
+                ["TOPIKAL", "33300", "IKS", "33300", "0"],
+                ["TOPIKAL", "33300", "LOCAL", "33300", "0"],
+                ["TOPIKAL", "33300", "BPJS", "33300", "0"],
+                ["TOPIKAL", "33300", "DOMESTIC", "33300", "0"],
+                ["TOPIKAL", "33300", "EXPART", "33300", "0"],
+                ["TOPIKAL", "33300", "FOREIGN", "33300", "0"],
+                ["XX", "84.38", "IKS", "122.351", "0"],
+                ["XX", "84.38", "LOCAL", "109.694", "0"],
+                ["XX", "84.38", "BPJS", "84.38", "0"],
+                ["XX", "84.38", "DOMESTIC", "84.38", "0"],
+                ["XX", "84.38", "EXPART", "84.38", "0"],
+                ["XX", "84.38", "FOREIGN", "151.884", "0"],
+                ["XX", "97.77", "IKS", "141.7665", "0"],
+                ["XX", "97.77", "LOCAL", "127.101", "0"],
+                ["XX", "97.77", "BPJS", "97.77", "0"],
+                ["XX", "97.77", "DOMESTIC", "97.77", "0"],
+                ["XX", "97.77", "EXPART", "97.77", "0"],
+                ["XX", "97.77", "FOREIGN", "175.986", "0"],
+                ["XX", "300", "IKS", "435", "0"],
+                ["XX", "300", "LOCAL", "390", "0"],
+                ["XX", "300", "BPJS", "300", "0"],
+                ["XX", "300", "DOMESTIC", "300", "0"],
+                ["XX", "300", "EXPART", "300", "0"],
+                ["XX", "300", "FOREIGN", "540", "0"],
+                ["XX", "3663", "IKS", "5311.35", "0"],
+                ["XX", "3663", "LOCAL", "4761.9", "0"],
+                ["XX", "3663", "BPJS", "3663", "0"],
+                ["XX", "3663", "DOMESTIC", "3663", "0"],
+                ["XX", "3663", "EXPART", "5860.8", "0"],
+                ["XX", "3663", "FOREIGN", "6593.4", "0"],
+                ["XX", "13500", "IKS", "19575", "0"],
+                ["XX", "13500", "LOCAL", "17550", "0"],
+                ["XX", "13500", "BPJS", "13500", "0"],
+                ["XX", "13500", "DOMESTIC", "13500", "0"],
+                ["XX", "13500", "EXPART", "21600", "0"],
+                ["XX", "13500", "FOREIGN", "24300", "0"],
+                ["XX", "38250", "IKS", "55462.5", "0"],
+                ["XX", "38250", "LOCAL", "49725", "0"],
+                ["XX", "38250", "BPJS", "38250", "0"],
+                ["XX", "38250", "DOMESTIC", "38250", "0"],
+                ["XX", "38250", "EXPART", "61200", "0"],
+                ["XX", "38250", "FOREIGN", "68850", "0"],
+                ["XX", "15066000", "IKS", "21845700", "0"],
+                ["XX", "15066000", "LOCAL", "19585800", "0"],
+                ["XX", "15066000", "BPJS", "15066000", "0"],
+                ["XX", "15066000", "DOMESTIC", "15066000", "0"],
+                ["XX", "15066000", "EXPART", "15066000", "0"],
+                ["XX", "15066000", "FOREIGN", "27118800", "0"],
+                ["XX", "11100", "IKS", "11100", "0"],
+                ["XX", "11100", "LOCAL", "11100", "0"],
+                ["XX", "11100", "BPJS", "11100", "0"],
+                ["XX", "11100", "DOMESTIC", "11100", "0"],
+                ["XX", "11100", "EXPART", "11100", "0"],
+                ["XX", "11100", "FOREIGN", "11100", "0"]
+            ]
+        }
+    },
+    "reasons": {
+        "seroja-no-rounding": "The Seroja copy of the function inserts @HargaObat without round(), so its prices keep the fraction of base x (1 + markup / 100). Kuta 1 and Penta round to whole rupiah; ours rounds to whole rupiah half away from zero, like them.",
+        "seroja-item-class": "The Seroja copy also requires SIMmGradingHargaObat.KelasBarangID = mBarang.Kelas_ID. Grading groups and item classes align one to one except this XX item of class 7, which the legacy function therefore prices at 0 %. Ours has no item class and applies the XX rows."
+    },
+    "expected_differences": [
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "IKS",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "LOCAL",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "BPJS",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "DOMESTIC",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "EXPART",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "ANTIBIOTIK ORAL",
+            "base_price": "899.1",
+            "price_group": "FOREIGN",
+            "legacy_price": "899.1",
+            "our_price": "899",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "INJEKSI",
+            "base_price": "11475",
+            "price_group": "LOCAL",
+            "legacy_price": "17212.5",
+            "our_price": "17213",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "IKS",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "LOCAL",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "BPJS",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "DOMESTIC",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "EXPART",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "87.52",
+            "price_group": "FOREIGN",
+            "legacy_price": "87.52",
+            "our_price": "88",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "IKS",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "LOCAL",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "BPJS",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "DOMESTIC",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "EXPART",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "783.82",
+            "price_group": "FOREIGN",
+            "legacy_price": "783.82",
+            "our_price": "784",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "IKS",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "LOCAL",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "BPJS",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "DOMESTIC",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "EXPART",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "OBAT ORAL",
+            "base_price": "109840.05",
+            "price_group": "FOREIGN",
+            "legacy_price": "109840.05",
+            "our_price": "109840",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "IKS",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "LOCAL",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "BPJS",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "DOMESTIC",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "EXPART",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "TOPIKAL",
+            "base_price": "21367.5",
+            "price_group": "FOREIGN",
+            "legacy_price": "21367.5",
+            "our_price": "21368",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "IKS",
+            "legacy_price": "122.351",
+            "our_price": "122",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "LOCAL",
+            "legacy_price": "109.694",
+            "our_price": "110",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "BPJS",
+            "legacy_price": "84.38",
+            "our_price": "84",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "DOMESTIC",
+            "legacy_price": "84.38",
+            "our_price": "84",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "EXPART",
+            "legacy_price": "84.38",
+            "our_price": "84",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "84.38",
+            "price_group": "FOREIGN",
+            "legacy_price": "151.884",
+            "our_price": "152",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "IKS",
+            "legacy_price": "141.7665",
+            "our_price": "142",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "LOCAL",
+            "legacy_price": "127.101",
+            "our_price": "127",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "BPJS",
+            "legacy_price": "97.77",
+            "our_price": "98",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "DOMESTIC",
+            "legacy_price": "97.77",
+            "our_price": "98",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "EXPART",
+            "legacy_price": "97.77",
+            "our_price": "98",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "97.77",
+            "price_group": "FOREIGN",
+            "legacy_price": "175.986",
+            "our_price": "176",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "3663",
+            "price_group": "IKS",
+            "legacy_price": "5311.35",
+            "our_price": "5311",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "3663",
+            "price_group": "LOCAL",
+            "legacy_price": "4761.9",
+            "our_price": "4762",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "3663",
+            "price_group": "EXPART",
+            "legacy_price": "5860.8",
+            "our_price": "5861",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "3663",
+            "price_group": "FOREIGN",
+            "legacy_price": "6593.4",
+            "our_price": "6593",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "38250",
+            "price_group": "IKS",
+            "legacy_price": "55462.5",
+            "our_price": "55463",
+            "reason": "seroja-no-rounding"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "IKS",
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "16095",
+            "reason": "seroja-item-class"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "LOCAL",
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "14430",
+            "reason": "seroja-item-class"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "EXPART",
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "17760",
+            "reason": "seroja-item-class"
+        },
+        {
+            "source": "seroja",
+            "grading_group": "XX",
+            "base_price": "11100",
+            "price_group": "FOREIGN",
+            "item_class": 7,
+            "legacy_price": "11100",
+            "our_price": "19980",
+            "reason": "seroja-item-class"
+        }
+    ],
+    "not_carried": [
+        {
+            "rule": "TipePelayanan other than STANDARD",
+            "reason": "Decision 6: no service-type dimension now. No case exercises it."
+        },
+        {
+            "rule": "Guarantor contracts: CustomerKerjasamaID, ObatUp, guarantor category CC108 \"MA\", HargaObatDigunakan",
+            "reason": "They depend on hard-coded ids in the legacy function. The oracle passed CustomerKerjasamaID 0, so no case exercises them."
+        },
+        {
+            "rule": "BPJS + Fornas items at base price",
+            "reason": "A BPJS grading row of 0 % expresses it as data. No source has a Fornas item (Penta 0 of 3.505)."
+        },
+        {
+            "rule": "Employee class KRYWN discount",
+            "reason": "Depends on a hard-coded class; not carried. No case exercises it."
+        },
+        {
+            "rule": "KTP (local or foreign identity card)",
+            "reason": "Decision 5: local and foreign are price groups. The oracle used KTP 1 and the gradings are the KTP 1 rows."
+        }
+    ],
+    "unit_conversion": {
+        "about": "Legacy never sold in a unit other than the stock unit. Ours rounds once after multiplying by the unit content (BC ConvertAmountByUnitOfMeasure), so a STRIP of 10 is not 10 x the rounded tablet price.",
+        "source": "seroja",
+        "grading_group": "XX",
+        "base_price": "84.38",
+        "price_group": "LOCAL",
+        "quantity_per_unit": "10",
+        "our_price": "1097",
+        "legacy_style_price": "1100"
+    }
+}

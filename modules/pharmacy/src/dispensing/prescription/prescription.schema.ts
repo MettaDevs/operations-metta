@@ -49,6 +49,8 @@ export const issuedPrescriptionSchema = z.object({
         }),
         doctor: z.object({ id: idSchema, name: text(200) }).nullable(),
         section: z.object({ id: idSchema, name: text(150) }),
+        // Kelompok harga pembeli untuk harga obat saat disiapkan. Pesan yang belum membawanya dihargai tanpa kelompok.
+        price_group: reference.nullable().optional(),
         lines: z
             .array(issuedLineSchema)
             .min(1)

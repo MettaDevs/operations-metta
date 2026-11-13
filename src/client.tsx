@@ -41,7 +41,9 @@ import { page as modulesPharmacySrcDashboardDashboardPage } from '../modules/pha
 import { page as modulesPharmacySrcDispensingPrescriptionPrescriptionsPage } from '../modules/pharmacy/src/dispensing/prescription/prescriptions.page.tsx';
 import { page as modulesPharmacySrcDispensingServiceLocationServiceLocationsPage } from '../modules/pharmacy/src/dispensing/service-location/service-locations.page.tsx';
 import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modules/pharmacy/src/drug/drug-class/drug-classes.page.tsx';
+import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../modules/pharmacy/src/drug/drug-price/drug-prices.page.tsx';
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
+import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
@@ -542,12 +544,32 @@ const modulesPharmacySrcDrugDrugClassDrugClassesRoute = createRoute({
     staticData: { title: modulesPharmacySrcDrugDrugClassDrugClassesPage.title },
 });
 
+const modulesPharmacySrcDrugDrugPriceDrugPricesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDrugDrugPriceDrugPricesPage.path,
+    component: modulesPharmacySrcDrugDrugPriceDrugPricesPage.component,
+    validateSearch:
+        modulesPharmacySrcDrugDrugPriceDrugPricesPage.validateSearch,
+    staticData: { title: modulesPharmacySrcDrugDrugPriceDrugPricesPage.title },
+});
+
 const modulesPharmacySrcDrugDrugDrugsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: modulesPharmacySrcDrugDrugDrugsPage.path,
     component: modulesPharmacySrcDrugDrugDrugsPage.component,
     validateSearch: modulesPharmacySrcDrugDrugDrugsPage.validateSearch,
     staticData: { title: modulesPharmacySrcDrugDrugDrugsPage.title },
+});
+
+const modulesPharmacySrcDrugGradingGroupGradingGroupsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDrugGradingGroupGradingGroupsPage.path,
+    component: modulesPharmacySrcDrugGradingGroupGradingGroupsPage.component,
+    validateSearch:
+        modulesPharmacySrcDrugGradingGroupGradingGroupsPage.validateSearch,
+    staticData: {
+        title: modulesPharmacySrcDrugGradingGroupGradingGroupsPage.title,
+    },
 });
 
 const foundationCalendarCalendarsRoute = createRoute({
@@ -938,7 +960,9 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute,
         modulesPharmacySrcDispensingServiceLocationServiceLocationsRoute,
         modulesPharmacySrcDrugDrugClassDrugClassesRoute,
+        modulesPharmacySrcDrugDrugPriceDrugPricesRoute,
         modulesPharmacySrcDrugDrugDrugsRoute,
+        modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,
