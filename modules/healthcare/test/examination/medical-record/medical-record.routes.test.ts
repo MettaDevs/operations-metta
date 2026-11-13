@@ -863,7 +863,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         const current = opened.data.allergy.items;
         const added = current.length;
         const [noneCode] = await pool.unsafe<[{ id: string }]>(
-            `select id from sim_m_alergi where tenant_id = $1 and jenis = 'makanan' and kode = '00'`,
+            `select id from sim_m_alergi where tenant_id = $1 and jenis = 'makanan' and tidak_ada`,
             [tenantId],
         );
         const refusal = await refused(
