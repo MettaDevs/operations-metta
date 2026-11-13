@@ -17,7 +17,7 @@ import { Textarea } from '@operations-metta/ui/textarea';
 import { Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ApiBody } from '@core/platform/shell/index.ts';
-import { DrugAllergyLines } from './order-panels.tsx';
+import { AllergyLines } from './allergy-panels.tsx';
 
 // Panel tab Rekam Medis poli sistem lama (rekammedis/index.php), dalam urutan dan susunan kolom aslinya: Anamnesa,
 // Riwayat penyakit dan alergi, Status fisik, Periksa fisik, Asesmen nyeri, Risiko jatuh, Pemeriksaan dasar gigi, Keadaan
@@ -48,7 +48,6 @@ type Panel = Exclude<
     | 'diagnoses'
     | 'prognosis_id'
     | 'chronic_disease_ids'
-    | 'drug_allergies'
     | 'procedures'
     | 'prescriptions'
 >;
@@ -689,7 +688,7 @@ export function MedicalRecordPanels({
                                 </FormGrid>
                             )}
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-3 md:col-span-2">
                             <div className="flex items-center justify-between gap-3">
                                 <Subheading>Alergi pasien</Subheading>
                                 <div className="flex items-center gap-2">
@@ -706,69 +705,23 @@ export function MedicalRecordPanels({
                                         htmlFor="allergy.none"
                                         className="font-normal"
                                     >
-                                        Tidak ada
+                                        Tidak ada alergi
                                     </Label>
                                 </div>
                             </div>
-                            {!allergy.none && (
-                                <FormGrid columns={1}>
-                                    <FormControl
-                                        error={error('allergy.food_allergy_id')}
-                                        data-error-field="allergy.food_allergy_id"
-                                    >
-                                        <Select
-                                            label="Alergi makanan"
-                                            items={metadata.allergies.food.map(
-                                                (row) => ({
-                                                    value: row.id,
-                                                    label: row.name,
-                                                }),
-                                            )}
-                                            value={allergy.food_allergy_id}
-                                            onValueChange={(value) =>
-                                                patch('allergy', {
-                                                    food_allergy_id: value,
-                                                })
-                                            }
-                                        />
-                                    </FormControl>
-                                    <FormControl
-                                        error={error(
-                                            'allergy.airborne_allergy_id',
-                                        )}
-                                        data-error-field="allergy.airborne_allergy_id"
-                                    >
-                                        <Select
-                                            label="Alergi udara"
-                                            items={metadata.allergies.airborne.map(
-                                                (row) => ({
-                                                    value: row.id,
-                                                    label: row.name,
-                                                }),
-                                            )}
-                                            value={allergy.airborne_allergy_id}
-                                            onValueChange={(value) =>
-                                                patch('allergy', {
-                                                    airborne_allergy_id: value,
-                                                })
-                                            }
-                                        />
-                                    </FormControl>
-                                    <LineField
-                                        id="allergy.other"
-                                        label="Alergi lainnya"
-                                        value={allergy.other}
-                                        error={error('allergy.other')}
-                                        onChange={(value) =>
-                                            patch('allergy', { other: value })
-                                        }
-                                    />
-                                </FormGrid>
+                            {error('allergy.none') && (
+                                <p
+                                    role="alert"
+                                    data-error-field="allergy.none"
+                                    className="text-sm text-destructive"
+                                >
+                                    {error('allergy.none')}
+                                </p>
                             )}
-                            <Subheading>Alergi obat pasien</Subheading>
-                            <DrugAllergyLines
-                                rows={draft.drug_allergies ?? []}
+                            <AllergyLines
+                                rows={allergy.items}
                                 setDraft={setDraft}
+                                metadata={metadata}
                                 canCreate={metadata.permissions.create_drug}
                                 errors={errors}
                                 disabled={disabled}

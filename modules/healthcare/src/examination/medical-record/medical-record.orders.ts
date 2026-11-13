@@ -38,13 +38,12 @@ import {
     type LineUnit,
 } from './prescription.units.ts';
 
-// Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama, beserta alergi obat pasien yang diperiksa resep.
-// Ditulis di dalam Simpan rekam medis yang sama; Kirim ke farmasi menutup draf resep.
+// Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama. Ditulis di dalam Simpan rekam medis yang sama;
+// Kirim ke farmasi menutup draf resep.
 
 type Errors = Record<string, string[]>;
 type Procedure = NonNullable<MedicalRecord['procedures']>[number];
 type Prescription = NonNullable<MedicalRecord['prescriptions']>[number];
-type DrugAllergy = NonNullable<MedicalRecord['drug_allergies']>[number];
 
 export const prescriptionNumberReference = `${moduleId}.prescription-number`;
 
@@ -64,7 +63,7 @@ function numeric(raw: unknown): number | null | undefined {
     return Number.isFinite(value) ? value : undefined;
 }
 
-function text(
+export function text(
     raw: unknown,
     max: number,
     field: string,
@@ -307,82 +306,6 @@ export class ExaminationOrders {
 
     private async retire(table: string, id: string, stamp: string) {
         await this.update(table, id, { deleted_at: stamp, updated_at: stamp });
-    }
-
-    // Alergi obat ------------------------------------------------------------------------------------------------
-
-    async drugAllergies(patientId: string): Promise<DrugAllergy[]> {
-        return this.db.rows(
-            z.object({
-                drug_id: z.string(),
-                drug_code: z.string().nullable(),
-                drug_name: z.string(),
-            }),
-            `select a.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name
-             from sim_m_pasien_alergi_obat a
-             join gd_m_barang b on b.tenant_id = a.tenant_id and b.id = a.obat_id
-             where a.tenant_id = $1 and a.pasien_id = $2 and a.deleted_at is null
-             order by b.nama, b.id`,
-            [this.tenantId, patientId],
-        );
-    }
-
-    // Obat yang dikirim di daftar alergi obat. Alergi milik pasien, dan pasien bisa dibagi antar legal entity, jadi obat
-    // legal entity mana pun di tenant ini diterima, termasuk yang tidak boleh diresepkan; yang ganda dihitung sekali.
-    async readDrugAllergies(
-        raw: unknown[] | undefined,
-        errors: Errors,
-    ): Promise<string[]> {
-        const ids = new Set<string>();
-        for (const [index, item] of (raw ?? []).entries()) {
-            const value = isRecord(item) ? item.drug_id : undefined;
-            const id = typeof value === 'string' ? lookupId(value) : null;
-            const found = id
-                ? await this.db.one(
-                      z.object({ id: z.string() }),
-                      `select o.id from sim_m_obat o
-                       join gd_m_barang b on b.tenant_id = o.tenant_id and b.id = o.id and b.deleted_at is null
-                       where o.tenant_id = $1 and o.id = $2 and o.deleted_at is null`,
-                      [this.tenantId, id],
-                  )
-                : undefined;
-            if (!found)
-                add(
-                    errors,
-                    `drug_allergies.${index}.drug_id`,
-                    'Pilih obat dari daftar.',
-                );
-            else ids.add(found.id);
-        }
-        return [...ids];
-    }
-
-    async writeDrugAllergies(
-        patientId: string,
-        recordId: string,
-        ids: string[],
-        stamp: string,
-    ): Promise<void> {
-        const existing = await this.db.rows(
-            z.object({ id: z.string(), drug_id: z.string() }),
-            `select id, obat_id as drug_id from sim_m_pasien_alergi_obat
-             where tenant_id = $1 and pasien_id = $2 and deleted_at is null`,
-            [this.tenantId, patientId],
-        );
-        for (const row of existing)
-            if (!ids.includes(row.drug_id))
-                await this.retire('sim_m_pasien_alergi_obat', row.id, stamp);
-        for (const id of ids)
-            if (!existing.some((row) => row.drug_id === id))
-                await this.db.insert('sim_m_pasien_alergi_obat', {
-                    id: Bun.randomUUIDv7(),
-                    tenant_id: this.tenantId,
-                    pasien_id: patientId,
-                    obat_id: id,
-                    pemeriksaan_id: recordId,
-                    created_at: stamp,
-                    updated_at: stamp,
-                });
     }
 
     // Biaya Tindakan ---------------------------------------------------------------------------------------------

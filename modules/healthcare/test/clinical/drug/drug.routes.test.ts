@@ -355,8 +355,8 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
         ).toEqual(usedMessage);
         const allergen = await create(admin, { name: 'Alergen' });
         await insertUnchecked(
-            `insert into sim_m_pasien_alergi_obat (id, tenant_id, pasien_id, obat_id)
-             values ($1, $2, $3, $4)`,
+            `insert into sim_m_pasien_alergi (id, tenant_id, pasien_id, kategori, obat_id, dicatat_pada)
+             values ($1, $2, $3, 'obat', $4, now())`,
             [
                 Bun.randomUUIDv7(),
                 business.tenantId,

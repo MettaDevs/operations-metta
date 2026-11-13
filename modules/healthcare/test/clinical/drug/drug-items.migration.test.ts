@@ -151,17 +151,25 @@ describe.skipIf(!process.env.DB_HOST)('drug items migration', () => {
                      values ($1, $2, $3, 1, $4, 10)`,
                     [id(), clinic, id(), drug.clashing],
                 );
+                // Pasiennya ada, karena pindahan alergi pasien sesudahnya menyalin baris ini lewat foreign key yang aktif.
+                const clinicPatient = id();
+                const emptyPatient = id();
+                await tx.unsafe(
+                    `insert into sim_m_pasien (id, tenant_id, party_id, legal_entity_id, org_unit_id, nrm, creation_key)
+                     values ($1, $3, $1, $1, $1, 'NRM-1', 'pasien-1'), ($2, $4, $2, $2, $2, 'NRM-2', 'pasien-2')`,
+                    [clinicPatient, emptyPatient, clinic, empty],
+                );
                 await tx.unsafe(
                     `insert into sim_m_pasien_alergi_obat (id, tenant_id, pasien_id, obat_id)
                      values ($1, $2, $3, $4), ($5, $6, $7, $8)`,
                     [
                         id(),
                         clinic,
-                        id(),
+                        clinicPatient,
                         drug.coded,
                         id(),
                         empty,
-                        id(),
+                        emptyPatient,
                         drug.lonely,
                     ],
                 );
@@ -292,8 +300,8 @@ describe.skipIf(!process.env.DB_HOST)('drug items migration', () => {
                     `select b.nama from sim_tr_resep_detail d join sim_m_obat o on o.id = d.obat_id
                      join gd_m_barang b on b.id = o.id where d.tenant_id = $1
                      union all
-                     select b.nama from sim_m_pasien_alergi_obat a join sim_m_obat o on o.id = a.obat_id
-                     join gd_m_barang b on b.id = o.id where a.tenant_id = $1`,
+                     select b.nama from sim_m_pasien_alergi a join sim_m_obat o on o.id = a.obat_id
+                     join gd_m_barang b on b.id = o.id where a.tenant_id = $1 and a.kategori = 'obat'`,
                     [clinic],
                 )),
             ]).toEqual([{ nama: 'Parasetamol' }, { nama: 'Amoksisilin' }]);

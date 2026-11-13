@@ -314,7 +314,6 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             'anamnesis',
             'history',
             'allergy',
-            'drug_allergies',
             'status',
             'physical',
             'pain',

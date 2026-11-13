@@ -94,7 +94,10 @@ export const panels = {
             present: text('riwayat_sekarang'),
             past: text('riwayat_dahulu'),
             family: text('riwayat_keluarga'),
-        } satisfies Fields<typeof historySchema>,
+            // Tidak ada alergi pada pemeriksaan ini (AlergiPasienTidakAda sistem lama). Layar membaca dan mengirimnya
+            // sebagai allergy.none, bersama daftar alergi pasien.
+            allergy_none: { kind: 'check', column: 'alergi_tidak_ada' },
+        } satisfies Fields<typeof historySchema> & { allergy_none: FieldSpec },
     },
     status: {
         table: 'sim_tr_pemeriksaan_status_fisik',

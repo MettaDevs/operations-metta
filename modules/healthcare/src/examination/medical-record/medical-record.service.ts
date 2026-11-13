@@ -30,6 +30,10 @@ import {
     type PanelName,
 } from './medical-record.fields.ts';
 import { publishExaminationCharges } from './charges.events.ts';
+import {
+    activeDrugIdsOf,
+    PatientAllergies,
+} from './medical-record.allergies.ts';
 import { ExaminationOrders, practitionerId } from './medical-record.orders.ts';
 import {
     examinationPanels,
@@ -37,7 +41,6 @@ import {
     type ExaminationPanel,
 } from './medical-record.panels.ts';
 import {
-    allergySchema,
     anamnesisSchema,
     dentalSchema,
     fallRiskSchema,
@@ -287,14 +290,6 @@ const historyRowSchema = z.object({
 const diagnosisIncompleteMessage =
     'Field Kasus dan Jenis pada diagnosa harus di isi';
 
-const allergyRowSchema = z.object({
-    id: z.string(),
-    none: z.boolean(),
-    food_allergy_id: z.string().nullable(),
-    airborne_allergy_id: z.string().nullable(),
-    other: z.string().nullable(),
-});
-
 const anamnesisFields = {
     chief_complaint: {
         kind: 'text',
@@ -411,6 +406,7 @@ export async function missingRequired(
 // kunjungannya, hanya Simpan yang mengubah biaya yang ditolak, lewat lockChargeForChange; isi klinis tetap bisa diubah.
 export class MedicalRecords {
     private readonly orders: ExaminationOrders;
+    private readonly allergies: PatientAllergies;
     private readonly discharges: Discharges;
 
     constructor(
@@ -418,6 +414,7 @@ export class MedicalRecords {
         private readonly workspace: Workspace,
     ) {
         this.orders = new ExaminationOrders(db, workspace);
+        this.allergies = new PatientAllergies(db, workspace);
         this.discharges = new Discharges(db, workspace);
     }
 
@@ -434,17 +431,6 @@ export class MedicalRecords {
             }),
             `select kelompok as group, kode as code, nama as name, warna as color from sim_m_pemeriksaan_pilihan
              where tenant_id = $1 and deleted_at is null order by kelompok, urutan, kode`,
-            [tenantId],
-        );
-        const allergies = await this.db.rows(
-            z.object({
-                id: z.string(),
-                kind: z.string(),
-                code: z.string(),
-                name: z.string(),
-            }),
-            `select id, jenis as kind, kode as code, nama as name from sim_m_alergi
-             where tenant_id = $1 and deleted_at is null order by jenis, urutan, kode`,
             [tenantId],
         );
         const findings = await this.db.rows(
@@ -526,10 +512,7 @@ export class MedicalRecords {
                         })),
                 ]),
             ),
-            allergies: {
-                food: allergies.filter((row) => row.kind === 'makanan'),
-                airborne: allergies.filter((row) => row.kind === 'udara'),
-            },
+            allergies: await this.allergies.allergens(),
             findings,
             required: required.flatMap(({ field }) =>
                 isRequirableField(field)
@@ -699,8 +682,21 @@ export class MedicalRecords {
                     ),
                 ]),
             );
-            const allergy = uses('history')
-                ? await this.readAllergy(input.allergy, errors)
+            if (values.history)
+                values.history.allergy_none = readField(
+                    panels.history.fields.allergy_none,
+                    input.allergy?.none,
+                    'allergy.none',
+                    errors,
+                    options,
+                );
+            const allergies = uses('history')
+                ? await this.allergies.read(
+                      input.allergy,
+                      destination.patient_id,
+                      values.history?.allergy_none === true,
+                      errors,
+                  )
                 : null;
             const findings = uses('findings')
                 ? await this.readFindings(input.findings, errors)
@@ -732,12 +728,6 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
-            const drugAllergies = uses('history')
-                ? await this.orders.readDrugAllergies(
-                      input.drug_allergies,
-                      errors,
-                  )
-                : null;
             const procedures = uses('procedures')
                 ? await this.orders.readProcedures(
                       input.procedures,
@@ -745,20 +735,17 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
-            // Obat yang dicatat alergi pada Simpan yang sama ikut ditolak di resep.
+            // Obat yang dicatat alergi aktif pada Simpan yang sama ikut ditolak di resep.
             const prescriptions = uses('prescriptions')
                 ? await this.orders.readPrescriptions(
                       input.prescriptions,
                       header?.id ?? null,
                       destination.legal_entity_id,
-                      new Set(
-                          drugAllergies ??
-                              (
-                                  await this.orders.drugAllergies(
-                                      destination.patient_id,
-                                  )
-                              ).map((row) => row.drug_id),
-                      ),
+                      allergies
+                          ? activeDrugIdsOf(allergies)
+                          : await this.allergies.activeDrugIds(
+                                destination.patient_id,
+                            ),
                       errors,
                   )
                 : null;
@@ -829,11 +816,11 @@ export class MedicalRecords {
                     values[name] ?? {},
                     stamp,
                 );
-            if (allergy)
-                await this.writeAllergy(
+            if (allergies)
+                await this.allergies.write(
                     destination.patient_id,
                     recordId,
-                    allergy,
+                    allergies,
                     stamp,
                 );
             if (findings) await this.writeFindings(recordId, findings, stamp);
@@ -844,13 +831,6 @@ export class MedicalRecords {
                 await this.writeChronicDiseases(
                     recordId,
                     chronicDiseaseIds,
-                    stamp,
-                );
-            if (drugAllergies)
-                await this.orders.writeDrugAllergies(
-                    destination.patient_id,
-                    recordId,
-                    drugAllergies,
                     stamp,
                 );
             if (procedures) {
@@ -946,11 +926,7 @@ export class MedicalRecords {
                 input.prescriptions,
                 header?.id ?? null,
                 destination.legal_entity_id,
-                new Set(
-                    (
-                        await this.orders.drugAllergies(destination.patient_id)
-                    ).map((row) => row.drug_id),
-                ),
+                await this.allergies.activeDrugIds(destination.patient_id),
                 errors,
             );
             if (Object.keys(errors).length) validation(errors);
@@ -1059,17 +1035,6 @@ export class MedicalRecords {
         );
     }
 
-    private async allergyRow(patientId: string) {
-        return this.db.one(
-            allergyRowSchema,
-            `select id, tidak_ada as none, alergi_makanan_id as food_allergy_id,
-                    alergi_udara_id as airborne_allergy_id, alergi_lainnya as other
-             from sim_m_pasien_alergi
-             where tenant_id = $1 and pasien_id = $2 and deleted_at is null`,
-            [this.workspace.tenantId, patientId],
-        );
-    }
-
     // Isi rekam medis dengan panel yang dipakai section tujuan saja, dalam bentuk yang dikirim kembali saat Simpan.
     private async present(destination: Destination) {
         const tenantId = this.workspace.tenantId;
@@ -1138,10 +1103,10 @@ export class MedicalRecords {
             });
         if (uses('history')) {
             data.history = panelSchemas.history.parse(panelValues.history);
-            data.allergy = await this.presentAllergy(destination.patient_id);
-            data.drug_allergies = await this.orders.drugAllergies(
-                destination.patient_id,
-            );
+            data.allergy = {
+                none: panelValues.history?.allergy_none === true,
+                items: await this.allergies.list(destination.patient_id),
+            };
         }
         if (uses('status'))
             data.status = panelSchemas.status.parse(panelValues.status);
@@ -1253,30 +1218,6 @@ export class MedicalRecords {
         };
     }
 
-    // Alergi pasien, atau nilai awal form sistem lama bila pasien belum punya catatan alergi: pilihan pertama alergi
-    // makanan dan udara.
-    private async presentAllergy(
-        patientId: string,
-    ): Promise<z.infer<typeof allergySchema>> {
-        const allergy = await this.allergyRow(patientId);
-        if (allergy) return allergySchema.parse(allergy);
-        const first = await this.db.rows(
-            z.object({ kind: z.string(), id: z.string() }),
-            `select distinct on (jenis) jenis as kind, id from sim_m_alergi
-             where tenant_id = $1 and deleted_at is null and jenis in ('makanan', 'udara')
-             order by jenis, urutan, kode`,
-            [this.workspace.tenantId],
-        );
-        return {
-            none: false,
-            food_allergy_id:
-                first.find((row) => row.kind === 'makanan')?.id ?? null,
-            airborne_allergy_id:
-                first.find((row) => row.kind === 'udara')?.id ?? null,
-            other: null,
-        };
-    }
-
     private async optionSets() {
         const rows = await this.db.rows(
             z.object({ group: z.string(), code: z.string() }),
@@ -1313,57 +1254,6 @@ export class MedicalRecords {
             field,
             errors,
         );
-    }
-
-    private async allergyId(
-        raw: unknown,
-        kind: 'makanan' | 'udara',
-        field: string,
-        errors: Errors,
-    ): Promise<string | null> {
-        if (raw === null || raw === undefined || raw === '') return null;
-        const id = typeof raw === 'string' ? lookupId(raw) : null;
-        const found = id
-            ? await this.db.one(
-                  z.object({ id: z.string() }),
-                  'select id from sim_m_alergi where tenant_id = $1 and id = $2 and jenis = $3 and deleted_at is null',
-                  [this.workspace.tenantId, id, kind],
-              )
-            : undefined;
-        if (!found) add(errors, field, 'Pilih dari daftar.');
-        return found?.id ?? null;
-    }
-
-    private async readAllergy(
-        raw: Record<string, unknown> | undefined,
-        errors: Errors,
-    ) {
-        const rest = readPanel(
-            {
-                none: { kind: 'check', column: 'tidak_ada' },
-                other: { kind: 'text', column: 'alergi_lainnya', max: 500 },
-            },
-            raw,
-            'allergy',
-            errors,
-            new Map(),
-        );
-        return {
-            tidak_ada: rest.none ?? false,
-            alergi_makanan_id: await this.allergyId(
-                raw?.food_allergy_id,
-                'makanan',
-                'allergy.food_allergy_id',
-                errors,
-            ),
-            alergi_udara_id: await this.allergyId(
-                raw?.airborne_allergy_id,
-                'udara',
-                'allergy.airborne_allergy_id',
-                errors,
-            ),
-            alergi_lainnya: rest.other ?? null,
-        };
     }
 
     // Aspek keadaan fisik yang diperiksa. Aspek yang tidak dikenal ditolak; aspek ganda dihitung sekali.
@@ -1712,47 +1602,6 @@ export class MedicalRecords {
                 ...Object.values(columns),
             ],
         );
-    }
-
-    // Alergi pasien: satu baris per pasien, diubah di tempat.
-    private async writeAllergy(
-        patientId: string,
-        recordId: string,
-        values: {
-            tidak_ada: Bind;
-            alergi_makanan_id: string | null;
-            alergi_udara_id: string | null;
-            alergi_lainnya: Bind;
-        },
-        stamp: string,
-    ): Promise<void> {
-        const existing = await this.allergyRow(patientId);
-        const empty =
-            values.tidak_ada !== true &&
-            values.alergi_makanan_id === null &&
-            values.alergi_udara_id === null &&
-            values.alergi_lainnya === null;
-        if (empty) {
-            if (existing)
-                await this.retire('sim_m_pasien_alergi', existing.id, stamp);
-            return;
-        }
-        if (existing)
-            await this.update('sim_m_pasien_alergi', existing.id, {
-                ...values,
-                pemeriksaan_id: recordId,
-                updated_at: stamp,
-            });
-        else
-            await this.db.insert('sim_m_pasien_alergi', {
-                id: Bun.randomUUIDv7(),
-                tenant_id: this.workspace.tenantId,
-                pasien_id: patientId,
-                ...values,
-                pemeriksaan_id: recordId,
-                created_at: stamp,
-                updated_at: stamp,
-            });
     }
 
     private async writeFindings(

@@ -12,17 +12,26 @@ import {
 } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Physical = Record<string, number | string | null>;
+type Allergy = {
+    id: string | null;
+    category: string | null;
+    allergen_id: string | null;
+    allergen_name: string | null;
+    drug_id: string | null;
+    drug_code: string | null;
+    drug_name: string | null;
+    name: string | null;
+    reaction: string | null;
+    status: string;
+    recorded_at: string | null;
+    recorded_by: string | null;
+};
 type Record_ = {
     id: string | null;
     version: number | null;
     anamnesis: Record<string, string | number | null>;
     history: Record<string, string | boolean | null>;
-    allergy: {
-        none: boolean;
-        food_allergy_id: string | null;
-        airborne_allergy_id: string | null;
-        other: string | null;
-    };
+    allergy: { none: boolean; items: Allergy[] };
     status: Record<string, string | boolean | null>;
     physical: Physical;
     pain: Record<string, string | number | boolean | null>;
@@ -51,6 +60,7 @@ type Metadata = {
     allergies: {
         food: { id: string; code: string; name: string }[];
         airborne: { id: string; code: string; name: string }[];
+        drug_classes: { id: string; code: string; name: string }[];
     };
     findings: {
         id: string;
@@ -101,6 +111,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
 
     let tenantId: string;
     let admin: Browser;
+    let adminName: string;
     let unit: string;
     let umum: string;
     let patientId: string;
@@ -202,6 +213,10 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         );
         admin = browser();
         await admin.login(owner.email, owner.password);
+        [{ name: adminName }] = await pool.unsafe<[{ name: string }]>(
+            'select name from users where id = $1',
+            [owner.userId],
+        );
         await created('/api/v1/organizations', {
             classification: 'legal_entity',
             name: 'PT Klinik Uji Rekam Medis',
@@ -277,17 +292,26 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
     }, 120_000);
 
     test('reference lists are seeded for the tenant from the old system', () => {
+        // Kode 00 "Tidak Ada" bukan alergen, jadi tidak ditawarkan.
         expect(
             metadata.allergies.food.map((row) => [row.code, row.name]),
         ).toEqual([
-            ['00', 'Tidak Ada'],
             ['01', 'Seafood'],
             ['02', 'Gandum'],
             ['03', 'Susu Sapi'],
             ['04', 'Kacang-Kacangan'],
             ['05', 'Makanan Lain'],
         ]);
-        expect(metadata.allergies.airborne).toHaveLength(4);
+        expect(metadata.allergies.airborne).toHaveLength(3);
+        expect(metadata.allergies.drug_classes.map((row) => row.name)).toEqual([
+            'Antibiotik',
+            'Antiinflamasi',
+            'Non Steroid',
+            'Aspirin',
+            'Kortikosteroid',
+            'Insulin',
+            'Obat-Obatan Lain',
+        ]);
         expect(metadata.options.kesadaran?.map((row) => row.code)).toEqual([
             'COMPOS MENTIS',
             'SOMNOLEN',
@@ -333,9 +357,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         ]).toEqual([161, 50, 'Berdiri']);
         expect(opened.data.status.emotional_expression).toBe('Tenang');
         expect(opened.data.status.uses_mobility_aid).toBe(false);
-        expect(opened.data.allergy.food_allergy_id).toBe(
-            metadata.allergies.food[0]!.id,
-        );
+        expect(opened.data.allergy).toEqual({ none: false, items: [] });
     });
 
     test('Simpan is refused with the old messages until the required physical fields are filled', async () => {
@@ -409,12 +431,6 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
                 present: 'Demam',
                 past: 'Tifus',
                 family: null,
-            },
-            allergy: {
-                none: false,
-                food_allergy_id: metadata.allergies.food[1]!.id,
-                airborne_allergy_id: metadata.allergies.airborne[2]!.id,
-                other: 'Debu',
             },
             status: {
                 ...opened.data.status,
@@ -655,36 +671,257 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         }
     });
 
-    test('allergies belong to the patient and carry over to the next visit', async () => {
+    const allergy = (values: Partial<Allergy>): Allergy => ({
+        id: null,
+        category: null,
+        allergen_id: null,
+        allergen_name: null,
+        drug_id: null,
+        drug_code: null,
+        drug_name: null,
+        name: null,
+        reaction: null,
+        status: 'aktif',
+        recorded_at: null,
+        recorded_by: null,
+        ...values,
+    });
+
+    async function storedAllergies() {
+        return pool.unsafe<
+            {
+                id: string;
+                alergi_id: string | null;
+                nama: string | null;
+                reaksi: string | null;
+                status: string;
+                pemeriksaan_id: string | null;
+                dicatat_pada: Date;
+                dicatat_oleh: string | null;
+                deleted_at: Date | null;
+            }[]
+        >(
+            `select id, alergi_id, nama, reaksi, status, pemeriksaan_id, dicatat_pada, dicatat_oleh, deleted_at
+             from sim_m_pasien_alergi where pasien_id = $1 order by dicatat_pada, id`,
+            [patientId],
+        );
+    }
+
+    test('allergies are a list per patient that carries over, and a later Simpan never overwrites what was recorded', async () => {
+        const [seafood, peanuts] = [
+            metadata.allergies.food[0]!,
+            metadata.allergies.food[3]!,
+        ];
+        const antibiotics = metadata.allergies.drug_classes[0]!;
         const first = await visit();
         await start(first);
         const opened = await show(admin, first);
-        await json(
+        const saved = await json<Shown>(
             await save(admin, first, {
                 ...opened.data,
                 physical: { ...opened.data.physical, ...vitals },
                 allergy: {
                     none: false,
-                    food_allergy_id: metadata.allergies.food[4]!.id,
-                    airborne_allergy_id: metadata.allergies.airborne[1]!.id,
-                    other: 'Lateks',
+                    items: [
+                        allergy({
+                            category: 'makanan',
+                            allergen_id: seafood.id,
+                            reaction: 'Gatal',
+                        }),
+                        allergy({
+                            category: 'makanan',
+                            allergen_id: peanuts.id,
+                        }),
+                        allergy({
+                            category: 'obat',
+                            allergen_id: antibiotics.id,
+                            status: 'sembuh',
+                        }),
+                        allergy({ category: 'lainnya', name: 'Lateks' }),
+                    ],
                 },
             }),
             200,
         );
-        const next = await visit();
-        const later = await show(admin, next);
-        expect(later.data.allergy).toEqual({
-            none: false,
-            food_allergy_id: metadata.allergies.food[4]!.id,
-            airborne_allergy_id: metadata.allergies.airborne[1]!.id,
-            other: 'Lateks',
-        });
-        const stored = await pool.unsafe<{ count: number }[]>(
-            'select count(*)::int as count from sim_m_pasien_alergi where pasien_id = $1 and deleted_at is null',
-            [patientId],
+        expect(
+            saved.data.allergy.items.map((row) => [
+                row.category,
+                row.allergen_name ?? row.name,
+                row.reaction,
+                row.status,
+                row.recorded_by,
+            ]),
+        ).toEqual([
+            ['makanan', 'Seafood', 'Gatal', 'aktif', adminName],
+            ['makanan', 'Kacang-Kacangan', null, 'aktif', adminName],
+            ['obat', 'Antibiotik', null, 'sembuh', adminName],
+            ['lainnya', 'Lateks', null, 'aktif', adminName],
+        ]);
+        const recorded = await storedAllergies();
+        expect(
+            recorded.map((row) => row.pemeriksaan_id === saved.data.id),
+        ).toEqual([true, true, true, true]);
+
+        const second = await visit();
+        await start(second);
+        const carried = await show(admin, second);
+        expect(carried.data.allergy).toEqual(saved.data.allergy);
+
+        // Reaksi dan status diubah di tempat; alergen kiriman baris tersimpan diabaikan. Lateks dibuang, udara ditambah.
+        const [seafoodRow, peanutsRow, antibioticsRow] =
+            carried.data.allergy.items;
+        const changed = await json<Shown>(
+            await save(admin, second, {
+                ...carried.data,
+                physical: { ...carried.data.physical, ...vitals },
+                allergy: {
+                    none: false,
+                    items: [
+                        {
+                            ...seafoodRow!,
+                            allergen_id: metadata.allergies.food[1]!.id,
+                            reaction: 'Gatal dan bengkak',
+                        },
+                        { ...peanutsRow!, status: 'tidak_aktif' },
+                        antibioticsRow!,
+                        allergy({
+                            category: 'udara',
+                            allergen_id: metadata.allergies.airborne[0]!.id,
+                        }),
+                    ],
+                },
+            }),
+            200,
         );
-        expect(stored[0]?.count).toBe(1);
+        expect(
+            changed.data.allergy.items.map((row) => [
+                row.id,
+                row.allergen_name ?? row.name,
+                row.reaction,
+                row.status,
+            ]),
+        ).toEqual([
+            [seafoodRow!.id, 'Seafood', 'Gatal dan bengkak', 'aktif'],
+            [peanutsRow!.id, 'Kacang-Kacangan', null, 'tidak_aktif'],
+            [antibioticsRow!.id, 'Antibiotik', null, 'sembuh'],
+            [changed.data.allergy.items[3]!.id, 'Udara Panas', null, 'aktif'],
+        ]);
+        const after = await storedAllergies();
+        expect(after).toHaveLength(5);
+        for (const before of recorded) {
+            const row = after.find((item) => item.id === before.id)!;
+            expect([
+                row.alergi_id,
+                row.nama,
+                row.pemeriksaan_id,
+                row.dicatat_pada,
+                row.dicatat_oleh,
+            ]).toEqual([
+                before.alergi_id,
+                before.nama,
+                before.pemeriksaan_id,
+                before.dicatat_pada,
+                before.dicatat_oleh,
+            ]);
+        }
+        expect(
+            after.map((row) => [
+                row.nama ?? row.reaksi ?? row.status,
+                row.deleted_at !== null,
+                row.pemeriksaan_id === changed.data.id,
+            ]),
+        ).toEqual([
+            ['Gatal dan bengkak', false, false],
+            ['tidak_aktif', false, false],
+            ['sembuh', false, false],
+            ['Lateks', true, false],
+            ['aktif', false, true],
+        ]);
+    });
+
+    test('Tidak ada alergi belongs to the examination and is refused while the patient has an active allergy', async () => {
+        const id = await visit();
+        await start(id);
+        const opened = await show(admin, id);
+        const base = {
+            ...opened.data,
+            physical: { ...opened.data.physical, ...vitals },
+        };
+        const current = opened.data.allergy.items;
+        const added = current.length;
+        const [noneCode] = await pool.unsafe<[{ id: string }]>(
+            `select id from sim_m_alergi where tenant_id = $1 and jenis = 'makanan' and kode = '00'`,
+            [tenantId],
+        );
+        const refusal = await refused(
+            await save(admin, id, {
+                ...base,
+                allergy: {
+                    none: true,
+                    items: [
+                        ...current.map((row) => ({
+                            ...row,
+                            status: 'tidak_aktif',
+                        })),
+                        allergy({ category: 'lainnya', name: 'Debu rumah' }),
+                        allergy({
+                            category: 'makanan',
+                            allergen_id: metadata.allergies.food[1]!.id,
+                        }),
+                        allergy({
+                            category: 'makanan',
+                            allergen_id: metadata.allergies.food[1]!.id,
+                        }),
+                        allergy({
+                            category: 'makanan',
+                            allergen_id: noneCode.id,
+                        }),
+                        allergy({ category: 'lainnya', status: 'kambuh' }),
+                    ],
+                },
+            }),
+        );
+        expect(refusal.errors).toEqual({
+            'allergy.none': [
+                'Tidak ada alergi tidak bisa dipilih selama pasien punya alergi aktif.',
+            ],
+            [`allergy.items.${added + 2}.allergen_id`]: [
+                'Gandum sudah ada di daftar alergi.',
+            ],
+            [`allergy.items.${added + 3}.allergen_id`]: ['Pilih dari daftar.'],
+            [`allergy.items.${added + 4}.status`]: ['Pilih status alergi.'],
+            [`allergy.items.${added + 4}.name`]: ['Isi nama alergi.'],
+        });
+
+        const quiet = await json<Shown>(
+            await save(admin, id, {
+                ...base,
+                allergy: {
+                    none: true,
+                    items: current.map((row) => ({
+                        ...row,
+                        status:
+                            row.status === 'aktif' ? 'tidak_aktif' : row.status,
+                    })),
+                },
+            }),
+            200,
+        );
+        expect(quiet.data.allergy.none).toBe(true);
+        expect(
+            quiet.data.allergy.items.filter((row) => row.status === 'aktif'),
+        ).toEqual([]);
+        const statement = await pool.unsafe<{ alergi_tidak_ada: boolean }[]>(
+            `select alergi_tidak_ada from sim_tr_pemeriksaan_riwayat_penyakit
+             where pemeriksaan_id = $1 and deleted_at is null`,
+            [quiet.data.id],
+        );
+        expect([...statement]).toEqual([{ alergi_tidak_ada: true }]);
+        const next = await visit();
+        expect((await show(admin, next)).data.allergy).toEqual({
+            none: false,
+            items: quiet.data.allergy.items,
+        });
     });
 
     test('changing the required-field setting changes what Simpan and Selesai periksa demand', async () => {

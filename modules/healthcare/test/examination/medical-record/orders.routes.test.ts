@@ -75,11 +75,15 @@ type Record_ = {
     physical: Record<string, number | string | null>;
     procedures?: ProcedureLine[];
     prescriptions?: Prescription[];
-    drug_allergies?: {
-        drug_id: string;
-        drug_code?: string | null;
-        drug_name?: string;
-    }[];
+    allergy?: { none: boolean; items: Allergy[] };
+} & Record<string, unknown>;
+type Allergy = {
+    id: string | null;
+    category: string | null;
+    drug_id: string | null;
+    drug_code?: string | null;
+    drug_name?: string | null;
+    status: string;
 } & Record<string, unknown>;
 type Shown = { data: Record_; context: { editable: boolean } };
 type Reference = { id: string; code: string; name: string; active: boolean };
@@ -487,7 +491,7 @@ describe.skipIf(!process.env.DB_HOST)(
             const shown = await show(admin, id);
             expect(shown.data.procedures).toEqual([]);
             expect(shown.data.prescriptions).toEqual([]);
-            expect(shown.data.drug_allergies).toEqual([]);
+            expect(shown.data.allergy).toEqual({ none: false, items: [] });
             expect(metadata.permissions).toMatchObject({
                 create_procedure: true,
                 create_drug: true,
@@ -1318,14 +1322,28 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         });
 
-        test('a drug allergy belongs to the patient and blocks that drug with the old message, also in the same Simpan', async () => {
+        test('an active drug allergy belongs to the patient and blocks that drug with the old message, also in the same Simpan; an inactive one does not', async () => {
             const id = await started();
             const ibuprofen = await drug('Ibuprofen 400 mg');
             const aspirin = await drug('Asam Asetilsalisilat 80 mg');
+            const listed = async (at: string) =>
+                (await show(admin, at)).data.allergy?.items ?? [];
+            const allergic = (drugId: string) => ({
+                id: null,
+                category: 'obat',
+                drug_id: drugId,
+                status: 'aktif',
+            });
+            const withAllergies = async (at: string, items: Allergy[]) => ({
+                none: false,
+                items: [...(await listed(at)), ...items],
+            });
             expect(
                 await refused(
                     await save(admin, id, {
-                        drug_allergies: [{ drug_id: ibuprofen.id }],
+                        allergy: await withAllergies(id, [
+                            allergic(ibuprofen.id),
+                        ]),
                         prescriptions: [draft([single(ibuprofen.id)])],
                     }),
                 ),
@@ -1334,23 +1352,37 @@ describe.skipIf(!process.env.DB_HOST)(
                     'Tidak dapat menambahkan obat "Ibuprofen 400 mg", karena pasien alergi terhadap obat ini!',
                 ],
             });
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        allergy: await withAllergies(id, [
+                            allergic(ibuprofen.id),
+                            allergic(ibuprofen.id),
+                        ]),
+                    }),
+                ),
+            ).toEqual({
+                [`allergy.items.${(await listed(id)).length + 1}.drug_id`]: [
+                    'Ibuprofen 400 mg sudah ada di daftar alergi.',
+                ],
+            });
             await json(
                 await save(admin, id, {
-                    drug_allergies: [
-                        { drug_id: ibuprofen.id },
-                        { drug_id: ibuprofen.id },
-                    ],
+                    allergy: await withAllergies(id, [allergic(ibuprofen.id)]),
                 }),
                 200,
             );
             const next = await started();
-            expect((await show(admin, next)).data.drug_allergies).toEqual([
-                {
-                    drug_id: ibuprofen.id,
-                    drug_code: ibuprofen.code,
-                    drug_name: 'Ibuprofen 400 mg',
-                },
-            ]);
+            expect(
+                (await listed(next))
+                    .filter((row) => row.drug_id === ibuprofen.id)
+                    .map((row) => [
+                        row.category,
+                        row.drug_code,
+                        row.drug_name,
+                        row.status,
+                    ]),
+            ).toEqual([['obat', ibuprofen.code, 'Ibuprofen 400 mg', 'aktif']]);
             expect(
                 await refused(
                     await save(admin, next, {
@@ -1377,25 +1409,59 @@ describe.skipIf(!process.env.DB_HOST)(
                     'Tidak dapat menambahkan obat "Ibuprofen 400 mg", karena pasien alergi terhadap obat ini!',
                 ],
             });
+            // Alergi yang tidak aktif lagi tidak menolak obatnya; alergi baru pada Simpan yang sama langsung menolak.
+            const inactive = (await listed(next)).map((row) =>
+                row.drug_id === ibuprofen.id
+                    ? { ...row, status: 'tidak_aktif' }
+                    : row,
+            );
+            expect(
+                await refused(
+                    await save(admin, next, {
+                        allergy: {
+                            none: false,
+                            items: [...inactive, allergic(aspirin.id)],
+                        },
+                        prescriptions: [
+                            draft([single(ibuprofen.id), single(aspirin.id)]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.drug_id': [
+                    'Tidak dapat menambahkan obat "Asam Asetilsalisilat 80 mg", karena pasien alergi terhadap obat ini!',
+                ],
+            });
             await json(
                 await save(admin, next, {
-                    drug_allergies: [{ drug_id: aspirin.id }],
+                    allergy: { none: false, items: inactive },
                     prescriptions: [draft([single(ibuprofen.id)])],
                 }),
                 200,
             );
+
+            // Alergi yang dibuang diberi deleted_at; barisnya tetap ada.
+            await json(
+                await save(admin, next, {
+                    allergy: {
+                        none: false,
+                        items: inactive.filter(
+                            (row) => row.drug_id !== ibuprofen.id,
+                        ),
+                    },
+                }),
+                200,
+            );
             const allergies = await pool.unsafe<
-                { obat_id: string; deleted_at: Date | null }[]
+                { obat_id: string; status: string; deleted_at: Date | null }[]
             >(
-                'select obat_id, deleted_at from sim_m_pasien_alergi_obat where pasien_id = $1 order by created_at, id',
-                [patientId],
+                `select obat_id, status, deleted_at from sim_m_pasien_alergi
+                 where pasien_id = $1 and obat_id = $2`,
+                [patientId, ibuprofen.id],
             );
             expect(
-                allergies.map((row) => [row.obat_id, row.deleted_at === null]),
-            ).toEqual([
-                [ibuprofen.id, false],
-                [aspirin.id, true],
-            ]);
+                allergies.map((row) => [row.status, row.deleted_at !== null]),
+            ).toEqual([['tidak_aktif', true]]);
         });
 
         test('Kirim ke farmasi numbers the prescription, locks it, and leaves room for a new draft', async () => {
