@@ -91,6 +91,9 @@
                 "price_groups": [
                     { "code": "UMUM", "name": "Umum" },
                     { "code": "ASR", "name": "Asuransi" }
+                ],
+                "charge_components": [
+                    { "code": "SARANA", "name": "Sarana", "sort_order": 0 }
                 ]
             },
             "healthcare": {

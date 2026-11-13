@@ -56,6 +56,7 @@ import { page as foundationInventoryTransferTransferOrdersPage } from './foundat
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
 import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
+import { page as foundationPricingChargeComponentChargeComponentsPage } from './foundation/pricing/charge-component/charge-components.page.tsx';
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
 import { page as foundationPurchasingReceiptReceiptsPage } from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
@@ -648,6 +649,17 @@ const foundationNumberSequenceNumberSequencesRoute = createRoute({
     staticData: { title: foundationNumberSequenceNumberSequencesPage.title },
 });
 
+const foundationPricingChargeComponentChargeComponentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPricingChargeComponentChargeComponentsPage.path,
+    component: foundationPricingChargeComponentChargeComponentsPage.component,
+    validateSearch:
+        foundationPricingChargeComponentChargeComponentsPage.validateSearch,
+    staticData: {
+        title: foundationPricingChargeComponentChargeComponentsPage.title,
+    },
+});
+
 const foundationPricingPriceGroupPriceGroupsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPricingPriceGroupPriceGroupsPage.path,
@@ -846,6 +858,7 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryTransferTransferReceiptsRoute,
         foundationInventoryTransferTransferShipmentsRoute,
         foundationNumberSequenceNumberSequencesRoute,
+        foundationPricingChargeComponentChargeComponentsRoute,
         foundationPricingPriceGroupPriceGroupsRoute,
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingVendorVendorsRoute,

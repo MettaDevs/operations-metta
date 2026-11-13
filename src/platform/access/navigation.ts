@@ -326,6 +326,12 @@ export const sysAdminArea: NavigationAreaEntry = {
                     href: '/sysadmin/pricing/price-groups',
                     permission: 'core.price-group.read',
                 },
+                {
+                    id: 'charge-components',
+                    label: 'Komponen biaya',
+                    href: '/sysadmin/pricing/charge-components',
+                    permission: 'core.charge-component.read',
+                },
             ],
         },
         {
