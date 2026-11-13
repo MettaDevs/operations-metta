@@ -35,6 +35,8 @@ export const stockByLocationLineSchema = z.object({
 });
 
 export const stockByLocationSchema = z.object({
+    // Presisi jumlah mata uang lokal untuk menampilkan nilai.
+    amount_decimals: z.number(),
     items: z.array(
         z.object({
             item: reference.extend({ unit: z.string() }),

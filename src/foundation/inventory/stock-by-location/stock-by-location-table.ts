@@ -1,6 +1,9 @@
 import { displayDate } from '@operations-metta/ui/date-picker';
 import type { ApiBody } from '../../../platform/shell/index.ts';
-import { displayNumber } from '@operations-metta/ui/display-number';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import type { ReportTable } from '../report-table.ts';
 
 type Stock = ApiBody<'inventoryStockByLocation'>;
@@ -43,7 +46,7 @@ export function stockByLocationTable(report: Stock): ReportTable {
                         : '',
                     displayNumber(line.quantity),
                     group.item.unit,
-                    displayNumber(line.value),
+                    displayAmount(line.value, report.amount_decimals),
                 ],
             })),
             {
@@ -57,7 +60,7 @@ export function stockByLocationTable(report: Stock): ReportTable {
                     '',
                     displayNumber(group.quantity),
                     group.item.unit,
-                    displayNumber(group.value),
+                    displayAmount(group.value, report.amount_decimals),
                 ],
             },
         ]),
