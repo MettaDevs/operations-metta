@@ -1,7 +1,9 @@
 import { onEvent } from '../../platform/events/index.ts';
 import {
     chargesReplaced,
+    pharmacyChargesReplaced,
     receiveCharges,
+    receivePharmacyCharges,
     receiveVisitCancelled,
     receiveVisitCompleted,
     receiveVisitReopened,
@@ -23,6 +25,7 @@ import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
 export { clerkNotStartedMessage, openClerk } from './clerk/clerk.service.ts';
 export {
     approvalMessage,
+    automaticCancelReason,
     chargeLockedMessage,
     closedClerkMessage,
     lockChargeForChange,
@@ -40,6 +43,7 @@ export function registerBillingEventHandlers(): void {
     onEvent(visitCompleted, 'core', receiveVisitCompleted);
     onEvent(visitCancelled, 'core', receiveVisitCancelled);
     onEvent(visitReopened, 'core', receiveVisitReopened);
+    onEvent(pharmacyChargesReplaced, 'core', receivePharmacyCharges);
 }
 
 export function billingRoutes() {

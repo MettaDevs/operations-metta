@@ -14,6 +14,7 @@ const headerSchema = z.object({
     number: z.string(),
     notes: z.string().nullable(),
     registration_number: z.string(),
+    visit_id: z.string(),
     legal_entity_id: z.string(),
     operating_unit_id: z.string(),
     patient_id: z.string(),
@@ -76,7 +77,7 @@ export async function publishPrescriptionIssued(
 ): Promise<void> {
     const header = await db.one(
         headerSchema,
-        `select r.nomor as number, r.catatan as notes, g.no_reg as registration_number, g.legal_entity_id,
+        `select r.nomor as number, r.catatan as notes, g.no_reg as registration_number, g.id as visit_id, g.legal_entity_id,
                 g.operating_unit_id, k.id as patient_id, k.nrm as medical_record_number, pp.name as patient_name,
                 pp.birth_date::text as birth_date, g.pasien_ktp as ktp_patient, r.dokter_id as doctor_id,
                 dp.name as doctor_name,
@@ -133,6 +134,7 @@ export async function publishPrescriptionIssued(
             prescription_id: prescriptionId,
             prescription_number: header.number,
             registration_number: header.registration_number,
+            visit_id: header.visit_id,
             issued_at: `${issuedAt.replace(' ', 'T')}Z`,
             notes: header.notes,
             patient: {

@@ -125,8 +125,70 @@ async function lockVisit(
     );
 }
 
+// Pembayaran batal: baris biaya kunjungan kembali terbuka, dan finance diberi tahu sekali dengan angka yang sama dengan
+// saat bayar. Status pembayaran sudah diubah pemanggil.
+async function reopenCancelled(
+    db: Database,
+    cancelled: {
+        tenantId: string;
+        legalEntityId: string;
+        paymentId: string;
+        number: string;
+        visitId: string;
+        registrationNumber: string;
+        date: string;
+        value: string;
+        stamp: string;
+        reason: string;
+    },
+): Promise<void> {
+    await db.execute(
+        `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
+         where tenant_id = $2 and kasir_id = $3`,
+        [cancelled.stamp, cancelled.tenantId, cancelled.paymentId],
+    );
+    const lines = await db.rows(
+        z.object({
+            payment_method_id: z.string(),
+            amount: z.string(),
+            currency_code: z.string(),
+            currency_amount: z.string(),
+            exchange_rate: z.string(),
+        }),
+        `select jenis_bayar_id as payment_method_id, trim_scale(nilai)::text as amount,
+                mata_uang as currency_code, trim_scale(nilai_valuta)::text as currency_amount,
+                trim_scale(kurs)::text as exchange_rate
+         from kasir_detail where tenant_id = $1 and kasir_id = $2 order by id`,
+        [cancelled.tenantId, cancelled.paymentId],
+    );
+    await publishEvent(db, {
+        type: invoiceCancelled,
+        tenantId: cancelled.tenantId,
+        legalEntityId: cancelled.legalEntityId,
+        data: {
+            payment_id: cancelled.paymentId,
+            payment_number: cancelled.number,
+            source_module: source,
+            visit_id: cancelled.visitId,
+            registration_number: cancelled.registrationNumber,
+            date: cancelled.date,
+            value: cancelled.value,
+            cancelled_at: `${cancelled.stamp.replace(' ', 'T')}Z`,
+            reason: cancelled.reason,
+            payments: lines,
+        },
+    });
+}
+
+// Alasan batal pembayaran otomatis yang dibatalkan sistem karena biaya kunjungannya berubah.
+export const automaticCancelReason =
+    'Biaya kunjungan berubah sesudah lunas otomatis, jadi tagihan dilunasi ulang.';
+
 // Dipanggil module sumber di dalam transaksi yang mengubah atau membatalkan biaya kunjungan (Biaya Tindakan, batal
-// kunjungan). Kunjungan yang sudah dibayar ditolak dengan pesan sistem lama.
+// kunjungan, obat yang disiapkan, dibatalkan, atau diretur). Kunjungan yang dibayar kasir ditolak dengan pesan sistem
+// lama; pembatalannya urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis mengikuti tagihan:
+// pembayaran itu dibatalkan di sini, lalu kunjungan dilunasi lagi saat biayanya yang baru sampai ke kasir, seperti
+// Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli.
 export async function lockChargeForChange(
     db: Database,
     scope: { tenantId: string; sourceModule: string; visitId: string },
@@ -135,12 +197,45 @@ export async function lockChargeForChange(
         throw new Error('lockChargeForChange wajib di dalam transaksi.');
     await lockVisit(db, scope.tenantId, scope.visitId);
     const paid = await db.one(
-        z.object({ id: z.string() }),
-        `select id from kasir
-         where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'diposting'`,
+        z.object({
+            id: z.string(),
+            automatic: z.boolean(),
+            legal_entity_id: z.string(),
+            number: z.string(),
+            date: z.string(),
+            value: z.string(),
+            registration_number: z.string(),
+        }),
+        `select k.id, k.otomatis as automatic, k.legal_entity_id, k.no_bukti as number, k.tanggal::text as date,
+                trim_scale(k.nilai)::text as value, v.no_reg as registration_number
+         from kasir k
+         join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                               and v.kunjungan_id = k.kunjungan_id
+         where k.tenant_id = $1 and k.sumber_module = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
         [scope.tenantId, scope.sourceModule, scope.visitId],
     );
-    if (paid) validation({ _form: chargeLockedMessage });
+    if (!paid) return;
+    if (!paid.automatic) validation({ _form: chargeLockedMessage });
+    const stamp = nowSql();
+    await db.execute(
+        `update kasir set status = 'batal', tgl_batal = $1, alasan_batal = $2,
+                          dibatalkan_oleh_user_id = nullif(current_setting('coreerp.user_id', true), '')::uuid,
+                          updated_at = $1
+         where tenant_id = $3 and id = $4`,
+        [stamp, automaticCancelReason, scope.tenantId, paid.id],
+    );
+    await reopenCancelled(db, {
+        tenantId: scope.tenantId,
+        legalEntityId: paid.legal_entity_id,
+        paymentId: paid.id,
+        number: paid.number,
+        visitId: scope.visitId,
+        registrationNumber: paid.registration_number,
+        date: paid.date,
+        value: paid.value,
+        stamp,
+        reason: automaticCancelReason,
+    });
 }
 
 type Scope = { tenantId: string; legalEntityId: string };
@@ -189,11 +284,10 @@ async function openInvoice(
         `select id, jenis_biaya_id, jenis_biaya_nama, dokter_id, dokter_nama, kelompok_jasa_id, kelompok_jasa_nama,
                 qty::text, nilai::text, harga_orig::text, disc::text, hext::text
          from kunjungan_kasir_detail
-         where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'terbuka'
-           and deleted_at is null
+         where tenant_id = $1 and kunjungan_id = $2 and status = 'terbuka' and deleted_at is null
          order by id
          for update`,
-        [scope.tenantId, source, visitId],
+        [scope.tenantId, visitId],
     );
     const totals = invoiceTotals(
         charges.map((charge) => ({
@@ -976,41 +1070,17 @@ export class Payments {
                 ],
             );
             if (!cancelled) coded(409, 'stale_version', staleMessage);
-            await this.db.execute(
-                `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
-                 where tenant_id = $2 and kasir_id = $3`,
-                [stamp, scope.tenantId, payment.id],
-            );
-            const lines = await this.db.rows(
-                z.object({
-                    payment_method_id: z.string(),
-                    amount: z.string(),
-                    currency_code: z.string(),
-                    currency_amount: z.string(),
-                    exchange_rate: z.string(),
-                }),
-                `select jenis_bayar_id as payment_method_id, trim_scale(nilai)::text as amount,
-                        mata_uang as currency_code, trim_scale(nilai_valuta)::text as currency_amount,
-                        trim_scale(kurs)::text as exchange_rate
-                 from kasir_detail where tenant_id = $1 and kasir_id = $2 order by id`,
-                [scope.tenantId, payment.id],
-            );
-            await publishEvent(this.db, {
-                type: invoiceCancelled,
+            await reopenCancelled(this.db, {
                 tenantId: scope.tenantId,
                 legalEntityId: scope.legalEntityId,
-                data: {
-                    payment_id: payment.id,
-                    payment_number: header.number,
-                    source_module: source,
-                    visit_id: header.visit_id,
-                    registration_number: header.registration_number,
-                    date: header.date,
-                    value: header.value,
-                    cancelled_at: `${stamp.replace(' ', 'T')}Z`,
-                    reason,
-                    payments: lines,
-                },
+                paymentId: payment.id,
+                number: header.number,
+                visitId: header.visit_id,
+                registrationNumber: header.registration_number,
+                date: header.date,
+                value: header.value,
+                stamp,
+                reason,
             });
         });
         return {

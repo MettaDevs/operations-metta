@@ -1,13 +1,15 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
-import { FormGrid } from '@operations-metta/ui/form-control';
+import { Field, FieldLabel } from '@operations-metta/ui/field';
+import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 import {
     PageDialogBody,
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
+import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -30,6 +32,7 @@ const formOf = (row: ServiceLocation | null) => ({
     unit: row ? { ...row.operating_unit, code: '' } : null,
     section: row?.section ? { ...row.section, code: '' } : null,
     location: row?.location ?? null,
+    includesService: row?.includes_service ?? false,
 });
 
 // Satu baris Lokasi layanan resep. Unit dan section asal adalah identitas baris, jadi hanya lokasinya yang berubah
@@ -50,6 +53,7 @@ export function ServiceLocationCard({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
+    const includesServiceId = useId();
     const { confirm, confirmation } = useConfirmation();
     const portalContainer = useRef<HTMLDivElement>(null);
     usePageDialogRecord({
@@ -88,6 +92,7 @@ export function ServiceLocationCard({
                           params: { id: record.id },
                           body: {
                               location_id: form.location?.id ?? '',
+                              includes_service: form.includesService,
                               version: record.version,
                           },
                       })
@@ -96,6 +101,7 @@ export function ServiceLocationCard({
                               operating_unit_id: form.unit?.id ?? '',
                               section_id: form.section?.id ?? null,
                               location_id: form.location?.id ?? '',
+                              includes_service: form.includesService,
                           },
                       });
                 toast.success('Lokasi layanan resep disimpan.');
@@ -230,6 +236,27 @@ export function ServiceLocationCard({
                             hint="Stok obat resep ini diambil dari lokasi ini saat disiapkan."
                             portalContainer={portalContainer}
                         />
+                        <FormControl hint="Obat resep dari unit atau section ini sudah termasuk biaya jasa, jadi tidak ditagih lagi di kasir. Harganya tetap tercatat.">
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id={includesServiceId}
+                                    checked={form.includesService}
+                                    disabled={!canManage}
+                                    onCheckedChange={(checked) =>
+                                        setForm((current) => ({
+                                            ...current,
+                                            includesService: checked,
+                                        }))
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={includesServiceId}
+                                    className="font-normal"
+                                >
+                                    Obat termasuk jasa
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
                     </FormGrid>
                 </PageDialogBody>
                 {confirmation}

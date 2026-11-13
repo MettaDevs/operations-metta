@@ -56,6 +56,7 @@ export const issuedPrescriptionSchema = z.object({
         prescription_id: idSchema,
         prescription_number: text(60).min(1),
         registration_number: text(60).min(1),
+        visit_id: idSchema.optional(),
         issued_at: z.iso.datetime(),
         notes: text(500).nullable(),
         patient: z.object({

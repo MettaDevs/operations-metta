@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { Database } from '@core/platform/database/index.ts';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 import { publishEvent } from '@core/platform/events/index.ts';
+import { HttpFailure, validation } from '@core/platform/http/index.ts';
 import {
     fromNumeric,
     issuedSlices,
@@ -152,4 +154,125 @@ export async function publishPrescriptionDispensed(
             }),
         },
     });
+}
+
+// Biaya obat satu penyerahan untuk kasir Core, sebagai potret penuh: baris yang masih ditagih dengan Qty bersih sesudah
+// retur (JmlPemakaian - JmlRetur sistem lama), atau kosong bila penyerahan dibatalkan. Harga satuan dan persen diskon
+// dibekukan saat Siapkan. Diterbitkan di transaksi Siapkan, Batal siapkan, retur, dan batal retur. Resep tanpa
+// kunjungan (diterima sebelum kunjungan ikut dikirim bersama resep) tidak dikirim, karena kasir tidak tahu tagihannya.
+export const dispensingChargesReplaced =
+    `${moduleId}.dispensing.charges-replaced.v1` as const;
+
+export async function publishDispensingCharges(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string },
+    dispensingId: string,
+): Promise<void> {
+    const header = await db.one(
+        z.object({
+            number: z.string(),
+            status: z.string(),
+            date: z.string().nullable(),
+            includes_service: z.boolean().nullable(),
+            prescription_id: z.string(),
+            prescription_number: z.string(),
+            visit_id: z.string().nullable(),
+            registration_number: z.string(),
+            operating_unit_id: z.string(),
+        }),
+        `select h.nomor as number, h.status, h.tanggal::text as date, h.termasuk_jasa as includes_service,
+                r.resep_sumber_id as prescription_id, r.nomor_resep as prescription_number,
+                r.kunjungan_id as visit_id, r.no_reg as registration_number, r.operating_unit_id
+         from bill_farmasi h
+         join far_tr_resep r on r.tenant_id = h.tenant_id and r.id = h.resep_id
+         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3`,
+        [scope.tenantId, scope.legalEntityId, dispensingId],
+    );
+    if (!header) throw new Error(`Dispensing ${dispensingId} was not found.`);
+    if (!header.visit_id || !header.date) return;
+    const lines =
+        header.status === 'dibatalkan'
+            ? []
+            : await db.rows(
+                  z.object({
+                      line_id: z.string(),
+                      item: reference,
+                      quantity: z.string(),
+                      unit_price: z.string(),
+                      discount_percent: z.string(),
+                  }),
+                  `select * from (
+                       select d.id as line_id,
+                              json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item,
+                              trim_scale((d.jumlah * d.konversi - coalesce((
+                                  select sum(x.jumlah * x.konversi) from retur_farmasi_detail x
+                                  join retur_farmasi y on y.tenant_id = x.tenant_id and y.id = x.retur_farmasi_id
+                                  where x.tenant_id = d.tenant_id and x.bill_farmasi_detail_id = d.id
+                                    and x.deleted_at is null and y.status = 'diposting' and y.deleted_at is null), 0))
+                                  / d.konversi)::text as quantity,
+                              trim_scale(coalesce(d.harga_satuan, 0))::text as unit_price,
+                              trim_scale(coalesce(d.persen_diskon, 0))::text as discount_percent,
+                              d.urutan
+                       from bill_farmasi_detail d
+                       join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+                       where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null) lines
+                   where quantity::numeric > 0
+                   order by urutan, line_id`,
+                  [scope.tenantId, dispensingId],
+              );
+    await publishEvent(db, {
+        type: dispensingChargesReplaced,
+        tenantId: scope.tenantId,
+        legalEntityId: scope.legalEntityId,
+        orgUnitId: header.operating_unit_id,
+        data: {
+            dispensing_id: dispensingId,
+            dispensing_number: header.number,
+            prescription_id: header.prescription_id,
+            prescription_number: header.prescription_number,
+            visit_id: header.visit_id,
+            registration_number: header.registration_number,
+            date: header.date,
+            includes_service: header.includes_service ?? false,
+            lines: lines.map(
+                ({
+                    line_id,
+                    item,
+                    quantity,
+                    unit_price,
+                    discount_percent,
+                }) => ({
+                    line_id,
+                    item,
+                    quantity,
+                    unit_price,
+                    discount_percent,
+                }),
+            ),
+        },
+    });
+}
+
+// Pesan sistem lama untuk retur dan batal penjualan farmasi yang obatnya sudah dibayar di kasir (BILLFarmasi
+// ClosePayment = 1).
+export const paidMessage = 'Data ini sudah melakukan Pembayaran diKasir!';
+
+// Kunci tagihan kunjungan di kasir sebelum biaya obatnya berubah: kunjungan yang sudah dibayar kasir ditolak, dan
+// pembatalannya urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis dibatalkan kasir sendiri lalu
+// dilunasi ulang. Resep berasal dari layanan kesehatan, jadi kunjungannya milik module itu.
+export async function lockVisitCharges(
+    db: Database,
+    scope: { tenantId: string; visitId: string; message?: string },
+): Promise<void> {
+    try {
+        await lockChargeForChange(db, {
+            tenantId: scope.tenantId,
+            sourceModule: 'healthcare',
+            visitId: scope.visitId,
+        });
+    } catch (error) {
+        if (scope.message && error instanceof HttpFailure)
+            validation({ _form: scope.message });
+        throw error;
+    }
 }

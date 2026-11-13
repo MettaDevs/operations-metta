@@ -16,6 +16,8 @@ export const chargesReplaced =
 export const visitCompleted = 'healthcare.visit.completed.v1' as const;
 export const visitCancelled = 'healthcare.visit.cancelled.v1' as const;
 export const visitReopened = 'healthcare.visit.reopened.v1' as const;
+export const pharmacyChargesReplaced =
+    'pharmacy.dispensing.charges-replaced.v1' as const;
 const processedTable = 'kasir_event_diproses';
 
 const chargesSchema = z.object({
@@ -44,6 +46,28 @@ const chargesSchema = z.object({
                     value: z.string(),
                 }),
             ),
+        }),
+    ),
+});
+
+// Potret baris obat satu penyerahan farmasi. includes_service: obat termasuk jasa (IncludeJasa sistem lama), jadi
+// nilainya 0 di tagihan walau harganya tetap tercatat.
+const pharmacyChargesSchema = z.object({
+    dispensing_id: z.string(),
+    visit_id: z.uuid(),
+    date: z.string(),
+    includes_service: z.boolean(),
+    lines: z.array(
+        z.object({
+            line_id: z.string(),
+            item: z.object({
+                id: z.string(),
+                code: z.string(),
+                name: z.string(),
+            }),
+            quantity: z.string(),
+            unit_price: z.string(),
+            discount_percent: z.string(),
         }),
     ),
 });
@@ -89,57 +113,57 @@ function parsed<S extends z.ZodType>(
     return null;
 }
 
-// Potret penuh baris biaya satu pemeriksaan. Baris terbuka diubah di tempat, baris baru ditambah, dan baris terbuka
-// yang tidak ada lagi di potret dihapus lunak. Baris yang sudah ditagih tidak disentuh: module menolak mengubahnya
-// sebelum event ini terbit.
-export async function receiveCharges(
+type ChargeLine = {
+    lineId: string;
+    values: Record<string, string | number | null>;
+    components: { charge_component_id: string; value: string }[];
+};
+
+// Potret penuh baris biaya satu dokumen sumber (pemeriksaan atau penyerahan farmasi). Baris terbuka diubah di tempat,
+// baris baru ditambah, dan baris terbuka yang tidak ada lagi di potret dihapus lunak. Baris yang sudah ditagih tidak
+// disentuh: module menolak mengubahnya sebelum event ini terbit, kecuali tagihan yang lunas otomatis, yang dibatalkan
+// lebih dulu lalu dilunasi ulang di sini.
+async function replaceCharges(
     db: Database,
-    envelope: EventEnvelope,
+    envelope: EventEnvelope & { legal_entity_id: string },
+    document: {
+        module: string;
+        documentId: string;
+        visitId: string;
+        group: string;
+        lines: ChargeLine[];
+    },
 ): Promise<void> {
-    const data = parsed(chargesSchema, envelope);
-    if (!data || !envelope.legal_entity_id) return;
-    if (await alreadyProcessed(db, processedTable, envelope)) return;
     const tenantId = envelope.tenant_id;
     const stamp = nowSql();
-    const kept = data.lines.map((line) => line.line_id);
+    const kept = document.lines.map((line) => line.lineId);
     const retired = await db.rows(
         z.object({ id: z.string() }),
         `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4 and status = 'terbuka'
            and deleted_at is null and not (sumber_baris_id = any($5::uuid[]))
          returning id`,
-        [stamp, tenantId, source, data.examination_id, `{${kept.join(',')}}`],
+        [
+            stamp,
+            tenantId,
+            document.module,
+            document.documentId,
+            `{${kept.join(',')}}`,
+        ],
     );
     for (const row of retired)
         await retireComponents(db, tenantId, row.id, stamp);
-    for (const line of data.lines) {
-        const values = {
-            kelompok_jasa_id: line.service_group_id,
-            kelompok_jasa_nama: line.service_group_name,
-            kelompok_jasa_urutan: line.service_group_order,
-            kategori_nama: line.category_name,
-            jenis_biaya_id: line.procedure_id,
-            jenis_biaya_kode: line.procedure_code,
-            jenis_biaya_nama: line.procedure_name,
-            qty: line.quantity,
-            nilai: line.tariff,
-            harga_orig: line.tariff,
-            section_id: line.section_id,
-            section_nama: line.section_name,
-            dokter_id: line.doctor_id,
-            dokter_nama: line.doctor_name,
-            tanggal: line.date,
-        };
+    for (const line of document.lines) {
         const existing = await db.one(
             z.object({ id: z.string(), status: z.string() }),
             `select id, status from kunjungan_kasir_detail
              where tenant_id = $1 and sumber_module = $2 and sumber_baris_id = $3 and deleted_at is null`,
-            [tenantId, source, line.line_id],
+            [tenantId, document.module, line.lineId],
         );
         if (existing?.status === 'ditagih') continue;
         let id = existing?.id;
         if (id) {
-            const columns = Object.entries(values);
+            const columns = Object.entries(line.values);
             await db.execute(
                 `update kunjungan_kasir_detail
                  set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
@@ -154,12 +178,12 @@ export async function receiveCharges(
                 id,
                 tenant_id: tenantId,
                 legal_entity_id: envelope.legal_entity_id,
-                sumber_module: source,
-                sumber_dokumen_id: data.examination_id,
-                sumber_baris_id: line.line_id,
-                kunjungan_id: data.visit_id,
-                group_biaya: 'PERAWATAN',
-                ...values,
+                sumber_module: document.module,
+                sumber_dokumen_id: document.documentId,
+                sumber_baris_id: line.lineId,
+                kunjungan_id: document.visitId,
+                group_biaya: document.group,
+                ...line.values,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -175,6 +199,109 @@ export async function receiveCharges(
                 updated_at: stamp,
             });
     }
+    await settleAgain(db, {
+        tenantId,
+        legalEntityId: envelope.legal_entity_id,
+        visitId: document.visitId,
+    });
+}
+
+// Kunjungan selesai yang tipe pasiennya lunas otomatis dilunasi lagi dengan jenis bayar otomatisnya sesudah biayanya
+// berubah. Kunjungan yang belum selesai menunggu kunjungan selesai.
+async function settleAgain(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string; visitId: string },
+): Promise<void> {
+    const visit = await db.one(
+        z.object({ method: z.string() }),
+        `select jenis_bayar_otomatis_id as method from kunjungan_kasir
+         where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'selesai'
+           and jenis_bayar_otomatis_id is not null`,
+        [scope.tenantId, source, scope.visitId],
+    );
+    if (visit)
+        await settleAutomatically(db, {
+            ...scope,
+            paymentMethodId: visit.method,
+        });
+}
+
+export async function receiveCharges(
+    db: Database,
+    envelope: EventEnvelope,
+): Promise<void> {
+    const data = parsed(chargesSchema, envelope);
+    const legalEntityId = envelope.legal_entity_id;
+    if (!data || !legalEntityId) return;
+    if (await alreadyProcessed(db, processedTable, envelope)) return;
+    await replaceCharges(
+        db,
+        { ...envelope, legal_entity_id: legalEntityId },
+        {
+            module: source,
+            documentId: data.examination_id,
+            visitId: data.visit_id,
+            group: 'PERAWATAN',
+            lines: data.lines.map((line) => ({
+                lineId: line.line_id,
+                values: {
+                    kelompok_jasa_id: line.service_group_id,
+                    kelompok_jasa_nama: line.service_group_name,
+                    kelompok_jasa_urutan: line.service_group_order,
+                    kategori_nama: line.category_name,
+                    jenis_biaya_id: line.procedure_id,
+                    jenis_biaya_kode: line.procedure_code,
+                    jenis_biaya_nama: line.procedure_name,
+                    qty: line.quantity,
+                    nilai: line.tariff,
+                    harga_orig: line.tariff,
+                    section_id: line.section_id,
+                    section_nama: line.section_name,
+                    dokter_id: line.doctor_id,
+                    dokter_nama: line.doctor_name,
+                    tanggal: line.date,
+                },
+                components: line.components,
+            })),
+        },
+    );
+}
+
+// Baris OBAT dari penyerahan farmasi (blok BILLFarmasi GetDetailRincianBiaya): harga satuan dan persen diskon yang
+// dibekukan farmasi saat Siapkan, Qty bersih sesudah retur. Obat yang termasuk jasa bernilai 0 dengan harga aslinya
+// tetap di harga_orig, seperti Kuta (IncludeJasa = 1).
+export async function receivePharmacyCharges(
+    db: Database,
+    envelope: EventEnvelope,
+): Promise<void> {
+    const data = parsed(pharmacyChargesSchema, envelope);
+    const legalEntityId = envelope.legal_entity_id;
+    if (!data || !legalEntityId) return;
+    if (await alreadyProcessed(db, processedTable, envelope)) return;
+    await replaceCharges(
+        db,
+        { ...envelope, legal_entity_id: legalEntityId },
+        {
+            module: 'pharmacy',
+            documentId: data.dispensing_id,
+            visitId: data.visit_id,
+            group: 'OBAT',
+            lines: data.lines.map((line) => ({
+                lineId: line.line_id,
+                values: {
+                    jenis_biaya_id: line.item.id,
+                    jenis_biaya_kode: line.item.code,
+                    jenis_biaya_nama: line.item.name,
+                    qty: line.quantity,
+                    nilai: data.includes_service ? '0' : line.unit_price,
+                    harga_orig: line.unit_price,
+                    disc: line.discount_percent,
+                    tanggal: data.date,
+                },
+                components: [],
+            })),
+        },
+    );
 }
 
 async function retireComponents(
@@ -215,6 +342,7 @@ export async function receiveVisitCompleted(
         penjamin_nama: data.guarantor?.name ?? null,
         no_kartu: data.card_number,
         section_nama: data.sections.map((section) => section.name).join(', '),
+        jenis_bayar_otomatis_id: data.automatic_payment_method_id ?? null,
         jenis_bayar_dibatasi: `{${(data.restricted_payment_method_ids ?? []).join(',')}}`,
         status: 'selesai',
     };
@@ -269,10 +397,9 @@ export async function receiveVisitCancelled(
     const retired = await db.rows(
         z.object({ id: z.string() }),
         `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
-         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4 and status = 'terbuka'
-           and deleted_at is null
+         where tenant_id = $2 and kunjungan_id = $3 and status = 'terbuka' and deleted_at is null
          returning id`,
-        [stamp, envelope.tenant_id, source, data.visit_id],
+        [stamp, envelope.tenant_id, data.visit_id],
     );
     for (const row of retired)
         await retireComponents(db, envelope.tenant_id, row.id, stamp);
