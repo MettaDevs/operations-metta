@@ -235,6 +235,14 @@ Siapa pun bisa membaca isi repo ini, termasuk berkas yang sudah dihapus, karena 
 - Skill CoreERP yang dipindah ke sini pada 9 November 2026 diganti nama dari awalan `coreerp-` menjadi `operations-metta-`, dan versi yang berlaku ada di sini, karena repo CoreERP tidak disentuh lagi. Skill generik, misalnya `module-discovery` dan `number-sequence-design`, tetap memakai namanya.
 - Isi skill menggambarkan keadaan repo ini. Bagian yang belum dipindah dari CoreERP disebut terus terang dan ditautkan ke kode atau docs CoreERP sebagai acuan perilaku. `operations-metta-bun-elysia` memegang angka runtime yang sudah diukur; path `docs/...` di dalamnya ditulis sebagai tautan ke repo CoreERP.
 
+## Sub-agent
+
+Keputusan pemilik produk, 13 November 2026: setiap sesi yang men-spawn sub-agent untuk pekerjaan di repo ini menjalankan sub-agent itu dengan skill `poteto-mode` dari plugin pstack, supaya sub-agent bekerja dengan alur yang sama ketatnya dengan sesi yang memberinya tugas.
+
+- Di Claude Code, spawn dengan `subagent_type: "pstack:poteto-agent"`. Agen itu membaca `poteto-mode` secara utuh sebelum bekerja. Brief-nya mengikuti bagian Subagents di skill itu: tujuan pemilik, berkas yang perlu dibaca, dan cakupan yang sempit.
+- Bila plugin pstack belum terpasang, pasang dulu dari GitHub, bukan bekerja tanpa skill. Sumbernya repo publik [`cursor/plugins`](https://github.com/cursor/plugins), folder `pstack` (lisensi MIT). Di Claude Code: `/plugin marketplace add cursor/plugins`, lalu `/plugin install pstack@cursor-plugins`. Harness lain: clone repo itu dan baca `pstack/skills/poteto-mode/SKILL.md` langsung.
+- Sub-agent yang mendapati skill itu tidak tersedia juga memasangnya lebih dulu dengan cara di atas.
+
 ## Alur kerja
 
 Keputusan pemilik produk, 9 November 2026: setiap perubahan masuk `main` lewat pull request, supaya CI selalu lulus sebelum perubahan sampai di `main`. PR tidak dibuat sebagai draft dan tidak menunggu review.
