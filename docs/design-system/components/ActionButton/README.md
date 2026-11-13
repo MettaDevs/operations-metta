@@ -13,6 +13,7 @@ Perintah record dengan label, ikon, dan ukuran yang sama di setiap layar: Baru, 
 | --- | --- | --- | --- | --- |
 | `create` | Baru | `plus` | Membuat… | `primary` |
 | `add` | Tambah | `plus` | Menambahkan… | `primary` |
+| `add-many` | Tambah banyak | `list-plus` | Menambahkan… | `primary` |
 | `edit` | Ubah | `pencil` | Memproses… | `primary` |
 | `save` | Simpan | `save` | Menyimpan… | `primary` |
 | `cancel` | Batal | `x` | Memproses… | `foreground` |
@@ -20,6 +21,7 @@ Perintah record dengan label, ikon, dan ukuran yang sama di setiap layar: Baru, 
 
 - **Baru** membuka kartu record baru, termasuk dokumen, aturan, job, atau relasi bertanggal yang formnya memilih referensi.
 - **Tambah** menambah baris rincian atau memasukkan record yang sudah ada ke kelompok/dokumen (aset ke polis, organisasi ke hierarki).
+- **Tambah banyak** membuka pemilih untuk menambah beberapa baris rincian sekaligus, satu baris per record yang dicentang. Dipakai lewat `selectRecords` di DocumentLines, bukan dipasang sendiri oleh halaman.
 - **Delete** dipakai untuk pengarsipan dan penghapusan lunak. Labelnya tidak mengubah handler, izin, atau cara data disimpan: barisnya tetap hanya mendapat `deleted_at`.
 
 ## Yang dipegang komponen
