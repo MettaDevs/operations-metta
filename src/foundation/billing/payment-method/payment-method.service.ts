@@ -15,6 +15,7 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
+import { localCurrencyCode } from '../../currency/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
 import {
     behaviorRule,
@@ -35,7 +36,7 @@ const rowSql = `select * from (
                            j.wajib_referensi as requires_reference, j.biaya_tambahan as allows_surcharge,
                            j.menampung_sisa as takes_remainder, j.dihitung_tutup_kas as counted_at_close,
                            j.tampil_di_kasir as shown_at_cashier, j.aktif as is_active,
-                           j.id_bayar_lama as legacy_id, j.version
+                           j.mata_uang as currency_code, j.id_bayar_lama as legacy_id, j.version
                     from jenis_bayar j
                     where j.tenant_id = $1 and j.legal_entity_id = $2 and j.deleted_at is null) methods
                 where true`;
@@ -76,6 +77,10 @@ function checked(body: unknown) {
                 `Tidak berlaku untuk perilaku ${rule.label.toLowerCase()}.`;
         options[column] = on;
     }
+    const currency = data?.currency_code?.trim().toUpperCase() || null;
+    if (currency && options.menampung_sisa)
+        errors.currency_code =
+            'Jenis bayar yang menampung sisa selalu memakai mata uang lokal.';
     if (Object.keys(errors).length || !data || behavior === null)
         validation(errors);
     return {
@@ -88,6 +93,7 @@ function checked(body: unknown) {
         ...options,
         tampil_di_kasir: data.shown_at_cashier ?? true,
         aktif: data.is_active ?? true,
+        mata_uang: currency,
     };
 }
 
@@ -99,7 +105,7 @@ function uniqueTaken(error: unknown): void {
     if (error.message.includes('jenis_bayar_tunai_unique'))
         validation({
             behavior:
-                'Legal entity ini sudah punya jenis bayar tunai yang aktif. Nonaktifkan yang lama lebih dulu.',
+                'Legal entity ini sudah punya jenis bayar tunai aktif untuk mata uang ini. Nonaktifkan yang lama lebih dulu.',
         });
     if (error.message.includes('jenis_bayar_menampung_sisa_unique'))
         validation({
@@ -121,6 +127,26 @@ export class PaymentMethods {
             tenantId: this.workspace.tenantId,
             legalEntityId: activeLegalEntity(this.workspace),
         };
+    }
+
+    // Mata uang asing yang sudah disetel di Sys Admin › Mata uang, pilihan isian Mata uang.
+    private async foreignCurrencies(): Promise<string[]> {
+        return (
+            await this.db.rows(
+                z.object({ currency_code: z.string() }),
+                `select currency_code from currency_precisions
+                 where tenant_id = $1 and currency_code <> $2 order by currency_code`,
+                [this.workspace.tenantId, localCurrencyCode],
+            )
+        ).map((row) => row.currency_code);
+    }
+
+    private async checkedCurrency(currency: string | null): Promise<void> {
+        if (currency && !(await this.foreignCurrencies()).includes(currency))
+            validation({
+                currency_code:
+                    'Pilih mata uang asing yang sudah disetel di Sys Admin › Mata uang, atau kosongkan untuk mata uang lokal.',
+            });
     }
 
     // `active=1` hanya jenis bayar yang aktif.
@@ -146,6 +172,8 @@ export class PaymentMethods {
             can_manage: this.workspace.permissions.has(
                 'core.payment-method.update',
             ),
+            local_currency: localCurrencyCode,
+            currencies: await this.foreignCurrencies(),
         };
     }
 
@@ -164,6 +192,7 @@ export class PaymentMethods {
     async create(body: unknown) {
         this.workspace.guard('payment-method', 'update');
         const data = checked(body);
+        await this.checkedCurrency(data.mata_uang);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -186,6 +215,7 @@ export class PaymentMethods {
         this.workspace.guard('payment-method', 'update');
         const current = await this.row(id);
         const data = checked(body);
+        await this.checkedCurrency(data.mata_uang);
         let updated = 0;
         try {
             const columns = Object.entries(data);

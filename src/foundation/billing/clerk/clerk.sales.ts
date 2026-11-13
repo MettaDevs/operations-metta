@@ -1,8 +1,32 @@
+import { z } from 'zod';
+import type { Database } from '../../../platform/database/index.ts';
 import type { ClerkSales } from './clerk.close.ts';
 
-// Penjualan kasir selama sesi, dibaca dari pembayaran yang membawa clerk itu. Tabel pembayaran (kasir dan kasir_detail)
-// lahir bersama Simpan pembayaran, jadi sampai saat itu tidak ada pembayaran yang bisa tercatat dan setiap sesi berisi
-// nol. Simpan pembayaran mengganti isi fungsi ini dengan query atas pembayarannya.
-export function clerkSales(): ClerkSales {
-    return { transactions: 0, total: '0', byMethod: new Map() };
+// Penjualan kasir selama sesi: pembayaran yang membawa clerk itu dan tidak batal, jumlah dan nilainya, semua jenis
+// bayar, dan nilai per jenis bayar. Sistem lama mencocokkan pembayaran lewat user dan jam mulai clerk saja.
+export async function clerkSales(
+    db: Database,
+    clerk: { tenantId: string; id: string },
+): Promise<ClerkSales> {
+    const [header] = await db.rows(
+        z.object({ transactions: z.number(), total: z.string() }),
+        `select count(*)::int as transactions,
+                coalesce((select sum(d.nilai) from kasir_detail d join kasir k on k.id = d.kasir_id
+                          where k.tenant_id = $1 and k.clerk_id = $2 and k.status = 'diposting'), 0)::text as total
+         from kasir where tenant_id = $1 and clerk_id = $2 and status = 'diposting'`,
+        [clerk.tenantId, clerk.id],
+    );
+    const byMethod = await db.rows(
+        z.object({ id: z.string(), amount: z.string() }),
+        `select d.jenis_bayar_id as id, sum(d.nilai)::text as amount
+         from kasir_detail d join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
+         where k.tenant_id = $1 and k.clerk_id = $2 and k.status = 'diposting'
+         group by d.jenis_bayar_id`,
+        [clerk.tenantId, clerk.id],
+    );
+    return {
+        transactions: header?.transactions ?? 0,
+        total: header?.total ?? '0',
+        byMethod: new Map(byMethod.map((row) => [row.id, row.amount])),
+    };
 }

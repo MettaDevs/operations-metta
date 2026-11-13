@@ -2769,6 +2769,18 @@
             }
         }
     },
+    "billingPaymentCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/billing/visits/{id}/payments",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "currencyList": {
         "~orpc": {
             "errorMap": {},

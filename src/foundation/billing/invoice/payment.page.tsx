@@ -4,7 +4,10 @@ import {
 } from '@operations-metta/ui/collapsible-section';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
-import { displayNumber } from '@operations-metta/ui/display-number';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
@@ -12,22 +15,23 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { definePage, orpc } from '../../../platform/shell/index.ts';
+import { PaymentForm } from '../payment/payment-form.tsx';
 
-// Form Pembayaran Kuta 1, bagian yang hanya dibaca: panel Pasien, Rincian Biaya, dan Nilai tagihan. Nilai dihitung
-// server dengan rumus kasir Kuta (invoice.totals.ts). Rincian menampilkan nilai baris apa adanya; sistem lama
+// Form Pembayaran Kuta 1: panel Pasien, Rincian Biaya, dan Detail Pembayaran. Nilai dihitung server dengan rumus
+// kasir Kuta (invoice.totals.ts); kunjungan yang sudah dibayar menampilkan pembayarannya. Rincian menampilkan nilai baris apa adanya; sistem lama
 // membulatkan tampilan baris ke atas per 1.000, padahal yang ditagih nilai tepatnya.
 
 const route = getRouteApi('/_app/billing/payments/$visitId');
 
 function PaymentPage(): ReactNode {
     const { visitId } = route.useParams();
-    const { data } = useSuspenseQuery(
+    const { data, refetch } = useSuspenseQuery(
         orpc.billingVisitShow.queryOptions({
             input: { params: { id: visitId } },
             select: (response) => response.body.data,
         }),
     );
-    const { visit, charges, totals } = data;
+    const { visit, charges, totals, payment } = data;
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const groupCount = new Set(
         charges.map(
@@ -193,18 +197,75 @@ function PaymentPage(): ReactNode {
                     </CollapsibleSection>
                     <CollapsibleSection
                         value="cashier"
-                        title="Data Kasir"
-                        summary={`Nilai ${displayNumber(totals.value)}`}
+                        title={
+                            payment
+                                ? `Pembayaran ${payment.number}`
+                                : 'Detail Pembayaran'
+                        }
+                        summary={`Nilai ${displayAmount(totals.value, data.amount_decimals)}`}
                     >
-                        <FormGrid>
-                            <FormControl hint="Jumlah Qty x (Nilai - Disc %) + HExt semua baris, dibulatkan ke rupiah.">
-                                <Input
-                                    label="Nilai"
-                                    value={displayNumber(totals.value)}
-                                    readOnly
-                                />
-                            </FormControl>
-                        </FormGrid>
+                        {payment ? (
+                            <FormGrid>
+                                <FormControl>
+                                    <Input
+                                        label="Nilai"
+                                        value={displayAmount(
+                                            totals.value,
+                                            data.amount_decimals,
+                                        )}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                {payment.lines.map((line) => (
+                                    <FormControl
+                                        key={line.label}
+                                        hint={
+                                            line.currency_code ===
+                                            data.local_currency
+                                                ? undefined
+                                                : `${line.currency_code} ${displayNumber(line.currency_amount)} dengan kurs ${displayNumber(line.rate)}.`
+                                        }
+                                    >
+                                        <Input
+                                            label={line.label}
+                                            value={displayAmount(
+                                                line.amount,
+                                                data.amount_decimals,
+                                            )}
+                                            readOnly
+                                        />
+                                    </FormControl>
+                                ))}
+                                <FormControl>
+                                    <Input
+                                        label="Kembalian"
+                                        value={displayAmount(
+                                            payment.change,
+                                            data.amount_decimals,
+                                        )}
+                                        readOnly
+                                    />
+                                </FormControl>
+                            </FormGrid>
+                        ) : data.can_pay ? (
+                            <PaymentForm
+                                form={data}
+                                onSaved={() => refetch()}
+                            />
+                        ) : (
+                            <FormGrid>
+                                <FormControl hint="Jumlah Qty x (Nilai - Disc %) + HExt semua baris, dibulatkan ke rupiah.">
+                                    <Input
+                                        label="Nilai"
+                                        value={displayAmount(
+                                            totals.value,
+                                            data.amount_decimals,
+                                        )}
+                                        readOnly
+                                    />
+                                </FormControl>
+                            </FormGrid>
+                        )}
                     </CollapsibleSection>
                 </CollapsibleSectionGroup>
             </div>

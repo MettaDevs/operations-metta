@@ -1,0 +1,132 @@
+asyncapi: 3.0.0
+info:
+  title: billing.invoice.posted.v1
+  version: 1.0.0
+  description: |
+    Pembayaran kasir disimpan: tagihan kunjungan sekaligus pembayarannya, seperti satu baris SIMtrKasir sistem lama.
+    Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di transaksi Simpan yang sama,
+    sesudah baris biaya kunjungan ditandai ditagih.
+
+    Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime dan belum ada penerima. Layanan kesehatan tidak
+    perlu menandai kunjungan Sudah Bayar, karena kasir yang memegang status itu, dan perubahan biaya sesudah bayar
+    ditolak lewat `lockChargeForChange` milik kasir. Finance menerimanya kelak untuk posting.
+channels:
+  billing.invoice.posted.v1:
+    address: billing.invoice.posted.v1
+    messages:
+      invoicePosted:
+        $ref: '#/components/messages/invoicePosted'
+operations:
+  publishInvoicePosted:
+    action: send
+    channel:
+      $ref: '#/channels/billing.invoice.posted.v1'
+    messages:
+      - $ref: '#/channels/billing.invoice.posted.v1/messages/invoicePosted'
+components:
+  messages:
+    invoicePosted:
+      name: invoicePosted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: billing.invoice.posted.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity kasir.
+        org_unit_id:
+          type: ['null', string]
+          format: uuid
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/invoice'
+    invoice:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          payment_id,
+          payment_number,
+          source_module,
+          visit_id,
+          registration_number,
+          date,
+          value,
+          payments,
+        ]
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        payment_number:
+          type: string
+          description: Nomor bukti dari number sequence kasir legal entity itu.
+        source_module:
+          type: string
+          description: Module pemilik kunjungan, misalnya `healthcare`.
+        visit_id:
+          type: string
+          format: uuid
+        registration_number:
+          type: string
+        date:
+          type: string
+          format: date
+        value:
+          type: string
+          description: Nilai tagihan dalam mata uang lokal tenant, teks desimal.
+        payments:
+          type: array
+          description: |
+            Nilai per jenis bayar yang dipakai, tanpa yang nol. Jenis bayar bermata uang asing membawa jumlah valuta dan
+            kurs yang dipakai, supaya finance kelak bisa memposting selisih kurs. Tunai lokal bisa negatif bila
+            kembaliannya untuk tunai valuta.
+          items:
+            type: object
+            additionalProperties: false
+            required: [payment_method_id, amount, currency_code, currency_amount, exchange_rate]
+            properties:
+              payment_method_id:
+                type: string
+                format: uuid
+              amount:
+                type: string
+                description: Jumlah dalam mata uang lokal tenant, teks desimal.
+              currency_code:
+                type: string
+                description: Kode ISO mata uang jenis bayar; mata uang lokal untuk jenis bayar tanpa mata uang asing.
+              currency_amount:
+                type: string
+                description: Jumlah dalam mata uang itu, teks desimal.
+              exchange_rate:
+                type: string
+                description: Nilai satu satuan mata uang itu dalam mata uang lokal; 1 untuk mata uang lokal.
