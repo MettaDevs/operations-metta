@@ -162,8 +162,15 @@ export const sampleSchema = z.object({
             policy: z.string(),
         }),
     ),
-    // Kelompok harga Core, ditunjuk tipe pasien lewat kodenya.
-    pricing: z.object({ price_groups: z.array(codeName) }).optional(),
+    // Kelompok harga Core, ditunjuk tipe pasien lewat kodenya, dan komponen biaya selain komponen bawaan tenant.
+    pricing: z
+        .object({
+            price_groups: z.array(codeName),
+            charge_components: z
+                .array(codeName.extend({ sort_order: z.number() }))
+                .default([]),
+        })
+        .optional(),
     healthcare: z
         .object({
             patient_types: z.array(
@@ -372,6 +379,11 @@ async function seedOrganizations(
               options.sample.pricing.price_groups,
           )
         : new Map<string, string>();
+    if (options.sample.pricing)
+        await api.ensureEach(
+            `${corePricing}/charge-components`,
+            options.sample.pricing.charge_components,
+        );
     const healthcare = options.sample.healthcare;
     if (healthcare) {
         const types = new Map<string, string>();
