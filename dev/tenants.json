@@ -469,14 +469,72 @@
                         "name": "Konsultasi dokter umum",
                         "group": "TM",
                         "category": "TND",
-                        "sections": ["Poli Umum", "Pusling"]
+                        "sections": ["Poli Umum", "Pusling"],
+                        "prices": [
+                            {
+                                "price_group": "UMUM",
+                                "components": [
+                                    {
+                                        "component": "SARANA",
+                                        "new_price": "15000"
+                                    },
+                                    {
+                                        "component": "PELAYANAN",
+                                        "new_price": "35000"
+                                    }
+                                ]
+                            },
+                            {
+                                "price_group": "ASR",
+                                "components": [
+                                    {
+                                        "component": "SARANA",
+                                        "new_price": "20000"
+                                    },
+                                    {
+                                        "component": "PELAYANAN",
+                                        "new_price": "50000"
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         "code": "JAS0002",
                         "name": "Jahit luka kecil",
                         "group": "TM",
                         "category": "TND",
-                        "sections": ["Poli Umum"]
+                        "sections": ["Poli Umum"],
+                        "prices": [
+                            {
+                                "price_group": "UMUM",
+                                "components": [
+                                    {
+                                        "component": "SARANA",
+                                        "initial_price": "25000",
+                                        "new_price": "25000"
+                                    },
+                                    {
+                                        "component": "PELAYANAN",
+                                        "new_price": "50000"
+                                    }
+                                ]
+                            },
+                            {
+                                "price_group": "UMUM",
+                                "care_class": "K1",
+                                "components": [
+                                    {
+                                        "component": "SARANA",
+                                        "new_price": "40000"
+                                    },
+                                    {
+                                        "component": "PELAYANAN",
+                                        "new_price": "75000"
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         "code": "JAS0003",

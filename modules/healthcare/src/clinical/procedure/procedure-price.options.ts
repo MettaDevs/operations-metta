@@ -1,0 +1,120 @@
+// Isian tab Detail Harga kartu Jasa sistem lama (views/services/price/form.php dan form_component.php) dengan kolom
+// sim_m_tindakan_harga dan sim_m_tindakan_harga_komponen serta label sistem lama. Dipakai service untuk membaca dan
+// menulis, dan layar untuk label isian.
+
+// Lokasi (Price_model::dropdown_static('Lokasi')): kode yang disimpan sistem lama, labelnya kode itu sendiri.
+export const priceLocations = {
+    RJ: 'RJ',
+    UGD: 'UGD',
+    RI: 'RI',
+    XX: 'XX',
+} as const;
+export type PriceLocation = keyof typeof priceLocations;
+
+export function isPriceLocation(value: string): value is PriceLocation {
+    return Object.hasOwn(priceLocations, value);
+}
+
+// money: uang (money SQL Server), 0 atau lebih karena isian mask-number sistem lama menjadikan angka negatif 0.
+// number: persen dan Qty, isian teks biasa di sistem lama tanpa batas bawah.
+export type PriceNumberKind = 'money' | 'number';
+
+// Isian angka baris harga yang diketik pengguna. Harga baris tidak termasuk: harga itu jumlah komponennya.
+export const priceNumberFields = {
+    detail_incentive: {
+        column: 'insentif_detail',
+        kind: 'money',
+        label: 'Insentif Detail',
+    },
+    component_incentive: {
+        column: 'insentif_komponen',
+        kind: 'money',
+        label: 'Insentif Komponen',
+    },
+    hc_discount_percent: {
+        column: 'disc_hc_umum',
+        kind: 'number',
+        label: 'Diskon HC (%)',
+    },
+} as const;
+
+// Harga baris = jumlah biasa nilai komponen bernama sama, tanpa dikali Qty (calculate_total_price). Kolomnya bernama
+// sama di kedua tabel.
+export const priceSumFields = {
+    previous_price: { column: 'harga_lama', label: 'Harga Lama' },
+    new_price: { column: 'harga_baru', label: 'Harga Baru' },
+    previous_hc_price: { column: 'harga_hc_lama', label: 'Harga Lama HC' },
+    new_hc_price: { column: 'harga_hc_baru', label: 'Harga Baru HC' },
+    previous_bpjs_price: {
+        column: 'harga_bpjs_lama',
+        label: 'Harga Lama BPJS',
+    },
+    new_bpjs_price: { column: 'harga_bpjs', label: 'Harga Baru BPJS' },
+} as const;
+export type PriceSumField = keyof typeof priceSumFields;
+
+// Harga Baru yang diisikan form komponen sistem lama begitu Harga Awal, Persen Insentif, atau Persen Pajak Titipan
+// ditinggalkan dan Include Insentif diubah (calculate_new_price di form_component.php): Harga Awal, ditambah insentif
+// bila tidak termasuk, ditambah pajak titipan. Hitungannya pecahan biner peramban lalu toFixed(2) mask_number, urutan
+// operasinya sama, supaya angkanya sama persis dengan sistem lama. Isian Harga Baru tetap boleh diubah sesudahnya.
+export function legacyNewPrice(
+    initialPrice: string,
+    incentivePercent: string,
+    taxDepositPercent: string,
+    includesIncentive: boolean,
+): string {
+    const initial = Number(initialPrice);
+    const incentive = includesIncentive
+        ? 0
+        : (initial * Number(incentivePercent)) / 100;
+    const tax = (initial * Number(taxDepositPercent)) / 100;
+    return (initial + incentive + tax).toFixed(2);
+}
+
+// Isian angka komponen, urutan form komponen sistem lama.
+export const componentNumberFields = {
+    quantity: { column: 'qty', kind: 'number', label: 'Qty' },
+    initial_price: { column: 'harga_awal', kind: 'money', label: 'Harga Awal' },
+    previous_price: {
+        column: 'harga_lama',
+        kind: 'money',
+        label: 'Harga Lama',
+    },
+    tax_deposit_percent: {
+        column: 'persen_pajak_titipan',
+        kind: 'number',
+        label: 'Persen Pajak Titipan',
+    },
+    incentive_percent: {
+        column: 'persen_insentif',
+        kind: 'number',
+        label: 'Persen Insentif',
+    },
+    new_price: { column: 'harga_baru', kind: 'money', label: 'Harga Baru' },
+    previous_hc_price: {
+        column: 'harga_hc_lama',
+        kind: 'money',
+        label: 'Harga Lama HC',
+    },
+    new_hc_price: {
+        column: 'harga_hc_baru',
+        kind: 'money',
+        label: 'Harga Baru HC',
+    },
+    hc_incentive_percent: {
+        column: 'persen_insentif_hc',
+        kind: 'number',
+        label: 'Insentif HC (%)',
+    },
+    previous_bpjs_price: {
+        column: 'harga_bpjs_lama',
+        kind: 'money',
+        label: 'Harga Lama BPJS',
+    },
+    new_bpjs_price: {
+        column: 'harga_bpjs',
+        kind: 'money',
+        label: 'Harga Baru BPJS',
+    },
+} as const;
+export type ComponentNumberField = keyof typeof componentNumberFields;

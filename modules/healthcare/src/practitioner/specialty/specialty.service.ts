@@ -254,6 +254,15 @@ export class Specialties {
             validation({
                 id: 'Spesialis ini masih dipakai tenaga kesehatan. Ganti spesialis nakes itu lebih dulu.',
             });
+        const priced = await this.db.one(
+            z.object({ id: z.string() }),
+            'select id from sim_m_tindakan_harga where tenant_id = $1 and spesialisasi_id = $2 and deleted_at is null limit 1',
+            [this.workspace.tenantId, current.id],
+        );
+        if (priced)
+            validation({
+                id: 'Spesialis ini masih dipakai di harga tindakan. Ganti spesialis baris harga itu lebih dulu.',
+            });
         const stamp = nowSql();
         let deleted = 0;
         await this.db.transaction(async () => {

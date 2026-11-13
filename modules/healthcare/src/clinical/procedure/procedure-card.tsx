@@ -38,8 +38,10 @@ import {
     procedureOptions,
     type ProcedureOption,
 } from './procedure.options.ts';
+import { priceDrafts, priceInputs } from './procedure-price-draft.ts';
+import { ProcedurePriceTab } from './procedure-price-tab.tsx';
 
-export type Procedure = ApiBody<'healthcareProcedureList'>['data'][number];
+export type Procedure = ApiBody<'healthcareProcedureShow'>['data'];
 export type ProcedurePermissions =
     ApiBody<'healthcareProcedureMetadata'>['permissions'];
 type Metadata = ApiBody<'healthcareProcedureMetadata'>;
@@ -83,8 +85,9 @@ const options: { option: ProcedureOption; label: string }[] = [
 ];
 
 // Kartu satu tindakan, susunan kartu Jasa sistem lama: kode, nama, nama internasional, kelompok, dan kategori di
-// Umum, lalu section yang menawarkannya (tab Detail Section). Dipakai daftar tindakan di Setup dan tombol Baru pada
-// pilihan tindakan baris Biaya Tindakan pemeriksaan. Kartu memuat pilihannya sendiri supaya bisa dibuka dari mana saja.
+// Umum, lalu tab Detail Harga, lalu section yang menawarkannya (tab Detail Section). Dipakai daftar tindakan di Setup
+// dan tombol Baru pada pilihan tindakan baris Biaya Tindakan pemeriksaan. Kartu memuat pilihannya sendiri supaya bisa
+// dibuka dari mana saja.
 export function ProcedureCard({
     procedure,
     permissions,
@@ -125,6 +128,7 @@ export function ProcedureCard({
         flags: Object.fromEntries(
             flags.map(({ flag }) => [flag, procedure?.[flag] ?? false]),
         ),
+        prices: priceDrafts(procedure?.prices ?? []),
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -201,10 +205,11 @@ export function ProcedureCard({
         setErrors({});
         setMessage(null);
         // Angka diketik cara Indonesia (12.500); yang tidak terbaca dikirim apa adanya supaya ditolak di isiannya.
-        const { flags: flagValues, ...fields } = form;
+        const { flags: flagValues, prices, ...fields } = form;
         const body = {
             ...fields,
             ...flagValues,
+            prices: priceInputs(prices),
             hospital_cost_percent:
                 parseDisplayNumber(form.hospital_cost_percent) ??
                 form.hospital_cost_percent,
@@ -310,7 +315,7 @@ export function ProcedureCard({
                 />
                 <PageDialogBody className="py-3">
                     <CollapsibleSectionGroup
-                        defaultValue={['general', 'sections']}
+                        defaultValue={['general', 'prices', 'sections']}
                     >
                         <CollapsibleSection
                             value="general"
@@ -623,6 +628,24 @@ export function ProcedureCard({
                                     </Field>
                                 ))}
                             </FormGrid>
+                        </CollapsibleSection>
+                        <CollapsibleSection
+                            value="prices"
+                            title="Detail Harga"
+                            summary={`${form.prices.length} baris harga`}
+                        >
+                            <ProcedurePriceTab
+                                prices={form.prices}
+                                saved={procedure?.prices ?? []}
+                                metadata={metadata}
+                                editing={editing}
+                                onChange={(prices) =>
+                                    setForm((current) => ({
+                                        ...current,
+                                        prices,
+                                    }))
+                                }
+                            />
                         </CollapsibleSection>
                         <CollapsibleSection
                             value="sections"

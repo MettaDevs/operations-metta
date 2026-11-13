@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listParametersSchema } from '@core/platform/http/index.ts';
+import { procedurePriceRowSchema } from './procedure-price.schema.ts';
 
 // Tindakan milik tenant (SIMmListJasa sistem lama), dipilih di baris Biaya Tindakan pemeriksaan.
 export const procedureRowSchema = z.object({
@@ -42,6 +43,11 @@ export const procedureRowSchema = z.object({
     version: z.number(),
 });
 
+// Kartu satu tindakan: baris daftar ditambah tab Detail Harga.
+export const procedureRecordSchema = procedureRowSchema.extend({
+    prices: z.array(procedurePriceRowSchema),
+});
+
 export const procedureListQuerySchema = listParametersSchema.extend({
     status: z.enum(['active', 'inactive']).optional(),
     group: z.string().optional(),
@@ -60,6 +66,9 @@ export const procedureInputSchema = z.object({
     // Section yang menawarkan tindakan ini, dikirim lengkap: yang tidak disebut lagi dilepas. Tanpa section_ids,
     // section tindakan tidak disentuh.
     section_ids: z.array(z.string()).optional(),
+    // Baris harga (procedurePriceInputSchema), dikirim lengkap seperti section_ids dan diperiksa per baris. Tanpa
+    // prices, harga tindakan tidak disentuh.
+    prices: z.array(z.unknown()).optional(),
     // Teks desimal (12.5) atau angka.
     hospital_cost_percent: z.union([z.string(), z.number()]).optional(),
     hospital_cost_amount: z.union([z.string(), z.number()]).optional(),

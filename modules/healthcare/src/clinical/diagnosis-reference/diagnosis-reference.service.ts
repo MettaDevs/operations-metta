@@ -23,8 +23,7 @@ import {
 
 type Use = { table: string; column: string };
 
-// Tabel tiap daftar dan tempat barisnya dipakai, yang menahan Delete. Kelas dan kategori operasi belum dipakai di mana
-// pun sampai tarif dipindah.
+// Tabel tiap daftar dan tempat barisnya dipakai, yang menahan Delete.
 const tables = {
     'diagnosis-types': {
         table: 'sim_m_diagnosa_jenis',
@@ -61,8 +60,16 @@ const tables = {
             { table: 'sim_tr_registrasi_tujuan', column: 'status_pulang_id' },
         ],
     },
-    'care-classes': { table: 'sim_m_kelas', uses: [] },
-    'operation-categories': { table: 'sim_m_kategori_operasi', uses: [] },
+    'care-classes': {
+        table: 'sim_m_kelas',
+        uses: [{ table: 'sim_m_tindakan_harga', column: 'kelas_id' }],
+    },
+    'operation-categories': {
+        table: 'sim_m_kategori_operasi',
+        uses: [
+            { table: 'sim_m_tindakan_harga', column: 'kategori_operasi_id' },
+        ],
+    },
     'benefit-limit-categories': {
         table: 'sim_m_kategori_plafon',
         uses: [{ table: 'sim_m_tindakan', column: 'kategori_plafon_id' }],

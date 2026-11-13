@@ -116,6 +116,22 @@ const clinicSchema = z.object({
                 benefit_limit_category: z.string().optional(),
                 supporting_device: z.string().optional(),
                 sections: z.array(z.string()),
+                // Tab Detail Harga: kelompok harga dan kelas lewat kodenya, komponen lewat kode komponen biaya.
+                prices: z
+                    .array(
+                        z.object({
+                            price_group: z.string(),
+                            care_class: z.string().optional(),
+                            components: z.array(
+                                z.object({
+                                    component: z.string(),
+                                    initial_price: z.string().optional(),
+                                    new_price: z.string(),
+                                }),
+                            ),
+                        }),
+                    )
+                    .default([]),
             }),
         )
         .default([]),
@@ -803,7 +819,10 @@ async function seedProcedures(
         clinic.procedure_groups,
     );
     const lists = `${healthcareApi}/diagnosis-references`;
-    await api.ensureEach(`${lists}/care-classes`, clinic.care_classes);
+    const careClasses = await api.ensureEach(
+        `${lists}/care-classes`,
+        clinic.care_classes,
+    );
     await api.ensureEach(
         `${lists}/operation-categories`,
         clinic.operation_categories,
@@ -830,7 +849,7 @@ async function seedProcedures(
                 ),
             }),
     );
-    await api.ensureEach(
+    const procedures = await api.ensureEach(
         `${healthcareApi}/procedures`,
         clinic.procedures,
         (procedure) =>
@@ -866,6 +885,54 @@ async function seedProcedures(
                 ),
             }),
     );
+    await seedProcedurePrices(api, clinic, procedures, careClasses);
+}
+
+// Harga contoh hanya diisi untuk tindakan yang belum punya baris harga, supaya harga yang diatur di layar tidak
+// tertimpa. Isian kartu lainnya dikirim kembali apa adanya; harga baris dijumlahkan server dari komponennya.
+async function seedProcedurePrices(
+    api: SampleApi,
+    clinic: z.infer<typeof clinicSchema>,
+    procedures: Map<string, string>,
+    careClasses: Map<string, string>,
+): Promise<void> {
+    const today = new Date().toLocaleDateString('sv');
+    for (const procedure of clinic.procedures) {
+        if (!procedure.prices.length) continue;
+        const path = `${healthcareApi}/procedures/${required(procedures, procedure.code, 'Tindakan')}`;
+        const record = await api.data(
+            z.looseObject({ prices: z.array(z.unknown()) }),
+            'GET',
+            path,
+        );
+        if (record.prices.length) continue;
+        const prices = [];
+        for (const price of procedure.prices) {
+            const components = [];
+            for (const component of price.components)
+                components.push({
+                    charge_component_id: await api.codeId(
+                        `${corePricing}/charge-components`,
+                        component.component,
+                    ),
+                    quantity: '1',
+                    initial_price: component.initial_price ?? '0',
+                    new_price: component.new_price,
+                });
+            prices.push({
+                price_group_id: await api.codeId(
+                    `${corePricing}/price-groups`,
+                    price.price_group,
+                ),
+                care_class_id: price.care_class
+                    ? required(careClasses, price.care_class, 'Kelas')
+                    : null,
+                new_price_date: today,
+                components,
+            });
+        }
+        await api.call('PATCH', path, { ...record, prices });
+    }
 }
 
 const practitionerRow = z.object({
