@@ -22,6 +22,7 @@ import {
     stockByLocationLineSchema,
     stockByLocationSchema,
 } from './stock-by-location.schema.ts';
+import { Currency, localCurrencyCode } from '../../currency/index.ts';
 
 const itemSchema = stockByLocationSchema.shape.items.element.shape.item;
 const lineSchema = stockByLocationLineSchema.extend({ item: itemSchema });
@@ -160,6 +161,11 @@ export class StockByLocation {
             group.value += fromNumeric(line.value, amountScale);
         }
         return stockByLocationSchema.parse({
+            amount_decimals: (
+                await new Currency(this.db, this.workspace.tenantId).precision(
+                    localCurrencyCode,
+                )
+            ).amount_decimals,
             items: [...groups.values()].map((group) => ({
                 ...group,
                 quantity: display(group.quantity, quantityScale),

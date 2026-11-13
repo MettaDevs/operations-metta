@@ -271,6 +271,11 @@ export class Adjustments {
         this.workspace.guard('inventory-adjustment', 'read');
         const header = await this.header(id);
         return {
+            amount_decimals: (
+                await new Currency(this.db, this.scope.tenantId).precision(
+                    localCurrencyCode,
+                )
+            ).amount_decimals,
             data: await this.db.rows(
                 adjustmentEntryRowSchema,
                 `select k.id, json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'unit', s.kode) as item,

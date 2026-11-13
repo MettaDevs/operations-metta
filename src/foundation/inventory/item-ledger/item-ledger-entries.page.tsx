@@ -37,7 +37,10 @@ import {
     definePage,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { displayNumber } from '@operations-metta/ui/display-number';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import { ItemCard } from '../item/item-card.tsx';
 import { ItemLookup, type Item } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';
@@ -174,6 +177,7 @@ function ItemLedgerEntriesPage(): ReactNode {
     const [pickedItem, setPickedItem] = useState<Item | null>(null);
     const [pickedLocation, setPickedLocation] = useState<Location | null>(null);
     const [pickedBatch, setPickedBatch] = useState<BatchOption | null>(null);
+    const [amountDecimals, setAmountDecimals] = useState(0);
     const [opening, setOpening] = useState<{
         key: string;
         balance: string;
@@ -284,6 +288,7 @@ function ItemLedgerEntriesPage(): ReactNode {
                 { signal },
             );
             setOpening({ key: filterKey, balance: body.opening_balance });
+            setAmountDecimals(body.amount_decimals);
             return { items: body.data, nextCursor: body.next_cursor };
         },
         [itemId, locationId, batchId, kind, from, to, filterKey],
@@ -408,7 +413,7 @@ function ItemLedgerEntriesPage(): ReactNode {
             align: 'right',
             cell: (entry) => (
                 <DataTableText>
-                    {displayNumber(entry.cost_amount)}
+                    {displayAmount(entry.cost_amount, amountDecimals)}
                 </DataTableText>
             ),
         },

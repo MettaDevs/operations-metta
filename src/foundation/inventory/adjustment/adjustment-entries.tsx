@@ -7,7 +7,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { api, errorText } from '../../../platform/shell/index.ts';
-import { displayNumber } from '@operations-metta/ui/display-number';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import type { Adjustment } from './adjustment-labels.tsx';
 
 // Baris kartu gudang yang ditulis posting dokumen ini, termasuk batch yang diambil otomatis untuk stok keluar dan baris
@@ -29,9 +32,10 @@ export function AdjustmentEntries({
                 await api.inventoryAdjustmentEntries({
                     params: { id: document.id },
                 })
-            ).body.data,
+            ).body,
     });
-    const rows = entries.data;
+    const rows = entries.data?.data;
+    const amountDecimals = entries.data?.amount_decimals ?? 0;
 
     return (
         <CollapsibleSection
@@ -107,7 +111,10 @@ export function AdjustmentEntries({
                             align: 'right',
                             cell: (entry) => (
                                 <DataTableText>
-                                    {displayNumber(entry.cost_amount)}
+                                    {displayAmount(
+                                        entry.cost_amount,
+                                        amountDecimals,
+                                    )}
                                 </DataTableText>
                             ),
                         },

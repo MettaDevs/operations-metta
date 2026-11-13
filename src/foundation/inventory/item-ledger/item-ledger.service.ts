@@ -10,6 +10,7 @@ import {
 import { activeLegalEntity } from '../inventory.service.ts';
 import { entryKinds } from './item-ledger.posting.ts';
 import { ledgerRowSchema, stockRowSchema } from './item-ledger.schema.ts';
+import { Currency, localCurrencyCode } from '../../currency/index.ts';
 
 const batchJson = `case when t.id is null then null else json_build_object(
                        'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end`;
@@ -142,6 +143,11 @@ export class ItemLedger {
         });
         return {
             opening_balance: opening,
+            amount_decimals: (
+                await new Currency(this.db, this.workspace.tenantId).precision(
+                    localCurrencyCode,
+                )
+            ).amount_decimals,
             data: batch.data.map((row) => ledgerRowSchema.parse(row)),
             next_cursor: batch.next_cursor,
         };

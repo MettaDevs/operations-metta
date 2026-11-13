@@ -18,10 +18,12 @@ import { operationsTestApp } from '../../../support/operations-app.ts';
 import {
     createMember,
     grantAllOrganizations,
+    setCurrencyPrecision,
 } from '../../../support/tenant-fixtures.ts';
 
 type Reference = { id: string; code: string; name: string };
 type Stock = {
+    amount_decimals: number;
     items: {
         item: Reference & { unit: string };
         quantity: string;
@@ -376,6 +378,27 @@ describe.skipIf(!process.env.DB_HOST)('stock by location', () => {
             'E2',
             '20/11/2026',
         ]);
+    });
+
+    test('values are written with the cents of the local currency precision', async () => {
+        await setCurrencyPrecision(pool, business.tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 2,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
+        const table = stockByLocationTable(await stock(business));
+        expect(
+            table.rows.find(
+                (row) => row.cells[0] === 'STK-1' && row.cells[2] === 'Total',
+            )?.cells[7],
+        ).toBe('3.700,00');
+        await setCurrencyPrecision(pool, business.tenantId, {
+            amount_decimals: 0,
+            unit_amount_decimals: 0,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
     });
 
     test('another legal entity never shows and its locations are refused', async () => {
