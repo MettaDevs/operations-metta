@@ -33,8 +33,8 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 
-// Daftar dan kartu yang sama untuk semua daftar pendek klinis (jenis diagnosa sampai aturan pakai): kode, nama, urutan,
-// dan status aktif. Tiap halaman hanya memberi nama daftarnya dan judulnya.
+// Daftar dan kartu yang sama untuk semua daftar pendek klinis (jenis diagnosa sampai alat penunjang): kode, nama, urutan,
+// dan status aktif. Tiap halaman memberi nama daftarnya, judulnya, dan label urutan bila sistem lama menamainya lain.
 
 type List = Parameters<
     typeof api.healthcareDiagnosisReferenceList
@@ -53,6 +53,7 @@ type Search = z.infer<typeof referenceSearchSchema>;
 function EntryCard({
     list,
     title,
+    sortOrderLabel,
     entry,
     permissions,
     onSaved,
@@ -60,6 +61,7 @@ function EntryCard({
 }: {
     list: List;
     title: string;
+    sortOrderLabel: string;
     entry: Entry | null;
     permissions: Permissions;
     onSaved: (entry: Entry) => void;
@@ -216,7 +218,7 @@ function EntryCard({
                     </FormControl>
                     <FormControl error={errors.sort_order?.[0]}>
                         <Input
-                            label="Urutan"
+                            label={sortOrderLabel}
                             inputMode="numeric"
                             data-error-field="sort_order"
                             value={form.sort_order}
@@ -252,11 +254,13 @@ function EntryCard({
 export function DiagnosisReferenceList({
     list,
     title,
+    sortOrderLabel = 'Urutan',
     search,
     onSearchChange,
 }: {
     list: List;
     title: string;
+    sortOrderLabel?: string;
     search: Search;
     onSearchChange: (next: Partial<Search>) => void;
 }): ReactNode {
@@ -417,7 +421,7 @@ export function DiagnosisReferenceList({
                         },
                         {
                             id: 'sort_order',
-                            header: 'Urutan',
+                            header: sortOrderLabel,
                             width: 90,
                             cell: (entry) => (
                                 <DataTableText>
@@ -461,6 +465,7 @@ export function DiagnosisReferenceList({
                             }
                             list={list}
                             title={title}
+                            sortOrderLabel={sortOrderLabel}
                             entry={open === 'new' ? null : open}
                             permissions={permissions}
                             onSaved={(entry) => {

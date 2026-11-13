@@ -16,7 +16,10 @@ type Practitioner = {
     party_id: string;
     name: string;
     profession_id: string;
-    specialization: string | null;
+    specialty_id: string | null;
+    specialty_name: string | null;
+    subspecialty_id: string | null;
+    subspecialty_name: string | null;
     license_number: string | null;
     license_valid_until: string | null;
     bpjs_doctor_code: string | null;
@@ -112,7 +115,6 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             gender: 'female',
             phone: '081200000001',
             profession_id: professions.dokter,
-            specialization: 'Penyakit dalam',
             license_number: 'SIP-UJI-001',
             // SIP yang sudah lewat masa berlakunya hanya dicatat, tidak ditolak.
             license_valid_until: '2020-01-31',
@@ -123,7 +125,8 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             expect.objectContaining({
                 name: 'Dokter Uji',
                 profession_id: professions.dokter,
-                specialization: 'Penyakit dalam',
+                specialty_id: null,
+                subspecialty_id: null,
                 license_number: 'SIP-UJI-001',
                 license_valid_until: '2020-01-31',
                 bpjs_doctor_code: 'BPJS-001',
@@ -241,6 +244,90 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
             [tenantId],
         );
         expect(count?.count).toBe(0);
+    }, 30_000);
+
+    test('specialty and subspecialty come from the specialty master, and a subspecialty must belong to the specialty', async () => {
+        const specialty = async (name: string, line: string) =>
+            (
+                await json<{
+                    data: { id: string; subspecialties: { id: string }[] };
+                }>(
+                    await admin.post('/api/modules/healthcare/v1/specialties', {
+                        name,
+                        subspecialties: [{ name: line }],
+                    }),
+                    201,
+                )
+            ).data;
+        const internal = await specialty('Penyakit Dalam', 'Ginjal');
+        const child = await specialty('Anak', 'Neonatologi');
+        const practitioner = await created({
+            name: 'Internis Uji',
+            profession_id: professions.dokter,
+            specialty_id: internal.id,
+            subspecialty_id: internal.subspecialties[0]!.id,
+        });
+        expect(practitioner).toEqual(
+            expect.objectContaining({
+                specialty_id: internal.id,
+                specialty_name: 'Penyakit Dalam',
+                subspecialty_id: internal.subspecialties[0]!.id,
+                subspecialty_name: 'Ginjal',
+            }),
+        );
+        const [row] = await pool.unsafe<
+            { spesialisasi_id: string; sub_spesialisasi_id: string }[]
+        >(
+            'select spesialisasi_id, sub_spesialisasi_id from sim_m_nakes where id = $1',
+            [practitioner.id],
+        );
+        expect(row).toEqual({
+            spesialisasi_id: internal.id,
+            sub_spesialisasi_id: internal.subspecialties[0]!.id,
+        });
+        expect(
+            await errors(
+                await admin.patch(`${api}/${practitioner.id}`, {
+                    profession_id: professions.dokter,
+                    specialty_id: internal.id,
+                    subspecialty_id: child.subspecialties[0]!.id,
+                    version: practitioner.version,
+                }),
+            ),
+        ).toEqual({
+            subspecialty_id: [
+                'Pilih sub spesialis dari spesialis yang dipilih.',
+            ],
+        });
+        expect(
+            await errors(
+                await admin.post(api, {
+                    name: 'Nakes Spesialis Salah',
+                    profession_id: professions.dokter,
+                    specialty_id: Bun.randomUUIDv7(),
+                    subspecialty_id: internal.subspecialties[0]!.id,
+                }),
+            ),
+        ).toEqual({
+            specialty_id: ['Pilih spesialis dari daftar.'],
+            subspecialty_id: [
+                'Pilih sub spesialis dari spesialis yang dipilih.',
+            ],
+        });
+        const cleared = (
+            await json<{ data: Practitioner }>(
+                await admin.patch(`${api}/${practitioner.id}`, {
+                    profession_id: professions.dokter,
+                    specialty_id: child.id,
+                    version: practitioner.version,
+                }),
+                200,
+            )
+        ).data;
+        expect([cleared.specialty_name, cleared.subspecialty_id]).toEqual([
+            'Anak',
+            null,
+        ]);
     }, 30_000);
 
     test('changing a practitioner keeps the person, rejects a stale version, and delete archives the row', async () => {

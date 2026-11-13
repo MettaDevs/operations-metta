@@ -12,6 +12,11 @@ export const procedureRowSchema = z.object({
     group_name: z.string().nullable(),
     category_id: z.string().nullable(),
     category_name: z.string().nullable(),
+    // Kategori Plafon (KategoriPlafon) dan Menggunakan Alat (KodeMappingAlat) kartu Jasa sistem lama.
+    benefit_limit_category_id: z.string().nullable(),
+    benefit_limit_category_name: z.string().nullable(),
+    supporting_device_id: z.string().nullable(),
+    supporting_device_name: z.string().nullable(),
     // Cost RS persen dan rupiah (CostRSPersen, CostRSRupiah), teks desimal.
     hospital_cost_percent: z.string(),
     hospital_cost_amount: z.string(),
@@ -50,6 +55,8 @@ export const procedureInputSchema = z.object({
     international_name: z.string().nullable().optional(),
     group_id: z.string().nullable().optional(),
     category_id: z.string().nullable().optional(),
+    benefit_limit_category_id: z.string().nullable().optional(),
+    supporting_device_id: z.string().nullable().optional(),
     // Section yang menawarkan tindakan ini, dikirim lengkap: yang tidak disebut lagi dilepas. Tanpa section_ids,
     // section tindakan tidak disentuh.
     section_ids: z.array(z.string()).optional(),

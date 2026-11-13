@@ -38,12 +38,13 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 
-// Tenaga kesehatan (nakes): orang di buku alamat dengan profesi, SIP, dan kode dokter BPJS. Nakes baru memakai orang
-// yang sudah ada di buku alamat atau membuat orang baru; nama dan identitasnya sesudah itu diubah di Buku alamat.
+// Tenaga kesehatan (nakes): orang di buku alamat dengan profesi, spesialis, SIP, dan kode dokter BPJS. Nakes baru memakai
+// orang yang sudah ada di buku alamat atau membuat orang baru; nama dan identitasnya sesudah itu diubah di Buku alamat.
 
 const route = getRouteApi('/_app/healthcare/practitioner/practitioners');
 const ALL = 'all';
 const UNSET = '__unset__';
+const NONE = { value: UNSET, label: 'Tidak ada' };
 type Practitioner = ApiBody<'healthcarePractitionerList'>['data'][number];
 type Metadata = ApiBody<'healthcarePractitionerMetadata'>;
 type Person = ApiBody<'partyList'>['data'][number];
@@ -58,7 +59,8 @@ type CardForm = {
     gender: string;
     phone: string;
     professionId: string;
-    specialization: string;
+    specialtyId: string | null;
+    subspecialtyId: string | null;
     license_number: string;
     license_valid_until: string;
     bpjs_doctor_code: string;
@@ -94,7 +96,8 @@ function PractitionerCard({
         gender: '',
         phone: '',
         professionId: practitioner?.profession_id ?? '',
-        specialization: practitioner?.specialization ?? '',
+        specialtyId: practitioner?.specialty_id ?? null,
+        subspecialtyId: practitioner?.subspecialty_id ?? null,
         license_number: practitioner?.license_number ?? '',
         license_valid_until: practitioner?.license_valid_until ?? '',
         bpjs_doctor_code: practitioner?.bpjs_doctor_code ?? '',
@@ -109,6 +112,11 @@ function PractitionerCard({
     const profession =
         metadata.professions.find((item) => item.id === form.professionId) ??
         null;
+    // Sub spesialis yang ditawarkan hanya milik spesialis yang dipilih, seperti populate_subspecialist sistem lama.
+    const specialty =
+        metadata.specialties.find((item) => item.id === form.specialtyId) ??
+        null;
+    const subspecialties = specialty?.subspecialties ?? [];
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -153,7 +161,8 @@ function PractitionerCard({
         setMessage(null);
         const details = {
             profession_id: form.professionId,
-            specialization: nullable(form.specialization),
+            specialty_id: form.specialtyId,
+            subspecialty_id: form.subspecialtyId,
             license_number: nullable(form.license_number),
             license_valid_until: nullable(form.license_valid_until),
             bpjs_doctor_code: nullable(form.bpjs_doctor_code),
@@ -214,13 +223,7 @@ function PractitionerCard({
         }
     };
     const text = (
-        field:
-            | 'name'
-            | 'nik'
-            | 'phone'
-            | 'specialization'
-            | 'license_number'
-            | 'bpjs_doctor_code',
+        field: 'name' | 'nik' | 'phone' | 'license_number' | 'bpjs_doctor_code',
         label: string,
         options: {
             required?: boolean;
@@ -429,9 +432,83 @@ function PractitionerCard({
                             ]}
                         />
                     </FormControl>
-                    {text('specialization', 'Spesialisasi', {
-                        maxLength: 200,
-                    })}
+                    <FormControl
+                        error={error('specialty_id')}
+                        data-error-field="specialty_id"
+                    >
+                        {editing ? (
+                            <Select
+                                label="Spesialis"
+                                items={[
+                                    NONE,
+                                    ...metadata.specialties.map((item) => ({
+                                        value: item.id,
+                                        label: item.name,
+                                    })),
+                                ]}
+                                value={form.specialtyId ?? UNSET}
+                                onValueChange={(value) => {
+                                    const specialtyId =
+                                        value === null || value === UNSET
+                                            ? null
+                                            : value;
+                                    setForm({
+                                        ...form,
+                                        specialtyId,
+                                        subspecialtyId:
+                                            specialtyId === form.specialtyId
+                                                ? form.subspecialtyId
+                                                : null,
+                                    });
+                                }}
+                                searchPlaceholder="Cari spesialis"
+                                emptyMessage="Spesialis tidak ditemukan."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Spesialis"
+                                value={practitioner.specialty_name ?? ''}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
+                    <FormControl
+                        error={error('subspecialty_id')}
+                        data-error-field="subspecialty_id"
+                    >
+                        {editing ? (
+                            <Select
+                                label="Sub Spesialis"
+                                items={[
+                                    NONE,
+                                    ...subspecialties.map((item) => ({
+                                        value: item.id,
+                                        label: item.name,
+                                    })),
+                                ]}
+                                value={form.subspecialtyId ?? UNSET}
+                                onValueChange={(value) =>
+                                    setForm({
+                                        ...form,
+                                        subspecialtyId:
+                                            value === null || value === UNSET
+                                                ? null
+                                                : value,
+                                    })
+                                }
+                                searchPlaceholder="Cari sub spesialis"
+                                emptyMessage="Sub spesialis tidak ditemukan."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Sub Spesialis"
+                                value={practitioner.subspecialty_name ?? ''}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
                     {text('license_number', 'No. SIP', { maxLength: 100 })}
                     <FormControl error={error('license_valid_until')}>
                         {editing ? (
@@ -727,12 +804,12 @@ function PractitionersPage(): ReactNode {
                             ),
                         },
                         {
-                            id: 'specialization',
-                            header: 'Spesialisasi',
+                            id: 'specialty',
+                            header: 'Spesialis',
                             width: 200,
                             cell: (practitioner) => (
                                 <DataTableText>
-                                    {practitioner.specialization ?? '—'}
+                                    {practitioner.specialty_name ?? '—'}
                                 </DataTableText>
                             ),
                         },

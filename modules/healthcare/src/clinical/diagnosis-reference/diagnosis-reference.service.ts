@@ -21,52 +21,61 @@ import {
     type DiagnosisReferenceList,
 } from './diagnosis-reference.schema.ts';
 
-// Tabel tiap daftar dan tempat barisnya dipakai, yang menahan Delete.
+type Use = { table: string; column: string };
+
+// Tabel tiap daftar dan tempat barisnya dipakai, yang menahan Delete. Kelas dan kategori operasi belum dipakai di mana
+// pun sampai tarif dipindah.
 const tables = {
     'diagnosis-types': {
         table: 'sim_m_diagnosa_jenis',
-        usedIn: 'sim_tr_pemeriksaan_diagnosa',
-        usedBy: 'jenis_id',
+        uses: [{ table: 'sim_tr_pemeriksaan_diagnosa', column: 'jenis_id' }],
     },
     'diagnosis-cases': {
         table: 'sim_m_diagnosa_kasus',
-        usedIn: 'sim_tr_pemeriksaan_diagnosa',
-        usedBy: 'kasus_id',
+        uses: [{ table: 'sim_tr_pemeriksaan_diagnosa', column: 'kasus_id' }],
     },
     prognoses: {
         table: 'sim_m_prognosa',
-        usedIn: 'sim_tr_pemeriksaan',
-        usedBy: 'prognosa_id',
+        uses: [{ table: 'sim_tr_pemeriksaan', column: 'prognosa_id' }],
     },
     'chronic-diseases': {
         table: 'sim_m_penyakit_kronis',
-        usedIn: 'sim_tr_pemeriksaan_penyakit_kronis',
-        usedBy: 'penyakit_kronis_id',
+        uses: [
+            {
+                table: 'sim_tr_pemeriksaan_penyakit_kronis',
+                column: 'penyakit_kronis_id',
+            },
+        ],
     },
     'procedure-groups': {
         table: 'sim_m_tindakan_kelompok',
-        usedIn: 'sim_m_tindakan',
-        usedBy: 'kelompok_id',
+        uses: [{ table: 'sim_m_tindakan', column: 'kelompok_id' }],
     },
     'dosage-forms': {
         table: 'sim_m_bentuk_sediaan',
-        usedIn: 'sim_m_obat',
-        usedBy: 'bentuk_sediaan_id',
+        uses: [{ table: 'sim_m_obat', column: 'bentuk_sediaan_id' }],
     },
     'usage-instructions': {
         table: 'sim_m_aturan_pakai',
-        usedIn: 'sim_tr_resep_detail',
-        usedBy: 'aturan_pakai_id',
+        uses: [{ table: 'sim_tr_resep_detail', column: 'aturan_pakai_id' }],
     },
     'discharge-statuses': {
         table: 'sim_m_status_pulang',
-        usedIn: 'sim_tr_registrasi_tujuan',
-        usedBy: 'status_pulang_id',
+        uses: [
+            { table: 'sim_tr_registrasi_tujuan', column: 'status_pulang_id' },
+        ],
     },
-} satisfies Record<
-    DiagnosisReferenceList,
-    { table: string; usedIn: string; usedBy: string }
->;
+    'care-classes': { table: 'sim_m_kelas', uses: [] },
+    'operation-categories': { table: 'sim_m_kategori_operasi', uses: [] },
+    'benefit-limit-categories': {
+        table: 'sim_m_kategori_plafon',
+        uses: [{ table: 'sim_m_tindakan', column: 'kategori_plafon_id' }],
+    },
+    'supporting-devices': {
+        table: 'sim_m_alat_penunjang',
+        uses: [{ table: 'sim_m_tindakan', column: 'alat_penunjang_id' }],
+    },
+} satisfies Record<DiagnosisReferenceList, { table: string; uses: Use[] }>;
 
 function checked(body: unknown) {
     const parsed = diagnosisReferenceInputSchema.safeParse(body);
@@ -89,8 +98,7 @@ function checked(body: unknown) {
 // Setup → Klinis.
 export class DiagnosisReferences {
     private readonly table: string;
-    private readonly usedIn: string;
-    private readonly usedBy: string;
+    private readonly uses: Use[];
 
     constructor(
         private readonly db: Database,
@@ -99,11 +107,7 @@ export class DiagnosisReferences {
     ) {
         const parsed = diagnosisReferenceListSchema.safeParse(list);
         if (!parsed.success) abort(404, 'Not Found');
-        ({
-            table: this.table,
-            usedIn: this.usedIn,
-            usedBy: this.usedBy,
-        } = tables[parsed.data]);
+        ({ table: this.table, uses: this.uses } = tables[parsed.data]);
     }
 
     private get rowSql() {
@@ -231,15 +235,17 @@ export class DiagnosisReferences {
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('diagnosis-reference', 'delete');
         const current = await this.row(id);
-        const used = await this.db.one(
-            z.object({ id: z.string() }),
-            `select id from ${this.usedIn} where tenant_id = $1 and ${this.usedBy} = $2 and deleted_at is null limit 1`,
-            [this.workspace.tenantId, current.id],
-        );
-        if (used)
-            validation({
-                id: 'Baris ini sudah dipakai. Nonaktifkan saja supaya tidak dipilih lagi.',
-            });
+        for (const use of this.uses)
+            if (
+                await this.db.one(
+                    z.object({ id: z.string() }),
+                    `select id from ${use.table} where tenant_id = $1 and ${use.column} = $2 and deleted_at is null limit 1`,
+                    [this.workspace.tenantId, current.id],
+                )
+            )
+                validation({
+                    id: 'Baris ini sudah dipakai. Nonaktifkan saja supaya tidak dipilih lagi.',
+                });
         const deleted = await this.db.execute(
             `update ${this.table} set deleted_at = $1, updated_at = $1
              where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,

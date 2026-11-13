@@ -2,13 +2,17 @@
 // dan `bun run dev` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
 import { page as modulesHealthcareSrcClinicalClusterClustersPage } from '../modules/healthcare/src/clinical/cluster/clusters.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/benefit-limit-categories.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/care-classes.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/chronic-diseases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-cases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/discharge-statuses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/dosage-forms.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/operation-categories.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/procedure-groups.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/prognoses.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/supporting-devices.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/usage-instructions.page.tsx';
 import { page as modulesHealthcareSrcClinicalDrugDrugsPage } from '../modules/healthcare/src/clinical/drug/drugs.page.tsx';
 import { page as modulesHealthcareSrcClinicalIcd10Icd10Page } from '../modules/healthcare/src/clinical/icd10/icd10.page.tsx';
@@ -23,6 +27,7 @@ import { page as modulesHealthcareSrcExaminationQueueQueuePage } from '../module
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
 import { page as modulesHealthcareSrcPractitionerPractitionerPractitionersPage } from '../modules/healthcare/src/practitioner/practitioner/practitioners.page.tsx';
 import { page as modulesHealthcareSrcPractitionerProfessionProfessionsPage } from '../modules/healthcare/src/practitioner/profession/professions.page.tsx';
+import { page as modulesHealthcareSrcPractitionerSpecialtySpecialtiesPage } from '../modules/healthcare/src/practitioner/specialty/specialties.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitNewPage } from '../modules/healthcare/src/registration/visit/visit-new.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitPage } from '../modules/healthcare/src/registration/visit/visit.page.tsx';
 import { page as modulesHealthcareSrcRegistrationVisitVisitsPage } from '../modules/healthcare/src/registration/visit/visits.page.tsx';
@@ -97,6 +102,32 @@ const modulesHealthcareSrcClinicalClusterClustersRoute = createRoute({
     },
 });
 
+const modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage.title,
+        },
+    });
+
 const modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute =
     createRoute({
         getParentRoute: () => appLayoutRoute,
@@ -162,6 +193,19 @@ const modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute =
         },
     });
 
+const modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage.title,
+        },
+    });
+
 const modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsRoute =
     createRoute({
         getParentRoute: () => appLayoutRoute,
@@ -185,6 +229,19 @@ const modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute =
             modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage.title,
         },
     });
 
@@ -331,6 +388,18 @@ const modulesHealthcareSrcPractitionerProfessionProfessionsRoute = createRoute({
         modulesHealthcareSrcPractitionerProfessionProfessionsPage.validateSearch,
     staticData: {
         title: modulesHealthcareSrcPractitionerProfessionProfessionsPage.title,
+    },
+});
+
+const modulesHealthcareSrcPractitionerSpecialtySpecialtiesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesHealthcareSrcPractitionerSpecialtySpecialtiesPage.path,
+    component:
+        modulesHealthcareSrcPractitionerSpecialtySpecialtiesPage.component,
+    validateSearch:
+        modulesHealthcareSrcPractitionerSpecialtySpecialtiesPage.validateSearch,
+    staticData: {
+        title: modulesHealthcareSrcPractitionerSpecialtySpecialtiesPage.title,
     },
 });
 
@@ -830,13 +899,17 @@ const platformShellLoginRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     appLayoutRoute.addChildren([
         modulesHealthcareSrcClinicalClusterClustersRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceBenefitLimitCategoriesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceProcedureGroupsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructionsRoute,
         modulesHealthcareSrcClinicalDrugDrugsRoute,
         modulesHealthcareSrcClinicalIcd10Icd10Route,
@@ -851,6 +924,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcPatientPatientPatientsRoute,
         modulesHealthcareSrcPractitionerPractitionerPractitionersRoute,
         modulesHealthcareSrcPractitionerProfessionProfessionsRoute,
+        modulesHealthcareSrcPractitionerSpecialtySpecialtiesRoute,
         modulesHealthcareSrcRegistrationVisitVisitNewRoute,
         modulesHealthcareSrcRegistrationVisitVisitRoute,
         modulesHealthcareSrcRegistrationVisitVisitsRoute,

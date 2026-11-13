@@ -45,6 +45,8 @@ export type ProcedurePermissions =
 type Metadata = ApiBody<'healthcareProcedureMetadata'>;
 type Group = Metadata['groups'][number];
 type Category = Metadata['categories'][number];
+type ChoiceField = 'benefit_limit_category_id' | 'supporting_device_id';
+const NONE = '__none__';
 
 const flags = Object.entries(procedureFlags).flatMap(([flag, { label }]) =>
     isProcedureFlag(flag) ? [{ flag, label }] : [],
@@ -54,6 +56,26 @@ const optionItems = (option: ProcedureOption) =>
         value,
         label,
     }));
+// Dua pilihan master sesudah Kategori, masing-masing dengan pilihan kosong seperti "-- None --" kartu Jasa sistem lama.
+const choices: {
+    field: ChoiceField;
+    list: 'benefit_limit_categories' | 'supporting_devices';
+    heldName: 'benefit_limit_category_name' | 'supporting_device_name';
+    label: string;
+}[] = [
+    {
+        field: 'benefit_limit_category_id',
+        list: 'benefit_limit_categories',
+        heldName: 'benefit_limit_category_name',
+        label: 'Kategori Plafon',
+    },
+    {
+        field: 'supporting_device_id',
+        list: 'supporting_devices',
+        heldName: 'supporting_device_name',
+        label: 'Menggunakan Alat',
+    },
+];
 const options: { option: ProcedureOption; label: string }[] = [
     { option: 'posting_group', label: 'Kelompok Posting' },
     { option: 'incentive_source', label: 'Sumber Insentif' },
@@ -85,6 +107,8 @@ export function ProcedureCard({
         international_name: procedure?.international_name ?? '',
         group_id: procedure?.group_id ?? null,
         category_id: procedure?.category_id ?? null,
+        benefit_limit_category_id: procedure?.benefit_limit_category_id ?? null,
+        supporting_device_id: procedure?.supporting_device_id ?? null,
         section_ids: procedure
             ? procedure.sections.map((section) => section.id)
             : defaultSectionIds,
@@ -151,6 +175,19 @@ export function ProcedureCard({
                   active: false,
               }
             : null);
+    // Pilihan nonaktif hanya ditawarkan kepada tindakan yang sudah memegangnya.
+    const choiceItems = (
+        list: (typeof choices)[number]['list'],
+        field: ChoiceField,
+    ) => [
+        { value: NONE, label: 'Tidak ada' },
+        ...(metadata?.[list] ?? [])
+            .filter((item) => item.active || item.id === procedure?.[field])
+            .map((item) => ({
+                value: item.id,
+                label: `${item.name}${item.active ? '' : ' (nonaktif)'}`,
+            })),
+    ];
     const held = new Set(procedure?.sections.map((section) => section.id));
     const sections = (metadata?.sections ?? [])
         .filter((section) => section.active || held.has(section.id))
@@ -414,6 +451,51 @@ export function ProcedureCard({
                                         ]}
                                     />
                                 </FormControl>
+                                {choices.map(
+                                    ({ field, list, heldName, label }) => (
+                                        <FormControl
+                                            key={field}
+                                            error={errors[field]?.[0]}
+                                            data-error-field={field}
+                                        >
+                                            {editing ? (
+                                                <Select
+                                                    label={label}
+                                                    items={choiceItems(
+                                                        list,
+                                                        field,
+                                                    )}
+                                                    value={form[field] ?? NONE}
+                                                    onValueChange={(value) =>
+                                                        setForm({
+                                                            ...form,
+                                                            [field]:
+                                                                value ===
+                                                                    null ||
+                                                                value === NONE
+                                                                    ? null
+                                                                    : value,
+                                                        })
+                                                    }
+                                                    searchPlaceholder={`Cari ${label.toLowerCase()}`}
+                                                    emptyMessage="Pilihan tidak ditemukan."
+                                                    portalContainer={
+                                                        portalContainer
+                                                    }
+                                                />
+                                            ) : (
+                                                <Input
+                                                    label={label}
+                                                    value={
+                                                        procedure?.[heldName] ??
+                                                        ''
+                                                    }
+                                                    readOnly
+                                                />
+                                            )}
+                                        </FormControl>
+                                    ),
+                                )}
                                 <FormControl
                                     error={errors.hospital_cost_percent?.[0]}
                                 >
