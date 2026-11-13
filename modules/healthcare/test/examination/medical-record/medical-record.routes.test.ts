@@ -14,6 +14,7 @@ import {
 type Physical = Record<string, number | string | null>;
 type Allergy = {
     id: string | null;
+    version: number | null;
     category: string | null;
     allergen_id: string | null;
     allergen_name: string | null;
@@ -31,7 +32,11 @@ type Record_ = {
     version: number | null;
     anamnesis: Record<string, string | number | null>;
     history: Record<string, string | boolean | null>;
-    allergy: { none: boolean; items: Allergy[] };
+    allergy: {
+        none: boolean;
+        items: Allergy[];
+        removed?: { id: string; version: number }[];
+    };
     status: Record<string, string | boolean | null>;
     physical: Physical;
     pain: Record<string, string | number | boolean | null>;
@@ -357,7 +362,11 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         ]).toEqual([161, 50, 'Berdiri']);
         expect(opened.data.status.emotional_expression).toBe('Tenang');
         expect(opened.data.status.uses_mobility_aid).toBe(false);
-        expect(opened.data.allergy).toEqual({ none: false, items: [] });
+        expect(opened.data.allergy).toEqual({
+            none: false,
+            items: [],
+            removed: [],
+        });
     });
 
     test('Simpan is refused with the old messages until the required physical fields are filled', async () => {
@@ -673,6 +682,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
 
     const allergy = (values: Partial<Allergy>): Allergy => ({
         id: null,
+        version: null,
         category: null,
         allergen_id: null,
         allergen_name: null,
@@ -768,7 +778,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         expect(carried.data.allergy).toEqual(saved.data.allergy);
 
         // Reaksi dan status diubah di tempat; alergen kiriman baris tersimpan diabaikan. Lateks dibuang, udara ditambah.
-        const [seafoodRow, peanutsRow, antibioticsRow] =
+        const [seafoodRow, peanutsRow, antibioticsRow, latexRow] =
             carried.data.allergy.items;
         const changed = await json<Shown>(
             await save(admin, second, {
@@ -788,6 +798,9 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
                             category: 'udara',
                             allergen_id: metadata.allergies.airborne[0]!.id,
                         }),
+                    ],
+                    removed: [
+                        { id: latexRow!.id!, version: latexRow!.version! },
                     ],
                 },
             }),
@@ -921,7 +934,121 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         expect((await show(admin, next)).data.allergy).toEqual({
             none: false,
             items: quiet.data.allergy.items,
+            removed: [],
         });
+    });
+
+    test('two examinations of the same patient open at once keep the allergies each other recorded', async () => {
+        const older = await visit();
+        await start(older);
+        const newer = await visit();
+        await start(newer);
+        const olderOpened = await show(admin, older);
+        const newerOpened = await show(admin, newer);
+        const body = (opened: Shown, allergyList: Record_['allergy']) => ({
+            ...opened.data,
+            physical: { ...opened.data.physical, ...vitals },
+            allergy: allergyList,
+        });
+
+        const newerSaved = await json<Shown>(
+            await save(
+                admin,
+                newer,
+                body(newerOpened, {
+                    ...newerOpened.data.allergy,
+                    items: [
+                        ...newerOpened.data.allergy.items,
+                        allergy({ category: 'lainnya', name: 'Plester luka' }),
+                    ],
+                }),
+            ),
+            200,
+        );
+        const plaster = newerSaved.data.allergy.items.find(
+            (row) => row.name === 'Plester luka',
+        )!;
+
+        const olderSaved = await json<Shown>(
+            await save(
+                admin,
+                older,
+                body(olderOpened, olderOpened.data.allergy),
+            ),
+            200,
+        );
+        expect(olderSaved.data.allergy.items).toContainEqual(plaster);
+        const [stored] = await pool.unsafe<[{ deleted_at: Date | null }]>(
+            'select deleted_at from sim_m_pasien_alergi where id = $1',
+            [plaster.id],
+        );
+        expect(stored.deleted_at).toBeNull();
+
+        // Kedua layar memuat Plester luka. Yang satu mengubah statusnya; yang lain, masih memegang versi lama, tidak boleh
+        // membuang atau mengubahnya tanpa memuat ulang.
+        const first = await show(admin, older);
+        const second = await show(admin, newer);
+        await json<Shown>(
+            await save(
+                admin,
+                newer,
+                body(second, {
+                    ...second.data.allergy,
+                    items: second.data.allergy.items.map((row) =>
+                        row.id === plaster.id
+                            ? { ...row, status: 'sembuh' }
+                            : row,
+                    ),
+                }),
+            ),
+            200,
+        );
+        const stale =
+            'Alergi ini baru diubah dari pemeriksaan lain pasien ini. Muat ulang halaman untuk melihat daftar terbarunya.';
+        const loaded = first.data.allergy.items;
+        const plasterAt = loaded.findIndex((row) => row.id === plaster.id);
+        expect(
+            (
+                await refused(
+                    await save(
+                        admin,
+                        older,
+                        body(first, {
+                            ...first.data.allergy,
+                            items: loaded.filter(
+                                (row) => row.id !== plaster.id,
+                            ),
+                            removed: [
+                                { id: plaster.id!, version: plaster.version! },
+                            ],
+                        }),
+                    ),
+                )
+            ).errors,
+        ).toEqual({ 'allergy.items': [stale] });
+        expect(
+            (
+                await refused(
+                    await save(
+                        admin,
+                        older,
+                        body(first, {
+                            ...first.data.allergy,
+                            items: loaded.map((row) =>
+                                row.id === plaster.id
+                                    ? { ...row, reaction: 'Kemerahan' }
+                                    : row,
+                            ),
+                        }),
+                    ),
+                )
+            ).errors,
+        ).toEqual({ [`allergy.items.${plasterAt}.status`]: [stale] });
+        expect(
+            (await show(admin, older)).data.allergy.items.find(
+                (row) => row.id === plaster.id,
+            ),
+        ).toMatchObject({ status: 'sembuh', reaction: null });
     });
 
     test('changing the required-field setting changes what Simpan and Selesai periksa demand', async () => {

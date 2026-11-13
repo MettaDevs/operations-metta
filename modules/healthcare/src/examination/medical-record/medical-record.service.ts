@@ -1110,6 +1110,7 @@ export class MedicalRecords {
             data.allergy = {
                 none: panelValues.history?.allergy_none === true,
                 items: await this.allergies.list(destination.patient_id),
+                removed: [],
             };
         }
         if (uses('status'))
