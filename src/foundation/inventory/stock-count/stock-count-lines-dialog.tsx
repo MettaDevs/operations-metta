@@ -22,7 +22,7 @@ import {
     FormErrorHeader,
 } from '../../../platform/shell/index.ts';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
-import { ItemLookup } from '../item/item-lookup.tsx';
+import { ItemLookup, selectItems } from '../item/item-lookup.tsx';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 import { label, type Position } from './stock-count-fields.tsx';
 
@@ -169,6 +169,26 @@ export function StockCountLinesDialog({
                                 { key: nextKey(), item: null },
                             ])
                         }
+                        selectRecords={selectItems((picked) =>
+                            setItems((current) => {
+                                const present = new Set(
+                                    current.map((row) => row.item?.id),
+                                );
+                                return [
+                                    ...current,
+                                    ...picked
+                                        .filter((item) => !present.has(item.id))
+                                        .map((item) => ({
+                                            key: nextKey(),
+                                            item: {
+                                                id: item.id,
+                                                code: item.code,
+                                                name: item.name,
+                                            },
+                                        })),
+                                ];
+                            }),
+                        )}
                         onDeleteRows={(removed) =>
                             setItems((current) =>
                                 current.filter(
@@ -180,7 +200,7 @@ export function StockCountLinesDialog({
                                 ),
                             )
                         }
-                        emptyMessage="Semua barang. Pilih Tambah untuk menghitung barang tertentu saja."
+                        emptyMessage="Semua barang. Pilih Tambah atau Tambah banyak untuk menghitung barang tertentu saja."
                         columns={[
                             {
                                 id: 'item_id',

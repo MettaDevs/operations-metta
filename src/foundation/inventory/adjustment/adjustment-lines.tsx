@@ -11,7 +11,7 @@ import {
     displayNumber,
     parseDisplayNumber,
 } from '@operations-metta/ui/display-number';
-import { ItemLookup, type Item } from '../item/item-lookup.tsx';
+import { ItemLookup, selectItems, type Item } from '../item/item-lookup.tsx';
 import {
     MasterLookup,
     type LookupRequest,
@@ -446,6 +446,20 @@ export function AdjustmentLines({
             onAddRow={
                 editing ? () => onChange([...lines, blankLine()]) : undefined
             }
+            selectRecords={
+                editing
+                    ? selectItems(
+                          (items) =>
+                              onChange([
+                                  ...lines,
+                                  ...items.map((item) =>
+                                      withItem(blankLine(), item),
+                                  ),
+                              ]),
+                          'quantity',
+                      )
+                    : undefined
+            }
             onDeleteRows={
                 editing
                     ? (removed) =>
@@ -461,7 +475,7 @@ export function AdjustmentLines({
             }
             emptyMessage={
                 editing
-                    ? 'Belum ada barang. Pilih Tambah untuk menambahkan baris.'
+                    ? 'Belum ada barang. Pilih Tambah atau Tambah banyak untuk menambahkan baris.'
                     : 'Dokumen ini tidak berisi baris.'
             }
             columns={[

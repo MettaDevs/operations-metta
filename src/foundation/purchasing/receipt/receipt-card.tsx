@@ -1,6 +1,7 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
@@ -193,6 +194,16 @@ const loadItems = async (
         nextCursor: body.next_cursor,
     };
 };
+const itemColumns: DataTableColumn<ItemChoice>[] = [
+    { id: 'code', header: 'Kode', width: 110, cell: (item) => item.code },
+    { id: 'name', header: 'Nama', width: 260, cell: (item) => item.name },
+    {
+        id: 'base_unit',
+        header: 'Satuan dasar',
+        width: 110,
+        cell: (item) => item.base_unit.code,
+    },
+];
 const loadFundingSources = async (
     query: { q: string; cursor?: string },
     signal: AbortSignal,
@@ -523,16 +534,16 @@ export function ReceiptCard({
         });
     };
 
-    const addLine = () =>
+    const addLines = (items: (ItemChoice | null)[]) =>
         setLines((current) => {
             const previous = current.at(-1);
             return [
                 ...current,
-                {
+                ...items.map((item) => ({
                     key: nextKey(),
                     id: null,
-                    item: null,
-                    unit: null,
+                    item,
+                    unit: item?.purchase_unit ?? null,
                     quantity: '',
                     unit_cost: '',
                     discount_percent: '',
@@ -543,7 +554,7 @@ export function ReceiptCard({
                     funding_source: previous?.funding_source ?? null,
                     procurement_program: previous?.procurement_program ?? null,
                     budget_year: previous?.budget_year ?? '',
-                },
+                })),
             ];
         });
 
@@ -852,7 +863,20 @@ export function ReceiptCard({
                                   }
                                 : undefined
                         }
-                        onAddRow={editable ? addLine : undefined}
+                        onAddRow={editable ? () => addLines([null]) : undefined}
+                        selectRecords={
+                            editable
+                                ? {
+                                      noun: 'barang',
+                                      loadItems: itemLoader,
+                                      columns: itemColumns,
+                                      getItemValue: (item) => item.id,
+                                      getItemLabel: label,
+                                      focusColumnId: 'quantity',
+                                      onAdd: addLines,
+                                  }
+                                : undefined
+                        }
                         onDeleteRows={
                             editable
                                 ? (removed) =>
@@ -870,7 +894,7 @@ export function ReceiptCard({
                         }
                         emptyMessage={
                             editable
-                                ? 'Belum ada barang. Pilih Tambah untuk menambahkan barang yang diterima.'
+                                ? 'Belum ada barang. Pilih Tambah atau Tambah banyak untuk menambahkan barang yang diterima.'
                                 : 'Dokumen ini tidak berisi barang.'
                         }
                         footer={
@@ -924,29 +948,7 @@ export function ReceiptCard({
                                                 emptyMessage="Barang tidak ditemukan."
                                                 popupClassName="w-[36rem]"
                                                 showDetails={false}
-                                                columns={[
-                                                    {
-                                                        id: 'code',
-                                                        header: 'Kode',
-                                                        width: 110,
-                                                        cell: (item) =>
-                                                            item.code,
-                                                    },
-                                                    {
-                                                        id: 'name',
-                                                        header: 'Nama',
-                                                        width: 260,
-                                                        cell: (item) =>
-                                                            item.name,
-                                                    },
-                                                    {
-                                                        id: 'base_unit',
-                                                        header: 'Satuan dasar',
-                                                        width: 110,
-                                                        cell: (item) =>
-                                                            item.base_unit.code,
-                                                    },
-                                                ]}
+                                                columns={itemColumns}
                                             />
                                         </FormControl>
                                     ) : (
