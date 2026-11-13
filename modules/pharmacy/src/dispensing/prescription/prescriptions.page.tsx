@@ -275,7 +275,10 @@ function PrescriptionsPage(): ReactNode {
                 () =>
                     api.pharmacyDispensingHandOver({
                         params: { id: row.id },
-                        body: { version: row.dispensing_version ?? 0 },
+                        body: {
+                            received_by_patient: true,
+                            version: row.dispensing_version ?? 0,
+                        },
                     }),
                 `Obat ${row.patient_name} sudah diserahkan.`,
                 `Obat ${row.patient_name} belum diserahkan`,
@@ -307,7 +310,7 @@ function PrescriptionsPage(): ReactNode {
         )
             actions.push({
                 id: 'hand-over',
-                label: 'Serahkan',
+                label: 'Serahkan ke pasien',
             });
         actions.push({ id: 'open', label: 'Buka' });
         return actions;

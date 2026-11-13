@@ -26,6 +26,8 @@ type Dispensing = {
         handed_over_by: { name: string } | null;
         called_at: string | null;
         handed_over_at: string | null;
+        received_by_patient: boolean | null;
+        receiver_name: string | null;
         version: number;
     } | null;
     lines: {
@@ -653,6 +655,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing', () => {
         expect(
             (
                 await pharmacy.admin.post(path(id, '/hand-over'), {
+                    received_by_patient: true,
                     version: prepared.dispensing?.version,
                 })
             ).status,
@@ -660,6 +663,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing', () => {
         const handed = (
             await json<{ data: Dispensing }>(
                 await pharmacy.admin.post(path(id, '/hand-over'), {
+                    received_by_patient: true,
                     version: called.dispensing?.version,
                 }),
                 200,
@@ -672,6 +676,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing', () => {
         expect(
             (
                 await pharmacy.admin.post(path(id, '/hand-over'), {
+                    received_by_patient: true,
                     version: handed.dispensing?.version,
                 })
             ).status,
@@ -686,6 +691,87 @@ describe.skipIf(!process.env.DB_HOST)('dispensing', () => {
             ),
         ).toEqual(['_form']);
         expect(await stock(item.id, farmasi.id)).toEqual({ SERAH: 7 });
+        expect(handed.dispensing?.received_by_patient).toBe(true);
+        expect(handed.dispensing?.receiver_name).toBeNull();
+    });
+
+    test('Serahkan requires who received the drugs: the patient, or someone else by name', async () => {
+        const item = await pharmacy.item('TERIMA-1', {
+            tracking_code_id: tracked.id,
+        });
+        await receive(farmasi.id, [
+            { item, batch: 'TERIMA', expiry: '2027-08-31', quantity: 3 },
+        ]);
+        const id = await prescribe(item, '1');
+        const { version } =
+            (
+                await json<{ data: Dispensing }>(
+                    await pharmacy.admin.post(path(id, '/prepare')),
+                    200,
+                )
+            ).data.dispensing ?? {};
+        for (const [body, field] of [
+            [{}, 'received_by_patient'],
+            [{ received_by_patient: false }, 'receiver_name'],
+            [
+                { received_by_patient: false, receiver_name: '   ' },
+                'receiver_name',
+            ],
+            [
+                { received_by_patient: false, receiver_name: 'x'.repeat(151) },
+                'receiver_name',
+            ],
+            [
+                { received_by_patient: true, receiver_name: 'Kerabat Uji' },
+                'receiver_name',
+            ],
+        ] as const)
+            expect(
+                Object.keys(
+                    await refused(
+                        await pharmacy.admin.post(path(id, '/hand-over'), {
+                            ...body,
+                            version,
+                        }),
+                    ),
+                ),
+            ).toEqual([field]);
+        expect((await shown(id)).dispensing?.status).toBe('disiapkan');
+        const handed = (
+            await json<{ data: Dispensing }>(
+                await pharmacy.admin.post(path(id, '/hand-over'), {
+                    received_by_patient: false,
+                    receiver_name: '  Kerabat Uji  ',
+                    version,
+                }),
+                200,
+            )
+        ).data.dispensing;
+        expect(handed?.status).toBe('diserahkan');
+        expect(handed?.received_by_patient).toBe(false);
+        expect(handed?.receiver_name).toBe('Kerabat Uji');
+        expect([
+            ...(await pool.unsafe<
+                {
+                    diterima_pasien: boolean | null;
+                    nama_penerima: string | null;
+                }[]
+            >(
+                'select diterima_pasien, nama_penerima from bill_farmasi where tenant_id = $1 and id = $2',
+                [pharmacy.tenantId, handed?.id ?? ''],
+            )),
+        ]).toEqual([{ diterima_pasien: false, nama_penerima: 'Kerabat Uji' }]);
+        expect(
+            await pool
+                .unsafe(
+                    'update bill_farmasi set diterima_pasien = true where tenant_id = $1 and id = $2',
+                    [pharmacy.tenantId, handed?.id ?? ''],
+                )
+                .then(
+                    () => '',
+                    (caught: unknown) => String(caught),
+                ),
+        ).toContain('bill_farmasi_penerima_check');
     });
 
     test('a prescription without a pharmacy location is refused with the unit to set up, and preparing from a chosen location works', async () => {

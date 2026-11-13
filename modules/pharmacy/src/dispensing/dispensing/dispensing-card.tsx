@@ -10,6 +10,7 @@ import {
     parseDisplayNumber,
 } from '@operations-metta/ui/display-number';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { Input } from '@operations-metta/ui/input';
 import {
     MasterLookup,
     nameColumn,
@@ -23,6 +24,7 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
+import { Select } from '@operations-metta/ui/select';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -108,6 +110,18 @@ const draftOf = (view: View['data']): Draft => ({
         price: line.price,
     })),
 });
+
+const receivers = [
+    { value: 'patient', label: 'Pasien sendiri' },
+    { value: 'other', label: 'Orang lain' },
+];
+
+const receiverText = (dispensing: Dispensing) =>
+    dispensing.received_by_patient === null
+        ? null
+        : dispensing.received_by_patient
+          ? 'Pasien sendiri'
+          : dispensing.receiver_name;
 
 type Action = 'save' | 'prepare' | 'call' | 'hand-over' | 'cancel';
 const failedOperations: Record<Action, string> = {
@@ -257,6 +271,7 @@ function DispensingForm({
         (status === null || status === 'draf') && permissions.prepare;
     const prepared = status !== null && status !== 'draf';
     const [draft, setDraft] = useState<Draft>(() => draftOf(view.data));
+    const [receiver, setReceiver] = useState({ byPatient: true, name: '' });
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -408,6 +423,10 @@ function DispensingForm({
                             params: { id: prescription.id },
                             body: {
                                 pharmacist_id: draft.pharmacist?.id ?? null,
+                                received_by_patient: receiver.byPatient,
+                                receiver_name: receiver.byPatient
+                                    ? null
+                                    : receiver.name.trim() || null,
                                 version: dispensing.version,
                             },
                         })
@@ -632,6 +651,66 @@ function DispensingForm({
                                     hint="Kosongkan bila yang menyerahkan adalah Anda sendiri; namanya diisi saat Serahkan."
                                     portalContainer={portalContainer}
                                 />
+                                {awaitingHandover && permissions.hand_over && (
+                                    <>
+                                        <FormControl
+                                            error={
+                                                errors.received_by_patient?.[0]
+                                            }
+                                            data-error-field="received_by_patient"
+                                        >
+                                            <Select
+                                                label="Diterima oleh"
+                                                required
+                                                portalContainer={
+                                                    portalContainer
+                                                }
+                                                items={receivers}
+                                                value={
+                                                    receiver.byPatient
+                                                        ? 'patient'
+                                                        : 'other'
+                                                }
+                                                onValueChange={(value) => {
+                                                    if (value)
+                                                        setReceiver(
+                                                            (current) => ({
+                                                                ...current,
+                                                                byPatient:
+                                                                    value ===
+                                                                    'patient',
+                                                            }),
+                                                        );
+                                                }}
+                                            />
+                                        </FormControl>
+                                        {!receiver.byPatient && (
+                                            <FormControl
+                                                error={
+                                                    errors.receiver_name?.[0]
+                                                }
+                                            >
+                                                <Input
+                                                    label="Nama penerima"
+                                                    required
+                                                    maxLength={150}
+                                                    data-error-field="receiver_name"
+                                                    value={receiver.name}
+                                                    onChange={(event) =>
+                                                        setReceiver(
+                                                            (current) => ({
+                                                                ...current,
+                                                                name: event
+                                                                    .target
+                                                                    .value,
+                                                            }),
+                                                        )
+                                                    }
+                                                />
+                                            </FormControl>
+                                        )}
+                                    </>
+                                )}
                                 <FormControl error={errors.notes?.[0]}>
                                     <Textarea
                                         label="Catatan farmasi"
@@ -669,6 +748,11 @@ function DispensingForm({
                                             ? `${dateTimeText(dispensing.handed_over_at)} · ${dispensing.handed_over_by?.name ?? ''}`
                                             : null}
                                     </Fact>
+                                    {status === 'diserahkan' && (
+                                        <Fact label="Diterima oleh">
+                                            {receiverText(dispensing)}
+                                        </Fact>
+                                    )}
                                 </dl>
                             )}
                             {view.data.cancelled.length > 0 && (
