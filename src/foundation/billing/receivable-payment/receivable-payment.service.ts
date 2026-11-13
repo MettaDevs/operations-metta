@@ -180,23 +180,25 @@ export async function refuseWhenPaidOff(
     if (found?.paid_off) validation({ _form: outstandingPaymentMessage });
 }
 
-// Batal pembayaran menutup piutangnya. Piutang dikunci lebih dulu, sama dengan Simpan pembayaran hutang, jadi pelunasan
-// yang sedang disimpan selesai dulu lalu batal ini menolaknya, atau pelunasan menunggu lalu mendapati piutangnya batal.
+// Batal pembayaran dan nota kredit menutup piutangnya, dan menjawab id piutang yang ditutup. Piutang dikunci lebih dulu,
+// sama dengan Simpan pembayaran hutang, jadi pelunasan yang sedang disimpan selesai dulu lalu batal ini menolaknya, atau
+// pelunasan menunggu lalu mendapati piutangnya batal.
 export async function cancelReceivables(
     db: Database,
     payment: { tenantId: string; paymentId: string; stamp: string },
-): Promise<void> {
+): Promise<string[]> {
     const locked = await db.rows(
         z.object({ id: z.string() }),
         'select id from piutang where tenant_id = $1 and kasir_id = $2 order by id for update',
         [payment.tenantId, payment.paymentId],
     );
-    if (!locked.length) return;
+    if (!locked.length) return [];
     await refuseWhenPaidOff(db, payment);
     await db.execute(
         `update piutang set status = 'batal', updated_at = $1 where tenant_id = $2 and kasir_id = $3`,
         [payment.stamp, payment.tenantId, payment.paymentId],
     );
+    return locked.map((receivable) => receivable.id);
 }
 
 const receivableSql = `select * from (

@@ -1,0 +1,168 @@
+asyncapi: 3.0.0
+info:
+    title: billing.credit-memo.posted.v1
+    version: 1.0.0
+    description: |
+        Nota kredit kasir diposting: pembayaran yang clerk-nya sudah Clerk End dibalik seluruhnya, pola BC Sales Credit
+        Memo (`CorrectPostedSalesInvoice` / Cancel) dan Refund. Sistem lama tidak punya padanannya; ia hanya punya Batal.
+        Diterbitkan kasir Core (`src/foundation/billing/credit-memo/`) lewat `publishEvent` di transaksi nota kredit yang
+        sama, sesudah penyetuju yang berhak mengetik akunnya, pembayaran menjadi `dikreditkan`, piutangnya dibatalkan, dan
+        baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).
+
+        Pengembalian adalah uang yang keluar dari laci clerk tempat nota kredit diposting: satu baris per baris pembayaran
+        yang jenis bayarnya berperilaku uang diterima (tunai dan non tunai), dengan jumlah, jumlah valuta, dan kurs yang sama
+        persis dengan `billing.invoice.posted.v1` pembayaran itu. Baris piutang (bon, penjamin) tidak dikembalikan;
+        piutangnya dibatalkan dan id-nya ada di `cancelled_receivable_ids`. Baris beban tidak dikembalikan.
+
+        Keadaan sebenarnya, 14 November 2026: hanya diantar di dalam runtime dan belum ada penerima. Belum ada batal nota
+        kredit. Finance menerimanya kelak untuk membalik posting `billing.invoice.posted.v1` pada tanggal nota kredit.
+channels:
+    billing.credit-memo.posted.v1:
+        address: billing.credit-memo.posted.v1
+        messages:
+            creditMemoPosted:
+                $ref: '#/components/messages/creditMemoPosted'
+operations:
+    publishCreditMemoPosted:
+        action: send
+        channel:
+            $ref: '#/channels/billing.credit-memo.posted.v1'
+        messages:
+            - $ref: '#/channels/billing.credit-memo.posted.v1/messages/creditMemoPosted'
+components:
+    messages:
+        creditMemoPosted:
+            name: creditMemoPosted
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/envelope'
+    schemas:
+        envelope:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    type,
+                    occurred_at,
+                    tenant_id,
+                    legal_entity_id,
+                    correlation_id,
+                    data,
+                ]
+            properties:
+                id:
+                    type: string
+                    format: uuid
+                    description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+                type:
+                    const: billing.credit-memo.posted.v1
+                occurred_at:
+                    type: string
+                    format: date-time
+                tenant_id:
+                    type: string
+                    format: uuid
+                legal_entity_id:
+                    type: string
+                    format: uuid
+                    description: Legal entity kasir.
+                org_unit_id:
+                    type: ['null', string]
+                    format: uuid
+                correlation_id:
+                    type: string
+                    format: uuid
+                data:
+                    $ref: '#/components/schemas/creditMemo'
+        creditMemo:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    credit_memo_id,
+                    credit_memo_number,
+                    payment_id,
+                    payment_number,
+                    source_module,
+                    visit_id,
+                    registration_number,
+                    date,
+                    value,
+                    discount,
+                    reason,
+                    refunds,
+                    cancelled_receivable_ids,
+                ]
+            properties:
+                credit_memo_id:
+                    type: string
+                    format: uuid
+                credit_memo_number:
+                    type: string
+                    description: Nomor nota kredit dari number sequence nota kredit legal entity itu.
+                payment_id:
+                    type: string
+                    format: uuid
+                    description: Pembayaran yang dikoreksi, sama dengan `payment_id` di `billing.invoice.posted.v1`.
+                payment_number:
+                    type: string
+                source_module:
+                    type: string
+                    description: Module pemilik kunjungan, misalnya `healthcare`.
+                visit_id:
+                    type: string
+                    format: uuid
+                registration_number:
+                    type: string
+                date:
+                    type: string
+                    format: date
+                    description: Tanggal nota kredit di zona waktu legal entity, bukan tanggal pembayaran.
+                value:
+                    type: string
+                    description: Nilai tagihan pembayaran yang dikoreksi dalam mata uang lokal tenant, teks desimal.
+                discount:
+                    type: string
+                    description: Nilai diskon pembayaran yang dikoreksi dalam mata uang lokal tenant, teks desimal.
+                reason:
+                    type: string
+                    description: Alasan koreksi yang diisi kasir.
+                refunds:
+                    type: array
+                    description: |
+                        Uang yang dikembalikan per jenis bayar, tanpa yang nol. Positif berarti uang keluar dari laci; tunai lokal
+                        bisa negatif bila pembayarannya memberi kembalian rupiah untuk tunai valuta.
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required:
+                            [
+                                payment_method_id,
+                                amount,
+                                currency_code,
+                                currency_amount,
+                                exchange_rate,
+                            ]
+                        properties:
+                            payment_method_id:
+                                type: string
+                                format: uuid
+                            amount:
+                                type: string
+                                description: Jumlah dalam mata uang lokal tenant, teks desimal.
+                            currency_code:
+                                type: string
+                                description: Kode ISO mata uang jenis bayar; mata uang lokal untuk jenis bayar tanpa mata uang asing.
+                            currency_amount:
+                                type: string
+                                description: Jumlah dalam mata uang itu, teks desimal.
+                            exchange_rate:
+                                type: string
+                                description: Kurs saat pembayaran, nilai satu satuan mata uang itu dalam mata uang lokal; 1 untuk mata uang lokal.
+                cancelled_receivable_ids:
+                    type: array
+                    description: Piutang pembayaran itu yang dibatalkan nota kredit ini. Kosong bila pembayarannya tanpa piutang.
+                    items:
+                        type: string
+                        format: uuid
