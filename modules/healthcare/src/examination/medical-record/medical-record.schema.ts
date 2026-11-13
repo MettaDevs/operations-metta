@@ -164,7 +164,6 @@ export const procedureSchema = z.object({
     added_at: text,
 });
 
-// Pilihan satuan obat: satuan dasar berisi 1 lebih dulu, lalu satuan kemasan dengan isinya dalam satuan dasar.
 export const drugUnitSchema = z.object({
     id: z.string(),
     code: z.string(),
@@ -180,7 +179,7 @@ export const prescriptionLineSchema = z.object({
     drug_code: text,
     drug_name: text,
     // Satuan jumlah baris obat; kosong saat disimpan berarti satuan jual obat. Kode, nama, isi, dan pilihan satuan hanya
-    // dibaca. Isi disalin saat satuan baris dipilih, jadi mengubah isi kemasan sesudahnya tidak mengubah resep ini.
+    // dibaca.
     unit_id: text,
     unit_code: text,
     unit_name: text,
@@ -193,9 +192,9 @@ export const prescriptionLineSchema = z.object({
     usage_instruction_id: text,
     notes: text,
     // Yang dipegang pasien: diserahkan farmasi dikurangi yang dikembalikan, seperti "Obat Direalisasi" di CPPT sistem
-    // lama, beserta satuannya, misalnya "2 STRIP". Hanya dibaca; kosong selama belum diserahkan.
+    // lama. Hanya dibaca; kosong selama belum diserahkan.
     dispensed_quantity: text.optional(),
-    // Total yang dikembalikan pasien ke farmasi beserta satuannya; hanya dibaca, kosong bila belum pernah ada retur.
+    // Total yang dikembalikan pasien ke farmasi; hanya dibaca, kosong bila belum pernah ada retur.
     returned_quantity: text.optional(),
 });
 

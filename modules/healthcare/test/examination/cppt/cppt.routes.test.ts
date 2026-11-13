@@ -431,7 +431,6 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         ).map((row) => row.id);
         const tablet = { id: clinic.unitTab, code: 'TAB', name: 'Tablet' };
         const inStrips = { id: strip, code: 'STRIP', name: 'Strip' };
-        // Diterbitkan seperti module farmasi menerbitkannya, lalu diperiksa terhadap berkas kontrak.
         const publish = async (
             type:
                 | 'pharmacy.prescription.dispensed.v1'

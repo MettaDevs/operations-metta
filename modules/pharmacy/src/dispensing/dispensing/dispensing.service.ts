@@ -79,7 +79,6 @@ const lockedSchema = z.object({
     issued_at: z.string(),
 });
 
-// Baris obat resep. Resep dari pesan yang belum membawa satuan ditulis dalam satuan dasar barang dengan isi 1.
 const itemLineSchema = z.object({
     id: z.string(),
     order: z.number(),
@@ -216,8 +215,7 @@ export class Dispensings {
     }
 
     // Baris penyerahan aktif; tanpa penyerahan aktif, usulan dari penyerahan terakhir yang dibatalkan (supaya jumlah,
-    // satuan, batch, dan alasan yang sudah diisi tidak hilang), atau dari jumlah dan satuan resep. units: pilihan satuan
-    // barang itu, satuan dasar lebih dulu.
+    // satuan, batch, dan alasan yang sudah diisi tidak hilang), atau dari jumlah dan satuan resep.
     private async lines(
         prescriptionId: string,
         active: Header | undefined,
@@ -363,9 +361,9 @@ export class Dispensings {
             : { unitId, quantityPerUnit: conversion };
     }
 
-    // Isian draf: satu baris per obat resep dalam satuan resep atau satuan lain barang itu, jumlah 0 sampai jumlah resep
-    // (dibandingkan dalam satuan dasar), alasan wajib bila kurang dari resep, batch milik barang itu, lokasi milik legal
-    // entity ini, apoteker dan asisten anggota tenant.
+    // Isian draf: satu baris per obat resep, jumlah 0 sampai jumlah resep (dibandingkan dalam satuan dasar), alasan
+    // wajib bila kurang dari resep, batch milik barang itu, lokasi milik legal entity ini, apoteker dan asisten anggota
+    // tenant.
     private async checked(prescriptionId: string, body: unknown) {
         const data = parseInput(dispensingInputSchema, body, messages);
         const errors: Record<string, string> = {};
@@ -678,7 +676,6 @@ export class Dispensings {
                  order by urutan, id`,
                 [this.scope.tenantId, billId],
             );
-            // Stok keluar dalam satuan dasar: jumlah baris x isi satuannya.
             const outbound = lines.map((line, index) => ({
                 line,
                 field: `lines.${index}`,

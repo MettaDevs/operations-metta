@@ -45,9 +45,7 @@ const reference = z.object({
 });
 
 // Baris penyerahan untuk satu baris obat resep. id kosong berarti usulan untuk penyerahan yang belum disimpan: jumlah
-// dan satuan resep, batch diambil otomatis. quantity dalam unit, yang isinya dalam satuan dasar quantity_per_unit;
-// units adalah pilihan satuan barang itu, satuan dasar lebih dulu. taken: batch yang benar-benar diambil saat
-// disiapkan, dari kartu gudang, dalam satuan dasar.
+// dan satuan resep, batch diambil otomatis. taken: batch yang benar-benar diambil saat disiapkan, dari kartu gudang.
 export const dispensingLineSchema = z.object({
     id: z.string().nullable(),
     prescription_line_id: z.string(),

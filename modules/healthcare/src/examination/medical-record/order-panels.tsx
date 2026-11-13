@@ -57,7 +57,6 @@ type DrugUnit = PrescriptionLine['units'][number];
 
 const NOT_COMPOUND = 'none';
 
-// Satuan baris obat; isinya disalin ulang oleh server saat Simpan.
 const unitValues = (unit: DrugUnit | undefined) => ({
     unit_id: unit?.id ?? null,
     unit_code: unit?.code ?? null,
@@ -66,7 +65,6 @@ const unitValues = (unit: DrugUnit | undefined) => ({
 });
 const unitLabel = (unit: DrugUnit) =>
     `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
-// Pilihan satuan obat, ditambah satuan tersimpan baris ini bila satuan itu sejak itu dilepas dari obatnya.
 const unitChoices = (row: PrescriptionLine): DrugUnit[] =>
     row.unit_id && !row.units.some((unit) => unit.id === row.unit_id)
         ? [

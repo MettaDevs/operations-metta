@@ -17,9 +17,7 @@ const reference = z.object({
 
 // Dipanggil di transaksi yang memposting atau membatalkan retur, sesudah statusnya ditulis. returned_base_quantity
 // setiap baris adalah total retur yang masih berlaku atas baris resep itu sesudah perubahan ini, dalam satuan dasar,
-// jadi penerima cukup menyalinnya dan hasilnya sama walau event diantar ulang. Satu baris event menggabungkan baris
-// retur per batch atas satu baris resep: unit dan quantity memakai satuan baris retur bila semuanya sama, kalau tidak
-// satuan dasar. Batch selalu dalam satuan dasar, seperti stok.
+// jadi penerima cukup menyalinnya dan hasilnya sama walau event diantar ulang.
 export async function publishReturn(
     db: Database,
     scope: { tenantId: string; legalEntityId: string },

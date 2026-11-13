@@ -44,8 +44,6 @@ export async function refused(response: Response) {
 
 type Reference = { id: string; code: string; name: string };
 
-// Baris obat ditulis dalam unit (bawaannya satuan dasar TAB) dengan isinya dalam satuan dasar, seperti layanan
-// kesehatan menulisnya.
 export type IssuedLine = {
     item?: Reference | null;
     compound?: number | null;
@@ -58,7 +56,6 @@ export type IssuedLine = {
 
 let issuedContract: Promise<z.ZodType> | null = null;
 
-// Referensi seperti di kontrak event: tanpa field lain dari jawaban API.
 const reference = ({ id, code, name }: Reference): Reference => ({
     id,
     code,

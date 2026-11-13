@@ -50,9 +50,6 @@ const writtenPrescriptionSchema = z.object({
 type WrittenPrescription = z.infer<typeof writtenPrescriptionSchema>;
 type PlanLine = Cppt['plan']['prescriptions'][number]['lines'][number];
 
-// Baris resep di P. Resep yang sudah diserahkan menulis yang dipegang pasien dalam satuan baris bila habis dibagi
-// isinya, kalau tidak dalam satuan dasar; obat yang habis diretur tidak ditulis, begitu pula kepala racikan yang semua
-// komponennya habis diretur.
 function planLines({
     handed_over: handedOver,
     lines,

@@ -122,7 +122,6 @@ type ProcedureLine = {
     doctor_id: string | null;
 };
 
-// Satuan baris obat dan isinya dalam satuan dasar sebagai teks numeric(18,4), seperti yang disimpan di konversi.
 type ChosenUnit = { id: string; conversion: string };
 type PrescriptionLine = {
     drug_id: string | null;
@@ -477,8 +476,6 @@ export class ExaminationOrders {
         );
     }
 
-    // Jumlah yang diserahkan dan diretur datang dari farmasi dalam satuan dasar, dan ditulis dalam satuan baris bila
-    // habis dibagi isinya.
     async prescriptions(
         recordId: string | null,
         legalEntityId: string,
@@ -732,9 +729,9 @@ export class ExaminationOrders {
         return lines;
     }
 
-    // Satuan baris obat. Bawaannya satuan jual obat, seperti baris penjualan BC yang mengisi Unit of Measure Code dari
-    // Sales Unit of Measure barang. Satuan lain harus satuan obat itu sendiri. Isinya disalin saat satuan dipilih: baris
-    // tersimpan yang satuannya tidak berubah memakai isi yang sudah disalin, walau isi kemasan sejak itu diubah.
+    // Bawaannya satuan jual obat, seperti baris penjualan BC yang mengisi Unit of Measure Code dari
+    // Sales Unit of Measure barang. Satuan lain harus satuan obat itu sendiri. Baris tersimpan yang satuannya tidak
+    // berubah memakai isi yang sudah disalin, walau isi kemasan sejak itu diubah.
     private async lineUnit(
         raw: unknown,
         drugId: string,

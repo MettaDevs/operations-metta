@@ -101,7 +101,7 @@ const draftOf = (view: View['data']): Draft => ({
     lines: view.lines.map((line) => ({
         prescriptionLineId: line.prescription_line_id,
         quantity: displayNumber(line.quantity),
-        unit: line.unit,
+        unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         batch: line.batch,
         reason: line.reason ?? '',
         taken: line.taken,

@@ -11,8 +11,7 @@ import { moduleId } from '../../module.ts';
 
 // Obat resep sudah diserahkan, sebagai event untuk layanan kesehatan (E-Resep menampilkan yang diserahkan). Isinya
 // potret saat diserahkan; kontraknya ditulis tangan di contracts/events/pharmacy.prescription.dispensed.v1.yaml, dan
-// mengubah isinya berarti versi baru. unit dan quantity adalah satuan dan jumlah yang diserahkan, prescribed_unit dan
-// prescribed_quantity seperti yang ditulis dokter, dan batch dalam satuan dasar seperti stok.
+// mengubah isinya berarti versi baru.
 export const prescriptionDispensed =
     `${moduleId}.prescription.dispensed.v1` as const;
 

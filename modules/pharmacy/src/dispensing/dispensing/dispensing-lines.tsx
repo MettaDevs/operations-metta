@@ -34,11 +34,11 @@ export type Taken = {
 export type UnitOption = Reference & { quantity_per_unit: string };
 
 // Isian satu obat resep. Jumlah disimpan sebagai teks yang tampil di isian (12,5) dan baru diubah ke angka API saat
-// dikirim; jumlah itu dalam unit, satuan resep atau satuan lain barang yang sama.
+// dikirim.
 export type LineDraft = {
     prescriptionLineId: string;
     quantity: string;
-    unit: Reference;
+    unit: UnitOption;
     batch: PickedBatch | null;
     reason: string;
     taken: Taken[];
@@ -145,8 +145,7 @@ type Row = {
 const unitLabel = (unit: UnitOption) =>
     `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
 
-// Satu baris per batch yang diambil, supaya batch kedua tidak terpotong di kolom yang sempit. Jumlah batch dalam
-// satuan dasar, seperti stok.
+// Satu baris per batch yang diambil, supaya batch kedua tidak terpotong di kolom yang sempit.
 function TakenBatches({
     taken,
     baseCode,
@@ -187,7 +186,6 @@ export function DispensingLines({
     prepared: boolean;
     errors: Record<string, string[]>;
     stock: Map<string, string>;
-    // Pilihan satuan per baris resep, satuan dasar lebih dulu.
     units: Map<string, UnitOption[]>;
     locationId: string | null;
     portalContainer: RefObject<HTMLElement | null>;
@@ -216,12 +214,11 @@ export function DispensingLines({
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const baseCode = (line: PrescriptionLine) =>
         units.get(line.id)?.[0]?.code ?? '';
-    // Pilihan satuan baris ini, ditambah satuan isiannya bila satuan itu sejak itu dilepas dari barangnya.
     const choices = (draft: LineDraft): UnitOption[] => {
         const options = units.get(draft.prescriptionLineId) ?? [];
         return options.some((unit) => unit.id === draft.unit.id)
             ? options
-            : [{ ...draft.unit, quantity_per_unit: '1' }, ...options];
+            : [draft.unit, ...options];
     };
 
     const columns: DataTableColumn<Row>[] = [
@@ -341,11 +338,7 @@ export function DispensingLines({
                                 );
                                 if (unit)
                                     update(draft.prescriptionLineId, {
-                                        unit: {
-                                            id: unit.id,
-                                            code: unit.code,
-                                            name: unit.name,
-                                        },
+                                        unit,
                                     });
                             }}
                             portalContainer={portalContainer}

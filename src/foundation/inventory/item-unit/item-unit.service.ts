@@ -128,8 +128,8 @@ const itemUnitOptionSchema = z.object({
 });
 export type ItemUnitOption = z.infer<typeof itemUnitOptionSchema>;
 
-// Pilihan satuan baris dokumen untuk beberapa barang sekaligus, satuan dasar lebih dulu lalu satuan kemasan menurut
-// isinya. Untuk layar module yang penggunanya tidak memegang izin kartu barang, misalnya E-Resep dan penyerahan obat.
+// Pilihan satuan baris dokumen, satuan dasar lebih dulu lalu satuan kemasan menurut isinya. Untuk layar module yang
+// penggunanya tidak memegang izin kartu barang.
 export async function itemUnits(
     db: Database,
     scope: { tenantId: string; legalEntityId: string },

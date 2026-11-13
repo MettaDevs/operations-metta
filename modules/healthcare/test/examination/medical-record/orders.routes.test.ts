@@ -261,7 +261,6 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         }
 
-        // Obat yang dijual per STRIP isi 10 tablet, seperti Antasida di data contoh.
         async function packaged(name: string) {
             const item = await drug(name);
             const entry = await created<{ entry_id: string; version: number }>(

@@ -43,7 +43,6 @@ const numberFormat =
 const baseText = (quantity: string, row: Returnable) =>
     `${displayNumber(quantity)} ${row.base_unit?.code ?? ''}`;
 
-// Pilihan satuan barang, ditambah satuan saat diserahkan bila satuan itu sejak itu dilepas dari barangnya.
 const unitChoices = (row: Returnable) =>
     row.unit && !row.units.some((unit) => unit.id === row.unit?.id)
         ? [
@@ -85,7 +84,6 @@ export function ReturnCard({
     const queryClient = useQueryClient();
     const stored = useReturns(prescriptionId);
     const [quantities, setQuantities] = useState<Record<string, string>>({});
-    // Satuan yang dipilih per baris; bawaannya satuan saat diserahkan.
     const [units, setUnits] = useState<Record<string, string>>({});
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);

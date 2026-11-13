@@ -82,7 +82,6 @@ export class Drugs {
         };
     }
 
-    // Pilihan satuan setiap obat, supaya E-Resep bisa menulis jumlah dalam satuan kemasan tanpa izin kartu barang.
     private async withUnits(rows: z.infer<typeof drugRowSchema>[]) {
         const units = await itemUnits(
             this.db,

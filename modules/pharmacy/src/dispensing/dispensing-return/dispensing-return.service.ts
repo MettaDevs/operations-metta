@@ -73,8 +73,8 @@ type DispensedLine = z.infer<typeof dispensedLineSchema> & {
     units: ItemUnitOption[];
 };
 
-// Satuan baris retur. Bawaannya satuan saat diserahkan, dengan isi yang disalin waktu itu; satuan lain harus satuan
-// barang itu sendiri, dengan isinya sekarang.
+// Bawaannya satuan saat diserahkan, dengan isi yang disalin waktu itu; satuan lain harus satuan barang itu sendiri,
+// dengan isinya sekarang.
 function returnUnit(raw: string | null | undefined, line: DispensedLine) {
     const unitId = raw || line.unit.id;
     if (unitId === line.unit.id)
@@ -150,7 +150,6 @@ export class DispensingReturns {
         );
     }
 
-    // Baris penyerahan beserta satuannya: satuan dan isi saat diserahkan, satuan dasar, dan pilihan satuan barangnya.
     private async dispensingLines(
         dispensingId: string,
     ): Promise<Map<string, DispensedLine>> {
@@ -396,8 +395,6 @@ export class DispensingReturns {
                           )
                         : undefined;
                 const source = group && dispensed.get(group.lineId);
-                // Satu baris retur per baris penyerahan dan batch, supaya dua baris tidak sama-sama mengambil bagian
-                // yang belum diretur.
                 if (
                     !group ||
                     !source ||

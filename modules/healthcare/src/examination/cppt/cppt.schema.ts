@@ -68,7 +68,6 @@ export const cpptSchema = z.object({
                     z.object({
                         compound: number,
                         drug_name: text,
-                        // Jumlah beserta satuannya, misalnya "2 STRIP"; kosong pada kepala racikan.
                         quantity: text,
                         requested_quantity: number,
                         signa: text,
