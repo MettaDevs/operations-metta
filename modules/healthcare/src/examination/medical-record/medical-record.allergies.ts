@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import { isoSql, type Database } from '@core/platform/database/index.ts';
-import { isRecord, lookupId } from '@core/platform/http/index.ts';
+import { coded, isRecord, lookupId } from '@core/platform/http/index.ts';
 import { duplicateAllergyMessage } from './medical-record.messages.ts';
 import { practitionerOfUser, text } from './medical-record.orders.ts';
 import {
@@ -20,6 +20,7 @@ type AllergyStatus = (typeof allergyStatuses)[number];
 
 const savedAllergySchema = allergyItemSchema.extend({
     id: z.string(),
+    version: z.number(),
     category: z.enum(allergyCategories),
 });
 type SavedAllergy = z.infer<typeof savedAllergySchema>;
@@ -41,16 +42,23 @@ type NewEntry = {
     label: string;
 };
 
-// Daftar yang dikirim layar: baris tersimpan yang tetap ada beserta reaksi dan statusnya, dan baris baru. Baris
-// tersimpan yang tidak dikirim lagi dibuang pengguna.
+// Simpan dari satu layar. Pemeriksaan lain pasien yang sama boleh terbuka bersamaan, jadi baris tersimpan yang tidak
+// diubah atau dibuang layar ini dibiarkan, termasuk baris yang baru dicatat pemeriksaan lain. Baris yang diubah atau
+// dibuang membawa versi yang dimuat layar.
 export type AllergyList = {
     saved: SavedAllergy[];
-    kept: Map<string, { reaction: string | null; status: AllergyStatus }>;
+    changed: Map<
+        string,
+        { reaction: string | null; status: AllergyStatus; version: number }
+    >;
+    removed: Map<string, number>;
     added: NewAllergy[];
 };
 
 const allergyNoneMessage =
     'Tidak ada alergi tidak bisa dipilih selama pasien punya alergi aktif.';
+const staleAllergyMessage =
+    'Alergi ini baru diubah dari pemeriksaan lain pasien ini. Muat ulang halaman untuk melihat daftar terbarunya.';
 
 // Kode 00 "Tidak Ada" di setiap jenis sim_m_alergi (kode PCare) berarti pasien tidak punya alergi jenis itu, jadi ia
 // bukan alergen. Tidak ada alergi dicatat per pemeriksaan.
@@ -80,18 +88,29 @@ const keyOf = (row: {
           ? `${row.category ?? ''}:${row.allergen_id}`
           : null;
 
+// Daftar sesudah Simpan: baris tersimpan yang tidak dibuang dengan reaksi dan status barunya, lalu baris baru.
+const resulting = (list: AllergyList) => [
+    ...list.saved
+        .filter((row) => !list.removed.has(row.id))
+        .map((row) => ({ ...row, ...list.changed.get(row.id) })),
+    ...list.added,
+];
+
 // Obat dari baris obat_id yang aktif, yang ditolak E-Resep. Golongan obat tidak ikut, karena tidak ada pemetaan golongan
 // ke obat.
 export function activeDrugIdsOf(list: AllergyList): Set<string> {
-    const ids = new Set<string>();
-    for (const row of list.saved) {
-        const kept = list.kept.get(row.id);
-        if (row.drug_id && kept?.status === 'aktif') ids.add(row.drug_id);
-    }
-    for (const row of list.added)
-        if (row.drug_id && row.status === 'aktif') ids.add(row.drug_id);
-    return ids;
+    return new Set(
+        resulting(list).flatMap((row) =>
+            row.drug_id && row.status === 'aktif' ? [row.drug_id] : [],
+        ),
+    );
 }
+
+// Baris tersimpan yang disebut layar, atau kosong bila sudah dibuang.
+const savedRow = (saved: SavedAllergy[], raw: unknown) => {
+    const id = typeof raw === 'string' ? lookupId(raw) : null;
+    return saved.find((row) => row.id === id);
+};
 
 export class PatientAllergies {
     constructor(
@@ -130,7 +149,7 @@ export class PatientAllergies {
     async list(patientId: string): Promise<SavedAllergy[]> {
         return this.db.rows(
             savedAllergySchema,
-            `select a.id, a.kategori as category, a.alergi_id as allergen_id, m.nama as allergen_name,
+            `select a.id, a.version, a.kategori as category, a.alergi_id as allergen_id, m.nama as allergen_name,
                     a.obat_id as drug_id, b.kode as drug_code, b.nama as drug_name, a.nama as name,
                     a.reaksi as reaction, a.status, ${isoSql('a.dicatat_pada')} as recorded_at, u.name as recorded_by
              from sim_m_pasien_alergi a
@@ -151,8 +170,10 @@ export class PatientAllergies {
         );
     }
 
-    // Daftar alergi yang dikirim layar. Baris tersimpan dikenali dari id-nya; jenis dan alergen kirimannya diabaikan,
-    // karena keduanya tidak berubah sesudah dicatat. Tanpa items, daftar tersimpan dibiarkan seperti adanya.
+    // Kiriman layar: items memuat baris baru dan baris tersimpan yang masih tampil, removed memuat baris tersimpan yang
+    // dibuang. Baris tersimpan dikenali dari id-nya; jenis dan alergen kirimannya diabaikan, karena keduanya tidak
+    // berubah sesudah dicatat. Mengubah reaksi atau status dan membuang baris ditolak bila versi yang dimuat layar bukan
+    // versi terbaru, karena pemeriksaan lain sudah mengubahnya.
     async read(
         raw: Record<string, unknown> | undefined,
         patientId: string,
@@ -160,75 +181,94 @@ export class PatientAllergies {
         errors: Errors,
     ): Promise<AllergyList> {
         const saved = await this.list(patientId);
-        const list: AllergyList = { saved, kept: new Map(), added: [] };
-        if (!Array.isArray(raw?.items)) {
-            if (raw?.items !== undefined)
-                add(errors, 'allergy.items', 'Isian ini tidak sah.');
-            for (const row of saved)
-                list.kept.set(row.id, {
-                    reaction: row.reaction,
-                    status: row.status,
-                });
-        } else {
-            const added: (NewEntry & {
-                reaction: string | null;
-                status: AllergyStatus;
-            })[] = [];
-            for (const [index, item] of raw.items.entries()) {
-                const row = isRecord(item) ? item : {};
-                const field = (name: string) =>
-                    `allergy.items.${index}.${name}`;
-                const reaction = text(
-                    row.reaction,
-                    500,
-                    field('reaction'),
-                    errors,
-                );
-                const status = isStatus(row.status) ? row.status : null;
-                if (!status)
-                    add(errors, field('status'), 'Pilih status alergi.');
-                if (missing(row.id)) {
-                    const entry = await this.readNew(row, field, errors);
-                    if (entry && status)
-                        added.push({ ...entry, reaction, status });
-                    continue;
-                }
-                const id = typeof row.id === 'string' ? lookupId(row.id) : null;
-                const before = saved.find((allergy) => allergy.id === id);
-                if (!before || list.kept.has(before.id))
-                    add(errors, field('id'), 'Isian ini tidak sah.');
-                else if (status) list.kept.set(before.id, { reaction, status });
-            }
-            // Alergen yang sudah ada di daftar tidak dicatat dua kali. Baris tersimpan yang dibuang tidak dihitung, jadi
-            // alergennya boleh dicatat ulang.
-            const keys = new Set(
-                saved.flatMap((row) => {
-                    const key = keyOf(row);
-                    return key && list.kept.has(row.id) ? [key] : [];
-                }),
-            );
-            for (const entry of added) {
-                const key = keyOf(entry.allergy);
-                if (key && keys.has(key)) {
-                    add(
-                        errors,
-                        entry.field,
-                        duplicateAllergyMessage(entry.label),
-                    );
-                    continue;
-                }
-                if (key) keys.add(key);
-                list.added.push({
-                    ...entry.allergy,
-                    reaction: entry.reaction,
-                    status: entry.status,
-                });
-            }
+        const list: AllergyList = {
+            saved,
+            changed: new Map(),
+            removed: new Map(),
+            added: [],
+        };
+        const items = raw?.items ?? [];
+        const removed = raw?.removed ?? [];
+        if (!Array.isArray(items))
+            add(errors, 'allergy.items', 'Isian ini tidak sah.');
+        if (!Array.isArray(removed))
+            add(errors, 'allergy.removed', 'Isian ini tidak sah.');
+        let stale = false;
+        for (const item of Array.isArray(removed) ? removed : []) {
+            const entry = isRecord(item) ? item : {};
+            const before = savedRow(saved, entry.id);
+            // Baris yang sudah dibuang pemeriksaan lain sudah sampai di keadaan yang diminta.
+            if (!before) continue;
+            if (entry.version === before.version)
+                list.removed.set(before.id, before.version);
+            else stale = true;
         }
-        const active =
-            [...list.kept.values()].some((row) => row.status === 'aktif') ||
-            list.added.some((row) => row.status === 'aktif');
-        if (none && active) add(errors, 'allergy.none', allergyNoneMessage);
+        if (stale) add(errors, 'allergy.items', staleAllergyMessage);
+        const seen = new Set<string>();
+        const added: (NewEntry & {
+            reaction: string | null;
+            status: AllergyStatus;
+        })[] = [];
+        for (const [index, item] of (Array.isArray(items)
+            ? items
+            : []
+        ).entries()) {
+            const row = isRecord(item) ? item : {};
+            const field = (name: string) => `allergy.items.${index}.${name}`;
+            const reaction = text(row.reaction, 500, field('reaction'), errors);
+            const status = isStatus(row.status) ? row.status : null;
+            if (!status) add(errors, field('status'), 'Pilih status alergi.');
+            if (missing(row.id)) {
+                const entry = await this.readNew(row, field, errors);
+                if (entry && status) added.push({ ...entry, reaction, status });
+                continue;
+            }
+            const before = savedRow(saved, row.id);
+            if (!before) {
+                add(errors, field('status'), staleAllergyMessage);
+                continue;
+            }
+            if (seen.has(before.id) || list.removed.has(before.id)) {
+                add(errors, field('id'), 'Isian ini tidak sah.');
+                continue;
+            }
+            seen.add(before.id);
+            if (
+                !status ||
+                (reaction === before.reaction && status === before.status)
+            )
+                continue;
+            if (row.version === before.version)
+                list.changed.set(before.id, {
+                    reaction,
+                    status,
+                    version: before.version,
+                });
+            else add(errors, field('status'), staleAllergyMessage);
+        }
+        // Alergen yang sudah ada di daftar tidak dicatat dua kali. Baris tersimpan yang dibuang tidak dihitung, jadi
+        // alergennya boleh dicatat ulang.
+        const keys = new Set(
+            saved.flatMap((row) => {
+                const key = keyOf(row);
+                return key && !list.removed.has(row.id) ? [key] : [];
+            }),
+        );
+        for (const entry of added) {
+            const key = keyOf(entry.allergy);
+            if (key && keys.has(key)) {
+                add(errors, entry.field, duplicateAllergyMessage(entry.label));
+                continue;
+            }
+            if (key) keys.add(key);
+            list.added.push({
+                ...entry.allergy,
+                reaction: entry.reaction,
+                status: entry.status,
+            });
+        }
+        if (none && resulting(list).some((row) => row.status === 'aktif'))
+            add(errors, 'allergy.none', allergyNoneMessage);
         return list;
     }
 
@@ -346,24 +386,17 @@ export class PatientAllergies {
         list: AllergyList,
         stamp: string,
     ): Promise<void> {
-        for (const row of list.saved)
-            if (!list.kept.has(row.id))
-                await this.update(row.id, {
-                    deleted_at: stamp,
-                    updated_at: stamp,
-                });
-        for (const row of list.saved) {
-            const kept = list.kept.get(row.id);
-            if (
-                kept &&
-                (kept.reaction !== row.reaction || kept.status !== row.status)
-            )
-                await this.update(row.id, {
-                    reaksi: kept.reaction,
-                    status: kept.status,
-                    updated_at: stamp,
-                });
-        }
+        for (const [id, version] of list.removed)
+            await this.update(id, version, {
+                deleted_at: stamp,
+                updated_at: stamp,
+            });
+        for (const [id, { reaction, status, version }] of list.changed)
+            await this.update(id, version, {
+                reaksi: reaction,
+                status,
+                updated_at: stamp,
+            });
         const recorder = list.added.length
             ? await practitionerOfUser(
                   this.db,
@@ -391,13 +424,20 @@ export class PatientAllergies {
             });
     }
 
-    private async update(id: string, values: Record<string, string | null>) {
+    // Versi yang dimuat layar sudah diperiksa saat membaca kiriman. Pemeriksaan lain yang menyimpan di antara baca dan
+    // tulis membuat versinya tidak cocok lagi, dan seluruh Simpan dibatalkan.
+    private async update(
+        id: string,
+        version: number,
+        values: Record<string, string | null>,
+    ) {
         const columns = Object.keys(values);
-        await this.db.execute(
+        const updated = await this.db.execute(
             `update sim_m_pasien_alergi
-             set ${columns.map((column, index) => `${column} = $${index + 3}`).join(', ')}
-             where tenant_id = $1 and id = $2`,
-            [this.tenantId, id, ...Object.values(values)],
+             set ${columns.map((column, index) => `${column} = $${index + 4}`).join(', ')}
+             where tenant_id = $1 and id = $2 and version = $3 and deleted_at is null`,
+            [this.tenantId, id, version, ...Object.values(values)],
         );
+        if (updated === 0) coded(409, 'stale_version', staleAllergyMessage);
     }
 }

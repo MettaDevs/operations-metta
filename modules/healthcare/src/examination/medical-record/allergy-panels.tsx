@@ -18,7 +18,8 @@ import { DrugLookup, timeOf } from './order-panels.tsx';
 
 type Draft = MedicalRecordDraft;
 type SetDraft = (update: (draft: Draft) => Draft) => void;
-type Allergy = NonNullable<Draft['allergy']>['items'][number];
+type AllergyList = NonNullable<Draft['allergy']>;
+type Allergy = AllergyList['items'][number];
 type Category = NonNullable<Allergy['category']>;
 type Status = Allergy['status'];
 type Errors = Record<string, string[]>;
@@ -38,6 +39,7 @@ const statuses = [
 
 const blankAllergy: Allergy = {
     id: null,
+    version: null,
     category: null,
     allergen_id: null,
     allergen_name: null,
@@ -50,6 +52,27 @@ const blankAllergy: Allergy = {
     recorded_at: null,
     recorded_by: null,
 };
+
+// Baris tersimpan yang dibuang dicatat beserta versi yang dimuat layar, supaya Simpan hanya membuang baris yang dikenal
+// layar ini dan tidak menyentuh alergi yang baru dicatat pemeriksaan lain.
+function removeAllergies(
+    allergy: AllergyList,
+    indexes: readonly number[],
+): AllergyList {
+    const removed = new Set(indexes);
+    return {
+        ...allergy,
+        items: allergy.items.filter((_, at) => !removed.has(at)),
+        removed: [
+            ...allergy.removed,
+            ...allergy.items.flatMap((row, at) =>
+                removed.has(at) && row.id !== null && row.version !== null
+                    ? [{ id: row.id, version: row.version }]
+                    : [],
+            ),
+        ],
+    };
+}
 
 const noAllergen = {
     allergen_id: null,
@@ -262,10 +285,16 @@ export function AllergyLines({
             }
             onAddRow={() => setItems((items) => [...items, blankAllergy])}
             onDeleteRows={(removed) =>
-                setItems((items) =>
-                    items.filter(
-                        (_, at) => !removed.some((line) => line.index === at),
-                    ),
+                setDraft((current) =>
+                    current.allergy
+                        ? {
+                              ...current,
+                              allergy: removeAllergies(
+                                  current.allergy,
+                                  removed.map((line) => line.index),
+                              ),
+                          }
+                        : current,
                 )
             }
             emptyMessage={

@@ -34,10 +34,11 @@ export const allergyCategories = [
 export const allergyStatuses = ['aktif', 'tidak_aktif', 'sembuh'] as const;
 
 // Satu alergi pasien. Alergennya allergen_id untuk makanan, udara, dan golongan obat, drug_id untuk obat tertentu, atau
-// name untuk lainnya. Jenis dan alergen tidak berubah sesudah dicatat; yang bisa diubah hanya reaksi dan status. Nama
-// alergen, kode dan nama obat, serta waktu dan pencatatnya hanya dibaca.
+// name untuk lainnya. Jenis dan alergen tidak berubah sesudah dicatat; yang bisa diubah hanya reaksi dan status. Versi
+// baris tersimpan dikirim kembali apa adanya; nama alergen, kode dan nama obat, serta waktu dan pencatatnya hanya dibaca.
 export const allergyItemSchema = z.object({
     id: text,
+    version: number,
     category: z.enum(allergyCategories).nullable(),
     allergen_id: text,
     allergen_name: text,
@@ -51,10 +52,13 @@ export const allergyItemSchema = z.object({
     recorded_by: text,
 });
 
-// Daftar alergi milik pasien, terbawa ke pemeriksaan berikutnya. Tidak ada alergi milik pemeriksaan ini.
+// Daftar alergi milik pasien, terbawa ke pemeriksaan berikutnya. Tidak ada alergi milik pemeriksaan ini. Pemeriksaan lain
+// pasien yang sama boleh terbuka bersamaan, jadi Simpan hanya membuang baris yang disebut di removed, dengan versi yang
+// dimuat layar. Jawaban selalu membawa removed kosong.
 export const allergySchema = z.object({
     none: z.boolean(),
     items: z.array(allergyItemSchema),
+    removed: z.array(z.object({ id: z.string(), version: z.number() })),
 });
 
 export const statusSchema = z.object({

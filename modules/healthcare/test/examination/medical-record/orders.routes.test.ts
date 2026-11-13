@@ -76,10 +76,15 @@ type Record_ = {
     physical: Record<string, number | string | null>;
     procedures?: ProcedureLine[];
     prescriptions?: Prescription[];
-    allergy?: { none: boolean; items: Allergy[] };
+    allergy?: {
+        none: boolean;
+        items: Allergy[];
+        removed?: { id: string; version: number }[];
+    };
 } & Record<string, unknown>;
 type Allergy = {
     id: string | null;
+    version?: number | null;
     category: string | null;
     drug_id: string | null;
     drug_code?: string | null;
@@ -492,7 +497,11 @@ describe.skipIf(!process.env.DB_HOST)(
             const shown = await show(admin, id);
             expect(shown.data.procedures).toEqual([]);
             expect(shown.data.prescriptions).toEqual([]);
-            expect(shown.data.allergy).toEqual({ none: false, items: [] });
+            expect(shown.data.allergy).toEqual({
+                none: false,
+                items: [],
+                removed: [],
+            });
             expect(metadata.permissions).toMatchObject({
                 create_procedure: true,
                 create_drug: true,
@@ -1464,13 +1473,20 @@ describe.skipIf(!process.env.DB_HOST)(
             );
 
             // Alergi yang dibuang diberi deleted_at; barisnya tetap ada.
+            const current = await listed(next);
+            const dropped = current.find(
+                (row) => row.drug_id === ibuprofen.id,
+            )!;
             await json(
                 await save(admin, next, {
                     allergy: {
                         none: false,
-                        items: inactive.filter(
+                        items: current.filter(
                             (row) => row.drug_id !== ibuprofen.id,
                         ),
+                        removed: [
+                            { id: dropped.id!, version: dropped.version! },
+                        ],
                     },
                 }),
                 200,
