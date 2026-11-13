@@ -99,7 +99,7 @@ function ActionButton({
                 'h-7 gap-1.5 rounded-sm border-0 bg-transparent px-2 py-1 text-sm font-normal shadow-none',
                 action === 'cancel' ? 'text-foreground' : 'text-primary',
                 intent.destructive &&
-                    'hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/30',
+                    'not-disabled:hover:bg-destructive/10 not-disabled:hover:text-destructive focus-visible:ring-destructive/30',
             )}
         >
             <Icon

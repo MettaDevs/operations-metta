@@ -17,11 +17,96 @@ import {
 } from './input-group';
 import { filterRecordSearchItem } from './record-search';
 
+// Klik ganda pada pilihan: klik pertama memilih dan menutup daftar, lalu klik kedua jatuh ke kontrol yang tadinya
+// tertutup daftar, misalnya dropdown field berikutnya, dan membukanya. Klik kedua di titik yang sama ditelan. Event
+// mouse membawa hitungan klik dari peramban; event pointer tidak, jadi ia dikenali dari batas waktu klik ganda bawaan
+// Windows.
+const doubleClickMs = 500;
+const doubleClickSlop = 4;
+const secondClickEvents = [
+    'pointerdown',
+    'mousedown',
+    'pointerup',
+    'mouseup',
+    'click',
+    'dblclick',
+];
+
+function swallowSecondClick(first: Event) {
+    if (
+        !(first instanceof MouseEvent) ||
+        first.type !== 'click' ||
+        first.detail !== 1
+    ) {
+        return;
+    }
+
+    const { clientX, clientY, timeStamp } = first;
+    const target = first.view ?? window;
+    const timer = setTimeout(stop, doubleClickMs * 2);
+
+    function swallow(next: Event) {
+        if (
+            !(next instanceof MouseEvent) ||
+            Math.abs(next.clientX - clientX) > doubleClickSlop ||
+            Math.abs(next.clientY - clientY) > doubleClickSlop
+        ) {
+            stop();
+            return;
+        }
+
+        if (next instanceof PointerEvent) {
+            if (next.timeStamp - timeStamp <= doubleClickMs) {
+                next.stopPropagation();
+            }
+
+            return;
+        }
+
+        if (next.detail < 2) {
+            stop();
+            return;
+        }
+
+        next.preventDefault();
+        next.stopPropagation();
+
+        if (next.type === 'dblclick') {
+            stop();
+        }
+    }
+
+    function stop() {
+        clearTimeout(timer);
+
+        for (const type of secondClickEvents) {
+            target.removeEventListener(type, swallow, true);
+        }
+    }
+
+    for (const type of secondClickEvents) {
+        target.addEventListener(type, swallow, true);
+    }
+}
+
 function Combobox<Value, Multiple extends boolean | undefined = false>({
     filter = filterRecordSearchItem,
+    onValueChange,
     ...props
 }: ComboboxPrimitive.Root.Props<Value, Multiple>) {
-    return <ComboboxPrimitive.Root {...props} filter={filter} />;
+    return (
+        <ComboboxPrimitive.Root
+            {...props}
+            filter={filter}
+            onValueChange={(value, details) => {
+                if (!props.multiple && details.reason === 'item-press') {
+                    swallowSecondClick(details.event);
+                }
+
+                onValueChange?.(value, details);
+            }}
+        />
+    );
 }
 
 function ComboboxValue({ ...props }: ComboboxPrimitive.Value.Props) {
@@ -70,6 +155,7 @@ function ComboboxInput({
     showSearchIcon = false,
     label: providedLabel,
     id,
+    onKeyDown,
     ...props
 }: ComboboxPrimitive.Input.Props & {
     label?: string;
@@ -99,6 +185,27 @@ function ComboboxInput({
                     />
                 }
                 {...props}
+                onKeyDown={(event) => {
+                    // Base UI membiarkan Enter tanpa pilihan yang disorot mengirim form induk, misalnya menyimpan
+                    // dokumen dari baris yang barangnya belum ketemu, lalu menutup daftar dan membuang ketikan.
+                    // Di pemilih, Enter hanya memilih pilihan yang disorot; tanpa sorotan, ketikan dan daftar tetap.
+                    if (
+                        event.key === 'Enter' &&
+                        !event.nativeEvent.isComposing
+                    ) {
+                        event.preventDefault();
+
+                        if (
+                            !event.currentTarget.hasAttribute(
+                                'aria-activedescendant',
+                            )
+                        ) {
+                            event.preventBaseUIHandler();
+                        }
+                    }
+
+                    onKeyDown?.(event);
+                }}
                 aria-invalid={
                     props['aria-invalid'] ?? (cell?.errorId ? true : undefined)
                 }

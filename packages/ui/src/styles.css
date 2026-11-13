@@ -475,7 +475,7 @@
         [data-slot='button'],
         [data-slot='dialog-action'],
         [data-slot='dialog-cancel']
-    ):not([data-variant='destructive']):hover {
+    ):not([data-variant='destructive']):not(:disabled):hover {
     background: var(--accent);
 }
 

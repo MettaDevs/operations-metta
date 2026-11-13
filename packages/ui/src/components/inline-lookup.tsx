@@ -244,6 +244,28 @@ export function InlineLookup<T>({
                                             setQuery(undefined);
                                             setHighlighted(null);
                                         }
+
+                                        // Sorotan otomatis Base UI hilang saat daftar kosong selama hasil server
+                                        // dimuat, jadi hasil yang tiba sesudah ketikan tidak tersorot. Enter tetap
+                                        // memilih baris pertamanya, sama dengan hasil yang sudah tersedia saat diketik.
+                                        const first = data.items[0];
+
+                                        if (
+                                            event.key === 'Enter' &&
+                                            !event.nativeEvent.isComposing &&
+                                            open &&
+                                            searchQuery !== '' &&
+                                            !data.loading &&
+                                            first !== undefined &&
+                                            !event.currentTarget.hasAttribute(
+                                                'aria-activedescendant',
+                                            )
+                                        ) {
+                                            onValueChange(first);
+                                            setOpen(false);
+                                            setQuery(undefined);
+                                            setHighlighted(null);
+                                        }
                                     }}
                                 >
                                     <ComboboxTrigger
