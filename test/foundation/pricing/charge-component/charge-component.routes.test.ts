@@ -13,6 +13,12 @@ type ChargeComponent = {
     code: string;
     name: string;
     sort_order: number;
+    account_group: string;
+    posting_to: string;
+    payable_to: string;
+    service_group: string;
+    includes_incentive: boolean;
+    excludes_hospital_cost: boolean;
     is_active: boolean;
     version: number;
 };
@@ -112,6 +118,12 @@ describe.skipIf(!process.env.DB_HOST)('charge components', () => {
             code: 'SARANA',
             name: 'Sarana',
             sort_order: 0,
+            account_group: 'Pendapatan',
+            posting_to: 'GL',
+            payable_to: 'None',
+            service_group: 'Jasa Pelayanan',
+            includes_incentive: false,
+            excludes_hospital_cost: false,
             is_active: true,
             version: 1,
         });
@@ -164,6 +176,66 @@ describe.skipIf(!process.env.DB_HOST)('charge components', () => {
             await manager.post(api, { code: 'BHP', name: 'Bahan habis pakai' }),
             201,
         );
+    });
+
+    test('the legacy component fields default to the meaning of Kuta DT76 Pelayanan and are saved as chosen', async () => {
+        const fields = (row: Record<string, unknown>) => ({
+            account_group: row.account_group,
+            posting_to: row.posting_to,
+            payable_to: row.payable_to,
+            service_group: row.service_group,
+            includes_incentive: row.includes_incentive,
+            excludes_hospital_cost: row.excludes_hospital_cost,
+        });
+        const listed = await list(manager, '?q=PELAYANAN');
+        expect(listed.data.map(fields)).toEqual([
+            {
+                account_group: 'Pendapatan',
+                posting_to: 'GL',
+                payable_to: 'None',
+                service_group: 'Jasa Pelayanan',
+                includes_incentive: false,
+                excludes_hospital_cost: false,
+            },
+        ]);
+        const sarana = await json<{ data: Record<string, unknown> }>(
+            await manager.post(api, {
+                code: 'DT80',
+                name: 'Sarana Kuta',
+                account_group: 'Biaya',
+                posting_to: 'Hutang',
+                payable_to: 'Dokter',
+                service_group: 'Jasa Sarana',
+                includes_incentive: true,
+            }),
+            201,
+        );
+        expect(fields(sarana.data)).toEqual({
+            account_group: 'Biaya',
+            posting_to: 'Hutang',
+            payable_to: 'Dokter',
+            service_group: 'Jasa Sarana',
+            includes_incentive: true,
+            excludes_hospital_cost: false,
+        });
+        const [row] = await pool.unsafe<{ rekening: string; jasa: string }[]>(
+            "select kelompok_rekening as rekening, kelompok_jasa as jasa from komponen_biaya where tenant_id = $1 and kode = 'DT80'",
+            [tenantId],
+        );
+        expect(row).toEqual({ rekening: 'Biaya', jasa: 'Jasa Sarana' });
+        const refused = await json<{ errors: Record<string, string[]> }>(
+            await manager.post(api, {
+                code: 'DT99',
+                name: 'Salah',
+                posting_to: 'Kas',
+                service_group: 'Alat',
+            }),
+            422,
+        );
+        expect(Object.keys(refused.errors).sort()).toEqual([
+            'posting_to',
+            'service_group',
+        ]);
     });
 
     test('a viewer reads components but cannot add one', async () => {

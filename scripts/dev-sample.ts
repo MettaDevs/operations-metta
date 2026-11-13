@@ -187,7 +187,15 @@ export const sampleSchema = z.object({
         .object({
             price_groups: z.array(codeName),
             charge_components: z
-                .array(codeName.extend({ sort_order: z.number() }))
+                .array(
+                    codeName.extend({
+                        sort_order: z.number(),
+                        account_group: z.string().optional(),
+                        posting_to: z.string().optional(),
+                        payable_to: z.string().optional(),
+                        service_group: z.string().optional(),
+                    }),
+                )
                 .default([]),
         })
         .optional(),
