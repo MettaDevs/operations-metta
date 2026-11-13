@@ -10,6 +10,7 @@ import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
+import { MultiSelect } from '@operations-metta/ui/multi-select';
 import {
     PageDialog,
     PageDialogBody,
@@ -57,6 +58,7 @@ const route = getRouteApi('/_app/healthcare/coverage/patient-types');
 const behaviorLabels: Record<PatientTypeBehavior, string> = {
     requires_guarantor: 'Perlu perusahaan penjamin',
     requires_card_number: 'Perlu nomor kartu asuransi',
+    settles_automatically: 'Lunas otomatis di kasir',
 };
 type PatientType = ApiBody<'healthcarePatientTypeList'>['data'][number];
 type PriceGroup =
@@ -100,6 +102,8 @@ function PatientTypeCard({
         procedure_tariff: type?.procedure_tariff ?? 'general',
         procedure_tariff_price_group_id:
             type?.procedure_tariff_price_group_id ?? null,
+        payment_method_ids: type?.payment_method_ids ?? [],
+        automatic_payment_method_ids: type?.automatic_payment_method_ids ?? [],
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -153,10 +157,38 @@ function PatientTypeCard({
         )?.label ??
         type?.procedure_tariff_price_group_name ??
         '';
+    const settles = form.behaviors.includes('settles_automatically');
+    // Jenis bayar kasir legal entity mana pun. Nama legal entity ikut bila tenant punya lebih dari satu, karena setiap
+    // legal entity punya jenis bayarnya sendiri. Jenis bayar nonaktif hanya tampil bila tipe ini sudah memilihnya.
+    const methods = metadata?.payment_methods ?? [];
+    const manyLegalEntities =
+        new Set(methods.map((method) => method.legal_entity_id)).size > 1;
+    const methodItems = (chosen: string[], automatic: boolean) =>
+        methods
+            .filter(
+                (method) =>
+                    chosen.includes(method.id) ||
+                    (method.active &&
+                        (!automatic || method.settles_automatically)),
+            )
+            .map((method) => ({
+                value: method.id,
+                label: manyLegalEntities
+                    ? `${method.legal_entity_name} › ${method.name}`
+                    : method.name,
+            }));
+    const methodNames = (chosen: string[]) =>
+        methodItems(chosen, false)
+            .filter((item) => chosen.includes(item.value))
+            .map((item) => item.label)
+            .join(', ');
     const { has_price_group: hasPriceGroup, ...fields } = form;
     const payload = {
         ...fields,
         price_group_id: hasPriceGroup ? (form.price_group_id ?? '') : null,
+        automatic_payment_method_ids: settles
+            ? form.automatic_payment_method_ids
+            : [],
     };
 
     const save = async () => {
@@ -460,6 +492,72 @@ function PatientTypeCard({
                             </FieldLabel>
                         </Field>
                     ))}
+                    <FormControl
+                        error={errors.payment_method_ids?.[0]}
+                        data-error-field="payment_method_ids"
+                        hint="Jenis bayar yang dipilih hanya bisa dipakai pasien bertipe ini dan tipe lain yang juga memilihnya. Jenis bayar yang tidak dipilih tipe mana pun bisa dipakai semua tipe."
+                    >
+                        {editing ? (
+                            <MultiSelect
+                                label="Jenis bayar khusus tipe ini"
+                                items={methodItems(
+                                    form.payment_method_ids,
+                                    false,
+                                )}
+                                value={form.payment_method_ids}
+                                onValueChange={(value) =>
+                                    setForm({
+                                        ...form,
+                                        payment_method_ids: value,
+                                    })
+                                }
+                                searchPlaceholder="Cari jenis bayar"
+                                emptyMessage="Belum ada jenis bayar kasir."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Jenis bayar khusus tipe ini"
+                                value={methodNames(form.payment_method_ids)}
+                                readOnly
+                            />
+                        )}
+                    </FormControl>
+                    {settles && (
+                        <FormControl
+                            error={errors.automatic_payment_method_ids?.[0]}
+                            data-error-field="automatic_payment_method_ids"
+                            hint="Tagihan kunjungan pasien bertipe ini langsung lunas dengan jenis bayar ini begitu kunjungan selesai. Pilih satu untuk setiap legal entity."
+                        >
+                            {editing ? (
+                                <MultiSelect
+                                    label="Jenis bayar otomatis"
+                                    items={methodItems(
+                                        form.automatic_payment_method_ids,
+                                        true,
+                                    )}
+                                    value={form.automatic_payment_method_ids}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            automatic_payment_method_ids: value,
+                                        })
+                                    }
+                                    searchPlaceholder="Cari jenis bayar"
+                                    emptyMessage="Belum ada jenis bayar yang bisa melunasi otomatis."
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Jenis bayar otomatis"
+                                    value={methodNames(
+                                        form.automatic_payment_method_ids,
+                                    )}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                    )}
                     <Field orientation="horizontal" className="w-auto">
                         <Switch
                             id="patient-type-active"

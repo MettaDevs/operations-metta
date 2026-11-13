@@ -25,6 +25,7 @@ export {
     chargeLockedMessage,
     closedClerkMessage,
     lockChargeForChange,
+    patientTypeMessage,
 } from './payment/payment.service.ts';
 
 let registered = false;

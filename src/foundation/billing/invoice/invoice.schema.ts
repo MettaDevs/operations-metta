@@ -44,4 +44,6 @@ export const chargeRowSchema = z.object({
 export const visitDetailSchema = visitRowSchema.extend({
     guarantor_name: z.string().nullable(),
     card_number: z.string().nullable(),
+    // Jenis bayar yang dikhususkan tipe pasien lain, ditolak untuk kunjungan ini.
+    restricted_payment_method_ids: z.array(z.string()),
 });

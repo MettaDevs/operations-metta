@@ -9,8 +9,15 @@ info:
     membaca tabel layanan kesehatan. Kunjungan yang dibuka kembali (`healthcare.visit.reopened.v1`) menerbitkannya lagi
     saat selesai lagi, dengan potret yang diperbarui.
 
+    Sejak 14 November 2026 potret itu membawa dua field opsional dari pengaturan tipe pasien: jenis bayar legal entity
+    kunjungan yang dikhususkan tipe pasien lain (`restricted_payment_method_ids`), yang ditolak kasir untuk kunjungan ini,
+    dan jenis bayar otomatis (`automatic_payment_method_id`), yang melunasi seluruh tagihan kunjungan begitu kunjungan
+    selesai. Field opsional tidak menaikkan versi; penerima yang tidak mengenalnya memperlakukan kunjungan tanpa pembatas
+    dan tanpa bayar otomatis.
+
     Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime. Penerima: kasir Core
-    (`src/foundation/billing/charge/`), yang mencatatnya di `kunjungan_kasir`.
+    (`src/foundation/billing/charge/`), yang mencatatnya di `kunjungan_kasir` dan langsung membuat pembayaran bila
+    `automatic_payment_method_id` terisi.
 channels:
   healthcare.visit.completed.v1:
     address: healthcare.visit.completed.v1
@@ -136,3 +143,18 @@ components:
           description: Section tujuan kunjungan, berurutan.
           items:
             $ref: '#/components/schemas/named'
+        restricted_payment_method_ids:
+          type: array
+          description: |
+            Id jenis bayar kasir (Core) di legal entity kunjungan yang dikhususkan tipe pasien lain. Kasir menolak jenis
+            bayar ini untuk kunjungan ini dengan pesan sistem lama "Tidak Dapat Menggunakan Tipe Pembayaran, Karena
+            berbeda tipe pasien". Jenis bayar yang tidak disebut boleh dipakai.
+          items:
+            type: string
+            format: uuid
+        automatic_payment_method_id:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Id jenis bayar kasir (Core) di legal entity kunjungan yang melunasi seluruh tagihan begitu kunjungan selesai,
+            untuk tipe pasien yang lunas otomatis di kasir. Null bila tipe pasiennya dibayar di kasir.

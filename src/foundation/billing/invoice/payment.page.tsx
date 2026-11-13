@@ -231,7 +231,13 @@ function PaymentPage(): ReactNode {
                     >
                         {payment ? (
                             <FormGrid>
-                                <FormControl>
+                                <FormControl
+                                    hint={
+                                        payment.automatic
+                                            ? 'Lunas otomatis saat kunjungan selesai, karena tipe pasiennya lunas otomatis di kasir.'
+                                            : undefined
+                                    }
+                                >
                                     <Input
                                         label="Nilai"
                                         value={displayAmount(
