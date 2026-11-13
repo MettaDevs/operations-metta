@@ -87,28 +87,25 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             )
         ).data;
 
-    // Presisi harga satuan rupiah di Sys Admin › Mata uang. Tenant uji mulai seperti Kuta 1 dan Penta (rupiah utuh);
-    // presisi jumlah tidak boleh lebih halus dari harga satuan.
-    let currency: { id: string; version: number } | null = null;
+    // Presisi harga satuan rupiah di Sys Admin › Mata uang. Tenant uji mulai dengan baris rupiah utuh seperti Kuta 1 dan
+    // Penta; presisi jumlah tidak boleh lebih halus dari harga satuan.
     async function setting(unit_amount_decimals: number) {
-        const body = {
-            currency_code: 'IDR',
-            amount_decimals: Math.min(2, unit_amount_decimals),
-            unit_amount_decimals,
-            invoice_rounding_precision: '1',
-            invoice_rounding_type: 'nearest',
-        };
-        currency = (
-            await json<{ data: { id: string; version: number } }>(
-                currency
-                    ? await pharmacy.admin.patch(
-                          `/api/v1/currencies/${currency.id}`,
-                          { ...body, version: currency.version },
-                      )
-                    : await pharmacy.admin.post('/api/v1/currencies', body),
-                currency ? 200 : 201,
-            )
-        ).data;
+        const listed = await json<{
+            data: { id: string; currency_code: string; version: number }[];
+        }>(await pharmacy.admin.get('/api/v1/currencies'), 200);
+        const current = listed.data.find((row) => row.currency_code === 'IDR');
+        if (!current) throw new Error('The tenant has no rupiah row.');
+        await json(
+            await pharmacy.admin.patch(`/api/v1/currencies/${current.id}`, {
+                currency_code: 'IDR',
+                amount_decimals: Math.min(2, unit_amount_decimals),
+                unit_amount_decimals,
+                invoice_rounding_precision: '0',
+                invoice_rounding_type: 'nearest',
+                version: current.version,
+            }),
+            200,
+        );
     }
 
     beforeAll(async () => {
@@ -120,7 +117,6 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
                 'core.reference-data.manage',
             ],
         });
-        await setting(0);
         farmasi = await pharmacy.location('FARMASI');
         await pharmacy.created(`${api}/service-locations`, {
             operating_unit_id: pharmacy.unitId,

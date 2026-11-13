@@ -92,6 +92,21 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
         expect(role).toMatchObject({ name: 'Pemilik', is_owner: true });
         expect(role?.duties).toBe(role?.core_duties);
         expect(role?.duties).toBeGreaterThan(0);
+        // Presisi rupiah tertulis sebagai data sejak tenant lahir: rupiah utuh, tanpa pembulatan tagihan lagi.
+        expect([
+            ...(await runtime.unsafe(
+                'select currency_code, amount_decimals, unit_amount_decimals, trim_scale(invoice_rounding_precision)::text as invoice_rounding_precision, invoice_rounding_type from currency_precisions where tenant_id = $1',
+                [provision.tenant.id],
+            )),
+        ]).toEqual([
+            {
+                currency_code: 'IDR',
+                amount_decimals: 0,
+                unit_amount_decimals: 0,
+                invoice_rounding_precision: '0',
+                invoice_rounding_type: 'nearest',
+            },
+        ]);
     });
 
     test('mengulang penyiapan tidak menulis apa pun lagi', async () => {
@@ -101,12 +116,16 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
             { created: false },
         );
         const [counts] = await runtime.unsafe<
-            { memberships: number; roles: number }[]
+            { memberships: number; roles: number; currencies: number }[]
         >(
-            'select (select count(*)::int from tenant_memberships where tenant_id = $1) as memberships, (select count(*)::int from roles where tenant_id = $1) as roles',
+            'select (select count(*)::int from tenant_memberships where tenant_id = $1) as memberships, (select count(*)::int from roles where tenant_id = $1) as roles, (select count(*)::int from currency_precisions where tenant_id = $1) as currencies',
             [provision.tenant.id],
         );
-        expect({ ...counts }).toEqual({ memberships: 1, roles: 1 });
+        expect({ ...counts }).toEqual({
+            memberships: 1,
+            roles: 1,
+            currencies: 1,
+        });
     });
 
     test(

@@ -1,4 +1,9 @@
 import type postgres from 'postgres';
+import {
+    localCurrencyCode,
+    localCurrencyPrecision,
+    type RoundingMethod,
+} from '../../src/platform/money/index.ts';
 
 // Data awal tenant untuk test yang memakai database, ditulis lewat SQL langsung supaya setiap test memegang duty yang
 // ia butuhkan saja. Tenant sungguhan disiapkan provisionEnvironment. Semua nama dan email sintetis dan unik per
@@ -22,7 +27,42 @@ export async function createTenant(sql: postgres.Sql, name = 'Tenant uji') {
         "insert into tenants (id, client_id, name, slug, status, created_at, updated_at) values ($1, $2, $3, $4, 'active', now(), now())",
         [tenantId, clientId, name, slug],
     );
+    // Seperti provisionEnvironment: setiap tenant punya baris presisi rupiah sejak awal.
+    await setCurrencyPrecision(sql, tenantId, localCurrencyPrecision);
     return tenantId;
+}
+
+// Presisi mata uang tenant uji (Sys Admin › Mata uang). Test yang menghitung dengan desimal menyetelnya sendiri, bukan
+// bergantung pada baris rupiah utuh yang ditulis saat tenant disiapkan.
+export async function setCurrencyPrecision(
+    sql: postgres.Sql,
+    tenantId: string,
+    precision: {
+        amount_decimals: number;
+        unit_amount_decimals: number;
+        invoice_rounding_precision: string;
+        invoice_rounding_type: RoundingMethod;
+    },
+    currencyCode: string = localCurrencyCode,
+) {
+    await sql.unsafe(
+        `insert into currency_precisions (id, tenant_id, currency_code, amount_decimals, unit_amount_decimals,
+                invoice_rounding_precision, invoice_rounding_type, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, now(), now())
+         on conflict (tenant_id, currency_code) do update set amount_decimals = excluded.amount_decimals,
+             unit_amount_decimals = excluded.unit_amount_decimals,
+             invoice_rounding_precision = excluded.invoice_rounding_precision,
+             invoice_rounding_type = excluded.invoice_rounding_type, updated_at = now()`,
+        [
+            Bun.randomUUIDv7(),
+            tenantId,
+            currencyCode,
+            precision.amount_decimals,
+            precision.unit_amount_decimals,
+            precision.invoice_rounding_precision,
+            precision.invoice_rounding_type,
+        ],
+    );
 }
 
 // Anggota aktif tenant dengan satu role yang memegang duty yang disebut, misalnya `core.organization.manage`.

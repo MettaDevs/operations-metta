@@ -40,11 +40,13 @@ const typeItems = Object.entries(roundingTypeLabels).map(([value, label]) => ({
     label,
 }));
 
+// Isian awal mata uang baru. Rupiah sudah punya baris sejak tenant disiapkan, jadi yang ditambahkan di sini mata uang
+// asing: dua angka di belakang koma untuk jumlah, tiga untuk harga satuan, dan tagihan tidak dibulatkan.
 const formOf = (record: CurrencyPrecision | null) => ({
-    currency_code: record?.currency_code ?? 'IDR',
+    currency_code: record?.currency_code ?? '',
     amount_decimals: record?.amount_decimals ?? 2,
     unit_amount_decimals: record?.unit_amount_decimals ?? 3,
-    invoice_rounding_precision: record?.invoice_rounding_precision ?? '1',
+    invoice_rounding_precision: record?.invoice_rounding_precision ?? '0',
     invoice_rounding_type: record?.invoice_rounding_type ?? 'nearest',
 });
 

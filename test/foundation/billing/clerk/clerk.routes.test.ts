@@ -17,6 +17,7 @@ import {
 import {
     createMember,
     grantAllOrganizations,
+    setCurrencyPrecision,
 } from '../../../support/tenant-fixtures.ts';
 
 const api = '/api/v1/billing/clerks';
@@ -106,6 +107,13 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         legalEntityId = business.legalEntityId;
         cashier = business.admin;
         cashierUserId = business.member.userId;
+        // Hitungan Clerk End di sini memakai sen, jadi presisi jumlah rupiah tenant ini dua angka di belakang koma.
+        await setCurrencyPrecision(pool, tenantId, {
+            amount_decimals: 2,
+            unit_amount_decimals: 2,
+            invoice_rounding_precision: '0',
+            invoice_rounding_type: 'nearest',
+        });
         methods = {};
         for (const method of [
             {

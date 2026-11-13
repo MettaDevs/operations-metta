@@ -16,8 +16,8 @@ import {
     type CurrencyPrecision,
 } from './currency-card.tsx';
 
-// Presisi mata uang tenant: angka di belakang koma jumlah dan harga satuan, dan pembulatan tagihan. Rupiah tanpa baris
-// memakai bawaan: jumlah dua angka, harga satuan tiga angka, tagihan dibulatkan ke rupiah terdekat.
+// Presisi mata uang tenant: angka di belakang koma jumlah dan harga satuan, dan pembulatan tagihan. Baris rupiah ditulis
+// saat tenant disiapkan dengan rupiah utuh; mata uang lain ditambahkan dari sini.
 
 function CurrenciesPage(): ReactNode {
     const listed = useQuery(
@@ -55,7 +55,7 @@ function CurrenciesPage(): ReactNode {
                     actions={[{ id: 'open', label: 'Buka' }]}
                     onRowAction={(_, row) => setOpen(row)}
                     onRowClick={(row) => setOpen(row)}
-                    emptyMessage="Belum ada mata uang yang disetel. Rupiah memakai presisi bawaan."
+                    emptyMessage="Belum ada mata uang yang disetel. Rupiah dibulatkan ke rupiah utuh sampai disetel di sini."
                     columns={[
                         {
                             id: 'code',

@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import type { DatabaseSettings } from '../config/index.ts';
 import { sqlErrorCode } from '../database/index.ts';
 import { migrate, type MigrationSource } from '../migration/index.ts';
+import { localCurrencyCode, localCurrencyPrecision } from '../money/index.ts';
 import type { ProvisionRequest } from './provision.schema.ts';
 import { recordRoute } from './route.service.ts';
 
@@ -54,8 +55,8 @@ async function createDatabase(
     }
 }
 
-// Menulis customer, tenant, admin pertama, dan role pemilik yang memegang semua duty Core dalam satu transaksi.
-// Tenant yang sudah ada berarti transaksi itu pernah selesai, jadi tidak ada yang ditulis lagi.
+// Menulis customer, tenant, presisi rupiah, admin pertama, dan role pemilik yang memegang semua duty Core dalam satu
+// transaksi. Tenant yang sudah ada berarti transaksi itu pernah selesai, jadi tidak ada yang ditulis lagi.
 async function bootstrapTenant(
     sql: postgres.Sql,
     { client, tenant, admin }: ProvisionRequest,
@@ -89,6 +90,20 @@ async function bootstrapTenant(
         await transaction.unsafe(
             "insert into tenants (id, client_id, name, slug, status, created_at, updated_at) values ($1, $2, $3, $4, 'active', now(), now())",
             [tenant.id, client.id, tenant.name, tenant.slug],
+        );
+        // Presisi rupiah tertulis sebagai data sejak awal, supaya Sys Admin › Mata uang menampilkan angka yang sungguh
+        // dipakai dan tidak ada yang bergantung pada bawaan di kode.
+        await transaction.unsafe(
+            'insert into currency_precisions (id, tenant_id, currency_code, amount_decimals, unit_amount_decimals, invoice_rounding_precision, invoice_rounding_type, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7, now(), now())',
+            [
+                Bun.randomUUIDv7(),
+                tenant.id,
+                localCurrencyCode,
+                localCurrencyPrecision.amount_decimals,
+                localCurrencyPrecision.unit_amount_decimals,
+                localCurrencyPrecision.invoice_rounding_precision,
+                localCurrencyPrecision.invoice_rounding_type,
+            ],
         );
         await transaction.unsafe(
             "insert into users (id, name, email, password, account_type, created_at, updated_at) values ($1, $2, $3, $4, 'person', now(), now())",
