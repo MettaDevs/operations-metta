@@ -19,7 +19,13 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
-import { decimalInput, quantityScale, toNumeric } from '../quantity.ts';
+import { decimalsHint } from '../../../platform/money/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    unitAmountDecimals,
+} from '../../currency/index.ts';
+import { quantityScale, toNumeric, unitCostInput } from '../quantity.ts';
 import {
     batchRowSchema,
     itemInputSchema,
@@ -157,13 +163,15 @@ async function checked(
         !(await exists(db, 'gd_m_profil_pelacakan', scope, trackingCodeId))
     )
         errors.tracking_code_id = 'Pilih profil pelacakan dari daftar.';
+    const priceDecimals = unitAmountDecimals(
+        await new Currency(db, scope.tenantId).precision(localCurrencyCode),
+    );
     const basePrice =
         data.base_price === undefined
             ? undefined
-            : decimalInput(data.base_price);
-    if (basePrice === null || (basePrice !== undefined && basePrice < 0n))
-        errors.base_price =
-            'Isi harga dasar 0 atau lebih, paling banyak empat angka di belakang koma.';
+            : unitCostInput(data.base_price, priceDecimals);
+    if (basePrice === null)
+        errors.base_price = `Isi harga dasar 0 atau lebih, ${decimalsHint(priceDecimals)}.`;
     if (Object.keys(errors).length) validation(errors);
     return {
         code,

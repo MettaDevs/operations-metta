@@ -23,12 +23,20 @@ import {
     exists,
     parseInput,
     postItemLines,
+    quantityHint,
     quantityScale,
     raiseBasePrices,
     reverseItemEntries,
     toNumeric,
     unitConversion,
+    unitCostInput,
 } from '../../inventory/index.ts';
+import { decimalsHint } from '../../../platform/money/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    unitAmountDecimals,
+} from '../../currency/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
     receiptBasePrices,
@@ -150,6 +158,14 @@ export class Receipts {
             tenantId: this.workspace.tenantId,
             legalEntityId: activeLegalEntity(this.workspace),
         };
+    }
+
+    private async unitCostDecimals(): Promise<number> {
+        return unitAmountDecimals(
+            await new Currency(this.db, this.scope.tenantId).precision(
+                localCurrencyCode,
+            ),
+        );
     }
 
     async list(parameters: URLSearchParams) {
@@ -306,6 +322,7 @@ export class Receipts {
         const description = data.description?.trim() || null;
         if (description && description.length > 200)
             errors.description = messages.description;
+        const unitCostDecimals = await this.unitCostDecimals();
         const lines: LineDraft[] = [];
         for (const [index, line] of data.lines.entries()) {
             const field = `lines.${index}`;
@@ -342,23 +359,20 @@ export class Receipts {
             if (conversion === null) fail('unit_id', messages.unit_id);
             const quantity = decimalInput(line.quantity);
             if (quantity === null || quantity <= 0n)
-                fail(
-                    'quantity',
-                    'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.',
-                );
+                fail('quantity', `Isi jumlah lebih dari 0, ${quantityHint}.`);
             else if (
                 conversion !== null &&
                 baseQuantity(quantity, conversion) === null
             )
                 fail(
                     'quantity',
-                    'Jumlah ini dalam satuan dasar punya lebih dari empat angka di belakang koma atau terlalu besar. Ubah jumlah atau satuannya.',
+                    `Jumlah ini dalam satuan dasar harus ${quantityHint} dan tidak terlalu besar. Ubah jumlah atau satuannya.`,
                 );
-            const unitCost = decimalInput(line.unit_cost);
-            if (unitCost === null || unitCost < 0n)
+            const unitCost = unitCostInput(line.unit_cost, unitCostDecimals);
+            if (unitCost === null)
                 fail(
                     'unit_cost',
-                    'Isi harga satuan 0 atau lebih, paling banyak empat angka di belakang koma.',
+                    `Isi harga satuan 0 atau lebih, ${decimalsHint(unitCostDecimals)}.`,
                 );
             const discount =
                 line.discount_percent === null ||
@@ -705,10 +719,11 @@ export class Receipts {
                 validation({
                     lines: 'Tambahkan sedikitnya satu baris sebelum posting.',
                 });
+            const unitCostDecimals = await this.unitCostDecimals();
             await raiseBasePrices(
                 this.db,
                 this.scope,
-                receiptBasePrices(lines),
+                receiptBasePrices(lines, unitCostDecimals),
             );
             await postItemLines(
                 this.db,
@@ -724,7 +739,12 @@ export class Receipts {
                     },
                 },
                 lines.map((line, index) =>
-                    receiptItemLine(line, claimed.location_id, index),
+                    receiptItemLine(
+                        line,
+                        claimed.location_id,
+                        index,
+                        unitCostDecimals,
+                    ),
                 ),
             );
         });

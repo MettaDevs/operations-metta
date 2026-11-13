@@ -1,3 +1,4 @@
+import { divideRounded } from '../../../platform/money/index.ts';
 import {
     baseQuantity,
     fromNumeric,
@@ -10,16 +11,21 @@ const hundredPercent = 100n * scale;
 
 export const sourceType = 'penerimaan';
 
-// Harga per satuan dasar sesudah diskon baris, dibulatkan sekali ke empat angka di belakang koma (setengah menjauhi
-// nol), seperti Unit Cost (LCY) di baris pembelian BC.
+// Harga per satuan dasar sesudah diskon baris, dibulatkan sekali ke `decimals` angka di belakang koma (presisi harga
+// satuan mata uang tenant, setengah menjauhi nol), seperti Unit Cost (LCY) di baris pembelian BC.
 export function baseUnitCost(
     unitCost: bigint,
     discountPercent: bigint,
     conversion: bigint,
+    decimals: number,
 ): bigint {
-    const numerator = unitCost * (hundredPercent - discountPercent) * scale;
-    const denominator = hundredPercent * conversion;
-    return (numerator + denominator / 2n) / denominator;
+    const step = 10n ** BigInt(quantityScale - decimals);
+    return (
+        divideRounded(
+            unitCost * (hundredPercent - discountPercent) * scale,
+            hundredPercent * conversion * step,
+        ) * step
+    );
 }
 
 export type StoredReceiptLine = {
@@ -41,6 +47,7 @@ export type StoredReceiptLine = {
 // sistem lama sama dengan harga baris. Barang di beberapa baris memakai harga tertinggi.
 export function receiptBasePrices(
     lines: readonly StoredReceiptLine[],
+    decimals: number,
 ): Map<string, bigint> {
     const prices = new Map<string, bigint>();
     for (const line of lines) {
@@ -48,6 +55,7 @@ export function receiptBasePrices(
             fromNumeric(line.unit_cost, quantityScale),
             0n,
             fromNumeric(line.conversion, quantityScale),
+            decimals,
         );
         if (price > (prices.get(line.item_id) ?? -1n))
             prices.set(line.item_id, price);
@@ -60,6 +68,7 @@ export function receiptItemLine(
     line: StoredReceiptLine,
     locationId: string,
     index: number,
+    decimals: number,
 ): InboundLine {
     const conversion = fromNumeric(line.conversion, quantityScale);
     const quantity = baseQuantity(
@@ -81,6 +90,7 @@ export function receiptItemLine(
             fromNumeric(line.unit_cost, quantityScale),
             fromNumeric(line.discount_percent, quantityScale),
             conversion,
+            decimals,
         ),
         batchNumber: line.batch_number,
         expiry: line.expiry,

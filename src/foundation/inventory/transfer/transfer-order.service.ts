@@ -26,6 +26,7 @@ import { unitConversion } from '../item-unit/item-unit.service.ts';
 import {
     baseQuantity,
     decimalInput,
+    quantityHint,
     display,
     fromNumeric,
     quantityScale,
@@ -394,17 +395,14 @@ export class TransferOrders {
             if (conversion === null) fail('unit_id', messages.unit_id);
             const requested = decimalInput(line.quantity);
             if (requested === null || requested <= 0n)
-                fail(
-                    'quantity',
-                    'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.',
-                );
+                fail('quantity', `Isi jumlah lebih dari 0, ${quantityHint}.`);
             else if (
                 conversion !== null &&
                 baseQuantity(requested, conversion) === null
             )
                 fail(
                     'quantity',
-                    'Jumlah ini dalam satuan dasar punya lebih dari empat angka di belakang koma atau terlalu besar. Ubah jumlah atau satuannya.',
+                    `Jumlah ini dalam satuan dasar harus ${quantityHint} dan tidak terlalu besar. Ubah jumlah atau satuannya.`,
                 );
             lines.push({
                 id: line.id ?? null,
@@ -796,14 +794,13 @@ export class TransferOrders {
         if (raw === undefined) return stored;
         const value = raw === '' ? 0n : decimalInput(raw);
         if (value === null || value < 0n)
-            errors[field] =
-                'Isi jumlah 0 atau lebih, paling banyak empat angka di belakang koma.';
+            errors[field] = `Isi jumlah 0 atau lebih, ${quantityHint}.`;
         else if (value > limit)
             errors[field] =
                 `Paling banyak ${quantity(limit)}, yaitu ${limitLabel}.`;
         else if (baseQuantity(value, conversion) === null)
             errors[field] =
-                'Jumlah ini dalam satuan dasar punya lebih dari empat angka di belakang koma. Ubah jumlahnya.';
+                `Jumlah ini dalam satuan dasar harus ${quantityHint}. Ubah jumlahnya.`;
         return value ?? 0n;
     }
 

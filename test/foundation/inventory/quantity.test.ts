@@ -29,15 +29,24 @@ describe('inventory quantities', () => {
         expect(decimalInput('100000000000000')).toBeNull();
     });
 
-    test('values quantity times unit cost once, rounded half away from zero to two decimals', () => {
-        expect(
-            amountOf([
-                { quantity: 40000n, unitCost: 15000000n },
-                { quantity: 20000n, unitCost: 20005000n },
-            ]),
-        ).toBe(1000100n);
-        expect(amountOf([{ quantity: 10000n, unitCost: 50n }])).toBe(1n);
-        expect(amountOf([{ quantity: -10000n, unitCost: 50n }])).toBe(-1n);
+    test('values quantity times unit cost once, rounded half away from zero to the amount precision of the currency', () => {
+        const parts = [
+            { quantity: 40000n, unitCost: 15000000n },
+            { quantity: 20000n, unitCost: 20005000n },
+        ];
+        // 4 x 1.500 + 2 x 2.000,5 = 10.001, berskala empat seperti kolom nilai.
+        expect(amountOf(parts, 2)).toBe(100010000n);
+        expect(amountOf(parts, 0)).toBe(100010000n);
+        // 1 x 0,005 menjadi 0,01 dengan dua angka di belakang koma dan 0 untuk rupiah utuh.
+        expect(amountOf([{ quantity: 10000n, unitCost: 50n }], 2)).toBe(100n);
+        expect(amountOf([{ quantity: 10000n, unitCost: 50n }], 0)).toBe(0n);
+        // 1 x 0,5 menjadi 1 rupiah, dan -1 bila keluar.
+        expect(amountOf([{ quantity: 10000n, unitCost: 5000n }], 0)).toBe(
+            10000n,
+        );
+        expect(amountOf([{ quantity: -10000n, unitCost: 5000n }], 0)).toBe(
+            -10000n,
+        );
     });
 
     test('base quantity is the line quantity times the unit content, refused when it needs a fifth decimal', () => {

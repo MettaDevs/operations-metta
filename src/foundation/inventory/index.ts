@@ -61,6 +61,7 @@ export {
     quantityHint,
     quantityScale,
     toNumeric,
+    unitCostInput,
 } from './quantity.ts';
 
 export function inventoryRoutes() {
