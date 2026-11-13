@@ -14,7 +14,8 @@ export const dateTime = (value: string) =>
     });
 
 // Hasil Clerk End, blok Jumlah Sistem dan Jumlah Clerk layar Lihat Clerk sistem lama: ringkasan sesi lalu jumlah sistem,
-// jumlah fisik, dan selisih per jenis bayar yang dihitung.
+// jumlah fisik, dan selisih per jenis bayar yang dihitung, dalam mata uang jenis bayar itu, dengan kurs hari Clerk End
+// dan selisihnya dalam mata uang lokal untuk jenis bayar bermata uang asing.
 export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
     const amount = (value: string | null) =>
         value === null ? '' : displayNumber(value);
@@ -79,6 +80,12 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         cell: (line) => text(line.name),
                     },
                     {
+                        id: 'currency',
+                        header: 'Mata Uang',
+                        width: 110,
+                        cell: (line) => text(line.currency_code),
+                    },
+                    {
                         id: 'system_amount',
                         header: 'Jumlah Sistem',
                         width: 160,
@@ -98,6 +105,25 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         width: 160,
                         align: 'right',
                         cell: (line) => text(amount(line.difference)),
+                    },
+                    {
+                        id: 'rate',
+                        header: 'Kurs',
+                        width: 130,
+                        align: 'right',
+                        cell: (line) =>
+                            text(
+                                line.currency_code === clerk.local_currency
+                                    ? ''
+                                    : amount(line.rate),
+                            ),
+                    },
+                    {
+                        id: 'difference_local',
+                        header: `Selisih ${clerk.local_currency}`,
+                        width: 160,
+                        align: 'right',
+                        cell: (line) => text(amount(line.difference_local)),
                     },
                 ]}
             />

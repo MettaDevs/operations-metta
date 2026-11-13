@@ -384,5 +384,110 @@ describe.skipIf(!process.env.DB_HOST)(
                 ]),
             ).toEqual([[foreign, '16000', '16250.5', '100000']]);
         });
+
+        test('a method that took payments keeps its currency', async () => {
+            const [method] = await pool.unsafe<{ version: number }[]>(
+                'select version from jenis_bayar where id = $1',
+                [methods[foreign] ?? ''],
+            );
+            expect(
+                await refused(
+                    await cashier.patch(
+                        `/api/v1/billing/payment-methods/${methods[foreign]}`,
+                        {
+                            code: foreign,
+                            name: foreign,
+                            behavior: 'tunai',
+                            counted_at_close: true,
+                            currency_code: null,
+                            version: method?.version,
+                        },
+                    ),
+                ),
+            ).toEqual({
+                currency_code: [
+                    'Jenis bayar ini sudah dipakai, jadi mata uangnya tidak bisa diubah. Buat jenis bayar baru untuk mata uang lain.',
+                ],
+            });
+        });
+
+        test('Clerk End counts foreign cash in its own currency and values its difference at the closing rate', async () => {
+            const current = await json<{
+                data: {
+                    id: string;
+                    version: number;
+                    lines: { currency_code: string; amount_decimals: number }[];
+                };
+            }>(await cashier.get('/api/v1/billing/clerks/current'), 200);
+            expect(
+                current.data.lines.map((line) => [
+                    line.currency_code,
+                    line.amount_decimals,
+                ]),
+            ).toEqual([
+                ['IDR', 2],
+                [foreign, 2],
+            ]);
+            // Valuta sesi ini: 12,35 + 6,15 + 6,25 = 24,75, senilai 400.634,58 rupiah dengan kurs saat dibayar. Tunai rupiah
+            // bersih -694 + 59,42 = -634,58 karena kembalian valuta keluar dari laci rupiah. Kasir menghitung 24,70 valuta
+            // dan 0 rupiah; kurs hari ini 16.250,5.
+            const ended = await json<{
+                data: {
+                    system_total: string;
+                    clerk_total: string;
+                    difference_total: string;
+                    lines: {
+                        code: string;
+                        currency_code: string;
+                        system_amount: string;
+                        counted_amount: string;
+                        difference: string;
+                        rate: string;
+                        difference_local: string;
+                    }[];
+                };
+            }>(
+                await cashier.post(
+                    `/api/v1/billing/clerks/${current.data.id}/end`,
+                    {
+                        password: testPassword,
+                        counts: {
+                            [methods.TUN!]: '0',
+                            [methods[foreign]!]: '24.70',
+                        },
+                        version: current.data.version,
+                    },
+                ),
+                200,
+            );
+            expect(
+                ended.data.lines.map((line) => [
+                    line.code,
+                    line.currency_code,
+                    line.system_amount,
+                    line.counted_amount,
+                    line.difference,
+                    line.rate,
+                    line.difference_local,
+                ]),
+            ).toEqual([
+                ['TUN', 'IDR', '-634.58', '0', '634.58', '1', '634.58'],
+                [
+                    foreign,
+                    foreign,
+                    '24.75',
+                    '24.7',
+                    '-0.05',
+                    '16250.5',
+                    '-812.53',
+                ],
+            ]);
+            // Jumlah fisik dinilai dengan kurs hari ini: 24,70 x 16.250,5 = 401.387,35.
+            expect([
+                ended.data.system_total,
+                ended.data.clerk_total,
+                ended.data.difference_total,
+            ]).toEqual(['400000', '401387.35', '-177.95']);
+        });
     },
 );

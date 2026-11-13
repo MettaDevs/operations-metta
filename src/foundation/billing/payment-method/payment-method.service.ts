@@ -216,6 +216,18 @@ export class PaymentMethods {
         const current = await this.row(id);
         const data = checked(body);
         await this.checkedCurrency(data.mata_uang);
+        // Clerk End menjumlah jumlah valuta per jenis bayar, jadi satu jenis bayar hanya pernah memegang satu mata uang.
+        if (
+            (current.currency_code ?? null) !== data.mata_uang &&
+            (await isReferenced(this.db, 'jenis_bayar', {
+                tenantId: this.scope.tenantId,
+                id: current.id,
+            }))
+        )
+            validation({
+                currency_code:
+                    'Jenis bayar ini sudah dipakai, jadi mata uangnya tidak bisa diubah. Buat jenis bayar baru untuk mata uang lain.',
+            });
         let updated = 0;
         try {
             const columns = Object.entries(data);

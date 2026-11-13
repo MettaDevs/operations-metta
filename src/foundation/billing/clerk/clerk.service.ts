@@ -22,7 +22,10 @@ import {
     Currency,
     decimalsHint,
     localCurrencyCode,
+    missingRateMessage,
+    roundAmount,
 } from '../../currency/index.ts';
+import type { Decimal } from '../../../platform/money/index.ts';
 import { closeClerk, countedMethods } from './clerk.close.ts';
 import { clerkSales } from './clerk.sales.ts';
 import {
@@ -59,7 +62,8 @@ const rowSql = `select * from (
                 where true`;
 
 // Jenis bayar yang dihitung saat Clerk End, aktif maupun tidak, berurut seperti di layar kasir.
-const countedMethodsSql = `select id, kode as code, coalesce(label_kasir, nama) as name, aktif as active
+const countedMethodsSql = `select id, kode as code, coalesce(label_kasir, nama) as name, aktif as active,
+                                  coalesce(mata_uang, $3) as currency_code
                            from jenis_bayar
                            where tenant_id = $1 and legal_entity_id = $2 and dihitung_tutup_kas and deleted_at is null
                            order by urutan, kode`;
@@ -68,6 +72,7 @@ const countedMethodSchema = z.object({
     code: z.string(),
     name: z.string(),
     active: z.boolean(),
+    currency_code: z.string(),
 });
 
 const codeCharacters = '1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -166,36 +171,49 @@ export class Clerks {
         return this.db.rows(countedMethodSchema, countedMethodsSql, [
             this.scope.tenantId,
             this.scope.legalEntityId,
+            localCurrencyCode,
         ]);
     }
 
     // Clerk dengan baris jenis bayarnya. Selama berjalan, barisnya jenis bayar yang akan diisi kasir tanpa angka; sesudah
     // Clerk End, baris yang tersimpan beserta jumlah sistem dan selisihnya.
     private async detail(clerk: z.infer<typeof clerkRowSchema>) {
+        const currency = new Currency(this.db, this.scope.tenantId);
         const lines =
             clerk.status === 'start'
-                ? countedMethods(
-                      await this.methods(),
-                      await clerkSales(this.db, {
-                          tenantId: this.scope.tenantId,
-                          id: clerk.id,
-                      }),
-                  ).map((method) => ({
-                      payment_method_id: method.id,
-                      code: method.code,
-                      name: method.name,
-                      system_amount: null,
-                      counted_amount: null,
-                      difference: null,
-                  }))
+                ? await Promise.all(
+                      countedMethods(
+                          await this.methods(),
+                          await clerkSales(this.db, {
+                              tenantId: this.scope.tenantId,
+                              id: clerk.id,
+                          }),
+                      ).map(async (method) => ({
+                          payment_method_id: method.id,
+                          code: method.code,
+                          name: method.name,
+                          currency_code: method.currency_code,
+                          amount_decimals: (
+                              await currency.precision(method.currency_code)
+                          ).amount_decimals,
+                          system_amount: null,
+                          counted_amount: null,
+                          difference: null,
+                          rate: null,
+                          difference_local: null,
+                      })),
+                  )
                 : await this.db.rows(
                       clerkLineSchema,
                       `select d.jenis_bayar_id as payment_method_id, j.kode as code,
-                              coalesce(j.label_kasir, j.nama) as name,
-                              trim_scale(d.jumlah_sistem)::text as system_amount,
+                              coalesce(j.label_kasir, j.nama) as name, d.mata_uang as currency_code,
+                              p.amount_decimals, trim_scale(d.jumlah_sistem)::text as system_amount,
                               trim_scale(d.jumlah_total)::text as counted_amount,
-                              trim_scale(d.jumlah_selisih)::text as difference
-                       from clerk_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
+                              trim_scale(d.jumlah_selisih)::text as difference, trim_scale(d.kurs)::text as rate,
+                              trim_scale(d.selisih_lokal)::text as difference_local
+                       from clerk_detail d
+                       join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
+                       join currency_precisions p on p.tenant_id = d.tenant_id and p.currency_code = d.mata_uang
                        where d.tenant_id = $1 and d.clerk_id = $2
                        order by j.urutan, j.kode`,
                       [this.scope.tenantId, clerk.id],
@@ -203,6 +221,7 @@ export class Clerks {
         return {
             ...clerk,
             lines,
+            local_currency: localCurrencyCode,
             mine: clerk.user_id === this.workspace.userId,
         };
     }
@@ -299,32 +318,52 @@ export class Clerks {
             id: clerk.id,
         });
         const methods = countedMethods(await this.methods(), sales);
-        const allowed = new Set(methods.map((method) => method.id));
-        const precision = await new Currency(
-            this.db,
-            this.scope.tenantId,
-        ).precision(localCurrencyCode);
+        const byId = new Map(methods.map((method) => [method.id, method]));
+        const currency = new Currency(this.db, this.scope.tenantId);
+        const precision = await currency.precision(localCurrencyCode);
         const counts = new Map<string, string>();
         const errors: Record<string, string> = {};
         for (const [methodId, raw] of Object.entries(
             parsed.data.counts ?? {},
         )) {
-            if (!allowed.has(methodId)) {
+            const method = byId.get(methodId);
+            if (!method) {
                 errors.counts =
                     'Ada jenis bayar yang tidak dihitung saat Clerk End. Muat ulang, lalu isi lagi.';
                 continue;
             }
+            // Jumlah fisik dalam mata uang jenis bayar itu, dengan presisi jumlahnya.
+            const decimals = (await currency.precision(method.currency_code))
+                .amount_decimals;
             const amount =
-                String(raw).trim() === ''
-                    ? '0'
-                    : amountInput(raw, precision.amount_decimals);
+                String(raw).trim() === '' ? '0' : amountInput(raw, decimals);
             if (amount === null)
                 errors[`counts.${methodId}`] =
-                    `Isi jumlah 0 atau lebih, ${decimalsHint(precision.amount_decimals)}.`;
+                    `Isi jumlah 0 atau lebih, ${decimalsHint(decimals)}.`;
             else counts.set(methodId, amount);
         }
+        // Kurs hari Clerk End untuk menilai selisih mata uang asing; kurs yang belum diisi ditolak di isiannya.
+        const today = await this.db.one(
+            z.object({ date: z.string() }),
+            `select (now() at time zone l.timezone)::date::text as date
+             from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
+        const date = today?.date ?? nowSql().slice(0, 10);
+        const rates = new Map<string, Decimal>();
+        for (const method of methods) {
+            const rate = await currency.findRate(method.currency_code, date);
+            if (rate) rates.set(method.id, rate);
+            else
+                errors[`counts.${method.id}`] = missingRateMessage(
+                    method.currency_code,
+                    date,
+                );
+        }
         if (Object.keys(errors).length) validation(errors);
-        const closed = closeClerk(methods, sales, counts);
+        const closed = closeClerk(methods, sales, counts, rates, (value) =>
+            roundAmount(value, precision),
+        );
         await this.db.transaction(async () => {
             const stamp = nowSql();
             const updated = await this.db.execute(
@@ -349,8 +388,14 @@ export class Clerks {
                     tenant_id: this.scope.tenantId,
                     clerk_id: clerk.id,
                     jenis_bayar_id: line.paymentMethodId,
+                    mata_uang:
+                        byId.get(line.paymentMethodId)?.currency_code ??
+                        localCurrencyCode,
                     jumlah_sistem: line.system,
+                    jumlah_sistem_lokal: line.systemLocal,
                     jumlah_total: line.counted,
+                    kurs: line.rate,
+                    selisih_lokal: line.differenceLocal,
                     created_at: stamp,
                     updated_at: stamp,
                 });
