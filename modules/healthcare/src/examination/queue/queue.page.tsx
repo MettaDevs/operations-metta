@@ -46,6 +46,8 @@ import {
     timeText,
 } from './queue-display.tsx';
 import {
+    defaultPractitioner,
+    defaultSection,
     placeRoom,
     readPlace,
     rememberPlace,
@@ -195,15 +197,25 @@ function QueuePage(): ReactNode {
     const filterPanelId = useId();
 
     const section =
-        metadata.sections.find(
-            (item) => item.id === (search.section ?? place.section),
-        ) ?? metadata.sections[0];
+        metadata.sections.find((item) => item.id === search.section) ??
+        defaultSection(
+            metadata.sections,
+            place,
+            metadata.user_practitioner_ids,
+        );
     const sectionRooms = section?.rooms ?? [];
     const roomId = placeRoom(place, section?.id, sectionRooms);
     const date = search.date ?? metadata.date;
     const today = date === metadata.date;
     const canManage = metadata.permissions.manage && today;
-    const { cluster, practitioner, status } = search;
+    const { cluster, status } = search;
+    // Pilihan Semua nakes ditulis ke alamat sebagai ALL, supaya saringan nakes bawaan tidak kembali.
+    const practitionerChoice =
+        search.practitioner ??
+        defaultPractitioner(section, metadata.user_practitioner_ids) ??
+        ALL;
+    const practitioner =
+        practitionerChoice === ALL ? undefined : practitionerChoice;
     const gender = (code: string | null) =>
         code === null
             ? null
@@ -490,10 +502,11 @@ function QueuePage(): ReactNode {
                                                 label: item.name,
                                             })),
                                         ]}
-                                        value={practitioner ?? ALL}
+                                        value={practitionerChoice}
                                         onValueChange={(value) =>
                                             setSearch({
-                                                practitioner: choice(value),
+                                                practitioner:
+                                                    value ?? undefined,
                                             })
                                         }
                                         searchPlaceholder="Cari nakes"

@@ -189,6 +189,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             'healthcare.visit.manage',
             'healthcare.examination.manage',
             'healthcare.practitioner.manage',
+            'healthcare.practice-schedule.manage',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
         await pool.unsafe(
@@ -957,5 +958,69 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
                 )
             ).errors.status,
         ).toEqual(['Kunjungan ini sudah dibatalkan.']);
+    }, 60_000);
+
+    test('the queue metadata names the active nakes of the signed-in user for the default filters', async () => {
+        const nakesRoom = await room(unitA, 'N1');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'NAKES',
+                name: 'Poli Nakes',
+                kind: 'rawat_jalan',
+                room_ids: [nakesRoom],
+            })
+        ).id;
+        type Metadata = {
+            date: string;
+            sections: { id: string; practitioners: { id: string }[] }[];
+            user_practitioner_ids: string[];
+        };
+        const metadata = async (as: Browser) =>
+            json<Metadata>(await as.get(`${api}/examination/metadata`), 200);
+        const session = (
+            await created(`${api}/practice-sessions`, {
+                name: 'Sesi Nakes',
+                start_time: '00:00',
+                end_time: '23:59',
+            })
+        ).id;
+        await created(`${api}/practice-schedules`, {
+            section_id: section,
+            date: (await metadata(admin)).date,
+            practitioner_id: doctorId,
+            session_id: session,
+            capacity: null,
+        });
+        const doctor = await member(['healthcare.examination.manage'], null);
+        const shell = await json<{ auth: { user: { id: string } } }>(
+            await doctor.get('/api/v1/shell'),
+            200,
+        );
+        expect((await metadata(doctor)).user_practitioner_ids).toEqual([]);
+        await pool.unsafe('update sim_m_nakes set user_id = $2 where id = $1', [
+            doctorId,
+            shell.auth.user.id,
+        ]);
+        try {
+            const linked = await metadata(doctor);
+            expect(linked.user_practitioner_ids).toEqual([doctorId]);
+            expect(
+                linked.sections
+                    .find((row) => row.id === section)
+                    ?.practitioners.map((row) => row.id),
+            ).toEqual([doctorId]);
+            expect((await metadata(admin)).user_practitioner_ids).toEqual([]);
+            await pool.unsafe(
+                'update sim_m_nakes set aktif = false where id = $1',
+                [doctorId],
+            );
+            expect((await metadata(doctor)).user_practitioner_ids).toEqual([]);
+        } finally {
+            await pool.unsafe(
+                'update sim_m_nakes set user_id = null, aktif = true where id = $1',
+                [doctorId],
+            );
+        }
     }, 60_000);
 });

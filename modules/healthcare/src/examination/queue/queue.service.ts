@@ -99,7 +99,9 @@ export class ExaminationQueue {
         private readonly workspace: Workspace,
     ) {}
 
-    // Section aktif di unit pengguna beserta ruangan aktif yang melayaninya, klaster, dan nakes berjadwal hari itu.
+    // Section aktif di unit pengguna beserta ruangan aktif yang melayaninya, klaster, nakes berjadwal hari itu, dan nakes
+    // milik pengguna (sim_m_nakes.user_id) untuk saringan bawaan, seperti dokter dan poli bawaan daftar poli sistem lama
+    // (poly/views/outpatient/datatable.php:126, 137).
     async metadata() {
         this.workspace.guard('examination', 'read');
         const date = await visitDate(this.db, this.workspace);
@@ -159,6 +161,15 @@ export class ExaminationQueue {
                  where tenant_id = $1 and deleted_at is null order by urutan, kode`,
                 [tenantId],
             ),
+            user_practitioner_ids: (
+                await this.db.rows(
+                    z.object({ id: z.string() }),
+                    `select id from sim_m_nakes
+                     where tenant_id = $1 and user_id = $2 and aktif and deleted_at is null
+                     order by id`,
+                    [tenantId, this.workspace.userId],
+                )
+            ).map((row) => row.id),
             permissions: {
                 manage: this.workspace.permissions.has(
                     'healthcare.examination.manage',
