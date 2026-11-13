@@ -164,6 +164,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                                 signa: '3x1',
                                 usage_instruction_id:
                                     metadata.usage_instructions[1]!.id,
+                                ...clinic.dosage,
                                 notes: null,
                             },
                         ],
@@ -356,6 +357,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
             quantity,
             signa: '3x1',
             usage_instruction_id: null,
+            ...clinic.dosage,
             notes: null,
         });
         await json(

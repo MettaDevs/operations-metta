@@ -7,10 +7,11 @@ import { idSchema, listParametersSchema } from '@core/platform/http/index.ts';
 // di sini dan diuji terhadap berkas kontrak itu. Field yang tidak dikenal dilewati, supaya field opsional baru di versi
 // yang sama tidak membuat resep terlewat.
 const decimalText = z.string().regex(/^[0-9]+(\.[0-9]+)?$/);
-const quantityPerUnit = decimalText.refine((value) => {
+const positiveDecimal = decimalText.refine((value) => {
     const parsed = decimalInput(value);
     return parsed !== null && parsed > 0n;
 });
+const positiveSmallint = z.number().int().min(1).max(32767);
 // Panjang teks mengikuti kolom far_tr_resep; teks yang lebih panjang membuat resep dilewati, bukan gagal disimpan.
 const text = (max: number) => z.string().max(max);
 const reference = z.object({
@@ -26,10 +27,19 @@ const issuedLineSchema = z.object({
     quantity: decimalText.nullable(),
     unit: reference.nullable(),
     // Pesan yang belum membawanya ditulis dalam satuan dasar, jadi isinya 1.
-    quantity_per_unit: quantityPerUnit.nullable().optional(),
+    quantity_per_unit: positiveDecimal.nullable().optional(),
     requested_quantity: decimalText.nullable(),
     signa: text(100).nullable(),
     usage_instruction: text(150).nullable(),
+    // Dosis yang ditulis dokter. Pesan yang belum membawanya ditulis sebelum dosis dicatat, jadi tanpa dosis.
+    frequency_per_day: positiveSmallint.nullable().optional(),
+    dose: positiveDecimal.nullable().optional(),
+    dose_unit: reference.nullable().optional(),
+    route: z
+        .object({ code: text(40), name: text(150) })
+        .nullable()
+        .optional(),
+    duration_days: positiveSmallint.nullable().optional(),
     notes: text(500).nullable(),
 });
 export const issuedPrescriptionSchema = z.object({
@@ -122,6 +132,11 @@ export const prescriptionLineSchema = z.object({
     requested_quantity: z.string().nullable(),
     signa: z.string().nullable(),
     usage_instruction: z.string().nullable(),
+    frequency_per_day: z.number().nullable(),
+    dose: z.string().nullable(),
+    dose_unit: locationSchema.nullable(),
+    route: z.object({ code: z.string(), name: z.string() }).nullable(),
+    duration_days: z.number().nullable(),
     notes: z.string().nullable(),
 });
 

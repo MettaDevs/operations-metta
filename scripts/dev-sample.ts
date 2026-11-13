@@ -179,12 +179,18 @@ const clinicSchema = z.object({
             doctor: z.string(),
             condition: z.string(),
             physical: z.record(z.string(), z.union([z.number(), z.string()])),
+            // Dosis: satuan dosis dari kode satuan persediaan, rute dari kode rute bawaan module.
             prescription: z.array(
                 z.object({
                     drug: z.string(),
                     quantity: z.number(),
                     signa: z.string(),
                     usage_instruction: z.string(),
+                    frequency_per_day: z.number(),
+                    dose: z.number(),
+                    dose_unit: z.string(),
+                    route: z.string(),
+                    duration_days: z.number(),
                 }),
             ),
         }),
@@ -1103,9 +1109,12 @@ async function seedClinic(
         'GET',
         `${examination}/medical-record/metadata`,
     );
-    const usage = z
-        .object({ usage_instructions: z.array(keyRow) })
-        .parse(metadata).usage_instructions;
+    const { usage_instructions: usage, medication_routes: routes } = z
+        .object({
+            usage_instructions: z.array(keyRow),
+            medication_routes: z.array(keyRow),
+        })
+        .parse(metadata);
     for (const visit of clinic.visits) {
         const patient = required(patients, visit.patient, 'Pasien');
         const registered = await api.data(
@@ -1145,6 +1154,14 @@ async function seedClinic(
                 usage_instruction_id: usage.find(
                     (row) => row.name === line.usage_instruction,
                 )?.id,
+                frequency_per_day: line.frequency_per_day,
+                dose: line.dose,
+                dose_unit_id: await api.codeId(
+                    `${coreInventory}/units-of-measure`,
+                    line.dose_unit,
+                ),
+                route_id: routes.find((row) => row.code === line.route)?.id,
+                duration_days: line.duration_days,
                 notes: null,
             });
         const doctor = required(practitioners, visit.doctor, 'Nakes');

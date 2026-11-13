@@ -152,6 +152,47 @@ describe.skipIf(!process.env.DB_HOST)('diagnosis reference lists', () => {
         ).not.toContain(added.id);
     });
 
+    test('medication routes start with the WHO ATC routes, and neither a code nor a name repeats', async () => {
+        expect(
+            (await list(admin, 'medication-routes')).map((row) => [
+                row.code,
+                row.name,
+            ]),
+        ).toEqual([
+            ['O', 'Oral'],
+            ['P', 'Parenteral'],
+            ['R', 'Rektal'],
+            ['V', 'Vaginal'],
+            ['N', 'Nasal'],
+            ['SL', 'Sublingual / bukal'],
+            ['TD', 'Transdermal'],
+            ['Inhal', 'Inhalasi'],
+            ['Instill', 'Instilasi'],
+            ['Implant', 'Implan'],
+        ]);
+        const refused = async (body: Record<string, unknown>) =>
+            (
+                await json<{ errors: Record<string, string[]> }>(
+                    await admin.post(`${api}/medication-routes`, body),
+                    422,
+                )
+            ).errors;
+        expect(await refused({ code: 'o', name: 'Lewat mulut' })).toEqual({
+            code: ['Kode ini sudah dipakai baris lain.'],
+        });
+        expect(await refused({ code: 'ORAL', name: 'oral' })).toEqual({
+            name: ['Nama ini sudah dipakai baris lain.'],
+        });
+        await json(
+            await admin.post(`${api}/medication-routes`, {
+                code: 'TOP',
+                name: 'Topikal',
+                sort_order: 11,
+            }),
+            201,
+        );
+    });
+
     test('the tariff dimension lists start empty, keep codes unique ignoring case, and can be renamed and deleted', async () => {
         for (const name of [
             'care-classes',

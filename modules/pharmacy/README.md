@@ -38,10 +38,11 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 
 - Penerima berjalan di transaksi Kirim ke farmasi milik dokter, jadi ia kecil: memeriksa isi, mencatat id event, lalu menyalin potret resep. Tidak ada pekerjaan stok.
 - Isi diperiksa schema zod milik module ini (`prescription.schema.ts`) yang mengikuti kontrak. Field yang tidak dikenal dilewati, supaya field opsional baru di versi yang sama tidak membuat resep terlewat.
-- Isi yang tidak cocok (bentuk salah, teks lebih panjang dari kolom, barang yang bukan milik legal entity itu) dicatat ke log `pharmacy-event-skipped` lalu dilewati, tidak dilempar: lemparan membatalkan resep dokter. Event yang dilewati tidak dicatat sebagai sudah diproses.
+- Isi yang tidak cocok (bentuk salah, teks lebih panjang dari kolom, barang atau satuan dosis yang bukan milik legal entity itu) dicatat ke log `pharmacy-event-skipped` lalu dilewati, tidak dilempar: lemparan membatalkan resep dokter. Event yang dilewati tidak dicatat sebagai sudah diproses.
 - Baris obat menyimpan satuan yang ditulis dokter dan isinya dalam satuan dasar (`konversi`, dari `quantity_per_unit`). Pesan yang belum membawa `quantity_per_unit` ditulis dalam satuan dasar, jadi isinya 1.
 - Kelompok harga pembeli (`price_group`, kelompok harga tipe pasien kunjungan) disimpan di `far_tr_resep.kelompok_harga_id` untuk harga obat. Pesan tanpa `price_group` disimpan kosong.
 - Patient KTP kunjungan (`patient.ktp`) disimpan di `far_tr_resep.pasien_ktp` untuk harga obat. Pesan tanpa `patient.ktp` disimpan `true`, bawaan sistem lama.
+- Dosis baris (`0009_prescription_dosage.sql`): kali sehari, dosis dan satuan dosisnya (satuan Core legal entity resep), rute sebagai kode dan nama yang disalin dari event karena daftar rute milik layanan kesehatan, dan lama hari. Layar penyerahan menampilkannya di samping signa, misalnya "3 x sehari 1 Tablet, Oral, 5 hari". Pesan yang belum membawa dosis disimpan tanpa dosis.
 - Event yang sama diantar dua kali, atau resep yang sama dalam event lain, dicatat sekali (`far_processed_events` dan indeks unik `resep_sumber_id`).
 - Handler hanya berjalan untuk tenant yang memasang module ini.
 

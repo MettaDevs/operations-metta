@@ -36,10 +36,26 @@ type Line = {
     requested_quantity?: number | string | null;
     signa?: string | null;
     usage_instruction_id?: string | null;
+    frequency_per_day?: number | string | null;
+    dose?: number | string | null;
+    dose_unit_id?: string | null;
+    dose_unit_code?: string | null;
+    route_id?: string | null;
+    duration_days?: number | string | null;
     notes?: string | null;
     drug_name?: string | null;
     unit_name?: string | null;
 };
+type Dosage = Required<
+    Pick<
+        Line,
+        | 'frequency_per_day'
+        | 'dose'
+        | 'dose_unit_id'
+        | 'route_id'
+        | 'duration_days'
+    >
+>;
 type Prescription = {
     id: string | null;
     number?: string | null;
@@ -63,6 +79,7 @@ type Shown = { data: Record_; context: { editable: boolean } };
 type Reference = { id: string; code: string; name: string; active: boolean };
 type Metadata = {
     usage_instructions: Reference[];
+    medication_routes: Reference[];
     permissions: { create_procedure: boolean; create_drug: boolean };
 };
 type Section = {
@@ -121,6 +138,7 @@ describe.skipIf(!process.env.DB_HOST)(
         let unitStrip: string;
         let legalEntityId: string;
         let metadata: Metadata;
+        let dosage: Dosage;
         let drugCount = 0;
 
         async function json<T>(response: Response, status: number): Promise<T> {
@@ -295,6 +313,7 @@ describe.skipIf(!process.env.DB_HOST)(
             quantity,
             signa: '3x1',
             usage_instruction_id: metadata.usage_instructions[1]!.id,
+            ...dosage,
             notes: null,
         });
 
@@ -423,6 +442,15 @@ describe.skipIf(!process.env.DB_HOST)(
                     name: 'Strip',
                 })
             ).id;
+            dosage = {
+                frequency_per_day: 3,
+                dose: 1,
+                dose_unit_id: unitTab,
+                route_id: metadata.medication_routes.find(
+                    (row) => row.code === 'O',
+                )!.id,
+                duration_days: 5,
+            };
         }, 120_000);
 
         test('aturan pakai is seeded from the old system, drug units are not, and both panels are on by default', async () => {
@@ -611,6 +639,7 @@ describe.skipIf(!process.env.DB_HOST)(
                                     drug_id: amoxicillin.id,
                                     compound: null,
                                     quantity: 0,
+                                    ...dosage,
                                 },
                             ]),
                         ],
@@ -625,7 +654,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 ],
                 'prescriptions.0.lines.3.compound': ['Racikan tidak valid!'],
                 'prescriptions.0.lines.4.quantity': [
-                    'Isi jumlah lebih dari 0.',
+                    'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
                 ],
             });
             const compounded: Line[] = [
@@ -637,6 +666,7 @@ describe.skipIf(!process.env.DB_HOST)(
                     requested_quantity: 10,
                     signa: '3x1',
                     usage_instruction_id: metadata.usage_instructions[0]!.id,
+                    ...dosage,
                 },
                 { drug_id: amoxicillin.id, compound: 1, quantity: 0.5 },
                 { drug_id: ctm.id, compound: 1, quantity: 1 },
@@ -736,6 +766,270 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(
                 after.filter((row) => row.deleted_at).map((row) => row.obat_id),
             ).toEqual([ctm.id]);
+        });
+
+        test('single drugs and racikan carry a full dosage, components carry none, and amounts keep four decimals', async () => {
+            const id = await started();
+            const syrup = await drug('Parasetamol sirup dosis');
+            const ctm = await drug('CTM 4 mg dosis');
+            const none = {
+                frequency_per_day: null,
+                dose: null,
+                dose_unit_id: null,
+                route_id: null,
+                duration_days: null,
+            };
+            const header: Line = {
+                drug_id: null,
+                compound: 1,
+                quantity: null,
+                requested_quantity: 10,
+            };
+            const component: Line = {
+                drug_id: ctm.id,
+                compound: 1,
+                quantity: 1,
+            };
+            const errors = (line: number, messages: Record<string, string>) =>
+                Object.fromEntries(
+                    Object.entries(messages).map(([name, message]) => [
+                        `prescriptions.0.lines.${line}.${name}`,
+                        [message],
+                    ]),
+                );
+            const required = {
+                frequency_per_day: 'Isi berapa kali sehari.',
+                dose: 'Isi dosis sekali pakai.',
+                dose_unit_id: 'Pilih satuan dosis.',
+                route_id: 'Pilih rute pemberian.',
+                duration_days: 'Isi lama pemberian (hari).',
+            };
+            const onHeader =
+                'Dosis komponen racikan diisi pada baris racikannya.';
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                { ...single(syrup.id), ...none },
+                                { ...header, ...none },
+                                { ...component, ...dosage },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                ...errors(0, required),
+                ...errors(1, required),
+                ...errors(2, {
+                    frequency_per_day: onHeader,
+                    dose: onHeader,
+                    dose_unit_id: onHeader,
+                    route_id: onHeader,
+                    duration_days: onHeader,
+                }),
+            });
+
+            const unknown = Bun.randomUUIDv7();
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                {
+                                    ...single(syrup.id, '1.23456'),
+                                    frequency_per_day: 1.5,
+                                    dose: '0.00001',
+                                    dose_unit_id: unknown,
+                                    route_id: unknown,
+                                    duration_days: 0,
+                                },
+                                {
+                                    ...header,
+                                    ...dosage,
+                                    requested_quantity: '2.00001',
+                                },
+                                component,
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                ...errors(0, {
+                    quantity:
+                        'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
+                    frequency_per_day:
+                        'Isi berapa kali sehari dengan bilangan bulat 1 atau lebih.',
+                    dose: 'Isi dosis lebih dari 0, paling banyak 4 angka di belakang koma.',
+                    dose_unit_id: 'Pilih satuan dosis dari daftar.',
+                    route_id: 'Pilih rute pemberian dari daftar.',
+                    duration_days:
+                        'Isi lama pemberian dengan bilangan bulat 1 hari atau lebih.',
+                }),
+                ...errors(1, {
+                    requested_quantity:
+                        'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
+                }),
+            });
+
+            const rectal = metadata.medication_routes.find(
+                (row) => row.code === 'R',
+            )!;
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [
+                        draft([
+                            {
+                                ...single(syrup.id, '1.2345'),
+                                dose: '0.1234',
+                                dose_unit_id: unitStrip,
+                                duration_days: '7',
+                            },
+                            {
+                                ...header,
+                                requested_quantity: '2.5',
+                                frequency_per_day: '2',
+                                dose: 1,
+                                dose_unit_id: unitTab,
+                                route_id: rectal.id,
+                                duration_days: 3,
+                            },
+                            component,
+                        ]),
+                    ],
+                }),
+                200,
+            );
+            const [prescription] = saved.data.prescriptions!;
+            expect(prescription!.lines).toMatchObject([
+                {
+                    quantity: 1.2345,
+                    frequency_per_day: 3,
+                    dose: 0.1234,
+                    dose_unit_id: unitStrip,
+                    dose_unit_code: 'STRIP',
+                    route_id: dosage.route_id,
+                    duration_days: 7,
+                },
+                {
+                    requested_quantity: 2.5,
+                    frequency_per_day: 2,
+                    dose: 1,
+                    dose_unit_id: unitTab,
+                    dose_unit_code: 'TAB',
+                    route_id: rectal.id,
+                    duration_days: 3,
+                },
+                { quantity: 1, ...none },
+            ]);
+            const stored = async () =>
+                pool.unsafe<
+                    {
+                        jumlah: string | null;
+                        jumlah_permintaan: string | null;
+                        frekuensi: number | null;
+                        dosis: string | null;
+                        dosis_satuan_id: string | null;
+                        rute_id: string | null;
+                        lama_hari: number | null;
+                        version: number;
+                    }[]
+                >(
+                    `select jumlah::text, jumlah_permintaan::text, frekuensi, dosis::text, dosis_satuan_id, rute_id,
+                            lama_hari, version
+                     from sim_tr_resep_detail where resep_id = $1 and deleted_at is null order by urutan`,
+                    [prescription!.id],
+                );
+            const before = await stored();
+            expect(before.map(({ version: _, ...row }) => row)).toEqual([
+                {
+                    jumlah: '1.2345',
+                    jumlah_permintaan: null,
+                    frekuensi: 3,
+                    dosis: '0.1234',
+                    dosis_satuan_id: unitStrip,
+                    rute_id: dosage.route_id,
+                    lama_hari: 7,
+                },
+                {
+                    jumlah: null,
+                    jumlah_permintaan: '2.5000',
+                    frekuensi: 2,
+                    dosis: '1.0000',
+                    dosis_satuan_id: unitTab,
+                    rute_id: rectal.id,
+                    lama_hari: 3,
+                },
+                {
+                    jumlah: '1.0000',
+                    jumlah_permintaan: null,
+                    frekuensi: null,
+                    dosis: null,
+                    dosis_satuan_id: null,
+                    rute_id: null,
+                    lama_hari: null,
+                },
+            ]);
+            await json(
+                await save(admin, id, { prescriptions: [prescription!] }),
+                200,
+            );
+            expect(await stored()).toEqual(before);
+        });
+
+        test('a dosage keeps its route after the route is turned off, but new lines cannot choose it', async () => {
+            const id = await started();
+            const ointment = await drug('Salep kulit');
+            const cream = await drug('Krim kulit');
+            const routes = `${api}/diagnosis-references/medication-routes`;
+            const topical = await created<{ id: string; version: number }>(
+                admin,
+                routes,
+                { code: 'TOP', name: 'Topikal' },
+            );
+            const onSkin = (drugId: string) => ({
+                ...single(drugId),
+                route_id: topical.id,
+            });
+            const saved = await json<Shown>(
+                await save(admin, id, {
+                    prescriptions: [draft([onSkin(ointment.id)])],
+                }),
+                200,
+            );
+            await json(
+                await admin.patch(`${routes}/${topical.id}`, {
+                    code: 'TOP',
+                    name: 'Topikal',
+                    is_active: false,
+                    version: topical.version,
+                }),
+                200,
+            );
+            const [prescription] = saved.data.prescriptions!;
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            {
+                                ...prescription!,
+                                lines: [
+                                    ...prescription!.lines,
+                                    onSkin(cream.id),
+                                ],
+                            },
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.1.route_id': [
+                    'Pilih rute pemberian dari daftar.',
+                ],
+            });
+            await json(
+                await save(admin, id, { prescriptions: [prescription!] }),
+                200,
+            );
         });
 
         test('a drug line takes the sales unit unless another unit of that drug is chosen, and keeps the isi copied when its unit was chosen', async () => {
@@ -901,6 +1195,7 @@ describe.skipIf(!process.env.DB_HOST)(
                                     drug_id: null,
                                     compound: 1,
                                     quantity: null,
+                                    ...dosage,
                                 },
                                 {
                                     drug_id: ibuprofen.id,
@@ -1346,6 +1641,11 @@ describe.skipIf(!process.env.DB_HOST)(
                                     requested_quantity: '10',
                                     signa: '3x1 bungkus',
                                     usage_instruction_id: null,
+                                    frequency_per_day: 2,
+                                    dose: '1.25',
+                                    dose_unit_id: unitStrip,
+                                    route_id: dosage.route_id,
+                                    duration_days: 3,
                                     notes: 'Puyer',
                                 },
                                 {
@@ -1430,6 +1730,15 @@ describe.skipIf(!process.env.DB_HOST)(
                             requested_quantity: null,
                             signa: '3x1',
                             usage_instruction: 'Setelah Makan',
+                            frequency_per_day: 3,
+                            dose: '1',
+                            dose_unit: {
+                                id: unitTab,
+                                code: 'TAB',
+                                name: 'Tablet',
+                            },
+                            route: { code: 'O', name: 'Oral' },
+                            duration_days: 5,
                             notes: null,
                         },
                         {
@@ -1444,6 +1753,15 @@ describe.skipIf(!process.env.DB_HOST)(
                             requested_quantity: '10',
                             signa: '3x1 bungkus',
                             usage_instruction: null,
+                            frequency_per_day: 2,
+                            dose: '1.25',
+                            dose_unit: {
+                                id: unitStrip,
+                                code: 'STRIP',
+                                name: 'Strip',
+                            },
+                            route: { code: 'O', name: 'Oral' },
+                            duration_days: 3,
                             notes: 'Puyer',
                         },
                         {
@@ -1458,6 +1776,11 @@ describe.skipIf(!process.env.DB_HOST)(
                             base_quantity: '2.5',
                             requested_quantity: null,
                             signa: null,
+                            frequency_per_day: null,
+                            dose: null,
+                            dose_unit: null,
+                            route: null,
+                            duration_days: null,
                         },
                         {
                             order: 4,

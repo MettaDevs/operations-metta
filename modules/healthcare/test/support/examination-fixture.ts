@@ -117,6 +117,18 @@ export async function createClinic(
             name: 'Tablet',
         })
     ).id;
+    // Dosis baris resep yang wajib: 3 x sehari 1 tablet oral selama 5 hari, rute dari data acuan bawaan.
+    const [oral] = await pool.unsafe<{ id: string }[]>(
+        `select id from sim_m_rute_obat where tenant_id = $1 and kode = 'O'`,
+        [tenantId],
+    );
+    const dosage = {
+        frequency_per_day: 3,
+        dose: 1,
+        dose_unit_id: unitTab,
+        route_id: oral!.id,
+        duration_days: 5,
+    };
     const unit = (
         await created('/api/v1/organizations', {
             classification: 'operating_unit',
@@ -278,6 +290,7 @@ export async function createClinic(
         admin,
         legalEntityId,
         unitTab,
+        dosage,
         unit,
         otherUnit,
         otherRoom,

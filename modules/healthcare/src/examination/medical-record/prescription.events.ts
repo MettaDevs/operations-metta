@@ -5,7 +5,7 @@ import { moduleId } from '../../module.ts';
 
 // Resep yang dikirim ke farmasi, sebagai event untuk module farmasi. Farmasi tidak membaca tabel module ini, jadi isinya
 // potret lengkap saat resep dikirim: nomor, kunjungan, pasien beserta Patient KTP kunjungan, dokter, section asal,
-// kelompok harga pembeli, dan baris beserta barang Core-nya.
+// kelompok harga pembeli, dan baris beserta barang Core dan dosisnya.
 // Legal entity dan unit kunjungan ada di envelope. Kontraknya ditulis tangan di
 // contracts/events/healthcare.prescription.issued.v1.yaml; mengubah isinya berarti versi baru.
 export const prescriptionIssued = `${moduleId}.prescription.issued.v1` as const;
@@ -50,6 +50,13 @@ const lineSchema = z.object({
     base_unit_code: z.string().nullable(),
     base_unit_name: z.string().nullable(),
     base_quantity: z.string().nullable(),
+    frequency_per_day: z.number().nullable(),
+    dose: z.string().nullable(),
+    dose_unit_id: z.string().nullable(),
+    dose_unit_code: z.string().nullable(),
+    dose_unit_name: z.string().nullable(),
+    route: z.object({ code: z.string(), name: z.string() }).nullable(),
+    duration_days: z.number().nullable(),
 });
 
 const reference = (
@@ -96,12 +103,17 @@ export async function publishPrescriptionIssued(
                 d.keterangan as notes, b.id as item_id, b.kode as item_code, b.nama as item_name, u.id as unit_id,
                 u.kode as unit_code, u.nama as unit_name, trim_scale(d.konversi)::text as quantity_per_unit,
                 bu.id as base_unit_id, bu.kode as base_unit_code, bu.nama as base_unit_name,
-                trim_scale(d.jumlah * d.konversi)::text as base_quantity
+                trim_scale(d.jumlah * d.konversi)::text as base_quantity, d.frekuensi as frequency_per_day,
+                trim_scale(d.dosis)::text as dose, du.id as dose_unit_id, du.kode as dose_unit_code,
+                du.nama as dose_unit_name, d.lama_hari as duration_days,
+                case when ro.id is null then null else json_build_object('code', ro.kode, 'name', ro.nama) end as route
          from sim_tr_resep_detail d
          left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
          left join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
          left join gd_m_satuan bu on bu.tenant_id = b.tenant_id and bu.id = b.satuan_dasar_id
+         left join gd_m_satuan du on du.tenant_id = d.tenant_id and du.id = d.dosis_satuan_id
          left join sim_m_aturan_pakai a on a.tenant_id = d.tenant_id and a.id = d.aturan_pakai_id
+         left join sim_m_rute_obat ro on ro.tenant_id = d.tenant_id and ro.id = d.rute_id
          where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
          order by d.urutan, d.id`,
         [tenantId, prescriptionId],
@@ -153,6 +165,17 @@ export async function publishPrescriptionIssued(
                 requested_quantity: line.requested_quantity,
                 signa: line.signa,
                 usage_instruction: line.usage_instruction,
+                // Dosis MedicationRequest.dosageInstruction. Rute disalin kode dan namanya, karena farmasi tidak membaca
+                // daftar rute module ini.
+                frequency_per_day: line.frequency_per_day,
+                dose: line.dose,
+                dose_unit: reference(
+                    line.dose_unit_id,
+                    line.dose_unit_code,
+                    line.dose_unit_name,
+                ),
+                route: line.route,
+                duration_days: line.duration_days,
                 notes: line.notes,
             })),
         },

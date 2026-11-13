@@ -84,6 +84,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 quantity: 10,
                 signa: '3x1',
                 usage_instruction_id: metadata.usage_instructions[0]?.id,
+                ...clinic.dosage,
                 notes: null,
             });
             await json(
