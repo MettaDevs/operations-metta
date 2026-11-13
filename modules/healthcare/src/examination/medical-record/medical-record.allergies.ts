@@ -60,9 +60,9 @@ const allergyNoneMessage =
 const staleAllergyMessage =
     'Alergi ini baru diubah dari pemeriksaan lain pasien ini. Muat ulang halaman untuk melihat daftar terbarunya.';
 
-// Kode 00 "Tidak Ada" di setiap jenis sim_m_alergi (kode PCare) berarti pasien tidak punya alergi jenis itu, jadi ia
-// bukan alergen. Tidak ada alergi dicatat per pemeriksaan.
-const allergenChoice = `kode <> '00' and deleted_at is null`;
+// Baris "Tidak Ada" sim_m_alergi (tidak_ada) berarti pasien tidak punya alergi jenis itu, jadi ia bukan alergen. Tidak
+// ada alergi dicatat per pemeriksaan.
+const allergenChoice = `not tidak_ada and deleted_at is null`;
 
 function add(errors: Errors, field: string, message: string): void {
     (errors[field] ??= []).push(message);
