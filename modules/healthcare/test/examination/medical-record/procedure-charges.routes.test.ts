@@ -551,10 +551,10 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             }[]
         >(
             `select r.jenis_biaya_kode as kode, trim_scale(r.qty)::text as qty, trim_scale(r.nilai)::text as nilai,
-                    (select count(*)::int from rincian_biaya_komponen c
-                     where c.rincian_biaya_id = r.id and c.deleted_at is null) as komponen,
+                    (select count(*)::int from kunjungan_kasir_detail_komponen c
+                     where c.kunjungan_kasir_detail_id = r.id and c.deleted_at is null) as komponen,
                     r.deleted_at is null as live
-             from rincian_biaya r where r.tenant_id = $1 and r.kunjungan_id = $2
+             from kunjungan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
              order by r.deleted_at nulls first, r.jenis_biaya_kode`,
             [clinic.tenantId, visit!.id],
         );

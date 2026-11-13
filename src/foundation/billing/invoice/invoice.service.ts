@@ -128,7 +128,7 @@ export class Invoices {
                     trim_scale(r.harga_orig)::text as original_price, trim_scale(r.disc)::text as discount_percent,
                     trim_scale(r.hext)::text as extra, r.section_nama as section_name, r.dokter_nama as doctor_name,
                     r.tanggal::text as date, r.status
-             from rincian_biaya r
+             from kunjungan_kasir_detail r
              where r.tenant_id = $1 and r.legal_entity_id = $2 and r.kunjungan_id = $3 and r.deleted_at is null
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
             [this.scope.tenantId, this.scope.legalEntityId, visitId],

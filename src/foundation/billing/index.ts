@@ -21,7 +21,7 @@ export { clerkNotStartedMessage, openClerk } from './clerk/clerk.service.ts';
 let registered = false;
 
 // Dipanggil src/main.ts dan src/worker.ts. Biaya pemeriksaan dan kunjungan selesai dari layanan kesehatan masuk kasir
-// lewat event (rincian_biaya, kunjungan_kasir).
+// lewat event (kunjungan_kasir_detail, kunjungan_kasir).
 export function registerBillingEventHandlers(): void {
     if (registered) return;
     registered = true;
