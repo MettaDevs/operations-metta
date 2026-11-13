@@ -24,7 +24,7 @@ import { sampleSchema, seedSample } from './dev-sample.ts';
 // di server. Module yang dibeli tenant contoh (`modules`) dipasang lewat installModule: entitlement, migration module,
 // catatan pemasangan, dan duty module untuk role pemilik. Data contoh (`sample`) diisi lewat API sebagai admin pertama
 // (scripts/dev-sample.ts). Aman diulang: lingkungan yang alamatnya sudah tercatat tidak disiapkan ulang, module yang
-// sudah terpasang dan lingkungan yang sudah berisi legal entity dilewati. Di server, tenant hanya lahir dari admin.erp.
+// sudah terpasang dilewati, dan data contoh hanya menambah yang belum ada. Di server, tenant hanya lahir dari admin.erp.
 const tenantsSchema = z.array(
     z.object({
         legal_name: z.string(),
@@ -179,7 +179,7 @@ try {
                     },
                 });
                 try {
-                    const seeded = await seedSample(
+                    const created = await seedSample(
                         loadConfig({
                             ...process.env,
                             SESSION_BACKEND: 'database',
@@ -200,9 +200,9 @@ try {
                         },
                     );
                     console.log(
-                        seeded
-                            ? `${url}: data contoh diisi, login petugas: ${tenant.sample.staff.map((person) => person.email).join(', ')}`
-                            : `${url}: data contoh sudah ada, dilewati`,
+                        created
+                            ? `${url}: data contoh diisi (${created} data baru), login petugas: ${tenant.sample.staff.map((person) => person.email).join(', ')}`
+                            : `${url}: data contoh sudah lengkap, dilewati`,
                     );
                 } finally {
                     await environmentSql.end();
