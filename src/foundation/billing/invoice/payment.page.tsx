@@ -1,3 +1,4 @@
+import { Button } from '@operations-metta/ui/button';
 import {
     CollapsibleSection,
     CollapsibleSectionGroup,
@@ -13,8 +14,11 @@ import { Input } from '@operations-metta/ui/input';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
+import { Undo2 } from 'lucide-react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { definePage, orpc } from '../../../platform/shell/index.ts';
+import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
 import { PaymentForm } from '../payment/payment-form.tsx';
 
 // Form Pembayaran Kuta 1: panel Pasien, Rincian Biaya, dan Detail Pembayaran. Nilai dihitung server dengan rumus
@@ -32,6 +36,7 @@ function PaymentPage(): ReactNode {
         }),
     );
     const { visit, charges, totals, payment } = data;
+    const [cancelling, setCancelling] = useState(false);
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const groupCount = new Set(
         charges.map(
@@ -40,9 +45,29 @@ function PaymentPage(): ReactNode {
     ).size;
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-            <RecordActionBar
-                title={`Pembayaran ${visit.registration_number}`}
-            />
+            <RecordActionBar title={`Pembayaran ${visit.registration_number}`}>
+                {payment && data.can_pay && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="command"
+                        onClick={() => setCancelling(true)}
+                    >
+                        <Undo2 aria-hidden="true" />
+                        Batal Pembayaran
+                    </Button>
+                )}
+            </RecordActionBar>
+            {payment && cancelling && (
+                <PaymentCancelDialog
+                    payment={payment}
+                    onClose={() => setCancelling(false)}
+                    onCancelled={async () => {
+                        setCancelling(false);
+                        await refetch();
+                    }}
+                />
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <CollapsibleSectionGroup
                     defaultValue={['patient', 'charges', 'cashier']}

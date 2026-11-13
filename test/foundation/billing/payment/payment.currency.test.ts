@@ -318,6 +318,8 @@ describe.skipIf(!process.env.DB_HOST)(
                 200,
             );
             expect(shown.data.payment).toEqual({
+                id: created.data.id,
+                version: 1,
                 number: expect.any(String),
                 received: '0',
                 change: '694',

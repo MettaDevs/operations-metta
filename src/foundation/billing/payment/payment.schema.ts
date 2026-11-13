@@ -22,3 +22,11 @@ export const paymentInputSchema = z.object({
         .optional(),
     take_remainder: z.boolean().optional(),
 });
+
+// Batal pembayaran (modal Batal Pembayaran sistem lama): penyetuju mengetik email dan kata sandinya, lalu alasan batal.
+export const paymentCancelInputSchema = z.object({
+    approver_email: z.string().optional(),
+    approver_password: z.string().optional(),
+    reason: z.string().optional(),
+    version: z.number().optional(),
+});
