@@ -265,7 +265,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
             ],
             [
                 ['core.reference-data.inquire'],
-                [['sysadmin', ['dashboard', 'geography']]],
+                [['sysadmin', ['dashboard', 'geography', 'currency']]],
             ],
             // Tanpa halaman yang boleh dibuka tidak ada area, jadi tidak ada halaman awal.
             [[], []],
