@@ -13,7 +13,7 @@ info:
 
     Keadaan sebenarnya, 13 November 2026:
     - Event hanya diantar di dalam runtime. Penerima: kasir Core (`src/foundation/billing/charge/`), yang menyimpan
-     barisnya di `rincian_biaya`. Belum ada pengirim ke luar runtime.
+     barisnya di `kunjungan_kasir_detail`. Belum ada pengirim ke luar runtime.
     - Belum membawa BHP, obat, lab, dan daftar jenis bayar yang diizinkan tipe pasien; itu menyusul sebagai field
      opsional.
     - Baris yang sudah ditagih kasir belum dikunci di layanan kesehatan; kuncinya menyusul bersama Simpan pembayaran.

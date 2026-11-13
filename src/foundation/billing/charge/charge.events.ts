@@ -99,7 +99,7 @@ export async function receiveCharges(
     const kept = data.lines.map((line) => line.line_id);
     const retired = await db.rows(
         z.object({ id: z.string() }),
-        `update rincian_biaya set deleted_at = $1, updated_at = $1
+        `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4 and status = 'terbuka'
            and deleted_at is null and not (sumber_baris_id = any($5::uuid[]))
          returning id`,
@@ -127,7 +127,7 @@ export async function receiveCharges(
         };
         const existing = await db.one(
             z.object({ id: z.string(), status: z.string() }),
-            `select id, status from rincian_biaya
+            `select id, status from kunjungan_kasir_detail
              where tenant_id = $1 and sumber_module = $2 and sumber_baris_id = $3 and deleted_at is null`,
             [tenantId, source, line.line_id],
         );
@@ -136,7 +136,7 @@ export async function receiveCharges(
         if (id) {
             const columns = Object.entries(values);
             await db.execute(
-                `update rincian_biaya
+                `update kunjungan_kasir_detail
                  set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
                      updated_at = $${columns.length + 1}
                  where tenant_id = $${columns.length + 2} and id = $${columns.length + 3}`,
@@ -145,7 +145,7 @@ export async function receiveCharges(
             await retireComponents(db, tenantId, id, stamp);
         } else {
             id = Bun.randomUUIDv7();
-            await db.insert('rincian_biaya', {
+            await db.insert('kunjungan_kasir_detail', {
                 id,
                 tenant_id: tenantId,
                 legal_entity_id: envelope.legal_entity_id,
@@ -160,10 +160,10 @@ export async function receiveCharges(
             });
         }
         for (const component of line.components)
-            await db.insert('rincian_biaya_komponen', {
+            await db.insert('kunjungan_kasir_detail_komponen', {
                 id: Bun.randomUUIDv7(),
                 tenant_id: tenantId,
-                rincian_biaya_id: id,
+                kunjungan_kasir_detail_id: id,
                 komponen_biaya_id: component.charge_component_id,
                 nilai: component.value,
                 created_at: stamp,
@@ -179,8 +179,8 @@ async function retireComponents(
     stamp: string,
 ): Promise<void> {
     await db.execute(
-        `update rincian_biaya_komponen set deleted_at = $1, updated_at = $1
-         where tenant_id = $2 and rincian_biaya_id = $3 and deleted_at is null`,
+        `update kunjungan_kasir_detail_komponen set deleted_at = $1, updated_at = $1
+         where tenant_id = $2 and kunjungan_kasir_detail_id = $3 and deleted_at is null`,
         [stamp, tenantId, chargeId],
     );
 }
@@ -254,7 +254,7 @@ export async function receiveVisitCancelled(
     );
     const retired = await db.rows(
         z.object({ id: z.string() }),
-        `update rincian_biaya set deleted_at = $1, updated_at = $1
+        `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4 and status = 'terbuka'
            and deleted_at is null
          returning id`,
