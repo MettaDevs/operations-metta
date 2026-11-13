@@ -654,7 +654,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 ],
                 'prescriptions.0.lines.3.compound': ['Racikan tidak valid!'],
                 'prescriptions.0.lines.4.quantity': [
-                    'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
+                    'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.',
                 ],
             });
             const compounded: Line[] = [
@@ -857,10 +857,10 @@ describe.skipIf(!process.env.DB_HOST)(
             ).toEqual({
                 ...errors(0, {
                     quantity:
-                        'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
+                        'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.',
                     frequency_per_day:
                         'Isi berapa kali sehari dengan bilangan bulat 1 atau lebih.',
-                    dose: 'Isi dosis lebih dari 0, paling banyak 4 angka di belakang koma.',
+                    dose: 'Isi dosis lebih dari 0, paling banyak empat angka di belakang koma.',
                     dose_unit_id: 'Pilih satuan dosis dari daftar.',
                     route_id: 'Pilih rute pemberian dari daftar.',
                     duration_days:
@@ -868,7 +868,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 }),
                 ...errors(1, {
                     requested_quantity:
-                        'Isi jumlah lebih dari 0, paling banyak 4 angka di belakang koma.',
+                        'Isi jumlah lebih dari 0, paling banyak empat angka di belakang koma.',
                 }),
             });
 

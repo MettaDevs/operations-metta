@@ -4,6 +4,7 @@ import {
     decimalInput,
     defaultUnit,
     itemUnits,
+    quantityHint,
     quantityScale,
     toNumeric,
     unitConversion,
@@ -85,7 +86,7 @@ function text(
 }
 
 // Jumlah obat dan dosis mengikuti aturan jumlah persediaan Core (decimalInput), termasuk banyak angka di belakang koma.
-const decimalRule = `lebih dari 0, paling banyak ${quantityScale} angka di belakang koma.`;
+const decimalRule = `lebih dari 0, ${quantityHint}.`;
 const quantityMessage = `Isi jumlah ${decimalRule}`;
 
 // Jumlah lebih dari 0 sebagai teks numeric yang disimpan; null bila kosong atau tidak sah.

@@ -9,6 +9,7 @@ import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPag
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/discharge-statuses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/dosage-forms.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/medication-routes.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/operation-categories.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferencePrognosesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/prognoses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/supporting-devices.page.tsx';
@@ -201,6 +202,19 @@ const modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute =
             modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage.title,
         },
     });
 
@@ -1007,6 +1021,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceOperationCategoriesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferencePrognosesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceSupportingDevicesRoute,
