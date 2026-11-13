@@ -377,7 +377,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             ),
             200,
         );
-        // Lima pembayaran di sesi ini, dua di antaranya dibatalkan: 175.000 + 50.000.
+        // Empat pembayaran di sesi ini, dua di antaranya dibatalkan: 175.000 + 50.000.
         expect([ended.data.transactions, ended.data.system_total]).toEqual([
             2,
             '225000',
