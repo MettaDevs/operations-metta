@@ -16,8 +16,11 @@ export const internalReferralSchema = z.object({
 
 // Panel Status Pasien sistem lama (SIMtrDataRegPasien.StatusPasien dan isian di bawahnya), disimpan di tujuan
 // kunjungan. Isian milik perilaku lain dikosongkan saat Simpan, seperti statuspasien_helper::submit.
+// condition_id: keadaan pasien saat pulang dari poli (Condition "Meninggalkan Faskes" SATUSEHAT), tidak bergantung pada
+// status, seperti Keadaan Pulang form KIA sistem lama.
 export const dischargeSchema = z.object({
     status_id: text,
+    condition_id: text,
     follow_up: z.boolean().nullable(),
     follow_up_date: text,
     consultant_id: text,

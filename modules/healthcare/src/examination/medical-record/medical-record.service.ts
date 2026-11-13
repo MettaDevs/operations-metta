@@ -526,6 +526,7 @@ export class MedicalRecords {
             ),
             practitioners,
             discharge_statuses: await this.discharges.statuses(),
+            discharge_conditions: await this.discharges.conditions(),
             permissions: {
                 manage: this.workspace.permissions.has(
                     'healthcare.examination.manage',
@@ -1032,13 +1033,21 @@ export class MedicalRecords {
         const saved = await this.db.one(
             z.object({
                 status_id: z.string().nullable(),
+                condition_id: z.string().nullable(),
                 consultant_id: z.string().nullable(),
             }),
-            `select status_pulang_id as status_id, dokter_konsul_id as consultant_id from sim_tr_registrasi_tujuan
-             where tenant_id = $1 and id = $2`,
+            `select status_pulang_id as status_id, keadaan_pulang_id as condition_id,
+                    dokter_konsul_id as consultant_id
+             from sim_tr_registrasi_tujuan where tenant_id = $1 and id = $2`,
             [this.workspace.tenantId, destinationId],
         );
-        return saved ?? { status_id: null, consultant_id: null };
+        return (
+            saved ?? {
+                status_id: null,
+                condition_id: null,
+                consultant_id: null,
+            }
+        );
     }
 
     private async header(destinationId: string, lock: boolean) {

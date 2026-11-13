@@ -67,6 +67,12 @@ const tables = {
             { table: 'sim_tr_registrasi_tujuan', column: 'status_pulang_id' },
         ],
     },
+    'discharge-conditions': {
+        table: 'sim_m_keadaan_pulang',
+        uses: [
+            { table: 'sim_tr_registrasi_tujuan', column: 'keadaan_pulang_id' },
+        ],
+    },
     'care-classes': {
         table: 'sim_m_kelas',
         uses: [{ table: 'sim_m_tindakan_harga', column: 'kelas_id' }],

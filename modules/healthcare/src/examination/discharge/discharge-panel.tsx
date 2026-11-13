@@ -271,6 +271,9 @@ export function DischargePanel({
     const behavior =
         statuses.find((row) => row.id === discharge.status_id)?.behavior ??
         null;
+    const conditions = metadata.discharge_conditions.filter(
+        (row) => row.active || row.id === discharge.condition_id,
+    );
     const deathTimes = metadata.options.waktu_meninggal ?? [];
     const deathAt = discharge.death_date
         ? `${discharge.death_date}T${discharge.death_time ?? ''}`
@@ -328,6 +331,39 @@ export function DischargePanel({
                             ))}
                         </RadioGroup>
                     </FieldSet>
+                </FormControl>
+
+                <FormControl
+                    error={error('condition_id')}
+                    data-error-field="discharge.condition_id"
+                >
+                    {disabled ? (
+                        <Input
+                            label="Keadaan pulang"
+                            disabled
+                            value={
+                                conditions.find(
+                                    (row) => row.id === discharge.condition_id,
+                                )?.name ?? ''
+                            }
+                        />
+                    ) : (
+                        <Select
+                            label="Keadaan pulang"
+                            items={conditions.map((row) => ({
+                                value: row.id,
+                                label: row.name,
+                            }))}
+                            value={discharge.condition_id}
+                            onValueChange={(value) =>
+                                setDischarge({
+                                    ...discharge,
+                                    condition_id: value,
+                                })
+                            }
+                            emptyMessage="Belum ada pilihan keadaan pulang. Tambahkan di Setup → Klinis → Keadaan pulang."
+                        />
+                    )}
                 </FormControl>
 
                 {behavior === 'rawat_jalan' && (

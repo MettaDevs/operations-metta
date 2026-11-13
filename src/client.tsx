@@ -7,6 +7,7 @@ import { page as modulesHealthcareSrcClinicalDiagnosisReferenceCareClassesPage }
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/chronic-diseases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-cases.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/diagnosis-types.page.tsx';
+import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/discharge-conditions.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/discharge-statuses.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsPage } from '../modules/healthcare/src/clinical/diagnosis-reference/dosage-forms.page.tsx';
 import { page as modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesPage } from '../modules/healthcare/src/clinical/diagnosis-reference/medication-routes.page.tsx';
@@ -179,6 +180,19 @@ const modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute =
             modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.validateSearch,
         staticData: {
             title: modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesPage.title,
+        },
+    });
+
+const modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsPage.path,
+        component:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsPage.title,
         },
     });
 
@@ -1053,6 +1067,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcClinicalDiagnosisReferenceChronicDiseasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisCasesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDiagnosisTypesRoute,
+        modulesHealthcareSrcClinicalDiagnosisReferenceDischargeConditionsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDischargeStatusesRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceDosageFormsRoute,
         modulesHealthcareSrcClinicalDiagnosisReferenceMedicationRoutesRoute,
