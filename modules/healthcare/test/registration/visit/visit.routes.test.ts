@@ -16,6 +16,7 @@ import {
 } from '../../../../../test/support/event-contracts.ts';
 
 type Destination = {
+    id: string;
     section_id: string;
     practice_schedule_id: string | null;
     practitioner_id: string | null;
@@ -807,6 +808,16 @@ describe.skipIf(!process.env.DB_HOST)('visit registration', () => {
             }),
         );
         expect(cancelled.destinations[0]!.status).toBe('batal');
+        // Batal tujuan tercatat di tujuannya, seperti SIMtrDataRegPasien.BatalAt dan BatalBy sistem lama.
+        const [destination] = await pool.unsafe<
+            { cancelled: boolean; same_time: boolean }[]
+        >(
+            `select d.batal_oleh = r.batal_oleh as cancelled, d.batal_pada = r.batal_pada as same_time
+             from sim_tr_registrasi_tujuan d join sim_tr_registrasi r on r.id = d.registrasi_id
+             where d.id = $1`,
+            [cancelled.destinations[0]!.id],
+        );
+        expect(destination).toEqual({ cancelled: true, same_time: true });
         expect((await cancel(admin, cancelled)).status).toBe(422);
     }, 30_000);
 

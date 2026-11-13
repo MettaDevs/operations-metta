@@ -17,6 +17,8 @@ import {
 import { visitVisibility } from '../../registration/visit/visit.service.ts';
 import { Discharges } from '../discharge/discharge.service.ts';
 import {
+    examinerPanelMissingMessage,
+    examinerRequiredMessage,
     finishedMessage,
     isRequirableField,
     notStartedMessage,
@@ -364,15 +366,28 @@ function inactivePanelErrors(
 }
 
 // Isian wajib yang belum terisi pada pemeriksaan tersimpan satu tujuan. Dipakai Selesai periksa, yang menolak
-// menyelesaikan pemeriksaan yang belum lengkap. Section yang tidak memakai Periksa fisik tidak punya isian wajib.
+// menyelesaikan pemeriksaan yang belum lengkap. Dokter / tenaga medis yang memeriksa selalu wajib (keputusan pemilik
+// produk, 13 November 2026: kunjungan tidak boleh selesai tanpa nakes tercatat); isian periksa fisik hanya wajib di
+// section yang memakai Periksa fisik.
 export async function missingRequired(
     db: Database,
     tenantId: string,
     destinationId: string,
     sectionId: string,
 ): Promise<Errors> {
-    if (!(await sectionPanels(db, tenantId, sectionId)).includes('physical'))
-        return {};
+    const used = await sectionPanels(db, tenantId, sectionId);
+    const errors: Errors = {};
+    const examiner = await db.one(
+        z.object({ doctor_id: z.string().nullable() }),
+        `select dokter_id as doctor_id from sim_tr_pemeriksaan
+         where tenant_id = $1 and tujuan_id = $2 and deleted_at is null`,
+        [tenantId, destinationId],
+    );
+    if (!examiner?.doctor_id)
+        if (used.includes('anamnesis'))
+            add(errors, 'anamnesis.doctor_id', examinerRequiredMessage);
+        else add(errors, 'status', examinerPanelMissingMessage);
+    if (!used.includes('physical')) return errors;
     const fields = panels.physical.fields;
     const physical = await db.one(
         z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
@@ -382,7 +397,7 @@ export async function missingRequired(
          where f.tenant_id = $1 and p.tujuan_id = $2 and p.deleted_at is null and f.deleted_at is null`,
         [tenantId, destinationId],
     );
-    return requiredErrors(db, tenantId, physical);
+    return { ...errors, ...(await requiredErrors(db, tenantId, physical)) };
 }
 
 // Isi tab Rekam Medis satu tujuan kunjungan: dibaca siapa pun yang boleh melihat antrean pemeriksaan, diubah hanya

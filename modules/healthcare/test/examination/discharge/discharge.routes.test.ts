@@ -79,9 +79,13 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
                 asal_tujuan_id: string | null;
                 nakes_id: string | null;
                 urutan: number;
+                didaftarkan_pada: string;
+                mulai_periksa_pada: string | null;
+                selesai_periksa_pada: string | null;
             }[]
         >(
-            `select status, no_antrean, kode_antrean, no_bukti, asal_tujuan_id, nakes_id, urutan
+            `select status, no_antrean, kode_antrean, no_bukti, asal_tujuan_id, nakes_id, urutan,
+                    didaftarkan_pada::text, mulai_periksa_pada::text, selesai_periksa_pada::text
              from sim_tr_registrasi_tujuan where id = $1`,
             [id],
         );
@@ -374,6 +378,10 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         });
         expect(second.no_bukti).not.toBe(first.no_bukti);
         expect(second.no_bukti).toMatch(/-RJ-\d{8}$/);
+        // Rujukan didaftarkan saat dirujuk, sesudah poli asal mulai memeriksa, seperti SIMtrDataRegPasien.Jam.
+        expect(first.mulai_periksa_pada).not.toBeNull();
+        expect(second.didaftarkan_pada >= first.mulai_periksa_pada!).toBe(true);
+        expect(second.mulai_periksa_pada).toBeNull();
         const [schedule] = await pool.unsafe<{ jumlah_terdaftar: number }[]>(
             'select jumlah_terdaftar from sim_tr_jadwal_praktik where id = $1',
             [clinic.dentalSchedule],
@@ -427,7 +435,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         });
 
         // Poli asal selesai, kunjungan tetap terbuka karena rujukan belum diperiksa.
-        await json(await clinic.save(destinationId, {}), 200);
+        await json(await clinic.examineBy(destinationId), 200);
         await json(await clinic.finish(destinationId), 200);
         expect(await visitStatus(visitId)).toBe('diperiksa');
         expect(

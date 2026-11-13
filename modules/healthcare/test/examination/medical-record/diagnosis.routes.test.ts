@@ -588,7 +588,17 @@ describe.skipIf(!process.env.DB_HOST)('examination diagnosis', () => {
             ).status,
         ).toEqual(['Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !']);
         await start(id);
-        await json(await save(admin, id, { diagnoses: [line(pain.id)] }), 200);
+        const opened = await show(admin, id);
+        await json(
+            await save(admin, id, {
+                anamnesis: {
+                    ...(opened.data.anamnesis as object),
+                    doctor_id: doctor,
+                },
+                diagnoses: [line(pain.id)],
+            }),
+            200,
+        );
         await json(
             await admin.post(
                 `${api}/examination/destinations/${id}/finish`,

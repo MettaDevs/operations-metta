@@ -95,6 +95,7 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
     let umum: string;
     let patientId: string;
     let room: string;
+    let doctor: string;
     let general: Section;
     let dentistry: Section;
     let metadata: Metadata;
@@ -192,6 +193,7 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             'healthcare.service-setup.manage',
             'healthcare.visit.manage',
             'healthcare.examination.manage',
+            'healthcare.practitioner.manage',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
         await pool.unsafe(
@@ -233,6 +235,19 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
                 phone: '081200000021',
                 domicile_address: { street: 'Jl. Bagian No. 1' },
                 payment_methods: [{ patient_type_id: umum }],
+            })
+        ).id;
+        const [doctorProfession] = await pool.unsafe<{ id: string }[]>(
+            `select id from sim_m_profesi where tenant_id = $1 and kode = 'dokter' and deleted_at is null`,
+            [tenantId],
+        );
+        doctor = (
+            await created(`${api}/practitioners`, {
+                name: 'Dokter Bagian',
+                nik: String(Date.now()).slice(-12).padStart(16, '4'),
+                gender: 'male',
+                phone: '081200000024',
+                profession_id: doctorProfession!.id,
             })
         ).id;
         room = (
@@ -504,6 +519,10 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             await json(
                 await admin.put(path(id), {
                     ...withoutPhysical.data,
+                    anamnesis: {
+                        ...(withoutPhysical.data.anamnesis as object),
+                        doctor_id: doctor,
+                    },
                     dental,
                 }),
                 200,
@@ -517,6 +536,32 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
             );
         } finally {
             dentistry = await configure(dentistry, dentalPanels);
+        }
+    });
+
+    test('a poli without Anamnesa cannot record the examining doctor, so Selesai periksa says how to fix it', async () => {
+        const id = await visit(general);
+        general = await configure(
+            general,
+            defaultPanels.filter(
+                (panel) => panel !== 'anamnesis' && panel !== 'physical',
+            ),
+        );
+        try {
+            expect(
+                await refused(
+                    await admin.post(
+                        `${api}/examination/destinations/${id}/finish`,
+                        {},
+                    ),
+                ),
+            ).toEqual({
+                status: [
+                    'Dokter / tenaga medis yang memeriksa belum tercatat, karena poli ini tidak memakai bagian Anamnesa. Aktifkan Anamnesa di kartu section.',
+                ],
+            });
+        } finally {
+            general = await configure(general, defaultPanels);
         }
     });
 

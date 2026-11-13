@@ -221,9 +221,24 @@ function ReferralDialog({
     );
 }
 
+// Waktu Mulai dan Selesai pemeriksaan di bawah status pasien, seperti panel Status Pasien sistem lama.
+function examinationTime(value: string | null): string {
+    return value
+        ? new Date(value).toLocaleString('id-ID', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+          })
+        : '—';
+}
+
 export function DischargePanel({
     destinationId,
     visitDate,
+    startedAt,
+    finishedAt,
     discharge,
     setDischarge,
     metadata,
@@ -233,6 +248,8 @@ export function DischargePanel({
 }: {
     destinationId: string;
     visitDate: string;
+    startedAt: string | null;
+    finishedAt: string | null;
     discharge: Discharge;
     setDischarge: (discharge: Discharge) => void;
     metadata: MedicalRecordMetadata;
@@ -533,6 +550,20 @@ export function DischargePanel({
                         </FormControl>
                     </div>
                 )}
+                <dl className="grid gap-1 border-t pt-3 text-sm">
+                    <div className="flex flex-wrap gap-x-2">
+                        <dt className="text-muted-foreground">
+                            Waktu mulai pemeriksaan
+                        </dt>
+                        <dd>{examinationTime(startedAt)}</dd>
+                    </div>
+                    <div className="flex flex-wrap gap-x-2">
+                        <dt className="text-muted-foreground">
+                            Waktu selesai pemeriksaan
+                        </dt>
+                        <dd>{examinationTime(finishedAt)}</dd>
+                    </div>
+                </dl>
             </CardContent>
             {referring && (
                 <ReferralDialog

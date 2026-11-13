@@ -61,5 +61,8 @@ export const queueEntrySchema = z.object({
     call_count: z.number(),
     // Poli asal rujuk internal, bila tujuan ini rujukan.
     referrer_section_name: z.string().nullable(),
+    // Waktu Mulai periksa dan Selesai periksa tujuan ini (SIMtrRJ.WaktuMulaiPeriksa dan WaktuSelesaiPeriksa).
+    started_at: z.string().nullable(),
+    finished_at: z.string().nullable(),
 });
 export type QueueEntry = z.infer<typeof queueEntrySchema>;

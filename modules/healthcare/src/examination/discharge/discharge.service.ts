@@ -534,6 +534,7 @@ export class Discharges {
                 status: 'menunggu',
                 asal_tujuan_id: destination.id,
                 catatan_rujukan: note,
+                didaftarkan_pada: stamp,
                 created_at: stamp,
                 updated_at: stamp,
             });

@@ -230,6 +230,11 @@ export function isRequirableField(value: string): value is RequirableField {
 export const requiredMessage = (label: string) =>
     `Field ${label} pada periksa fisik harus di isi`;
 
+export const examinerRequiredMessage =
+    'Pilih dokter / tenaga medis yang memeriksa sebelum menyelesaikan pemeriksaan.';
+export const examinerPanelMissingMessage =
+    'Dokter / tenaga medis yang memeriksa belum tercatat, karena poli ini tidak memakai bagian Anamnesa. Aktifkan Anamnesa di kartu section.';
+
 export const notStartedMessage =
     'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
 export const finishedMessage =

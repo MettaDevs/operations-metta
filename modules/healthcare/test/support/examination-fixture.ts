@@ -258,6 +258,21 @@ export async function createClinic(
         });
     }
 
+    // Dokter / tenaga medis yang memeriksa, wajib sebelum Selesai periksa.
+    async function examineBy(id: string, doctorId = doctor, as = admin) {
+        const current = await show(id, as);
+        return save(
+            id,
+            {
+                anamnesis: {
+                    ...(current.data.anamnesis as object),
+                    doctor_id: doctorId,
+                },
+            },
+            as,
+        );
+    }
+
     return {
         tenantId,
         admin,
@@ -282,6 +297,7 @@ export async function createClinic(
         finish,
         show,
         save,
+        examineBy,
         recordPath,
     };
 }
