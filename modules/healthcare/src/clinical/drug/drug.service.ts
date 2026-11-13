@@ -277,7 +277,8 @@ export class Drugs {
             z.object({ id: z.string() }),
             `select id from sim_tr_resep_detail where tenant_id = $1 and obat_id = $2 and deleted_at is null
              union all
-             select id from sim_m_pasien_alergi_obat where tenant_id = $1 and obat_id = $2 and deleted_at is null
+             select id from sim_m_pasien_alergi
+             where tenant_id = $1 and kategori = 'obat' and obat_id = $2 and deleted_at is null
              limit 1`,
             [scope.tenantId, current.id],
         );

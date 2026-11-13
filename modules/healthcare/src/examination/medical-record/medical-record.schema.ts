@@ -25,12 +25,36 @@ export const historySchema = z.object({
     family: text,
 });
 
-// Alergi milik pasien, bukan kunjungan: terbawa ke pemeriksaan berikutnya.
+export const allergyCategories = [
+    'makanan',
+    'udara',
+    'obat',
+    'lainnya',
+] as const;
+export const allergyStatuses = ['aktif', 'tidak_aktif', 'sembuh'] as const;
+
+// Satu alergi pasien. Alergennya allergen_id untuk makanan, udara, dan golongan obat, drug_id untuk obat tertentu, atau
+// name untuk lainnya. Jenis dan alergen tidak berubah sesudah dicatat; yang bisa diubah hanya reaksi dan status. Nama
+// alergen, kode dan nama obat, serta waktu dan pencatatnya hanya dibaca.
+export const allergyItemSchema = z.object({
+    id: text,
+    category: z.enum(allergyCategories).nullable(),
+    allergen_id: text,
+    allergen_name: text,
+    drug_id: text,
+    drug_code: text,
+    drug_name: text,
+    name: text,
+    reaction: text,
+    status: z.enum(allergyStatuses),
+    recorded_at: text,
+    recorded_by: text,
+});
+
+// Daftar alergi milik pasien, terbawa ke pemeriksaan berikutnya. Tidak ada alergi milik pemeriksaan ini.
 export const allergySchema = z.object({
     none: z.boolean(),
-    food_allergy_id: text,
-    airborne_allergy_id: text,
-    other: text,
+    items: z.array(allergyItemSchema),
 });
 
 export const statusSchema = z.object({
@@ -145,13 +169,6 @@ export const diagnosisSchema = z.object({
     tooth_position: text.optional(),
 });
 
-// Alergi obat pasien (SIMtrRiwayatAlergiObat), milik pasien seperti alergi lain. Kode dan nama hanya dibaca.
-export const drugAllergySchema = z.object({
-    drug_id: z.string(),
-    drug_code: text,
-    drug_name: z.string(),
-});
-
 // Baris Biaya Tindakan (SIMtrRJTransaksi). Satu tindakan sekali per pemeriksaan, jadi baris dikenali dari tindakannya.
 // Kode, nama, tarif, pengisi, dan jamnya hanya dibaca; tarif dihitung server saat baris pertama kali disimpan.
 export const procedureSchema = z.object({
@@ -247,7 +264,6 @@ export const medicalRecordSchema = z.object({
     diagnoses: z.array(diagnosisSchema).optional(),
     prognosis_id: text.optional(),
     chronic_disease_ids: z.array(z.string()).optional(),
-    drug_allergies: z.array(drugAllergySchema).optional(),
     procedures: z.array(procedureSchema).optional(),
     prescriptions: z.array(prescriptionSchema).optional(),
     discharge: dischargeSchema.optional(),
@@ -272,7 +288,6 @@ export const medicalRecordInputSchema = z.object({
     diagnoses: z.array(z.unknown()).optional(),
     prognosis_id: z.unknown().optional(),
     chronic_disease_ids: z.array(z.unknown()).optional(),
-    drug_allergies: z.array(z.unknown()).optional(),
     procedures: z.array(z.unknown()).optional(),
     prescriptions: z.array(z.unknown()).optional(),
     discharge: panel,

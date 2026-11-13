@@ -42,7 +42,7 @@ import type {
 } from './medical-record-panels.tsx';
 
 // Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama (rekammedis/Services.php dan Eresep), dalam urutan
-// aslinya sesudah Prognosa, serta daftar alergi obat pasien di panel Riwayat penyakit dan alergi.
+// aslinya sesudah Prognosa.
 
 type Draft = MedicalRecordDraft;
 type SetDraft = (update: (draft: Draft) => Draft) => void;
@@ -51,7 +51,6 @@ type ProcedureRow = NonNullable<Draft['procedures']>[number];
 type ProcedureChoice = Pick<Procedure, 'id' | 'code' | 'name'>;
 type Prescription = NonNullable<Draft['prescriptions']>[number];
 type PrescriptionLine = Prescription['lines'][number];
-type DrugAllergy = NonNullable<Draft['drug_allergies']>[number];
 type Errors = Record<string, string[]>;
 
 type DrugUnit = PrescriptionLine['units'][number];
@@ -103,7 +102,7 @@ const compoundLabel = (compound: number | string) => `Racikan ${compound}`;
 const drugLabel = (drug: { code: string | null; name: string }) =>
     drug.code ? `${drug.code} - ${drug.name}` : drug.name;
 // Waktu dari API adalah ISO UTC; layar menampilkannya dalam waktu peramban.
-const timeOf = (stamp: string | null | undefined) => {
+export const timeOf = (stamp: string | null | undefined) => {
     if (!stamp) return '';
     const date = new Date(stamp);
     return `${date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
@@ -144,18 +143,20 @@ function useDrugLoader(): LookupLoader<Drug> {
 }
 
 // Pilihan obat dengan Baru, yang membuka kartu obat dan langsung memilih obat yang baru disimpan.
-function DrugLookup({
+export function DrugLookup({
     field,
     value,
     canCreate,
     error,
     onPick,
+    required = true,
 }: {
     field: string;
     value: { id: string; code: string | null; name: string } | null;
     canCreate: boolean;
     error: string | undefined;
     onPick: (drug: Drug) => void;
+    required?: boolean;
 }): ReactNode {
     const loadDrugs = useDrugLoader();
     const [creating, setCreating] = useState(false);
@@ -163,7 +164,7 @@ function DrugLookup({
         <FormControl error={error} data-error-field={field}>
             <InlineLookup<Drug>
                 label="Nama Obat"
-                required
+                required={required}
                 loadItems={loadDrugs}
                 value={
                     value
@@ -242,119 +243,6 @@ function DrugLookup({
                 </PageDialog>
             )}
         </FormControl>
-    );
-}
-
-// Alergi Obat Pasien sistem lama (RiwayatPenyakit.php): daftar obat yang ditolak di resep pasien ini.
-export function DrugAllergyLines({
-    rows,
-    setDraft,
-    canCreate,
-    errors,
-    disabled,
-}: {
-    rows: DrugAllergy[];
-    setDraft: SetDraft;
-    canCreate: boolean;
-    errors: Errors;
-    disabled: boolean;
-}): ReactNode {
-    const [selected, setSelected] = useState<number[]>([]);
-    const lines = rows.map((row, index) => ({ index, row }));
-    const field = (index: number) => `drug_allergies.${index}.drug_id`;
-    const pick = (index: number, drug: Drug) => {
-        if (
-            rows.some(
-                (row, position) =>
-                    position !== index && row.drug_id === drug.id,
-            )
-        ) {
-            toast.error(`${drug.name} sudah ada di daftar alergi obat.`);
-            return;
-        }
-        setDraft((current) => ({
-            ...current,
-            drug_allergies: (current.drug_allergies ?? []).map(
-                (row, position) =>
-                    position === index
-                        ? {
-                              drug_id: drug.id,
-                              drug_code: drug.code,
-                              drug_name: drug.name,
-                          }
-                        : row,
-            ),
-        }));
-    };
-    return (
-        <DocumentLines
-            title="Alergi obat pasien"
-            data={lines}
-            getRowKey={(line) => line.index}
-            getRowLabel={(line) =>
-                line.row.drug_name || `Obat ${line.index + 1}`
-            }
-            showRowNumbers
-            readOnly={disabled}
-            disabled={disabled}
-            selection={
-                disabled
-                    ? undefined
-                    : {
-                          selectedKeys: selected,
-                          onSelectedKeysChange: (keys) =>
-                              setSelected(keys.map(Number)),
-                      }
-            }
-            onAddRow={() =>
-                setDraft((current) => ({
-                    ...current,
-                    drug_allergies: [
-                        ...(current.drug_allergies ?? []),
-                        { drug_id: '', drug_code: null, drug_name: '' },
-                    ],
-                }))
-            }
-            onDeleteRows={(removed) =>
-                setDraft((current) => ({
-                    ...current,
-                    drug_allergies: (current.drug_allergies ?? []).filter(
-                        (_, position) =>
-                            !removed.some((line) => line.index === position),
-                    ),
-                }))
-            }
-            emptyMessage={
-                disabled
-                    ? 'Belum ada alergi obat.'
-                    : 'Belum ada alergi obat. Pilih Tambah untuk menambahkan obat.'
-            }
-            columns={[
-                {
-                    id: 'drug_id',
-                    header: 'Nama Obat',
-                    content: 'control',
-                    minWidth: 320,
-                    cell: ({ index, row }) => (
-                        <DrugLookup
-                            field={field(index)}
-                            value={
-                                row.drug_id
-                                    ? {
-                                          id: row.drug_id,
-                                          code: row.drug_code,
-                                          name: row.drug_name,
-                                      }
-                                    : null
-                            }
-                            canCreate={canCreate}
-                            error={errors[field(index)]?.join(' ')}
-                            onPick={(drug) => pick(index, drug)}
-                        />
-                    ),
-                },
-            ]}
-        />
     );
 }
 
@@ -1711,8 +1599,11 @@ export function OrderPanels({
     onSend: (position: number) => void;
 }): ReactNode {
     const { procedures, prescriptions } = draft;
+    // Obat dari alergi obat yang aktif ditolak saat dipilih; golongan obat tidak.
     const allergies = new Set(
-        (draft.drug_allergies ?? []).map((row) => row.drug_id),
+        (draft.allergy?.items ?? []).flatMap((row) =>
+            row.drug_id && row.status === 'aktif' ? [row.drug_id] : [],
+        ),
     );
     const open = prescriptions?.findIndex((row) => row.status === 'draf') ?? -1;
     return (

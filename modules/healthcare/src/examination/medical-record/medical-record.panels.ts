@@ -12,7 +12,7 @@ export const examinationPanels = [
     {
         code: 'history',
         label: 'Riwayat penyakit dan alergi',
-        inputs: ['history', 'allergy', 'drug_allergies'],
+        inputs: ['history', 'allergy'],
     },
     {
         code: 'status',
