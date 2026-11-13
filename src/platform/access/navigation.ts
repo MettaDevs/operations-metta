@@ -316,6 +316,19 @@ export const sysAdminArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'pricing',
+            label: 'Harga',
+            icon: 'tag',
+            items: [
+                {
+                    id: 'price-groups',
+                    label: 'Kelompok harga',
+                    href: '/sysadmin/pricing/price-groups',
+                    permission: 'core.price-group.read',
+                },
+            ],
+        },
+        {
             id: 'calendar',
             label: 'Kalender',
             icon: 'calendar',

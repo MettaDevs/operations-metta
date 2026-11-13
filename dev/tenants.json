@@ -87,12 +87,24 @@
                     "policy": "healthcare.patient-unit"
                 }
             ],
+            "pricing": {
+                "price_groups": [
+                    { "code": "UMUM", "name": "Umum" },
+                    { "code": "ASR", "name": "Asuransi" }
+                ]
+            },
             "healthcare": {
                 "patient_types": [
-                    { "code": "UMUM", "name": "Umum", "default": true },
+                    {
+                        "code": "UMUM",
+                        "name": "Umum",
+                        "default": true,
+                        "price_group": "UMUM"
+                    },
                     {
                         "code": "ASR",
                         "name": "Asuransi",
+                        "price_group": "ASR",
                         "behaviors": [
                             "requires_guarantor",
                             "requires_card_number"

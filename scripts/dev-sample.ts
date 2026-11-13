@@ -162,6 +162,8 @@ export const sampleSchema = z.object({
             policy: z.string(),
         }),
     ),
+    // Kelompok harga Core, ditunjuk tipe pasien lewat kodenya.
+    pricing: z.object({ price_groups: z.array(codeName) }).optional(),
     healthcare: z
         .object({
             patient_types: z.array(
@@ -170,6 +172,7 @@ export const sampleSchema = z.object({
                     name: z.string(),
                     behaviors: z.array(z.string()).default([]),
                     default: z.boolean().default(false),
+                    price_group: z.string().optional(),
                 }),
             ),
             guarantors: z.array(
@@ -190,6 +193,7 @@ export const sampleSchema = z.object({
 export type Sample = z.infer<typeof sampleSchema>;
 
 const coreInventory = '/api/v1/inventory';
+const corePricing = '/api/v1/pricing';
 const healthcareApi = '/api/modules/healthcare/v1';
 const pharmacyApi = '/api/modules/pharmacy/v1';
 
@@ -362,24 +366,34 @@ async function seedOrganizations(
             },
         ]);
     }
+    const priceGroups = options.sample.pricing
+        ? await api.ensureEach(
+              `${corePricing}/price-groups`,
+              options.sample.pricing.price_groups,
+          )
+        : new Map<string, string>();
     const healthcare = options.sample.healthcare;
     if (healthcare) {
         const types = new Map<string, string>();
-        for (const type of healthcare.patient_types)
-            types.set(
+        for (const type of healthcare.patient_types) {
+            const priceGroupId = type.price_group
+                ? required(priceGroups, type.price_group, 'Kelompok harga')
+                : null;
+            const id = await api.ensure(
+                `${healthcareApi}/patient-types`,
+                'code',
                 type.code,
-                await api.ensure(
-                    `${healthcareApi}/patient-types`,
-                    'code',
-                    type.code,
-                    {
-                        code: type.code,
-                        name: type.name,
-                        behaviors: type.behaviors,
-                        is_default: type.default,
-                    },
-                ),
+                {
+                    code: type.code,
+                    name: type.name,
+                    behaviors: type.behaviors,
+                    is_default: type.default,
+                    price_group_id: priceGroupId,
+                },
             );
+            types.set(type.code, id);
+            await assignPriceGroup(api, id, type.code, priceGroupId);
+        }
         for (const guarantor of healthcare.guarantors)
             await api.ensure(
                 `${healthcareApi}/guarantors`,
@@ -392,6 +406,38 @@ async function seedOrganizations(
                 },
             );
     }
+}
+
+// Tipe pasien yang lahir sebelum kelompok harga ada di data contoh mendapat kelompoknya. Tipe yang sudah punya kelompok
+// tidak diubah, supaya pilihan yang diatur di layar tidak tertimpa.
+async function assignPriceGroup(
+    api: SampleApi,
+    id: string,
+    code: string,
+    priceGroupId: string | null,
+): Promise<void> {
+    if (!priceGroupId) return;
+    const type = await api.find(
+        z.object({
+            id: z.string(),
+            code: z.string(),
+            name: z.string(),
+            behaviors: z.array(z.string()),
+            is_active: z.boolean(),
+            is_default: z.boolean(),
+            max_visits_per_section_per_day: z.number(),
+            price_group_id: z.string().nullable(),
+            version: z.number(),
+        }),
+        `${healthcareApi}/patient-types`,
+        code,
+        (row) => row.id === id,
+    );
+    if (!type || type.price_group_id) return;
+    await api.call('PATCH', `${healthcareApi}/patient-types/${id}`, {
+        ...type,
+        price_group_id: priceGroupId,
+    });
 }
 
 // Master persediaan dan obat dikenali dari kodenya. Penerimaan dikenali dari nomor surat jalan vendor dan amprah dari

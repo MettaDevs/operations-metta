@@ -2409,6 +2409,54 @@
             }
         }
     },
+    "pricingPriceGroupList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/pricing/price-groups",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pricingPriceGroupCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/pricing/price-groups",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pricingPriceGroupUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/v1/pricing/price-groups/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pricingPriceGroupDelete": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "DELETE",
+                "path": "/api/v1/pricing/price-groups/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "receiptList": {
         "~orpc": {
             "errorMap": {},
@@ -2594,6 +2642,18 @@
             "route": {
                 "method": "DELETE",
                 "path": "/api/modules/healthcare/v1/patients/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcarePatientTypeMetadata": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/patient-types/metadata",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }

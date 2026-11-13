@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
     nowSql,
@@ -27,8 +28,11 @@ const rowSql = `select * from (
                          where b.tenant_id = t.tenant_id and b.tipe_pasien_id = t.id and b.deleted_at is null),
                         '[]'::json) as behaviors,
                            t.aktif as is_active, t.bawaan as is_default,
-                           t.maks_kunjungan_per_poli_per_hari as max_visits_per_section_per_day, t.version
-                    from sim_m_tipe_pasien t where t.tenant_id = $1 and t.deleted_at is null) patient_types
+                           t.maks_kunjungan_per_poli_per_hari as max_visits_per_section_per_day,
+                           t.kelompok_harga_id as price_group_id, g.nama as price_group_name, t.version
+                    from sim_m_tipe_pasien t
+                    left join kelompok_harga g on g.tenant_id = t.tenant_id and g.id = t.kelompok_harga_id
+                    where t.tenant_id = $1 and t.deleted_at is null) patient_types
                 where true`;
 
 function checked(body: unknown) {
@@ -63,6 +67,7 @@ function checked(body: unknown) {
         is_active: data.is_active ?? true,
         is_default: data.is_default ?? false,
         max_visits_per_section_per_day: visitLimit,
+        price_group_id: data.price_group_id?.trim() ?? null,
     };
 }
 
@@ -91,6 +96,45 @@ export class PatientTypes {
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {}
+
+    // Pilihan kelompok harga untuk kartu tipe pasien. Kelompok nonaktif ikut, supaya tipe yang sudah memegangnya tetap
+    // terbaca namanya.
+    async metadata() {
+        this.workspace.guard('patient-type', 'read');
+        return {
+            price_groups: await this.db.rows(
+                z.object({
+                    id: z.string(),
+                    code: z.string(),
+                    name: z.string(),
+                    active: z.boolean(),
+                }),
+                `select id, kode as code, nama as name, aktif as active from kelompok_harga
+                 where tenant_id = $1 and deleted_at is null order by kode`,
+                [this.workspace.tenantId],
+            ),
+        };
+    }
+
+    // Kelompok harga nonaktif hanya boleh tetap dipakai tipe yang sudah memegangnya.
+    private async checkedPriceGroup(
+        priceGroupId: string | null,
+        savedPriceGroupId: string | null,
+    ): Promise<void> {
+        if (priceGroupId === null) return;
+        // Teks kosong berarti saklar kelompok harga dinyalakan tanpa memilih kelompok.
+        if (!priceGroupId)
+            validation({ price_group_id: 'Pilih kelompok harga.' });
+        const found = lookupId(priceGroupId)
+            ? await this.db.one(
+                  z.object({ id: z.string() }),
+                  `select id from kelompok_harga
+                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                  [this.workspace.tenantId, priceGroupId, savedPriceGroupId],
+              )
+            : undefined;
+        if (!found) validation({ price_group_id: 'Pilih dari daftar.' });
+    }
 
     // Daftar bertahap, dipakai juga pilihan tipe pasien di form pasien, jadi pemegang izin lihat pasien ikut boleh
     // membacanya. `active=1` hanya tipe yang aktif.
@@ -134,6 +178,7 @@ export class PatientTypes {
     async create(body: unknown) {
         this.workspace.guard('patient-type', 'update');
         const data = checked(body);
+        await this.checkedPriceGroup(data.price_group_id, null);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -150,6 +195,7 @@ export class PatientTypes {
                     bawaan: data.is_default,
                     maks_kunjungan_per_poli_per_hari:
                         data.max_visits_per_section_per_day,
+                    kelompok_harga_id: data.price_group_id,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -166,6 +212,10 @@ export class PatientTypes {
         this.workspace.guard('patient-type', 'update');
         const current = await this.row(id);
         const data = checked(body);
+        await this.checkedPriceGroup(
+            data.price_group_id,
+            current.price_group_id,
+        );
         const version = expectedVersion(request, body);
         let updated = 0;
         try {
@@ -173,7 +223,7 @@ export class PatientTypes {
                 if (data.is_default) await this.clearDefault(current.id);
                 updated = await this.db.execute(
                     `update sim_m_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, bawaan = $9,
-                     maks_kunjungan_per_poli_per_hari = $10, updated_at = $5
+                     maks_kunjungan_per_poli_per_hari = $10, kelompok_harga_id = $11, updated_at = $5
                  where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
                     [
                         data.code,
@@ -186,6 +236,7 @@ export class PatientTypes {
                         version,
                         data.is_default,
                         data.max_visits_per_section_per_day,
+                        data.price_group_id,
                     ],
                 );
                 if (updated)

@@ -13,6 +13,9 @@ export const patientTypeRowSchema = z.object({
     is_default: z.boolean(),
     // Berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari. 0 berarti tanpa batas.
     max_visits_per_section_per_day: z.number(),
+    // Kelompok harga Core yang menentukan tarif pasien bertipe ini. Kosong berarti hanya harga untuk semua kelompok.
+    price_group_id: z.string().nullable(),
+    price_group_name: z.string().nullable(),
     version: z.number(),
 });
 
@@ -30,5 +33,6 @@ export const patientTypeInputSchema = z.object({
     max_visits_per_section_per_day: z
         .union([z.number(), z.string()])
         .optional(),
+    price_group_id: z.string().nullable().optional(),
     version: z.number().optional(),
 });

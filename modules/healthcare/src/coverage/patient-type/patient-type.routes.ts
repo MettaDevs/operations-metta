@@ -34,6 +34,10 @@ export function patientTypeRoutes() {
             outputStructure: 'detailed',
         });
     return {
+        healthcarePatientTypeMetadata: route('GET', '/metadata').handler(
+            async ({ context }) =>
+                ok(await (await patientTypes(context)).metadata()),
+        ),
         healthcarePatientTypeList: route('GET')
             .input(typedQuery<z.input<typeof patientTypeListQuerySchema>>())
             .handler(async ({ context }) =>
