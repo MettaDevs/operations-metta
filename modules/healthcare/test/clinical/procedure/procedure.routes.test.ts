@@ -81,7 +81,7 @@ describe.skipIf(!process.env.DB_HOST)('procedures', () => {
 
     async function group(code: string, name: string, active = true) {
         const created = await json<{ data: { id: string; version: number } }>(
-            await admin.post(`${api}/diagnosis-references/procedure-groups`, {
+            await admin.post(`${api}/procedure-groups`, {
                 code,
                 name,
             }),
@@ -90,7 +90,7 @@ describe.skipIf(!process.env.DB_HOST)('procedures', () => {
         if (!active)
             await json(
                 await admin.patch(
-                    `${api}/diagnosis-references/procedure-groups/${created.data.id}`,
+                    `${api}/procedure-groups/${created.data.id}`,
                     { code, name, is_active: false, version: 1 },
                 ),
                 200,

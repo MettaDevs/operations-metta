@@ -92,7 +92,14 @@ const clinicSchema = z.object({
         }),
     ),
     // Kelompok, kategori, dan tindakan (Setup Jasa sistem lama). Tindakan ditawarkan di section yang disebut namanya.
-    procedure_groups: z.array(codeName).default([]),
+    procedure_groups: z
+        .array(
+            codeName.extend({
+                international_name: z.string().optional(),
+                treatment_group: z.string().optional(),
+            }),
+        )
+        .default([]),
     procedure_categories: z
         .array(codeName.extend({ group: z.string() }))
         .default([]),
@@ -775,7 +782,7 @@ async function seedProcedures(
         if (found) sections.set(section.name, found.id);
     }
     const procedureGroups = await api.ensureEach(
-        `${healthcareApi}/diagnosis-references/procedure-groups`,
+        `${healthcareApi}/procedure-groups`,
         clinic.procedure_groups,
     );
     const lists = `${healthcareApi}/diagnosis-references`;

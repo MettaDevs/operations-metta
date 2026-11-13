@@ -47,10 +47,6 @@ const tables = {
             },
         ],
     },
-    'procedure-groups': {
-        table: 'sim_m_tindakan_kelompok',
-        uses: [{ table: 'sim_m_tindakan', column: 'kelompok_id' }],
-    },
     'dosage-forms': {
         table: 'sim_m_bentuk_sediaan',
         uses: [{ table: 'sim_m_obat', column: 'bentuk_sediaan_id' }],
