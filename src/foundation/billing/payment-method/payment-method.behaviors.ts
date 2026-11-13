@@ -51,9 +51,15 @@ export const paymentMethodOptionFields = [
 export type PaymentMethodOption =
     (typeof paymentMethodOptionFields)[number]['option'];
 
+// Nasib uang yang diterima lewat perilaku itu: `received` sudah di tangan klinik (laci atau rekening) dan bisa melunasi
+// piutang di Pembayaran Hutang; `receivable` ditagih kemudian, jadi Simpan pembayaran membuka entri piutang; `expense`
+// ditanggung klinik sendiri.
+export type PaymentMethodSettlement = 'received' | 'receivable' | 'expense';
+
 type BehaviorRule = {
     label: string;
     description: string;
+    settlement: PaymentMethodSettlement;
     parties: readonly PaymentMethodParty[];
     options: readonly PaymentMethodOption[];
 };
@@ -63,12 +69,14 @@ export const paymentMethodBehaviors = {
         label: 'Tunai',
         description:
             'Uang tunai di laci. Kasir mengisi uang yang diterima dan melihat kembaliannya.',
+        settlement: 'received',
         parties: ['tidak'],
         options: ['counted_at_close'],
     },
     non_tunai: {
         label: 'Non tunai',
         description: 'Kartu, EDC, transfer, atau QRIS.',
+        settlement: 'received',
         parties: ['tidak'],
         options: [
             'requires_merchant',
@@ -81,6 +89,7 @@ export const paymentMethodBehaviors = {
         label: 'Penjamin',
         description:
             'Ditagihkan ke penjamin kunjungan, misalnya perusahaan, BPJS, atau asuransi.',
+        settlement: 'receivable',
         parties: ['penjamin_kunjungan'],
         options: ['requires_reference'],
     },
@@ -88,12 +97,14 @@ export const paymentMethodBehaviors = {
         label: 'Piutang',
         description:
             'Bon pasien atau pihak lain, dilunasi kemudian di Pembayaran Hutang.',
+        settlement: 'receivable',
         parties: ['pasien', 'pilih_pihak'],
         options: ['requires_reference', 'takes_remainder'],
     },
     beban: {
         label: 'Beban',
         description: 'Ditanggung klinik sendiri, tanpa piutang.',
+        settlement: 'expense',
         parties: ['tidak'],
         options: [],
     },
@@ -108,6 +119,16 @@ export function isPaymentMethodBehavior(
 
 export function behaviorRule(behavior: PaymentMethodBehavior): BehaviorRule {
     return paymentMethodBehaviors[behavior];
+}
+
+export function behaviorsSettledAs(
+    settlement: PaymentMethodSettlement,
+): PaymentMethodBehavior[] {
+    return Object.entries(paymentMethodBehaviors).flatMap(([behavior, rule]) =>
+        rule.settlement === settlement && isPaymentMethodBehavior(behavior)
+            ? [behavior]
+            : [],
+    );
 }
 
 export function isPaymentMethodParty(

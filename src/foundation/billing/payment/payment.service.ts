@@ -29,6 +29,11 @@ import {
 } from '../../currency/index.ts';
 import { openClerk } from '../clerk/clerk.service.ts';
 import {
+    cancelReceivables,
+    openReceivables,
+    refuseWhenPaidOff,
+} from '../receivable-payment/receivable-payment.service.ts';
+import {
     invoiceTotals,
     type InvoiceTotals,
 } from '../invoice/invoice.totals.ts';
@@ -125,8 +130,8 @@ async function lockVisit(
     );
 }
 
-// Pembayaran batal: baris biaya kunjungan kembali terbuka, dan finance diberi tahu sekali dengan angka yang sama dengan
-// saat bayar. Status pembayaran sudah diubah pemanggil.
+// Pembayaran batal: piutangnya ikut batal (ditolak bila sudah ada pelunasan), baris biaya kunjungan kembali terbuka, dan
+// finance diberi tahu sekali dengan angka yang sama dengan saat bayar. Status pembayaran sudah diubah pemanggil.
 async function reopenCancelled(
     db: Database,
     cancelled: {
@@ -142,6 +147,11 @@ async function reopenCancelled(
         reason: string;
     },
 ): Promise<void> {
+    await cancelReceivables(db, {
+        tenantId: cancelled.tenantId,
+        paymentId: cancelled.paymentId,
+        stamp: cancelled.stamp,
+    });
     await db.execute(
         `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
          where tenant_id = $2 and kasir_id = $3`,
@@ -574,6 +584,12 @@ async function postPayment(
             created_at: stamp,
             updated_at: stamp,
         });
+    await openReceivables(db, {
+        tenantId: posting.tenantId,
+        legalEntityId: posting.legalEntityId,
+        paymentId: id,
+        stamp,
+    });
     for (const line of posting.discounts)
         await db.insert('kasir_discount', {
             id: Bun.randomUUIDv7(),
@@ -844,7 +860,18 @@ export class Payments {
                         errors[`${field}.reference`] =
                             'Isi nomor kartu atau nomor transaksi.';
                     const party = line.party_id?.trim() || null;
-                    if (method?.pihak === 'pilih_pihak' && !party)
+                    if (
+                        method?.pihak === 'pilih_pihak' &&
+                        !(
+                            party &&
+                            lookupId(party) &&
+                            (await this.db.one(
+                                z.object({ id: z.string() }),
+                                'select id from parties where tenant_id = $1 and id = $2 and deleted_at is null',
+                                [scope.tenantId, party],
+                            ))
+                        )
+                    )
                         errors[`${field}.party_id`] = partyMessage;
                     const currencyAmount = amount ?? '0';
                     return {
@@ -1000,6 +1027,10 @@ export class Payments {
             coded(409, 'payment_cancelled', alreadyCancelledMessage);
         if (payment.clerk_status !== null && payment.clerk_status !== 'start')
             validation({ _form: closedClerkMessage });
+        await refuseWhenPaidOff(this.db, {
+            tenantId: scope.tenantId,
+            paymentId: payment.id,
+        });
         const input = parsed.data;
         const reason = input.reason?.trim() ?? '';
         const email = input.approver_email?.trim() ?? '';
