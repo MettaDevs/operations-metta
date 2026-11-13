@@ -16,6 +16,7 @@ export const inventoryDuties = [
     'core.inventory-setup.manage',
     'core.inventory-item.manage',
     'core.inventory-adjustment.manage',
+    'core.inventory-period.manage',
 ];
 
 export async function json<T>(response: Response, status: number): Promise<T> {
@@ -168,6 +169,26 @@ export async function createBusiness(
         ).data;
     }
 
+    // Periode persediaan yang berakhir pada tanggal itu, dibuat lalu ditutup.
+    async function closedPeriod(endingDate: string) {
+        const period = await created<{ id: string; version: number }>(
+            `${inventoryApi}/periods`,
+            { ending_date: endingDate },
+        );
+        return (
+            await json<{ data: { id: string; version: number } }>(
+                await admin.post(`${inventoryApi}/periods/${period.id}/close`, {
+                    version: period.version,
+                }),
+                200,
+            )
+        ).data;
+    }
+    const reopenPeriod = (period: { id: string; version: number }) =>
+        admin.post(`${inventoryApi}/periods/${period.id}/reopen`, {
+            version: period.version,
+        });
+
     // Stok per nomor batch dari SQL langsung, bukan dari API yang sedang diuji.
     async function stock(itemId: string, locationId: string) {
         const rows = await pool.unsafe<
@@ -204,6 +225,8 @@ export async function createBusiness(
         reverse,
         adjust,
         posted,
+        closedPeriod,
+        reopenPeriod,
         stock,
     };
 }

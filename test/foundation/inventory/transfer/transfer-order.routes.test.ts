@@ -930,4 +930,58 @@ describe.skipIf(!process.env.DB_HOST)('transfer orders', () => {
             ).status,
         ).toBe(403);
     });
+
+    test('a shipment dated in a closed inventory period is refused at posting and at reversal until the period is reopened', async () => {
+        const warehouse = await business.location('PERIODE-GDG');
+        const pharmacy = await business.location('PERIODE-FAR');
+        const item = await business.item('PERIODE-1');
+        await business.posted(
+            'masuk',
+            warehouse.id,
+            [{ item_id: item.id, quantity: 10, unit_cost: 100 }],
+            '2026-08-01',
+        );
+        const order = () =>
+            submitted(
+                business,
+                {
+                    from_location_id: warehouse.id,
+                    to_location_id: pharmacy.id,
+                    posting_date: '2026-08-05',
+                },
+                [{ item_id: item.id, unit_id: business.uom.id, quantity: 2 }],
+            );
+        const shipment = postingsOf(
+            await done(await ship(business, await order(), '2026-08-10')),
+            'shipment',
+        )[0];
+        if (!shipment) throw new Error('No shipment.');
+        const period = await business.closedPeriod('2026-08-31');
+        expect(
+            (await refused(await ship(business, await order(), '2026-08-20')))
+                ._form?.[0],
+        ).toContain(
+            'Periode persediaan Agustus 2026 sudah ditutup, jadi stok bertanggal 20 Agustus 2026 tidak bisa diposting.',
+        );
+        const reverse = async () => {
+            const shown = await json<{ data: { version: number } }>(
+                await business.admin.get(`${shipmentsPath}/${shipment.id}`),
+                200,
+            );
+            return business.admin.post(
+                `${shipmentsPath}/${shipment.id}/reverse`,
+                { version: shown.data.version },
+            );
+        };
+        expect((await refused(await reverse()))._form?.[0]).toContain(
+            'posting bertanggal 10 Agustus 2026 tidak bisa dibatalkan.',
+        );
+        expect(await business.stock(item.id, pharmacy.id)).toEqual({ '-': 2 });
+        expect((await business.reopenPeriod(period)).status).toBe(200);
+        expect((await reverse()).status).toBe(200);
+        expect(await business.stock(item.id, pharmacy.id)).toEqual({});
+        expect(await business.stock(item.id, warehouse.id)).toEqual({
+            '-': 10,
+        });
+    });
 });
