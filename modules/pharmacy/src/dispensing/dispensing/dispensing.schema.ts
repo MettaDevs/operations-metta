@@ -34,6 +34,9 @@ export const dispensingHeaderSchema = z.object({
     called_at: z.string().nullable(),
     handed_over_at: z.string().nullable(),
     handed_over_by: person,
+    // Penerima obat, dicatat saat Serahkan; kosong sebelum diserahkan dan pada penyerahan sebelum kolomnya ada.
+    received_by_patient: z.boolean().nullable(),
+    receiver_name: z.string().nullable(),
     cancelled_at: z.string().nullable(),
     // Jumlah nilai baris; kosong selama penyerahan belum disiapkan.
     total_amount: z.string().nullable(),
@@ -99,7 +102,11 @@ export const dispensingInputSchema = z.object({
 
 export const versionInputSchema = z.object({ version: z.number() });
 
+// receiver_name wajib bila obat diterima orang lain dan ditolak bila diterima pasien sendiri; service yang memeriksanya,
+// supaya kedua kasus mendapat pesannya sendiri.
 export const handOverInputSchema = z.object({
     pharmacist_id: z.string().nullable().optional(),
+    received_by_patient: z.boolean(),
+    receiver_name: z.string().nullable().optional(),
     version: z.number(),
 });

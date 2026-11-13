@@ -104,6 +104,7 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
         }>(await pharmacy.admin.post(dispensing(id, '/prepare')), 200);
         await json(
             await pharmacy.admin.post(dispensing(id, '/hand-over'), {
+                received_by_patient: true,
                 version: prepared.data.dispensing?.version,
             }),
             200,
@@ -249,6 +250,7 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
         ).data.dispensing;
         await json(
             await pharmacy.admin.post(dispensing(id, '/hand-over'), {
+                received_by_patient: true,
                 version: current?.version,
             }),
             200,
@@ -558,6 +560,7 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
             );
             await json(
                 await pharmacy.admin.post(dispensing(id, '/hand-over'), {
+                    received_by_patient: true,
                     version: prepared.data.dispensing?.version,
                 }),
                 200,

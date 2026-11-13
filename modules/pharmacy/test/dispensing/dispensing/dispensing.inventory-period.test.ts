@@ -129,6 +129,7 @@ describe.skipIf(!process.env.DB_HOST)(
             const toReturn = await prescribed();
             await json(
                 await pharmacy.admin.post(dispensing(toReturn, '/hand-over'), {
+                    received_by_patient: true,
                     version: (await prepared(toReturn)).version,
                 }),
                 200,

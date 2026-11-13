@@ -73,6 +73,7 @@ const headerSql = `select h.id, h.nomor as number, h.status, h.tanggal::text as 
                           ${isoSql('h.dipanggil_pada')} as called_at,
                           ${isoSql('h.diserahkan_pada')} as handed_over_at,
                           ${personSql('h.diserahkan_oleh_user_id')} as handed_over_by,
+                          h.diterima_pasien as received_by_patient, h.nama_penerima as receiver_name,
                           ${isoSql('h.dibatalkan_pada')} as cancelled_at,
                           (select trim_scale(sum(${lineAmountSql('d')}))::text from bill_farmasi_detail d
                            where d.tenant_id = h.tenant_id and d.bill_farmasi_id = h.id and d.deleted_at is null)
@@ -113,6 +114,8 @@ const messages = {
     notes: 'Catatan paling banyak 500 karakter.',
     pharmacist_id: 'Pilih apoteker dari daftar.',
     assistant_id: 'Pilih asisten apoteker dari daftar.',
+    received_by_patient: 'Pilih siapa yang menerima obat.',
+    receiver_name: 'Isi nama penerima obat.',
     lines: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
     prescription_line_id: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
     quantity: 'Isi jumlah 0 atau lebih.',
@@ -843,9 +846,19 @@ export class Dispensings {
     async handOver(prescriptionId: string, body: unknown) {
         this.workspace.guard('dispensing', 'hand-over');
         const data = parseInput(handOverInputSchema, body, messages);
+        const errors: Record<string, string> = {};
         const pharmacistId = data.pharmacist_id || null;
         if (!(await this.member(pharmacistId)))
-            validation({ pharmacist_id: messages.pharmacist_id });
+            errors.pharmacist_id = messages.pharmacist_id;
+        const receiverName = data.receiver_name?.trim() || null;
+        if (data.received_by_patient) {
+            if (receiverName)
+                errors.receiver_name =
+                    'Kosongkan nama penerima bila obat diterima pasien sendiri.';
+        } else if (!receiverName) errors.receiver_name = messages.receiver_name;
+        else if (receiverName.length > 150)
+            errors.receiver_name = 'Nama penerima paling banyak 150 karakter.';
+        if (Object.keys(errors).length) validation(errors);
         return this.move(
             prescriptionId,
             ['disiapkan', 'dipanggil'],
@@ -855,12 +868,15 @@ export class Dispensings {
                 const stamp = nowSql();
                 await this.db.execute(
                     `update bill_farmasi set status = 'diserahkan', diserahkan_pada = $1, diserahkan_oleh_user_id = $2,
-                            apoteker_user_id = coalesce($3, apoteker_user_id, $2), updated_at = $1
-                     where tenant_id = $4 and id = $5`,
+                            apoteker_user_id = coalesce($3, apoteker_user_id, $2), diterima_pasien = $4,
+                            nama_penerima = $5, updated_at = $1
+                     where tenant_id = $6 and id = $7`,
                     [
                         stamp,
                         this.workspace.userId,
                         pharmacistId,
+                        data.received_by_patient,
+                        receiverName,
                         this.scope.tenantId,
                         billId,
                     ],
