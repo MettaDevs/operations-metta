@@ -22,6 +22,7 @@ import { FlaskConical, Send } from 'lucide-react';
 import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
+import { Decimal } from '@core/platform/money/index.ts';
 import { api } from '@core/platform/shell/index.ts';
 import { DrugCard, type Drug } from '../../clinical/drug/drug-card.tsx';
 import {
@@ -40,14 +41,13 @@ import type {
 } from './medical-record-panels.tsx';
 
 // Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama (rekammedis/Services.php dan Eresep), dalam urutan
-// aslinya sesudah Prognosa, serta daftar alergi obat pasien di panel Riwayat penyakit dan alergi. Tarif tindakan dan stok
-// obat belum ada sampai kasir dan farmasi dibangun.
+// aslinya sesudah Prognosa, serta daftar alergi obat pasien di panel Riwayat penyakit dan alergi.
 
 type Draft = MedicalRecordDraft;
 type SetDraft = (update: (draft: Draft) => Draft) => void;
 type ProcedureRow = NonNullable<Draft['procedures']>[number];
 // Isian pilihan tindakan di baris: cukup yang ditampilkan lookup, jadi baris tersimpan bisa menjadi nilainya.
-type ProcedureChoice = Pick<Procedure, 'id' | 'code' | 'name' | 'group_name'>;
+type ProcedureChoice = Pick<Procedure, 'id' | 'code' | 'name'>;
 type Prescription = NonNullable<Draft['prescriptions']>[number];
 type PrescriptionLine = Prescription['lines'][number];
 type DrugAllergy = NonNullable<Draft['drug_allergies']>[number];
@@ -86,6 +86,21 @@ const timeOf = (stamp: string | null | undefined) => {
     const date = new Date(stamp);
     return `${date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
 };
+
+// Total kaki Biaya Tindakan: jumlah Tarif x Qty (calculate di Services.php). Baris yang belum bertarif atau Qty-nya belum
+// sah tidak ikut dijumlahkan.
+function procedureTotal(rows: ProcedureRow[]): string {
+    return rows
+        .reduce((total, row) => {
+            const quantity = Number(row.quantity);
+            return row.tariff !== null &&
+                Number.isSafeInteger(quantity) &&
+                quantity >= 1
+                ? total.plus(Decimal.of(row.tariff).times(quantity))
+                : total;
+        }, Decimal.of('0'))
+        .normalized();
+}
 
 function useDrugLoader(): LookupLoader<Drug> {
     return useCallback<LookupLoader<Drug>>(
@@ -327,6 +342,7 @@ function ProcedureLines({
     rows,
     setDraft,
     metadata,
+    destinationId,
     sectionId,
     errors,
     disabled,
@@ -334,6 +350,7 @@ function ProcedureLines({
     rows: ProcedureRow[];
     setDraft: SetDraft;
     metadata: MedicalRecordMetadata;
+    destinationId: string;
     sectionId: string;
     errors: Errors;
     disabled: boolean;
@@ -367,7 +384,25 @@ function ProcedureLines({
             procedure_id: procedure.id,
             procedure_code: procedure.code,
             procedure_name: procedure.name,
+            tariff: null,
         });
+        // Tarif datang dari server, sama dengan yang disimpan Simpan; layar tidak pernah menjadi sumbernya.
+        void api
+            .healthcareProcedureTariff({
+                params: { id: destinationId },
+                query: { procedure_id: procedure.id },
+            })
+            .then(({ body }) =>
+                setDraft((current) => ({
+                    ...current,
+                    procedures: (current.procedures ?? []).map((row) =>
+                        row.procedure_id === procedure.id
+                            ? { ...row, tariff: body.data.tariff }
+                            : row,
+                    ),
+                })),
+            )
+            .catch(() => undefined);
     };
     const loadProcedures = useCallback<LookupLoader<ProcedureChoice>>(
         async ({ query, cursor, signal }) => {
@@ -454,6 +489,12 @@ function ProcedureLines({
                         ),
                     }))
                 }
+                footer={
+                    <div className="flex justify-end gap-6 text-sm font-semibold">
+                        <span>Total</span>
+                        <span>{displayNumber(procedureTotal(rows))}</span>
+                    </div>
+                }
                 emptyMessage={
                     disabled
                         ? 'Belum ada tindakan.'
@@ -472,7 +513,6 @@ function ProcedureLines({
                                           id: row.procedure_id,
                                           code: row.procedure_code ?? '',
                                           name: row.procedure_name ?? '',
-                                          group_name: null,
                                       }
                                     : null;
                             return (
@@ -525,13 +565,6 @@ function ProcedureLines({
                                                 cell: (procedure) =>
                                                     procedure.name,
                                             },
-                                            {
-                                                id: 'group',
-                                                header: 'Kelompok',
-                                                width: 160,
-                                                cell: (procedure) =>
-                                                    procedure.group_name ?? '',
-                                            },
                                         ]}
                                         onCreate={
                                             canCreate
@@ -569,6 +602,19 @@ function ProcedureLines({
                                     }
                                 />
                             </FormControl>
+                        ),
+                    },
+                    {
+                        id: 'tariff',
+                        header: 'Tarif',
+                        align: 'right',
+                        minWidth: 120,
+                        cell: ({ row }) => (
+                            <DataTableText>
+                                {row.tariff === null
+                                    ? ''
+                                    : displayNumber(row.tariff)}
+                            </DataTableText>
                         ),
                     },
                     {
@@ -1287,6 +1333,7 @@ export function OrderPanels({
     draft,
     setDraft,
     metadata,
+    destinationId,
     sectionId,
     errors,
     disabled,
@@ -1295,6 +1342,8 @@ export function OrderPanels({
     draft: Draft;
     setDraft: SetDraft;
     metadata: MedicalRecordMetadata;
+    // Tujuan kunjungan yang diperiksa, sumber tarif tindakan.
+    destinationId: string;
     // Section pemeriksaan, penyaring pilihan tindakan.
     sectionId: string;
     errors: Errors;
@@ -1318,6 +1367,7 @@ export function OrderPanels({
                         rows={procedures}
                         setDraft={setDraft}
                         metadata={metadata}
+                        destinationId={destinationId}
                         sectionId={sectionId}
                         errors={errors}
                         disabled={disabled}
