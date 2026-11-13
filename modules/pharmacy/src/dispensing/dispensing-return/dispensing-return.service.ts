@@ -20,6 +20,7 @@ import {
     itemUnits,
     parseInput,
     postItemLines,
+    quantityHint,
     quantityScale,
     reverseItemEntries,
     toNumeric,
@@ -383,7 +384,7 @@ export class DispensingReturns {
                 const quantity = decimalInput(line.quantity);
                 if (quantity === null || quantity < 0n) {
                     errors[`${field}.quantity`] =
-                        'Isi jumlah 0 atau lebih, paling banyak empat angka di belakang koma.';
+                        `Isi jumlah 0 atau lebih, ${quantityHint}.`;
                     return [];
                 }
                 if (quantity === 0n) return [];

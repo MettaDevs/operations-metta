@@ -18,6 +18,7 @@ export {
     amountDecimalOptions,
     amountInput,
     decimalsHint,
+    exchangeRateDecimals,
     unitAmountDecimalOptions,
 } from './currency.rules.ts';
 export { currencyRoutes } from './currency.routes.ts';

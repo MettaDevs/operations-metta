@@ -1,7 +1,17 @@
 import { z } from 'zod';
 import type { Bind, Database } from '@core/platform/database/index.ts';
 import { dateSchema, lookupId } from '@core/platform/http/index.ts';
-import { Decimal } from '@core/platform/money/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    unitAmountDecimals,
+    unitAmountStorageDecimals,
+} from '@core/foundation/currency/index.ts';
+import {
+    Decimal,
+    decimalsHint,
+    percentScale,
+} from '@core/platform/money/index.ts';
 import {
     lookupProcedurePrice,
     type ChosenPrice,
@@ -123,33 +133,39 @@ const moneyLimit = Decimal.of('1000000000000000');
 const numberLimit = Decimal.of('100000');
 const zero = Decimal.of('0');
 
-// Teks desimal empat angka di belakang koma, atau null bila bukan angka atau di luar kolomnya. Kosong berarti 0, sama
-// dengan sistem lama yang menyimpan isian kosong sebagai 0.
+// Banyak angka di belakang koma per jenis isian: harga mengikuti presisi harga satuan mata uang tenant, sedangkan Qty dan
+// persen komponen memakai satu skala persen. Semua disimpan dengan skala kolomnya, numeric(19,4) dan numeric(9,4).
+type Scales = Record<PriceNumberKind, number>;
+const columnScale = unitAmountStorageDecimals;
+
+// Teks desimal berskala kolomnya, atau null bila bukan angka, lebih halus dari skalanya, atau di luar kolomnya. Kosong
+// berarti 0, sama dengan sistem lama yang menyimpan isian kosong sebagai 0.
 function decimal(
     raw: string | number | null | undefined,
     kind: PriceNumberKind,
+    scales: Scales,
 ): string | null {
     const text = raw === undefined || raw === null ? '' : String(raw).trim();
-    if (text === '') return zero.fixed(4);
+    if (text === '') return zero.fixed(columnScale);
     let value: Decimal;
     try {
         value = Decimal.of(text);
     } catch {
         return null;
     }
-    if (value.rounded(4).compare(value) !== 0) return null;
+    if (value.rounded(scales[kind]).compare(value) !== 0) return null;
     const outside =
         kind === 'money'
             ? value.compare(zero) < 0 || value.compare(moneyLimit) >= 0
             : value.compare(numberLimit) >= 0 ||
               value.compare(zero.minus(numberLimit)) <= 0;
-    return outside ? null : value.fixed(4);
+    return outside ? null : value.fixed(columnScale);
 }
 
-const invalidNumber = {
-    money: 'diisi angka 0 atau lebih, paling banyak empat angka di belakang koma.',
-    number: 'diisi angka, paling banyak empat angka di belakang koma.',
-} as const;
+const invalidNumber = (kind: PriceNumberKind, scales: Scales) =>
+    kind === 'money'
+        ? `diisi angka 0 atau lebih, ${decimalsHint(scales.money)}.`
+        : `diisi angka, ${decimalsHint(scales.number)}.`;
 
 // Baris harga hidup tindakan untuk pencarian tarif, urutan id uuidv7 (urutan dibuat), padanan ListHargaID.
 const candidatesSql = `
@@ -303,6 +319,12 @@ export class ProcedurePrices {
             ),
             operation_categories: await ordered('sim_m_kategori_operasi'),
             charge_components: await ordered('komponen_biaya'),
+            // Presisi harga satuan mata uang lokal, untuk Harga Baru yang dihitung form komponen.
+            price_decimals: unitAmountDecimals(
+                await new Currency(this.db, this.tenantId).precision(
+                    localCurrencyCode,
+                ),
+            ),
         };
     }
 
@@ -328,6 +350,14 @@ export class ProcedurePrices {
             procedurePriceInputSchema.safeParse(row),
         );
         const valid = parsed.flatMap((row) => (row.success ? [row.data] : []));
+        const scales: Scales = {
+            money: unitAmountDecimals(
+                await new Currency(this.db, this.tenantId).precision(
+                    localCurrencyCode,
+                ),
+            ),
+            number: percentScale,
+        };
         const known = new Map<PriceKey, Map<string, boolean>>();
         for (const key of priceKeyNames)
             known.set(
@@ -385,11 +415,11 @@ export class ProcedurePrices {
                     `${where}: pilih lokasi dari daftar.`;
             for (const name of keysOf(priceNumberFields)) {
                 const { column, kind, label } = priceNumberFields[name];
-                const value = decimal(data[name], kind);
+                const value = decimal(data[name], kind, scales);
                 values[column] = value;
                 if (value === null)
                     errors[field(name)] =
-                        `${where}: ${label} ${invalidNumber[kind]}`;
+                        `${where}: ${label} ${invalidNumber(kind, scales)}`;
             }
             const newPriceDate = data.new_price_date?.trim() ?? '';
             if (!dateSchema.safeParse(newPriceDate).success)
@@ -443,12 +473,12 @@ export class ProcedurePrices {
                     const value =
                         name === 'quantity' && blank
                             ? null
-                            : decimal(raw, kind);
+                            : decimal(raw, kind, scales);
                     componentValues[column] = value;
                     if (value === null)
                         errors[part(name)] = blank
                             ? `${at}: isi ${label}.`
-                            : `${at}: ${label} ${invalidNumber[kind]}`;
+                            : `${at}: ${label} ${invalidNumber(kind, scales)}`;
                 }
                 components.push(componentValues);
             });
@@ -465,7 +495,7 @@ export class ProcedurePrices {
                             ? sum.plus(Decimal.of(value))
                             : sum;
                     }, zero)
-                    .fixed(4);
+                    .fixed(columnScale);
             }
             checked.push({
                 id,

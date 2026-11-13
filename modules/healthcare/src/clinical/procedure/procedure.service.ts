@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+    amountInput,
+    Currency,
+    decimalsHint,
+    localCurrencyCode,
+} from '@core/foundation/currency/index.ts';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
     nowSql,
@@ -14,6 +20,7 @@ import {
     staleMessage,
     validation,
 } from '@core/platform/http/index.ts';
+import { percentHint, percentInput } from '@core/platform/money/index.ts';
 import {
     isProcedureFlag,
     isProcedureOptionCode,
@@ -40,8 +47,8 @@ const rowSql = `select * from (
                            t.kategori_id as category_id, c.nama as category_name,
                            t.kategori_plafon_id as benefit_limit_category_id, kp.nama as benefit_limit_category_name,
                            t.alat_penunjang_id as supporting_device_id, ap.nama as supporting_device_name,
-                           t.cost_rs_persen::text as hospital_cost_percent,
-                           t.cost_rs_rupiah::text as hospital_cost_amount,
+                           trim_scale(t.cost_rs_persen)::text as hospital_cost_percent,
+                           trim_scale(t.cost_rs_rupiah)::text as hospital_cost_amount,
                            t.kelompok_posting as posting_group, t.sumber_insentif as incentive_source,
                            t.poliklinik as polyclinic,
                            ${flagEntries.map(({ flag, column }) => `t.${column} as ${flag}`).join(', ')},
@@ -71,14 +78,10 @@ function codeTaken(error: unknown): void {
 }
 
 // Angka Cost RS dari layar sudah berupa teks desimal (12.5). Kosong berarti 0, seperti nilai bawaan kolomnya.
-function decimal(
-    raw: string | number | undefined,
-    limit: number,
-): string | null {
-    const text = raw === undefined ? '0' : String(raw).trim() || '0';
-    if (!/^\d+(\.\d{1,2})?$/.test(text) || Number(text) >= limit) return null;
-    return text;
-}
+const orZero = (raw: string | number | undefined) =>
+    raw === undefined || String(raw).trim() === '' ? '0' : raw;
+// Persen Cost RS boleh lebih dari 100, sampai batas kolom sistem lama.
+const hospitalCostPercentMax = '999.9999';
 
 type Saved = {
     group_id: string | null;
@@ -301,14 +304,23 @@ export class Procedures {
             ))
         )
             errors.supporting_device_id = 'Pilih dari daftar.';
-        const hospitalCostPercent = decimal(data?.hospital_cost_percent, 1000);
+        const hospitalCostPercent = percentInput(
+            orZero(data?.hospital_cost_percent),
+            hospitalCostPercentMax,
+        );
         if (hospitalCostPercent === null)
-            errors.hospital_cost_percent =
-                'Isi angka 0 atau lebih, paling banyak dua angka di belakang koma.';
-        const hospitalCostAmount = decimal(data?.hospital_cost_amount, 1e16);
+            errors.hospital_cost_percent = percentHint(hospitalCostPercentMax);
+        const amountDecimals = (
+            await new Currency(this.db, this.workspace.tenantId).precision(
+                localCurrencyCode,
+            )
+        ).amount_decimals;
+        const hospitalCostAmount = amountInput(
+            orZero(data?.hospital_cost_amount),
+            amountDecimals,
+        );
         if (hospitalCostAmount === null)
-            errors.hospital_cost_amount =
-                'Isi angka 0 atau lebih, paling banyak dua angka di belakang koma.';
+            errors.hospital_cost_amount = `Isi angka 0 atau lebih, ${decimalsHint(amountDecimals)}.`;
         const option = (name: ProcedureOption, fallback: string) => {
             const value = data?.[name] ?? fallback;
             if (!isProcedureOptionCode(name, value))

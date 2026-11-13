@@ -6,6 +6,10 @@ import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
+import {
+    displayAmount,
+    displayNumber,
+} from '@operations-metta/ui/display-number';
 import { Input } from '@operations-metta/ui/input';
 import {
     PageDialog,
@@ -26,6 +30,7 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import { Decimal } from '../../../platform/money/index.ts';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
 
 export type Receipt = ApiBody<'purchasingReceiptShow'>['data'];
@@ -72,7 +77,6 @@ const statusLabels: Record<Receipt['status'], string> = {
     diposting: 'Diposting',
     dibatalkan: 'Dibatalkan',
 };
-const money = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
 const label = (entry: { code: string; name: string }) =>
     `${entry.code} - ${entry.name}`;
 const today = () => new Date().toLocaleDateString('sv-SE');
@@ -117,15 +121,28 @@ function linesOf(receipt: Receipt | null): Line[] {
     }));
 }
 
-// Nilai baris untuk tampilan: jumlah x harga satuan x (100 - diskon) / 100. Server menyimpan dan menghitung ulang
-// dengan aritmetika desimal.
-function amountOf(line: Line): number {
-    const value =
-        (Number(line.quantity) *
-            Number(line.unit_cost) *
-            (100 - Number(line.discount_percent || 0))) /
-        100;
-    return Number.isFinite(value) ? value : 0;
+const hundred = Decimal.of('100');
+const hundredth = Decimal.of('0.01');
+const decimalOf = (text: string) => {
+    try {
+        return Decimal.of(text.trim() || '0');
+    } catch {
+        return null;
+    }
+};
+
+// Nilai baris untuk tampilan: jumlah x harga satuan x (100 - diskon) / 100, desimal tepat seperti hitungan server. Isian
+// yang belum berupa angka dihitung 0.
+function amountOf(line: Line): Decimal {
+    const quantity = decimalOf(line.quantity);
+    const cost = decimalOf(line.unit_cost);
+    const discount = decimalOf(line.discount_percent);
+    return quantity && cost && discount
+        ? quantity
+              .multipliedBy(cost)
+              .multipliedBy(hundred.minus(discount))
+              .multipliedBy(hundredth)
+        : Decimal.of('0');
 }
 
 function useLoader<T>(
@@ -294,12 +311,14 @@ function UnitLookup({
 export function ReceiptCard({
     receipt: initial,
     permissions,
+    amountDecimals,
     portalContainer,
     onSaved,
     onClose,
 }: {
     receipt: Receipt | null;
     permissions: ReceiptPermissions;
+    amountDecimals: number;
     portalContainer: RefObject<HTMLElement | null>;
     onSaved: (receipt: Receipt) => void;
     onClose: () => void;
@@ -347,7 +366,10 @@ export function ReceiptCard({
     const showExpiry = lines.some(
         (line) => line.item?.expiry_required || line.expiry_date,
     );
-    const total = lines.reduce((sum, line) => sum + amountOf(line), 0);
+    const total = lines.reduce(
+        (sum, line) => sum.plus(amountOf(line)),
+        Decimal.of('0'),
+    );
 
     const payload = () => ({
         vendor_id: header.vendor?.id ?? '',
@@ -854,7 +876,10 @@ export function ReceiptCard({
                             <p className="text-right text-sm">
                                 Total nilai{' '}
                                 <span className="font-semibold">
-                                    {money.format(total)}
+                                    {displayAmount(
+                                        total.normalized(),
+                                        amountDecimals,
+                                    )}
                                 </span>
                             </p>
                         }
@@ -992,9 +1017,7 @@ export function ReceiptCard({
                                             />
                                         </FormControl>
                                     ) : (
-                                        text(
-                                            money.format(Number(line.quantity)),
-                                        )
+                                        text(displayNumber(line.quantity))
                                     ),
                             },
                             {
@@ -1032,11 +1055,7 @@ export function ReceiptCard({
                                             />
                                         </FormControl>
                                     ) : (
-                                        text(
-                                            money.format(
-                                                Number(line.unit_cost),
-                                            ),
-                                        )
+                                        text(displayNumber(line.unit_cost))
                                     ),
                             },
                             {
@@ -1078,10 +1097,8 @@ export function ReceiptCard({
                                     ) : (
                                         text(
                                             Number(line.discount_percent)
-                                                ? money.format(
-                                                      Number(
-                                                          line.discount_percent,
-                                                      ),
+                                                ? displayNumber(
+                                                      line.discount_percent,
                                                   )
                                                 : '',
                                         )
@@ -1093,7 +1110,12 @@ export function ReceiptCard({
                                 minWidth: 130,
                                 align: 'right',
                                 cell: ({ line }) =>
-                                    text(money.format(amountOf(line))),
+                                    text(
+                                        displayAmount(
+                                            amountOf(line).normalized(),
+                                            amountDecimals,
+                                        ),
+                                    ),
                             },
                             ...(showBatch
                                 ? [

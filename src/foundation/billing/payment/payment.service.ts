@@ -19,6 +19,7 @@ import {
     amountInput,
     Currency,
     decimalsHint,
+    exchangeRateDecimals,
     localCurrencyCode,
     missingRateMessage,
     toLocalAmount,
@@ -41,8 +42,6 @@ const numberReference = 'core.payment-number';
 const remainderMessage = 'Masih terdapat Sisa pembayaran!!';
 const merchantMessage = 'Anda belum memilih Merchan Bank!';
 const partyMessage = 'Anda belum memilih Dokter/Karyawan Bon!';
-// Kurs disimpan dengan enam angka di belakang koma, sama dengan Sys Admin › Kurs.
-const rateDecimals = 6;
 export const chargeLockedMessage =
     'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.';
 
@@ -232,7 +231,7 @@ export class Payments {
                             ? String(line.rate).trim()
                             : '';
                     const rateText = typedRate
-                        ? amountInput(typedRate, rateDecimals)
+                        ? amountInput(typedRate, exchangeRateDecimals)
                         : (defaultRate?.normalized() ?? null);
                     const rate =
                         rateText === null ? null : Decimal.of(rateText);
@@ -241,7 +240,7 @@ export class Payments {
                         (rate === null || rate.compare(Decimal.of('0')) <= 0)
                     )
                         errors[`${field}.rate`] =
-                            `Isi kurs lebih dari 0, paling banyak ${rateDecimals} angka di belakang koma.`;
+                            `Isi kurs lebih dari 0, ${decimalsHint(exchangeRateDecimals)}.`;
                     else if (
                         rate &&
                         defaultRate &&

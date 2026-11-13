@@ -294,7 +294,7 @@ export class StockCounts {
                     json_build_object('id', u.id, 'code', u.kode, 'name', u.nama) as unit,
                     trim_scale(d.konversi)::text as quantity_per_unit,
                     trim_scale(d.jumlah_tercatat)::text as quantity_expected,
-                    trim_scale(round(d.jumlah_dihitung / d.konversi, 4))::text as quantity_counted,
+                    trim_scale(round(d.jumlah_dihitung / d.konversi, ${quantityScale}))::text as quantity_counted,
                     trim_scale(d.jumlah_dihitung)::text as quantity_counted_base,
                     trim_scale(d.jumlah_tercatat_posting)::text as quantity_expected_at_posting,
                     d.bergerak_setelah_mulai as moved_after_count_started, d.keterangan as description

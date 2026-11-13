@@ -13,16 +13,22 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
-    decimalInput,
     fromNumeric,
     parseInput,
     quantityScale,
     toNumeric,
+    unitCostInput,
 } from '@core/foundation/inventory/index.ts';
 import {
     Currency,
     localCurrencyCode,
+    unitAmountDecimals,
 } from '@core/foundation/currency/index.ts';
+import {
+    decimalsHint,
+    percentInput,
+    percentScale,
+} from '@core/platform/money/index.ts';
 import {
     drugPrice,
     type DrugPrice,
@@ -35,8 +41,10 @@ import {
 
 type Scope = { tenantId: string; legalEntityId: string };
 
-const percentLimit = 1000n * 10n ** BigInt(quantityScale);
-const hundredPercent = 100n * 10n ** BigInt(quantityScale);
+// % naik boleh sampai di bawah 1000, batas kolom numeric(7,4).
+const markupMax = '999.9999';
+const percentValue = (text: string | null) =>
+    text === null ? null : fromNumeric(text, quantityScale);
 
 const rowSql = `select * from (
                     select h.id, json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) as price_group,
@@ -143,10 +151,9 @@ export async function priceDrugLines<
                   ),
                   effectiveFrom: row.effective_from,
               }));
-    const { unit_amount_decimals: unitPriceDecimals } = await new Currency(
-        db,
-        scope.tenantId,
-    ).precision(localCurrencyCode);
+    const unitPriceDecimals = unitAmountDecimals(
+        await new Currency(db, scope.tenantId).precision(localCurrencyCode),
+    );
     return lines.map((line) => {
         const item = items.get(line.itemId);
         if (!item) throw new Error(`Item ${line.itemId} was not found.`);
@@ -294,16 +301,20 @@ export class DrugPrices {
             )
         )
             errors.grading_group_id = messages.grading_group_id;
+        // Rentang harga dasar memakai presisi harga satuan, sama dengan harga dasar barang.
+        const priceDecimals = unitAmountDecimals(
+            await new Currency(this.db, scope.tenantId).precision(
+                localCurrencyCode,
+            ),
+        );
         const amountOf = (
             field: 'price_from' | 'price_to',
             raw: string | number,
         ) => {
-            const value = decimalInput(raw);
-            if (value === null || value < 0n) {
+            const value = unitCostInput(raw, priceDecimals);
+            if (value === null)
                 errors[field] =
-                    `${messages[field]} Paling banyak empat angka di belakang koma.`;
-                return null;
-            }
+                    `${messages[field]} ${decimalsHint(priceDecimals).replace(/^./, (first) => first.toUpperCase())}.`;
             return value;
         };
         const priceFrom = amountOf('price_from', data.price_from);
@@ -311,14 +322,14 @@ export class DrugPrices {
         if (priceFrom !== null && priceTo !== null && priceFrom > priceTo)
             errors.price_to =
                 'Harga dasar sampai tidak boleh lebih kecil dari harga dasar dari.';
-        const markup = decimalInput(data.markup_percent);
-        if (markup === null || markup < 0n || markup >= percentLimit)
-            errors.markup_percent =
-                'Isi % naik 0 sampai 999,9999, paling banyak empat angka di belakang koma.';
-        const discount = decimalInput(data.discount_percent ?? 0);
-        if (discount === null || discount < 0n || discount > hundredPercent)
-            errors.discount_percent =
-                'Isi % diskon 0 sampai 100, paling banyak empat angka di belakang koma.';
+        const markup = percentValue(
+            percentInput(data.markup_percent, markupMax),
+        );
+        if (markup === null)
+            errors.markup_percent = `Isi % naik 0 sampai 999,9999, ${decimalsHint(percentScale)}.`;
+        const discount = percentValue(percentInput(data.discount_percent ?? 0));
+        if (discount === null)
+            errors.discount_percent = `Isi % diskon 0 sampai 100, ${decimalsHint(percentScale)}.`;
         const effectiveFrom = dateSchema.safeParse(data.effective_from);
         if (!effectiveFrom.success)
             errors.effective_from = messages.effective_from;

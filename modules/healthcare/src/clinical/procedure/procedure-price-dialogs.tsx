@@ -517,6 +517,7 @@ export function ComponentDialog({
                     parsed(next.incentive_percent) ?? '0',
                     parsed(next.tax_deposit_percent) ?? '0',
                     next.includes_incentive,
+                    metadata?.price_decimals ?? 0,
                 ),
             ).normalized(),
         ),

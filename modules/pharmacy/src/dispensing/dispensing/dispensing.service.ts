@@ -20,6 +20,7 @@ import {
     openStock,
     parseInput,
     postItemLines,
+    quantityHint,
     quantityScale,
     reverseItemEntries,
     toNumeric,
@@ -51,8 +52,7 @@ import {
 export const dispensingSource = 'bill_farmasi';
 export const dispensingNumberReference = 'pharmacy.dispensing-number';
 
-export const inexactBaseMessage =
-    'Jumlah ini dalam satuan dasar lebih dari empat angka di belakang koma. Ganti satuan atau jumlahnya.';
+export const inexactBaseMessage = `Jumlah ini dalam satuan dasar harus ${quantityHint}. Ganti satuan atau jumlahnya.`;
 
 // Nilai baris penyerahan = jumlah x harga satuan x (100 - % diskon) / 100, dibulatkan ke sen seperti nilai baris
 // penerimaan. Kosong selama baris belum berharga (draf).
@@ -419,7 +419,7 @@ export class Dispensings {
                 quantity !== null && unit ? exactBase(quantity, unit) : null;
             if (quantity === null || quantity < 0n)
                 errors[`${field}.quantity`] =
-                    'Isi jumlah 0 atau lebih, paling banyak empat angka di belakang koma.';
+                    `Isi jumlah 0 atau lebih, ${quantityHint}.`;
             else if (
                 unit &&
                 baseQuantity(quantity, unit.quantityPerUnit) === null
