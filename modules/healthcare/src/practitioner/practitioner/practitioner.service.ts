@@ -310,9 +310,33 @@ export class Practitioners {
             });
         } catch (error) {
             taken(error);
+            await this.accountTaken(error, columns.user_id);
             throw error;
         }
         return { status: 201, headers: {}, body: { data: await this.row(id) } };
+    }
+
+    // Satu akun hanya tertaut ke satu nakes aktif (sim_m_nakes_user_aktif_unique, 0050), supaya nakes pelaku yang dicatat
+    // dari akun itu selalu pasti. Pesannya menyebut nakes yang sudah memakai akun itu.
+    private async accountTaken(
+        error: unknown,
+        userId: string | null,
+    ): Promise<void> {
+        if (
+            !userId ||
+            sqlErrorCode(error) !== '23505' ||
+            !(error instanceof Error) ||
+            !error.message.includes('sim_m_nakes_user_aktif_unique')
+        )
+            return;
+        const holder = await this.db.one(
+            z.object({ name: z.string() }),
+            `${rowSql} and n.user_id = $2 and n.aktif`,
+            [this.workspace.tenantId, userId],
+        );
+        validation({
+            user_id: `Akun ini sudah dipakai ${holder?.name ?? 'tenaga kesehatan aktif lain'}. Satu akun hanya untuk satu tenaga kesehatan aktif; nonaktifkan atau lepas akun dari tenaga kesehatan itu lebih dulu.`,
+        });
     }
 
     private async existingPerson(partyId: string): Promise<string> {
@@ -381,19 +405,24 @@ export class Practitioners {
             current.profession_id,
         );
         const names = Object.keys(columns);
-        const updated = await this.db.execute(
-            `update sim_m_nakes set ${names.map((column, index) => `${column} = $${index + 1}`).join(', ')},
+        const updated = await this.db
+            .execute(
+                `update sim_m_nakes set ${names.map((column, index) => `${column} = $${index + 1}`).join(', ')},
                     updated_at = $${names.length + 1}
              where tenant_id = $${names.length + 2} and id = $${names.length + 3} and version = $${names.length + 4}
                and deleted_at is null`,
-            [
-                ...Object.values(columns),
-                nowSql(),
-                this.workspace.tenantId,
-                current.id,
-                expectedVersion(request, body),
-            ],
-        );
+                [
+                    ...Object.values(columns),
+                    nowSql(),
+                    this.workspace.tenantId,
+                    current.id,
+                    expectedVersion(request, body),
+                ],
+            )
+            .catch(async (error: unknown) => {
+                await this.accountTaken(error, columns.user_id);
+                throw error;
+            });
         if (!updated) coded(409, 'stale_version', staleMessage);
         return { status: 200, headers: {}, body: { data: await this.row(id) } };
     }

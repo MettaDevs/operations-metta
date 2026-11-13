@@ -246,6 +246,76 @@ describe.skipIf(!process.env.DB_HOST)('practitioner master', () => {
         expect(count?.count).toBe(0);
     }, 30_000);
 
+    test('a login account belongs to at most one active practitioner', async () => {
+        const account = await createMember(pool, tenantId);
+        const taken = [
+            'Akun ini sudah dipakai Dokter Pemilik Akun. Satu akun hanya untuk satu tenaga kesehatan aktif; nonaktifkan atau lepas akun dari tenaga kesehatan itu lebih dulu.',
+        ];
+        const holder = await created({
+            name: 'Dokter Pemilik Akun',
+            profession_id: professions.dokter,
+            user_id: account.userId,
+        });
+        expect(
+            await errors(
+                await admin.post(api, {
+                    name: 'Dokter Kedua',
+                    profession_id: professions.dokter,
+                    user_id: account.userId,
+                }),
+            ),
+        ).toEqual({ user_id: taken });
+
+        // Nakes nonaktif boleh memegang akun yang sama, tetapi tidak bisa diaktifkan selama yang lain aktif.
+        const second = await created({
+            name: 'Dokter Kedua',
+            profession_id: professions.dokter,
+            user_id: account.userId,
+            is_active: false,
+        });
+        expect(
+            await errors(
+                await admin.patch(`${api}/${second.id}`, {
+                    profession_id: professions.dokter,
+                    user_id: account.userId,
+                    is_active: true,
+                    version: second.version,
+                }),
+            ),
+        ).toEqual({ user_id: taken });
+
+        const released = (
+            await json<{ data: Practitioner }>(
+                await admin.patch(`${api}/${holder.id}`, {
+                    profession_id: professions.dokter,
+                    user_id: account.userId,
+                    is_active: false,
+                    version: holder.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(released.is_active).toBe(false);
+        expect(
+            (
+                await json<{ data: Practitioner }>(
+                    await admin.patch(`${api}/${second.id}`, {
+                        profession_id: professions.dokter,
+                        user_id: account.userId,
+                        is_active: true,
+                        version: second.version,
+                    }),
+                    200,
+                )
+            ).data,
+        ).toEqual(
+            expect.objectContaining({
+                user_id: account.userId,
+                is_active: true,
+            }),
+        );
+    }, 30_000);
+
     test('specialty and subspecialty come from the specialty master, and a subspecialty must belong to the specialty', async () => {
         const specialty = async (name: string, line: string) =>
             (
