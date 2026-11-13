@@ -196,6 +196,28 @@ export class Workspace {
         return new Set(permissionRows.map((row) => row.code));
     }
 
+    // Permission yang dipegang pengguna lain lewat keanggotaan aktifnya di tenant ini, di antara kode yang disebut,
+    // misalnya penyetuju yang mengetik akunnya di layar kasir. Kosong bila ia bukan anggota aktif tenant ini.
+    static async memberHolds(
+        db: Database,
+        scope: { tenantId: string; userId: string },
+        codes: string[],
+    ): Promise<Set<string>> {
+        const membership = await db.one(
+            membershipSchema,
+            "select m.id,m.tenant_id from tenant_memberships m where m.user_id=$1 and m.tenant_id=$2 and m.status='active' limit 1",
+            [scope.userId, scope.tenantId],
+        );
+        const unique = [...new Set(codes)];
+        if (!membership || !unique.length) return new Set();
+        return Workspace.permissionsWhere(
+            db,
+            membership,
+            `p.code in (${unique.map((_, index) => `$${index + 1}`).join(',')})`,
+            unique,
+        );
+    }
+
     // Permission yang dipegang anggota ini di antara kode yang disebut, dari app mana pun. Fitur Core yang dijaga
     // izin milik module, misalnya party berperan pasien, memakainya.
     async holds(db: Database, codes: string[]): Promise<Set<string>> {

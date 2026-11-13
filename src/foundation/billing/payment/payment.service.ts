@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Workspace } from '../../../platform/access/index.ts';
+import { Workspace } from '../../../platform/access/index.ts';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import { publishEvent } from '../../../platform/events/index.ts';
 import {
@@ -10,7 +10,9 @@ import {
 import {
     abort,
     coded,
+    expectedVersion,
     lookupId,
+    staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
@@ -26,10 +28,33 @@ import {
 } from '../../currency/index.ts';
 import { openClerk } from '../clerk/clerk.service.ts';
 import { invoiceTotals } from '../invoice/invoice.totals.ts';
-import { paymentInputSchema } from './payment.schema.ts';
+import {
+    paymentCancelInputSchema,
+    paymentInputSchema,
+} from './payment.schema.ts';
 import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 
 export const invoicePosted = 'billing.invoice.posted.v1' as const;
+export const invoiceCancelled = 'billing.invoice.cancelled.v1' as const;
+
+// Batal pembayaran. Pesan persetujuan dari sistem lama (General_payment::cancel). Pembayaran di clerk yang sudah Clerk
+// End dikoreksi lewat nota kredit, bukan dibatalkan; pesan lamanya ("Pasien Sudah Di Proses Closing") diganti kalimat
+// sehari-hari.
+const cancelPermission = 'core.payment.cancel';
+export const approvalMessage = 'Username atau Password Salah';
+export const closedClerkMessage =
+    'Pembayaran ini masuk clerk yang sudah Clerk End, jadi tidak bisa dibatalkan lagi.';
+const alreadyCancelledMessage = 'Pembayaran ini sudah dibatalkan.';
+const cancelledPaymentSchema = z.object({
+    id: z.string(),
+    status: z.string(),
+    clerk_status: z.string(),
+});
+
+// Penyetuju batal pembayaran: email dan kata sandinya diperiksa sesi, hasilnya id pengguna atau null.
+export type ApproverCheck = {
+    verify: (email: string, password: string) => Promise<string | null>;
+};
 
 // Kunjungan yang dibuka kembali poli (rujuk internal sesudah Selesai periksa) belum siap dibayar.
 export const reopenedMessage =
@@ -484,6 +509,141 @@ export class Payments {
                 data: { id, number: posted },
                 message: 'Item data baru berhasil dibuat!',
             },
+        };
+    }
+
+    // Batal pembayaran (General_payment::cancel Kuta 1): kunci lebih dulu, lalu persetujuan, lalu satu transaksi yang
+    // mengisi TglBatal, BATAL, dan AlasanBatal, membuka lagi baris biaya kunjungan, dan memberi tahu finance. Baris
+    // jenis bayar tidak diubah, jadi kurs dan jumlah valutanya tetap seperti saat dibayar.
+    async cancel(
+        request: Request,
+        paymentId: string,
+        body: unknown,
+        approver: ApproverCheck,
+    ) {
+        this.workspace.guard('payment', 'update');
+        const scope = this.scope;
+        const parsed = paymentCancelInputSchema.safeParse(body);
+        if (!parsed.success)
+            validation({ _form: 'Isian batal pembayaran tidak sah.' });
+        const version = expectedVersion(request, body);
+        const payment = lookupId(paymentId)
+            ? await this.db.one(
+                  cancelledPaymentSchema,
+                  `select k.id, k.status, c.status as clerk_status
+                   from kasir k join clerk c on c.tenant_id = k.tenant_id and c.id = k.clerk_id
+                   where k.tenant_id = $1 and k.legal_entity_id = $2 and k.id = $3`,
+                  [scope.tenantId, scope.legalEntityId, paymentId],
+              )
+            : undefined;
+        if (!payment) abort(404, 'Not Found');
+        if (payment.status !== 'diposting')
+            coded(409, 'payment_cancelled', alreadyCancelledMessage);
+        if (payment.clerk_status !== 'start')
+            validation({ _form: closedClerkMessage });
+        const input = parsed.data;
+        const reason = input.reason?.trim() ?? '';
+        const email = input.approver_email?.trim() ?? '';
+        const password = input.approver_password ?? '';
+        const errors: Record<string, string> = {};
+        if (!email) errors.approver_email = 'Isi username penyetuju.';
+        if (!password) errors.approver_password = 'Isi password penyetuju.';
+        if (!reason) errors.reason = 'Isi alasan batal.';
+        else if (reason.length > 200)
+            errors.reason = 'Alasan batal paling banyak 200 karakter.';
+        if (Object.keys(errors).length) validation(errors);
+        const approverId = await approver.verify(email, password);
+        if (
+            !approverId ||
+            !(
+                await Workspace.memberHolds(
+                    this.db,
+                    { tenantId: scope.tenantId, userId: approverId },
+                    [cancelPermission],
+                )
+            ).has(cancelPermission)
+        )
+            validation({ approver_password: approvalMessage });
+        await this.db.transaction(async () => {
+            const stamp = nowSql();
+            const header = await this.db.one(
+                z.object({
+                    clerk_status: z.string(),
+                    visit_id: z.string(),
+                    number: z.string(),
+                    date: z.string(),
+                    value: z.string(),
+                    registration_number: z.string(),
+                }),
+                `select c.status as clerk_status, k.kunjungan_id as visit_id, k.no_bukti as number,
+                        k.tanggal::text as date, trim_scale(k.nilai)::text as value, v.no_reg as registration_number
+                 from kasir k
+                 join clerk c on c.tenant_id = k.tenant_id and c.id = k.clerk_id
+                 join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                                       and v.kunjungan_id = k.kunjungan_id
+                 where k.tenant_id = $1 and k.id = $2
+                 for share of c`,
+                [scope.tenantId, payment.id],
+            );
+            if (!header) abort(404, 'Not Found');
+            if (header.clerk_status !== 'start')
+                validation({ _form: closedClerkMessage });
+            await lockVisit(this.db, scope.tenantId, header.visit_id);
+            const cancelled = await this.db.execute(
+                `update kasir set status = 'batal', tgl_batal = $1, alasan_batal = $2, dibatalkan_oleh_user_id = $3,
+                                  penyetuju_batal_user_id = $4, updated_at = $1
+                 where tenant_id = $5 and id = $6 and status = 'diposting' and version = $7`,
+                [
+                    stamp,
+                    reason,
+                    scope.userId,
+                    approverId,
+                    scope.tenantId,
+                    payment.id,
+                    version,
+                ],
+            );
+            if (!cancelled) coded(409, 'stale_version', staleMessage);
+            await this.db.execute(
+                `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
+                 where tenant_id = $2 and kasir_id = $3`,
+                [stamp, scope.tenantId, payment.id],
+            );
+            const lines = await this.db.rows(
+                z.object({
+                    payment_method_id: z.string(),
+                    amount: z.string(),
+                    currency_code: z.string(),
+                    currency_amount: z.string(),
+                    exchange_rate: z.string(),
+                }),
+                `select jenis_bayar_id as payment_method_id, trim_scale(nilai)::text as amount,
+                        mata_uang as currency_code, trim_scale(nilai_valuta)::text as currency_amount,
+                        trim_scale(kurs)::text as exchange_rate
+                 from kasir_detail where tenant_id = $1 and kasir_id = $2 order by id`,
+                [scope.tenantId, payment.id],
+            );
+            await publishEvent(this.db, {
+                type: invoiceCancelled,
+                tenantId: scope.tenantId,
+                legalEntityId: scope.legalEntityId,
+                data: {
+                    payment_id: payment.id,
+                    payment_number: header.number,
+                    source_module: source,
+                    visit_id: header.visit_id,
+                    registration_number: header.registration_number,
+                    date: header.date,
+                    value: header.value,
+                    cancelled_at: `${stamp.replace(' ', 'T')}Z`,
+                    reason,
+                    payments: lines,
+                },
+            });
+        });
+        return {
+            data: { id: payment.id },
+            message: 'Item data baru berhasil dibatalkan!',
         };
     }
 }

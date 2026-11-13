@@ -2781,6 +2781,18 @@
             }
         }
     },
+    "billingPaymentCancel": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/billing/payments/{id}/cancel",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "currencyList": {
         "~orpc": {
             "errorMap": {},

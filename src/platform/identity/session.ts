@@ -301,11 +301,7 @@ export class Session {
         }
         const credentials = result.data;
         const email = credentials.email.toLowerCase();
-        const throttleKey =
-            email.normalize('NFKD').replace(/\p{M}/gu, '') + '|' + this.ip();
-        const routeKey = createHash('md5')
-            .update('login' + throttleKey)
-            .digest('hex');
+        const { throttleKey, routeKey } = this.loginKeys(email);
         const limiter = new RateLimiter(this.db, this.config.CACHE_PREFIX);
         if (await limiter.tooManyAttempts(routeKey)) {
             const seconds = await limiter.availableIn(routeKey);
@@ -417,6 +413,48 @@ export class Session {
     }
 
     // Kata sandi pengguna yang sedang masuk diketik ulang, misalnya sebelum menautkan akun SSO.
+    // Kunci penghitung percobaan masuk satu email dari alamat ini, sama dengan Fortify.
+    private loginKeys(email: string) {
+        const throttleKey =
+            email.normalize('NFKD').replace(/\p{M}/gu, '') + '|' + this.ip();
+        return {
+            throttleKey,
+            routeKey: createHash('md5')
+                .update('login' + throttleKey)
+                .digest('hex'),
+        };
+    }
+
+    // Penyetuju yang mengetik email dan kata sandinya di layar pengguna lain, misalnya batal pembayaran kasir (ListApprove
+    // sistem lama). Percobaannya dihitung bersama percobaan masuk email itu dari alamat yang sama, supaya kata sandi
+    // tidak bisa ditebak lewat jalur ini. Id penggunanya, atau null bila email atau kata sandinya salah.
+    async verifyApprover(
+        email: string,
+        password: string,
+    ): Promise<string | null> {
+        const normalized = email.trim().toLowerCase();
+        const { routeKey } = this.loginKeys(normalized);
+        const limiter = new RateLimiter(this.db, this.config.CACHE_PREFIX);
+        if (await limiter.tooManyAttempts(routeKey))
+            validation({
+                approver_email: `Terlalu banyak percobaan. Coba lagi dalam ${await limiter.availableIn(routeKey)} detik.`,
+            });
+        const user = await this.db.one(
+            userSchema,
+            `select ${userColumns} from users where email=$1 and account_type='person' limit 1`,
+            [normalized],
+        );
+        if (
+            user?.password != null &&
+            (await Bun.password.verify(password, user.password))
+        ) {
+            await limiter.clear(routeKey);
+            return user.id;
+        }
+        await limiter.hit(routeKey);
+        return null;
+    }
+
     async confirmPassword(password: string): Promise<boolean> {
         const user = this.requireUser();
         return (

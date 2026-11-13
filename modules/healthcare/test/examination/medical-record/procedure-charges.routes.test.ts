@@ -15,6 +15,7 @@ import {
     eventContract,
     outboxEnvelopes,
 } from '../../../../../test/support/event-contracts.ts';
+import { createMember } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Entry = { id: string; version: number };
 type Line = {
@@ -734,15 +735,33 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         }
         expect(await sent()).toBe(sentBefore);
 
-        // Pengganti API batal pembayaran kasir (irisan 6) sampai API itu ada; lane kasir menggantinya dengan panggilan API.
-        await pool.unsafe(
-            "update kasir set status = 'batal' where tenant_id = $1 and kunjungan_id = $2",
+        // Batal pembayaran kasir, disetujui pengguna yang berhak, membuka lagi baris biaya kunjungan.
+        const approver = await createMember(pool, clinic.tenantId, [
+            'core.payment-cancel.approve',
+        ]);
+        const [payment] = await pool.unsafe<{ id: string; version: number }[]>(
+            "select id, version from kasir where tenant_id = $1 and kunjungan_id = $2 and status = 'diposting'",
             [clinic.tenantId, visitId],
+        );
+        await json(
+            await cashier.post(
+                `/api/v1/billing/payments/${payment?.id}/cancel`,
+                {
+                    approver_email: approver.email,
+                    approver_password: approver.password,
+                    reason: 'Tindakan diubah sesudah bayar',
+                    version: payment?.version,
+                },
+            ),
+            200,
         );
         const after = await saved(id, [line(procedures.injection, 3)]);
         expect(after.data.procedures).toMatchObject([
             { procedure_id: procedures.injection, quantity: 3 },
         ]);
         expect(await sent()).toBe(sentBefore + 1);
+        expect(await cashierLines(visitId)).toEqual([
+            { kode: 'J-INJ', qty: '3', nilai: '50000', status: 'terbuka' },
+        ]);
     });
 });

@@ -212,6 +212,8 @@ export class Invoices {
         );
         const payment = await this.db.one(
             z.object({
+                id: z.string(),
+                version: z.number(),
                 number: z.string(),
                 received: z.string(),
                 change: z.string(),
@@ -229,7 +231,7 @@ export class Invoices {
             // Tunai mata uang lokal tersimpan bersih (uang diterima dikurangi kembalian), dan negatif bila kembalian tunai
             // valuta melebihi uang yang diterima. Layar menampilkannya seperti saat kasir mengisi: uang diterima di bawah
             // label jenis bayar tunai, lalu Kembalian, jadi barisnya tidak ikut daftar jenis bayar lain.
-            `select k.no_bukti as number, trim_scale(k.jumlah_bayar)::text as received,
+            `select k.id, k.version, k.no_bukti as number, trim_scale(k.jumlah_bayar)::text as received,
                     trim_scale(k.nilai_kembalian)::text as change,
                     coalesce((select coalesce(j.label_kasir, j.nama)
                               from kasir_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id

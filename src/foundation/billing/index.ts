@@ -21,7 +21,9 @@ import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
 // menyimpan, sehingga kasir yang belum Clerk Start ditolak dengan pesan sistem lama.
 export { clerkNotStartedMessage, openClerk } from './clerk/clerk.service.ts';
 export {
+    approvalMessage,
     chargeLockedMessage,
+    closedClerkMessage,
     lockChargeForChange,
 } from './payment/payment.service.ts';
 

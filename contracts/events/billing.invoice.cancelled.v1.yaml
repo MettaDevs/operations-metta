@@ -1,0 +1,152 @@
+asyncapi: 3.0.0
+info:
+    title: billing.invoice.cancelled.v1
+    version: 1.0.0
+    description: |
+        Pembayaran kasir dibatalkan: SIMtrKasir sistem lama dengan TglBatal, BATAL = 1, dan AlasanBatal, sesudah penyetuju
+        yang berhak mengetik akunnya. Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di
+        transaksi batal yang sama, sesudah baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).
+
+        Isinya sama dengan `billing.invoice.posted.v1` untuk pembayaran itu, ditambah waktu dan alasan batal. Baris jenis bayar
+        tidak diubah oleh pembatalan, jadi jumlah valuta dan kurs di sini sama persis dengan yang diterbitkan saat bayar, dan
+        penerima membalik posting dengan angka yang sama.
+
+        Keadaan sebenarnya, 14 November 2026: hanya diantar di dalam runtime dan belum ada penerima. Layanan kesehatan tidak
+        perlu menerimanya, karena kunci perubahan biaya (`lockChargeForChange`) membaca status pembayaran kasir langsung.
+        Finance menerimanya kelak untuk membalik posting `billing.invoice.posted.v1`.
+channels:
+    billing.invoice.cancelled.v1:
+        address: billing.invoice.cancelled.v1
+        messages:
+            invoiceCancelled:
+                $ref: '#/components/messages/invoiceCancelled'
+operations:
+    publishInvoiceCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/billing.invoice.cancelled.v1'
+        messages:
+            - $ref: '#/channels/billing.invoice.cancelled.v1/messages/invoiceCancelled'
+components:
+    messages:
+        invoiceCancelled:
+            name: invoiceCancelled
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/envelope'
+    schemas:
+        envelope:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    type,
+                    occurred_at,
+                    tenant_id,
+                    legal_entity_id,
+                    correlation_id,
+                    data,
+                ]
+            properties:
+                id:
+                    type: string
+                    format: uuid
+                    description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+                type:
+                    const: billing.invoice.cancelled.v1
+                occurred_at:
+                    type: string
+                    format: date-time
+                tenant_id:
+                    type: string
+                    format: uuid
+                legal_entity_id:
+                    type: string
+                    format: uuid
+                    description: Legal entity kasir.
+                org_unit_id:
+                    type: ['null', string]
+                    format: uuid
+                correlation_id:
+                    type: string
+                    format: uuid
+                data:
+                    $ref: '#/components/schemas/invoice'
+        invoice:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    payment_id,
+                    payment_number,
+                    source_module,
+                    visit_id,
+                    registration_number,
+                    date,
+                    value,
+                    cancelled_at,
+                    reason,
+                    payments,
+                ]
+            properties:
+                payment_id:
+                    type: string
+                    format: uuid
+                payment_number:
+                    type: string
+                    description: Nomor bukti dari number sequence kasir legal entity itu.
+                source_module:
+                    type: string
+                    description: Module pemilik kunjungan, misalnya `healthcare`.
+                visit_id:
+                    type: string
+                    format: uuid
+                registration_number:
+                    type: string
+                date:
+                    type: string
+                    format: date
+                value:
+                    type: string
+                    description: Nilai tagihan dalam mata uang lokal tenant, teks desimal.
+                cancelled_at:
+                    type: string
+                    format: date-time
+                    description: Waktu batal (TglBatal sistem lama), UTC.
+                reason:
+                    type: string
+                    description: Alasan batal yang diisi kasir (AlasanBatal sistem lama).
+                payments:
+                    type: array
+                    description: |
+                        Nilai per jenis bayar pembayaran yang dibatalkan, persis seperti saat dibayar, tanpa yang nol. Jenis bayar bermata uang asing membawa jumlah valuta dan
+                        kurs yang dipakai, supaya finance kelak bisa memposting selisih kurs. Tunai lokal bisa negatif bila
+                        kembaliannya untuk tunai valuta.
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required:
+                            [
+                                payment_method_id,
+                                amount,
+                                currency_code,
+                                currency_amount,
+                                exchange_rate,
+                            ]
+                        properties:
+                            payment_method_id:
+                                type: string
+                                format: uuid
+                            amount:
+                                type: string
+                                description: Jumlah dalam mata uang lokal tenant, teks desimal.
+                            currency_code:
+                                type: string
+                                description: Kode ISO mata uang jenis bayar; mata uang lokal untuk jenis bayar tanpa mata uang asing.
+                            currency_amount:
+                                type: string
+                                description: Jumlah dalam mata uang itu, teks desimal.
+                            exchange_rate:
+                                type: string
+                                description: Nilai satu satuan mata uang itu dalam mata uang lokal; 1 untuk mata uang lokal.
