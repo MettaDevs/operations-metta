@@ -108,6 +108,7 @@ export function ProcedureCard({
         code: procedure?.code ?? '',
         name: procedure?.name ?? '',
         international_name: procedure?.international_name ?? '',
+        icd9cm_code: procedure?.icd9cm_code ?? '',
         group_id: procedure?.group_id ?? null,
         category_id: procedure?.category_id ?? null,
         benefit_limit_category_id: procedure?.benefit_limit_category_id ?? null,
@@ -372,6 +373,24 @@ export function ProcedureCard({
                                                 ...form,
                                                 international_name:
                                                     event.target.value,
+                                            })
+                                        }
+                                    />
+                                </FormControl>
+                                <FormControl
+                                    error={errors.icd9cm_code?.[0]}
+                                    hint="Kode prosedur ICD-9-CM untuk SATUSEHAT, misalnya 89.7 atau 96.04. Boleh kosong bila jasa ini bukan prosedur klinis."
+                                >
+                                    <Input
+                                        label="Kode ICD-9-CM"
+                                        maxLength={10}
+                                        data-error-field="icd9cm_code"
+                                        value={form.icd9cm_code}
+                                        readOnly={!editing}
+                                        onChange={(event) =>
+                                            setForm({
+                                                ...form,
+                                                icd9cm_code: event.target.value,
                                             })
                                         }
                                     />

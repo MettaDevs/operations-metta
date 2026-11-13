@@ -18,6 +18,7 @@ type Procedure = {
     id: string;
     code: string;
     international_name: string | null;
+    icd9cm_code: string | null;
     category_id: string | null;
     category_name: string | null;
     benefit_limit_category_id: string | null;
@@ -140,6 +141,51 @@ describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
             [procedure.id],
         );
         expect(row).toEqual({ cyto: true, dokter: true, posting: 'KOMPONEN' });
+    });
+
+    test('the ICD-9-CM code is saved trimmed, read back, cleared, and refused unless it has the volume 3 shape', async () => {
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'ICD-1',
+            name: 'Nebulisasi',
+            icd9cm_code: ' 93.94 ',
+        });
+        expect(procedure.icd9cm_code).toBe('93.94');
+        const change = async (current: Procedure, icd9cm_code: unknown) =>
+            (
+                await json<{ data: Procedure }>(
+                    await clinic.admin.patch(
+                        `${api}/procedures/${current.id}`,
+                        {
+                            code: 'ICD-1',
+                            name: 'Nebulisasi',
+                            icd9cm_code,
+                            version: current.version,
+                        },
+                    ),
+                    200,
+                )
+            ).data;
+        const shortened = await change(procedure, '89.7');
+        expect(shortened.icd9cm_code).toBe('89.7');
+        const cleared = await change(shortened, null);
+        expect(cleared.icd9cm_code).toBeNull();
+        const [stored] = await pool.unsafe<{ kode_icd9cm: string | null }[]>(
+            'select kode_icd9cm from sim_m_tindakan where id = $1',
+            [procedure.id],
+        );
+        expect(stored).toEqual({ kode_icd9cm: null });
+        for (const icd9cm_code of ['8', '89.', '89.123', '8970', 'A9.7'])
+            expect(
+                await refused(
+                    await clinic.admin.post(`${api}/procedures`, {
+                        code: 'ICD-SALAH',
+                        name: 'Salah',
+                        icd9cm_code,
+                    }),
+                ),
+            ).toEqual({
+                icd9cm_code: ['Isi kode ICD-9-CM seperti 89.7 atau 96.04.'],
+            });
     });
 
     test('a category of another group, an unknown option code, and a negative cost are refused per field', async () => {

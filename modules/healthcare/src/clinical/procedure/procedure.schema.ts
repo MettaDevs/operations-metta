@@ -9,6 +9,8 @@ export const procedureRowSchema = z.object({
     name: z.string(),
     // Nama dalam bahasa lain, misalnya untuk pasien turis (JasaNameEnglish sistem lama).
     international_name: z.string().nullable(),
+    // Procedure.code di SATUSEHAT.
+    icd9cm_code: z.string().nullable(),
     group_id: z.string().nullable(),
     group_name: z.string().nullable(),
     category_id: z.string().nullable(),
@@ -59,6 +61,7 @@ export const procedureInputSchema = z.object({
     code: z.string(),
     name: z.string(),
     international_name: z.string().nullable().optional(),
+    icd9cm_code: z.string().nullable().optional(),
     group_id: z.string().nullable().optional(),
     category_id: z.string().nullable().optional(),
     benefit_limit_category_id: z.string().nullable().optional(),

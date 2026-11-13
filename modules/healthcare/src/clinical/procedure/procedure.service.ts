@@ -43,6 +43,7 @@ const flagEntries = Object.entries(procedureFlags).flatMap(
 
 const rowSql = `select * from (
                     select t.id, t.kode as code, t.nama as name, t.nama_internasional as international_name,
+                           t.kode_icd9cm as icd9cm_code,
                            t.kelompok_id as group_id, k.nama as group_name,
                            t.kategori_id as category_id, c.nama as category_name,
                            t.kategori_plafon_id as benefit_limit_category_id, kp.nama as benefit_limit_category_name,
@@ -251,6 +252,7 @@ export class Procedures {
         const code = data?.code.trim() ?? '';
         const name = data?.name.trim() ?? '';
         const internationalName = data?.international_name?.trim() || null;
+        const icd9cmCode = data?.icd9cm_code?.trim() || null;
         const groupId = data?.group_id?.trim() || null;
         const categoryId = data?.category_id?.trim() || null;
         const benefitLimitCategoryId =
@@ -263,6 +265,8 @@ export class Procedures {
             errors.name = 'Paling panjang 200 karakter.';
         if (internationalName !== null && internationalName.length > 200)
             errors.international_name = 'Paling panjang 200 karakter.';
+        if (icd9cmCode !== null && !/^\d{2}(\.\d{1,2})?$/.test(icd9cmCode))
+            errors.icd9cm_code = 'Isi kode ICD-9-CM seperti 89.7 atau 96.04.';
         if (
             groupId !== null &&
             !(await this.pickable(
@@ -375,6 +379,7 @@ export class Procedures {
                 kode: code,
                 nama: name,
                 nama_internasional: internationalName,
+                kode_icd9cm: icd9cmCode,
                 kelompok_id: groupId,
                 kategori_id: categoryId,
                 kategori_plafon_id: benefitLimitCategoryId,
