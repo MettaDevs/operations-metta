@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { sqlErrorCode } from '../../../src/platform/database/index.ts';
 import {
     createBusiness,
     inventoryApi,
@@ -295,6 +296,26 @@ describe.skipIf(!process.env.DB_HOST)('inventory setup and masters', () => {
                 ),
             ),
         ).toEqual(['_form']);
+    });
+
+    test('a unit SATUSEHAT code is stored with its code system, UCUM or HL7 orderable drug form', async () => {
+        const store = (code: string | null, system: string | null) =>
+            pool.unsafe(
+                'update gd_m_satuan set kode_satusehat = $1, sistem_kode_satusehat = $2 where id = $3',
+                [code, system, business.uom.id],
+            );
+        await store(
+            'TAB',
+            'http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm',
+        );
+        await store('mg', 'http://unitsofmeasure.org');
+        await store(null, null);
+        for (const [code, system] of [
+            ['TAB', null],
+            [null, 'http://unitsofmeasure.org'],
+            ['TAB', 'http://snomed.info/sct'],
+        ] as const)
+            expect(await store(code, system).catch(sqlErrorCode)).toBe('23514');
     });
 
     test('a category cannot sit under its own descendant, and a profile requiring expiry also requires batch', async () => {
