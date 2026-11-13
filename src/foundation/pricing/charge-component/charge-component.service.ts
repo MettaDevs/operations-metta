@@ -1,5 +1,6 @@
 import type { Workspace } from '../../../platform/access/index.ts';
 import {
+    isReferenced,
     nowSql,
     sqlErrorCode,
     type Database,
@@ -13,7 +14,6 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
-import { refuseWhileReferenced } from '../pricing.service.ts';
 import {
     chargeComponentOptionFields,
     isChargeComponentOptionCode,
@@ -175,12 +175,15 @@ export class ChargeComponents {
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('charge-component', 'update');
         const current = await this.row(id);
-        await refuseWhileReferenced(
-            this.db,
-            'komponen_biaya',
-            { tenantId: this.workspace.tenantId, id: current.id },
-            'Komponen biaya ini sudah dipakai, jadi tidak bisa dihapus. Nonaktifkan saja supaya tidak dipakai di tarif baru.',
-        );
+        if (
+            await isReferenced(this.db, 'komponen_biaya', {
+                tenantId: this.workspace.tenantId,
+                id: current.id,
+            })
+        )
+            validation({
+                _form: 'Komponen biaya ini sudah dipakai, jadi tidak bisa dihapus. Nonaktifkan saja supaya tidak dipakai di tarif baru.',
+            });
         const deleted = await this.db.execute(
             `update komponen_biaya set deleted_at = $1, updated_at = $1
              where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,

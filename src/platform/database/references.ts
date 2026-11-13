@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import type { Database } from '../../platform/database/index.ts';
-import { validation } from '../../platform/http/index.ts';
+import type { Database } from './index.ts';
 
 const referenceSchema = z.object({
     table_name: z.string(),
@@ -10,15 +9,14 @@ const referenceSchema = z.object({
 
 const quoted = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
 
-// Master harga dipakai tabel module (tipe pasien, tarif tindakan, grading obat), dan Core tidak menulis nama tabel
-// module. Rujukannya dibaca dari foreign key yang dipasang migration module ke master ini, jadi daftar pemakainya
-// mengikuti module yang terpasang di database itu. Baris rujukan yang sudah dihapus lunak tidak dihitung.
-export async function refuseWhileReferenced(
+// Master Core dipakai tabel module (tipe pasien, tarif tindakan, grading obat), dan Core tidak menulis nama tabel
+// module. Rujukannya dibaca dari foreign key yang dipasang migration ke master ini, jadi daftar pemakainya mengikuti
+// module yang terpasang di database itu. Baris rujukan yang sudah dihapus lunak tidak dihitung.
+export async function isReferenced(
     db: Database,
     table: string,
     scope: { tenantId: string; id: string },
-    message: string,
-): Promise<void> {
+): Promise<boolean> {
     const references = await db.rows(
         referenceSchema,
         `select source.relname as table_name, source_column.attname as column_name,
@@ -42,6 +40,7 @@ export async function refuseWhileReferenced(
              ${reference.soft_deleted ? 'and deleted_at is null' : ''} limit 1`,
             [scope.tenantId, scope.id],
         );
-        if (found) validation({ _form: message });
+        if (found) return true;
     }
+    return false;
 }

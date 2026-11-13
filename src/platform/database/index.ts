@@ -4,6 +4,8 @@ import postgres from 'postgres';
 import { z } from 'zod';
 import type { Config } from '../config/index.ts';
 
+export { isReferenced } from './references.ts';
+
 export type Bind = string | number | boolean | null;
 export const jsonObject = z.record(z.string(), z.json());
 export type JsonObject = z.infer<typeof jsonObject>;
