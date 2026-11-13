@@ -105,6 +105,7 @@ function CurrenciesPage(): ReactNode {
                                     : `${open.id}:${open.version}`
                             }
                             record={open === 'new' ? null : open}
+                            localCurrency={listed.data?.local_currency ?? ''}
                             canManage={canManage}
                             onSaved={(record) => {
                                 setOpen(record);

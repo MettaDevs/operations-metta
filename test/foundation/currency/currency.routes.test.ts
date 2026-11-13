@@ -136,6 +136,43 @@ describe.skipIf(!process.env.DB_HOST)('currency precisions', () => {
         ).toBe('26253');
     });
 
+    test('the local currency keeps its code, while its precision stays editable', async () => {
+        const listed = await json<{ data: Row[]; local_currency: string }>(
+            await admin.get(api),
+            200,
+        );
+        expect(listed.local_currency).toBe('IDR');
+        const local = listed.data.find((row) => row.currency_code === 'IDR');
+        if (!local) throw new Error('The tenant has no rupiah row.');
+        expect(
+            await refused(
+                await admin.patch(`${api}/${local.id}`, {
+                    ...idr,
+                    currency_code: 'IDX',
+                    version: local.version,
+                }),
+            ),
+        ).toEqual({
+            currency_code: [
+                'Kode mata uang lokal tidak bisa diubah. Presisi dan pembulatannya tetap bisa disetel.',
+            ],
+        });
+        const saved = await json<{ data: Row }>(
+            await admin.patch(`${api}/${local.id}`, {
+                ...idr,
+                amount_decimals: 2,
+                unit_amount_decimals: 4,
+                version: local.version,
+            }),
+            200,
+        );
+        expect([
+            saved.data.currency_code,
+            saved.data.amount_decimals,
+            saved.data.unit_amount_decimals,
+        ]).toEqual(['IDR', 2, 4]);
+    });
+
     test('another currency is added with its own precision', async () => {
         const created = await json<{ data: Row }>(
             await admin.post(api, {
