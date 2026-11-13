@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { pageFiles, readPage } from '../../../scripts/generate-client.ts';
 import {
+    billingArea,
+    coreAreas,
     sysAdminArea,
     visibleNavigation,
 } from '../../../src/platform/access/navigation.ts';
@@ -212,10 +214,24 @@ test('an entry carries its sidebar section title, and the title goes with the en
 
 test('every menu entry opens a page that exists, under the area prefix', () => {
     const paths = new Set(pageFiles().map((file) => readPage(file).path));
-    for (const group of sysAdminArea.groups)
+    for (const area of coreAreas)
+        for (const group of area.groups)
+            for (const item of group.items) {
+                expect(paths.has(item.href.split('?')[0]!)).toBe(true);
+                expect(item.href.startsWith(`/${area.id}/`)).toBe(true);
+            }
+});
+
+test('every Kasir page lives in the billing capability of Core', () => {
+    const pages = new Map(
+        pageFiles().map((file) => [readPage(file).path, file]),
+    );
+    for (const group of billingArea.groups)
         for (const item of group.items) {
-            expect(paths.has(item.href.split('?')[0]!)).toBe(true);
-            expect(item.href.startsWith('/sysadmin/')).toBe(true);
+            const file = pages.get(item.href)?.split(/[\\/]/) ?? [];
+            expect(
+                file.slice(file.indexOf('src'), file.indexOf('src') + 3),
+            ).toEqual(['src', 'foundation', 'billing']);
         }
 });
 

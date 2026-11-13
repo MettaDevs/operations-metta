@@ -5,7 +5,7 @@ import { z } from 'zod';
 // bawahnya rail berisi grup menu aplikasi yang sedang dibuka, satu grup per folder fitur di kode, jadi pembaca menu dan
 // pembaca kode memakai susunan yang sama; sidebar berisi halaman grup yang dipilih. Di kode dan di `/api/v1/shell`
 // aplikasi itu disebut area. URL halaman berawalan area: `/sysadmin/<folder>/...` untuk Core, `/<module>/<folder>/...`
-// untuk module.
+// untuk module. Core memegang satu aplikasi lagi selain Sys Admin, yaitu Kasir (`/billing/...`).
 //
 // Setiap area dibuka dengan dashboard-nya sendiri sebagai grup pertama; tidak ada dashboard bersama. Dashboard tidak
 // membawa permission dan tidak membuat areanya tampil: area hanya tampil bila anggota boleh membuka salah satu halaman
@@ -362,6 +362,51 @@ export const sysAdminArea: NavigationAreaEntry = {
         },
     ],
 };
+
+// Aplikasi Kasir: layar kasir Core (src/foundation/billing/), terpisah dari Sys Admin karena dipakai role kasir
+// sehari-hari, bukan admin. Keputusan pemilik produk, 11 November 2026: mesin kasir di Core, layarnya aplikasi sendiri
+// di katalog. URL-nya berawalan `/billing/`.
+export const billingArea: NavigationAreaEntry = {
+    id: 'billing',
+    label: 'Kasir',
+    icon: 'wallet',
+    groups: [
+        {
+            id: 'dashboard',
+            label: 'Dashboard',
+            icon: 'layout-dashboard',
+            items: [
+                {
+                    id: 'dashboard',
+                    label: 'Dashboard',
+                    href: '/billing/dashboard',
+                },
+            ],
+        },
+        {
+            id: 'setup',
+            label: 'Setup',
+            icon: 'settings',
+            items: [
+                {
+                    id: 'payment-methods',
+                    label: 'Jenis bayar',
+                    href: '/billing/payment-methods',
+                    permission: 'core.payment-method.read',
+                },
+                {
+                    id: 'merchants',
+                    label: 'Merchan',
+                    href: '/billing/merchants',
+                    permission: 'core.merchant.read',
+                },
+            ],
+        },
+    ],
+};
+
+// Aplikasi milik Core di katalog, berurutan seperti di rail.
+export const coreAreas: NavigationAreaEntry[] = [sysAdminArea, billingArea];
 
 export type NavigationItem = {
     id: string;

@@ -1,5 +1,6 @@
 import type { Workspace } from '../../../platform/access/index.ts';
 import {
+    isReferenced,
     nowSql,
     sqlErrorCode,
     type Database,
@@ -13,7 +14,6 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
-import { refuseWhileReferenced } from '../pricing.service.ts';
 import {
     priceGroupInputSchema,
     priceGroupRowSchema,
@@ -143,12 +143,15 @@ export class PriceGroups {
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('price-group', 'update');
         const current = await this.row(id);
-        await refuseWhileReferenced(
-            this.db,
-            'kelompok_harga',
-            { tenantId: this.workspace.tenantId, id: current.id },
-            'Kelompok harga ini masih dipakai, jadi tidak bisa dihapus. Nonaktifkan saja supaya tidak dipilih lagi.',
-        );
+        if (
+            await isReferenced(this.db, 'kelompok_harga', {
+                tenantId: this.workspace.tenantId,
+                id: current.id,
+            })
+        )
+            validation({
+                _form: 'Kelompok harga ini masih dipakai, jadi tidak bisa dihapus. Nonaktifkan saja supaya tidak dipilih lagi.',
+            });
         const deleted = await this.db.execute(
             `update kelompok_harga set deleted_at = $1, updated_at = $1
              where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,
