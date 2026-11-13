@@ -8,7 +8,9 @@ import { dispensingRoutes } from './dispensing/dispensing/dispensing.routes.ts';
 import { prescriptionRoutes } from './dispensing/prescription/prescription.routes.ts';
 import { serviceLocationRoutes } from './dispensing/service-location/service-location.routes.ts';
 import { drugClassRoutes } from './drug/drug-class/drug-class.routes.ts';
+import { drugPriceRoutes } from './drug/drug-price/drug-price.routes.ts';
 import { drugRoutes } from './drug/drug/drug.routes.ts';
+import { gradingGroupRoutes } from './drug/grading-group/grading-group.routes.ts';
 import { moduleId } from './module.ts';
 
 export function pharmacyRoutes() {
@@ -19,6 +21,8 @@ export function pharmacyRoutes() {
         ...serviceLocationRoutes(),
         ...drugClassRoutes(),
         ...drugRoutes(),
+        ...gradingGroupRoutes(),
+        ...drugPriceRoutes(),
     };
 }
 

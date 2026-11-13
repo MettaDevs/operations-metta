@@ -672,6 +672,64 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
         expect(await ledger(document.id)).toEqual([]);
     });
 
+    // Harga dasar barang (Harga_Jual sistem lama) per satuan dasar: posting menaikkannya ke harga beli per satuan
+    // dasar sebelum diskon bila lebih tinggi, penerimaan yang lebih murah dan batal posting tidak menurunkannya, dan
+    // pengguna boleh mengubahnya di kartu barang. Nilainya dibaca langsung dari gd_m_barang.
+    test('posting raises the base price to the higher purchase price per base unit, never lowers it, and a manual edit holds', async () => {
+        const make = setup(business);
+        const item = await business.item<{
+            id: string;
+            code: string;
+            name: string;
+            base_price: string;
+            version: number;
+        }>('PCT-HD');
+        await make.packaging(item.id, box.id, 100);
+        const basePrice = async () =>
+            (
+                await pool.unsafe<{ price: string }[]>(
+                    'select trim_scale(harga_dasar)::text as price from gd_m_barang where id = $1',
+                    [item.id],
+                )
+            )[0]?.price;
+        const line = (unitCost: number): Line => ({
+            item_id: item.id,
+            unit_id: box.id,
+            quantity: 1,
+            unit_cost: unitCost,
+            discount_percent: 10,
+        });
+        expect(item.base_price).toBe('0');
+
+        const first = await posted([line(12000)]);
+        expect(await basePrice()).toBe('120');
+        await posted([line(11000)]);
+        expect(await basePrice()).toBe('120');
+        await posted([line(12500), { ...line(13000), quantity: 2 }]);
+        expect(await basePrice()).toBe('130');
+        await json(await reverse(first), 200);
+        expect(await basePrice()).toBe('130');
+
+        const [current] = await pool.unsafe<{ version: number }[]>(
+            'select version from gd_m_barang where id = $1',
+            [item.id],
+        );
+        const edited = await json<{ data: { base_price: string } }>(
+            await business.admin.patch(`${inventoryApi}/items/${item.id}`, {
+                code: item.code,
+                name: item.name,
+                base_unit_id: business.uom.id,
+                base_price: '99.5',
+                version: current?.version,
+            }),
+            200,
+        );
+        expect(edited.data.base_price).toBe('99.5');
+        expect(await basePrice()).toBe('99.5');
+        await posted([line(10000)]);
+        expect(await basePrice()).toBe('100');
+    });
+
     test('a receipt dated in a closed inventory period is refused at posting and at reversal until the period is reopened', async () => {
         const early = (
             await json<{ data: Receipt }>(

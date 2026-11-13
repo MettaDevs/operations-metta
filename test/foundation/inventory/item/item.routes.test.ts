@@ -66,6 +66,30 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
         expect(chosen.tracking_code).toBeNull();
     });
 
+    test('the base price is kept when a caller does not send it, and a negative or malformed one is refused', async () => {
+        const item = await business.item<Item & { base_price: string }>(
+            'HARGA-1',
+            { base_price: '1250.5' },
+        );
+        expect(item.base_price).toBe('1250.5');
+        const renamed = await json<{ data: Item & { base_price: string } }>(
+            await change(item, { name: 'Harga tetap' }),
+            200,
+        );
+        expect(renamed.data.base_price).toBe('1250.5');
+        for (const base_price of [-1, 'murah', '1.00001'])
+            expect(
+                Object.keys(
+                    await refused(await change(renamed.data, { base_price })),
+                ),
+            ).toEqual(['base_price']);
+        const [stored] = await pool.unsafe<{ price: string }[]>(
+            'select trim_scale(harga_dasar)::text as price from gd_m_barang where id = $1',
+            [item.id],
+        );
+        expect(stored?.price).toBe('1250.5');
+    });
+
     test('the tracking profile changes freely until the first entry, then is refused', async () => {
         const item = await business.item<Item>('LACAK-1', {
             tracking_code_id: lot.id,

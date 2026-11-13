@@ -19,6 +19,7 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
+import { decimalInput, quantityScale, toNumeric } from '../quantity.ts';
 import {
     batchRowSchema,
     itemInputSchema,
@@ -40,6 +41,7 @@ const defaultUnitSql = (column: string) =>
 const rowSql = `select * from (
                     select b.id, b.kode as code, b.nama as name, b.tolak_stok_minus as refuse_negative_stock,
                            b.diblokir as is_blocked, b.version, b.kategori_id as category_id,
+                           trim_scale(b.harga_dasar)::text as base_price,
                            b.satuan_dasar_id as base_unit_id, b.profil_pelacakan_id as tracking_code_id,
                            ${reference('unit')} as base_unit, ${defaultUnitSql('satuan_beli_id')} as purchase_unit,
                            ${defaultUnitSql('satuan_jual_id')} as sales_unit, ${reference('category')} as category,
@@ -155,6 +157,13 @@ async function checked(
         !(await exists(db, 'gd_m_profil_pelacakan', scope, trackingCodeId))
     )
         errors.tracking_code_id = 'Pilih profil pelacakan dari daftar.';
+    const basePrice =
+        data.base_price === undefined
+            ? undefined
+            : decimalInput(data.base_price);
+    if (basePrice === null || (basePrice !== undefined && basePrice < 0n))
+        errors.base_price =
+            'Isi harga dasar 0 atau lebih, paling banyak empat angka di belakang koma.';
     if (Object.keys(errors).length) validation(errors);
     return {
         code,
@@ -166,6 +175,7 @@ async function checked(
         isBlocked: data.is_blocked ?? false,
         purchaseUnitId: data.purchase_unit_id,
         salesUnitId: data.sales_unit_id,
+        basePrice: basePrice ?? undefined,
     };
 }
 
@@ -225,6 +235,7 @@ export async function createItem(
             profil_pelacakan_id: trackingCodeId,
             tolak_stok_minus: data.refuseNegative,
             diblokir: data.isBlocked,
+            harga_dasar: toNumeric(data.basePrice ?? 0n, quantityScale),
             created_at: stamp,
             updated_at: stamp,
         });
@@ -297,8 +308,8 @@ export async function updateItem(
             updated = await db.execute(
                 `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
                         profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, satuan_beli_id = $8,
-                        satuan_jual_id = $9, updated_at = $10
-                 where tenant_id = $11 and id = $12 and version = $13 and deleted_at is null`,
+                        satuan_jual_id = $9, harga_dasar = coalesce($10::numeric, harga_dasar), updated_at = $11
+                 where tenant_id = $12 and id = $13 and version = $14 and deleted_at is null`,
                 [
                     data.code,
                     data.name,
@@ -309,6 +320,9 @@ export async function updateItem(
                     data.isBlocked,
                     units.purchase,
                     units.sales,
+                    data.basePrice === undefined
+                        ? null
+                        : toNumeric(data.basePrice, quantityScale),
                     nowSql(),
                     scope.tenantId,
                     stored.id,
@@ -321,6 +335,32 @@ export async function updateItem(
         throw error;
     }
     if (!updated) coded(409, 'stale_version', staleMessage);
+}
+
+// Posting penerimaan menaikkan harga dasar barang ke harga beli per satuan dasar yang lebih tinggi, seperti
+// Goods_receipt.php sistem lama, dan tidak pernah menurunkannya. Dipanggil sebelum mesin posting membaca barang yang
+// sama dengan `for share`, dan barang dikunci menurut urutan id: dua penerimaan yang menaikkan barang yang sama saling
+// menunggu, bukan saling mengunci.
+export async function raiseBasePrices(
+    db: Database,
+    scope: ItemScope,
+    prices: ReadonlyMap<string, bigint>,
+): Promise<void> {
+    const ordered = [...prices].sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+    );
+    for (const [itemId, price] of ordered)
+        await db.execute(
+            `update gd_m_barang set harga_dasar = $1, updated_at = $2
+             where tenant_id = $3 and legal_entity_id = $4 and id = $5 and harga_dasar < $1`,
+            [
+                toNumeric(price, quantityScale),
+                nowSql(),
+                scope.tenantId,
+                scope.legalEntityId,
+                itemId,
+            ],
+        );
 }
 
 export async function deleteItem(

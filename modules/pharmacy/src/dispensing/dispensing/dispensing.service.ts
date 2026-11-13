@@ -27,6 +27,7 @@ import {
     unitConversion,
 } from '@core/foundation/inventory/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
+import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
 import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
@@ -34,6 +35,7 @@ import { publishPrescriptionDispensed } from './dispensing.events.ts';
 import {
     dispensingHeaderSchema,
     dispensingInputSchema,
+    dispensingPriceSchema,
     handOverInputSchema,
     versionInputSchema,
     type DispensingLine,
@@ -52,6 +54,11 @@ export const dispensingNumberReference = 'pharmacy.dispensing-number';
 export const inexactBaseMessage =
     'Jumlah ini dalam satuan dasar lebih dari empat angka di belakang koma. Ganti satuan atau jumlahnya.';
 
+// Nilai baris penyerahan = jumlah x harga satuan x (100 - % diskon) / 100, dibulatkan ke sen seperti nilai baris
+// penerimaan. Kosong selama baris belum berharga (draf).
+const lineAmountSql = (alias: string) =>
+    `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.persen_diskon) / 100, 2)`;
+
 const personSql = (column: string) => `(select case when u.id is null then null
         else json_build_object('id', u.id, 'name', u.name) end from users u where u.id = ${column})`;
 
@@ -66,7 +73,10 @@ const headerSql = `select h.id, h.nomor as number, h.status, h.tanggal::text as 
                           ${isoSql('h.dipanggil_pada')} as called_at,
                           ${isoSql('h.diserahkan_pada')} as handed_over_at,
                           ${personSql('h.diserahkan_oleh_user_id')} as handed_over_by,
-                          ${isoSql('h.dibatalkan_pada')} as cancelled_at
+                          ${isoSql('h.dibatalkan_pada')} as cancelled_at,
+                          (select trim_scale(sum(${lineAmountSql('d')}))::text from bill_farmasi_detail d
+                           where d.tenant_id = h.tenant_id and d.bill_farmasi_id = h.id and d.deleted_at is null)
+                              as total_amount
                    from bill_farmasi h
                    left join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
                    where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null`;
@@ -77,6 +87,7 @@ const lockedSchema = z.object({
     operating_unit_name: z.string(),
     location_id: z.string().nullable(),
     issued_at: z.string(),
+    price_group_id: z.string().nullable(),
 });
 
 const itemLineSchema = z.object({
@@ -244,6 +255,7 @@ export class Dispensings {
                       }),
                       conversion: z.string(),
                       reason: z.string().nullable(),
+                      price: dispensingPriceSchema.nullable(),
                       batch: z
                           .object({
                               id: z.string(),
@@ -255,6 +267,10 @@ export class Dispensings {
                   `select d.id, d.resep_detail_id as prescription_line_id, d.jumlah::text as quantity,
                           json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
                           d.konversi::text as conversion, d.alasan as reason,
+                          case when d.harga_satuan is null then null else json_build_object(
+                              'unit_price', trim_scale(d.harga_satuan)::text,
+                              'discount_percent', trim_scale(d.persen_diskon)::text,
+                              'amount', trim_scale(${lineAmountSql('d')})::text) end as price,
                           case when t.id is null then null else json_build_object(
                               'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end as batch
                    from bill_farmasi_detail d
@@ -299,6 +315,8 @@ export class Dispensings {
                 units: units.get(line.item_id) ?? [],
                 batch: saved?.batch ?? null,
                 reason: saved?.reason ?? null,
+                // Usulan dari penyerahan yang dibatalkan tidak membawa harganya: Siapkan berikutnya menghitung ulang.
+                price: active ? (saved?.price ?? null) : null,
                 taken: taken
                     .filter((slice) => slice.sourceLineId === saved?.id)
                     .map((slice) => ({
@@ -316,7 +334,8 @@ export class Dispensings {
             ? await this.db.one(
                   lockedSchema,
                   `select r.id, r.operating_unit_id, u.name as operating_unit_name,
-                          ${servingLocationSql('r')} as location_id, r.diterbitkan_pada::text as issued_at
+                          ${servingLocationSql('r')} as location_id, r.diterbitkan_pada::text as issued_at,
+                          r.kelompok_harga_id as price_group_id
                    from far_tr_resep r
                    join organizations u on u.tenant_id = r.tenant_id and u.id = r.operating_unit_id
                    where r.tenant_id = $1 and r.legal_entity_id = $2 and r.id = $3 and r.deleted_at is null
@@ -689,6 +708,36 @@ export class Dispensings {
                 validation({
                     [`${inexact.field}.quantity`]: inexactBaseMessage,
                 });
+            // Harga obat dihitung sekali di sini dan disalin ke baris, dengan kelompok harga pembeli dari resep dan
+            // tanggal penyerahan; kasir dan perubahan grading sesudahnya tidak mengubahnya (keputusan 8.3 A).
+            for (const { line, price } of await priceDrugLines(
+                this.db,
+                this.scope,
+                {
+                    priceGroupId: locked.price_group_id,
+                    date: claimed.posting_date,
+                },
+                lines.map((line) => ({
+                    id: line.id,
+                    itemId: line.item_id,
+                    quantityPerUnit: quantityOf(line.conversion),
+                })),
+            ))
+                await this.db.execute(
+                    `update bill_farmasi_detail set harga_dasar = $1, grading_harga_id = $2, persen_naik = $3,
+                            harga_satuan = $4, persen_diskon = $5, updated_at = $6
+                     where tenant_id = $7 and id = $8`,
+                    [
+                        toNumeric(price.basePrice, quantityScale),
+                        price.gradingId,
+                        toNumeric(price.markupPercent, quantityScale),
+                        String(price.unitPrice),
+                        toNumeric(price.discountPercent, quantityScale),
+                        stamp,
+                        this.scope.tenantId,
+                        line.id,
+                    ],
+                );
             await postItemLines(
                 this.db,
                 {

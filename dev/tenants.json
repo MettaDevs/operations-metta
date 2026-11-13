@@ -610,7 +610,47 @@
                         "section": "Pusling",
                         "location": "PUSLING"
                     }
-                ]
+                ],
+                "grading_groups": ["OBAT ORAL", "INJEKSI"],
+                "price_gradings": [
+                    {
+                        "price_group": "UMUM",
+                        "grading_group": "OBAT ORAL",
+                        "price_from": 0,
+                        "price_to": 1000000000,
+                        "markup_percent": 30,
+                        "effective_from": "2026-01-01"
+                    },
+                    {
+                        "price_group": "UMUM",
+                        "grading_group": null,
+                        "price_from": 0,
+                        "price_to": 1000000000,
+                        "markup_percent": 20,
+                        "effective_from": "2026-01-01"
+                    },
+                    {
+                        "price_group": "ASR",
+                        "grading_group": "OBAT ORAL",
+                        "price_from": 0,
+                        "price_to": 1000000000,
+                        "markup_percent": 40,
+                        "discount_percent": 5,
+                        "effective_from": "2026-01-01"
+                    },
+                    {
+                        "price_group": "ASR",
+                        "grading_group": null,
+                        "price_from": 0,
+                        "price_to": 1000000000,
+                        "markup_percent": 25,
+                        "effective_from": "2026-01-01"
+                    }
+                ],
+                "drug_grading_groups": {
+                    "PCT-500": "OBAT ORAL",
+                    "AMX-500": "OBAT ORAL"
+                }
             }
         }
     }

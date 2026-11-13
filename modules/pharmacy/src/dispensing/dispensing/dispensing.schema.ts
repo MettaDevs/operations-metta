@@ -35,6 +35,8 @@ export const dispensingHeaderSchema = z.object({
     handed_over_at: z.string().nullable(),
     handed_over_by: person,
     cancelled_at: z.string().nullable(),
+    // Jumlah nilai baris; kosong selama penyerahan belum disiapkan.
+    total_amount: z.string().nullable(),
     version: z.number(),
 });
 
@@ -42,6 +44,13 @@ const reference = z.object({
     id: z.string(),
     code: z.string(),
     name: z.string(),
+});
+
+// Harga baris yang disalin saat disiapkan: harga per satuan baris dalam rupiah utuh, % diskon, dan nilai baris.
+export const dispensingPriceSchema = z.object({
+    unit_price: z.string(),
+    discount_percent: z.string(),
+    amount: z.string(),
 });
 
 // Baris penyerahan untuk satu baris obat resep. id kosong berarti usulan untuk penyerahan yang belum disimpan: jumlah
@@ -55,6 +64,8 @@ export const dispensingLineSchema = z.object({
     units: z.array(reference.extend({ quantity_per_unit: z.string() })),
     batch: batch.nullable(),
     reason: z.string().nullable(),
+    // Kosong selama baris belum disiapkan.
+    price: dispensingPriceSchema.nullable(),
     taken: z.array(
         z.object({
             batch_number: z.string().nullable(),

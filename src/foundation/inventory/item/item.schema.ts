@@ -29,6 +29,9 @@ export const itemRowSchema = z.object({
     expiry_required: z.boolean(),
     refuse_negative_stock: z.boolean().nullable(),
     is_blocked: z.boolean(),
+    // Harga dasar per satuan dasar (Harga_Jual sistem lama), dinaikkan posting penerimaan ke harga beli tertinggi per
+    // satuan dasar dan boleh diubah tangan. Harga jual obat dihitung dari harga ini.
+    base_price: z.string(),
     inventory: z.string(),
     has_entries: z.boolean(),
     has_open_entries: z.boolean(),
@@ -42,6 +45,8 @@ export const itemListQuerySchema = listParametersSchema.extend({
 
 // tracking_code_id yang tidak dikirim saat membuat barang disalin dari kategorinya; saat mengubah, berarti tetap.
 // purchase_unit_id dan sales_unit_id yang tidak dikirim berarti satuan dasar saat membuat dan tetap saat mengubah.
+// base_price yang tidak dikirim berarti 0 saat membuat dan tetap saat mengubah, jadi kartu obat layanan kesehatan yang
+// menulis barang lewat updateItem tidak menghapusnya.
 export const itemInputSchema = z.object({
     code: z.string(),
     name: z.string(),
@@ -52,6 +57,7 @@ export const itemInputSchema = z.object({
     tracking_code_id: z.string().nullable().optional(),
     refuse_negative_stock: z.boolean().nullable().optional(),
     is_blocked: z.boolean().optional(),
+    base_price: z.union([z.number(), z.string()]).optional(),
     version: z.number().optional(),
 });
 

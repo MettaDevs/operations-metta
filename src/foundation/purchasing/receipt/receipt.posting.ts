@@ -36,6 +36,25 @@ export type StoredReceiptLine = {
     budget_year: number | null;
 };
 
+// Harga beli per satuan dasar setiap barang di penerimaan, sebelum diskon, untuk harga dasar barang (Harga_Jual sistem
+// lama, yang dihitung Goods_receipt.php sebelum diskon). Penerimaan belum mencatat tarif pajak, jadi "termasuk pajak"
+// sistem lama sama dengan harga baris. Barang di beberapa baris memakai harga tertinggi.
+export function receiptBasePrices(
+    lines: readonly StoredReceiptLine[],
+): Map<string, bigint> {
+    const prices = new Map<string, bigint>();
+    for (const line of lines) {
+        const price = baseUnitCost(
+            fromNumeric(line.unit_cost, quantityScale),
+            0n,
+            fromNumeric(line.conversion, quantityScale),
+        );
+        if (price > (prices.get(line.item_id) ?? -1n))
+            prices.set(line.item_id, price);
+    }
+    return prices;
+}
+
 // Baris penerimaan yang tersimpan menjadi baris masuk mesin posting. Jumlahnya sudah diperiksa saat disimpan.
 export function receiptItemLine(
     line: StoredReceiptLine,

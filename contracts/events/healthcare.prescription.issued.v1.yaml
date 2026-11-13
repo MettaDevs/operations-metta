@@ -17,6 +17,9 @@ info:
       baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
     - Penerima: module farmasi (`modules/pharmacy`), bila terpasang untuk tenant itu, mencatat resep di antrean
       farmasi. Isi yang tidak cocok dengan kontrak ini dicatat ke log lalu dilewati, tanpa membatalkan pengiriman.
+    - `price_group` ditambahkan sesudah versi ini terbit, jadi opsional: farmasi menghitung harga obat dengan kelompok
+      harga itu saat resep disiapkan. Pesan tanpa `price_group` diperlakukan sama dengan `price_group` kosong, yaitu
+      obat dihargai harga dasar barang tanpa kenaikan.
     - Belum ada event pembatalan resep: layar tidak menawarkan membatalkan resep yang sudah dikirim, dan kunjungan hanya
       bisa dibatalkan sebelum diperiksa, jadi status `dibatalkan` belum pernah ditulis.
 channels:
@@ -131,6 +134,14 @@ components:
               format: uuid
             name:
               type: string
+        price_group:
+          description: |
+            Kelompok harga pembeli: kelompok harga tipe pasien kunjungan saat resep dikirim (Customer Price Group di
+            BC). Kosong bila tipe pasien itu tidak memakai kelompok harga. Penerbit selalu mengisinya; opsional karena
+            ditambahkan sesudah versi ini terbit.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/priceGroup'
         lines:
           type: array
           minItems: 1
@@ -197,6 +208,19 @@ components:
           description: Aturan pakai sebagai teks, misalnya Setelah Makan.
         notes:
           type: [string, 'null']
+    priceGroup:
+      type: object
+      additionalProperties: false
+      required: [id, code, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: Kode kelompok harga, misalnya UMUM.
+        name:
+          type: string
     reference:
       type: object
       additionalProperties: false

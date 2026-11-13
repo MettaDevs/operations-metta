@@ -12,6 +12,8 @@ export const drugRowSchema = z.object({
     drug_class: z
         .object({ id: z.string(), code: z.string(), name: z.string() })
         .nullable(),
+    // Kelompok grading untuk harga obat; kosong berarti hanya grading untuk semua barang yang berlaku.
+    grading_group: z.object({ id: z.string(), name: z.string() }).nullable(),
     is_generic: z.boolean(),
     is_formulary: z.boolean(),
     is_blocked: z.boolean(),
@@ -25,8 +27,10 @@ export const drugListQuerySchema = listParametersSchema.extend({
     formulary: z.enum(['true', 'false']).optional(),
 });
 
+// grading_group_id yang tidak dikirim berarti tetap.
 export const drugInputSchema = z.object({
     drug_class_id: z.string().nullable(),
+    grading_group_id: z.string().nullable().optional(),
     is_generic: z.boolean(),
     is_formulary: z.boolean(),
     version: z.number(),

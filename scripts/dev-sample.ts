@@ -182,6 +182,23 @@ const pharmacySchema = z.object({
             location: z.string(),
         }),
     ),
+    // Kelompok grading dikenali dari namanya. Grading harga menunjuk kode kelompok harga dan nama kelompok grading;
+    // grading_group kosong berarti semua barang. drug_grading_groups memetakan kode obat ke nama kelompok gradingnya.
+    grading_groups: z.array(z.string()).default([]),
+    price_gradings: z
+        .array(
+            z.object({
+                price_group: z.string(),
+                grading_group: z.string().nullable(),
+                price_from: z.number(),
+                price_to: z.number(),
+                markup_percent: z.number(),
+                discount_percent: z.number().default(0),
+                effective_from: z.string(),
+            }),
+        )
+        .default([]),
+    drug_grading_groups: z.record(z.string(), z.string()).default({}),
 });
 
 export const sampleSchema = z.object({
@@ -1140,6 +1157,93 @@ async function seedPharmacy(
                 `${pharmacyApi}/lookups/locations`,
                 mapping.location,
             ),
+        });
+    }
+    await seedDrugPrices(api, pharmacy);
+}
+
+// Kelompok grading dikenali dari namanya, baris grading dari kelompok harga, kelompok grading, tanggal berlaku, dan
+// harga dasar dari-nya. Obat hanya diberi kelompok grading bila belum punya, supaya pilihan di layar tidak tertimpa.
+async function seedDrugPrices(
+    api: SampleApi,
+    pharmacy: z.infer<typeof pharmacySchema>,
+): Promise<void> {
+    const gradingGroups = new Map<string, string>();
+    for (const name of pharmacy.grading_groups)
+        gradingGroups.set(
+            name,
+            await api.ensure(`${pharmacyApi}/grading-groups`, 'name', name, {
+                name,
+            }),
+        );
+    const gradingRow = z.object({
+        grading_group: z.object({ name: z.string() }).nullable(),
+        price_from: z.string(),
+        effective_from: z.string(),
+    });
+    for (const grading of pharmacy.price_gradings) {
+        const priceGroupId = await api.codeId(
+            '/api/v1/pricing/price-groups',
+            grading.price_group,
+        );
+        const existing = await api.data(
+            z.array(gradingRow),
+            'GET',
+            `${pharmacyApi}/drug-prices?price_group_id=${priceGroupId}&per_page=100`,
+        );
+        if (
+            existing.some(
+                (row) =>
+                    (row.grading_group?.name ?? null) ===
+                        grading.grading_group &&
+                    row.effective_from === grading.effective_from &&
+                    row.price_from === String(grading.price_from),
+            )
+        )
+            continue;
+        await api.call('POST', `${pharmacyApi}/drug-prices`, {
+            price_group_id: priceGroupId,
+            grading_group_id:
+                grading.grading_group === null
+                    ? null
+                    : required(
+                          gradingGroups,
+                          grading.grading_group,
+                          'Kelompok grading',
+                      ),
+            price_from: grading.price_from,
+            price_to: grading.price_to,
+            markup_percent: grading.markup_percent,
+            discount_percent: grading.discount_percent,
+            effective_from: grading.effective_from,
+        });
+    }
+    for (const [code, group] of Object.entries(pharmacy.drug_grading_groups)) {
+        const drug = await api.find(
+            z.object({
+                id: z.string(),
+                code: z.string(),
+                drug_class: idRow.nullable(),
+                grading_group: idRow.nullable(),
+                is_generic: z.boolean(),
+                is_formulary: z.boolean(),
+                version: z.number(),
+            }),
+            `${pharmacyApi}/drugs`,
+            code,
+            (row) => row.code === code,
+        );
+        if (!drug || drug.grading_group) continue;
+        await api.call('PUT', `${pharmacyApi}/drugs/${drug.id}`, {
+            drug_class_id: drug.drug_class?.id ?? null,
+            grading_group_id: required(
+                gradingGroups,
+                group,
+                'Kelompok grading',
+            ),
+            is_generic: drug.is_generic,
+            is_formulary: drug.is_formulary,
+            version: drug.version,
         });
     }
 }
