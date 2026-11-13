@@ -56,6 +56,7 @@ import { page as foundationInventoryTransferTransferOrdersPage } from './foundat
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
 import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
+import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
 import { page as foundationPurchasingReceiptReceiptsPage } from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
@@ -647,6 +648,14 @@ const foundationNumberSequenceNumberSequencesRoute = createRoute({
     staticData: { title: foundationNumberSequenceNumberSequencesPage.title },
 });
 
+const foundationPricingPriceGroupPriceGroupsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPricingPriceGroupPriceGroupsPage.path,
+    component: foundationPricingPriceGroupPriceGroupsPage.component,
+    validateSearch: foundationPricingPriceGroupPriceGroupsPage.validateSearch,
+    staticData: { title: foundationPricingPriceGroupPriceGroupsPage.title },
+});
+
 const foundationPurchasingReceiptReceiptsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingReceiptReceiptsPage.path,
@@ -837,6 +846,7 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryTransferTransferReceiptsRoute,
         foundationInventoryTransferTransferShipmentsRoute,
         foundationNumberSequenceNumberSequencesRoute,
+        foundationPricingPriceGroupPriceGroupsRoute,
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingVendorVendorsRoute,
         platformAccessAccessRoute,

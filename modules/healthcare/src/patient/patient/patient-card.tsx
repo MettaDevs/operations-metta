@@ -384,6 +384,8 @@ export function PatientTypeLookup({
                               is_active: true,
                               is_default: false,
                               max_visits_per_section_per_day: 0,
+                              price_group_id: null,
+                              price_group_name: null,
                               version: 0,
                           }
                         : null

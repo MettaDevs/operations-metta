@@ -7,6 +7,7 @@ import {
     FieldLabel,
 } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
 import {
@@ -21,8 +22,9 @@ import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
+import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -32,6 +34,7 @@ import {
     definePage,
     errorText,
     FormErrorHeader,
+    orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import {
@@ -51,6 +54,8 @@ const behaviorLabels: Record<PatientTypeBehavior, string> = {
     requires_card_number: 'Perlu nomor kartu asuransi',
 };
 type PatientType = ApiBody<'healthcarePatientTypeList'>['data'][number];
+type PriceGroup =
+    ApiBody<'healthcarePatientTypeMetadata'>['price_groups'][number];
 type Errors = Record<string, string[]>;
 const searchSchema = z.object({ q: z.string().max(200).optional() });
 
@@ -77,16 +82,46 @@ function PatientTypeCard({
         max_visits_per_section_per_day: String(
             type?.max_visits_per_section_per_day ?? 0,
         ),
+        // Kelompok harga boleh kosong; pilihan rujukan tidak bisa dikosongkan, jadi ia dibuka lewat saklar.
+        has_price_group: (type?.price_group_id ?? null) !== null,
+        price_group_id: type?.price_group_id ?? null,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const priceGroupSwitchId = useId();
+    // Popup pilihan kelompok harga dipasang di dalam kartu, supaya bisa dipilih dari dalam dialog.
+    const portalContainer = useRef<HTMLFormElement>(null);
+    const { data: metadata } = useQuery(
+        orpc.healthcarePatientTypeMetadata.queryOptions({
+            select: (response) => response.body,
+        }),
+    );
     usePageDialogRecord({
         recordTitle: type ? `${type.code} · ${type.name}` : 'Tipe pasien baru',
         editing,
     });
+    const priceGroups = (metadata?.price_groups ?? []).filter(
+        (group) => group.active || group.id === type?.price_group_id,
+    );
+    const priceGroup: PriceGroup | null =
+        priceGroups.find((group) => group.id === form.price_group_id) ??
+        (form.price_group_id !== null &&
+        form.price_group_id === type?.price_group_id
+            ? {
+                  id: form.price_group_id,
+                  code: '',
+                  name: type.price_group_name ?? '',
+                  active: false,
+              }
+            : null);
+    const { has_price_group: hasPriceGroup, ...fields } = form;
+    const payload = {
+        ...fields,
+        price_group_id: hasPriceGroup ? (form.price_group_id ?? '') : null,
+    };
 
     const save = async () => {
         setBusy(true);
@@ -96,9 +131,9 @@ function PatientTypeCard({
             const { body } = type
                 ? await api.healthcarePatientTypeUpdate({
                       params: { id: type.id },
-                      body: { ...form, version: type.version },
+                      body: { ...payload, version: type.version },
                   })
-                : await api.healthcarePatientTypeCreate({ body: form });
+                : await api.healthcarePatientTypeCreate({ body: payload });
             toast.success(
                 type ? 'Tipe pasien diperbarui.' : 'Tipe pasien dibuat.',
             );
@@ -140,6 +175,7 @@ function PatientTypeCard({
 
     return (
         <form
+            ref={portalContainer}
             noValidate
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => {
@@ -212,6 +248,69 @@ function PatientTypeCard({
                             }
                         />
                     </FormControl>
+                    <FormControl hint="Kelompok harga menentukan tarif pasien bertipe ini. Beberapa tipe pasien boleh memakai kelompok yang sama.">
+                        <Field orientation="horizontal" className="w-auto">
+                            <Switch
+                                id={priceGroupSwitchId}
+                                checked={form.has_price_group}
+                                disabled={!editing}
+                                onCheckedChange={(checked) =>
+                                    setForm({
+                                        ...form,
+                                        has_price_group: checked,
+                                    })
+                                }
+                            />
+                            <FieldLabel htmlFor={priceGroupSwitchId}>
+                                Pakai kelompok harga
+                            </FieldLabel>
+                        </Field>
+                    </FormControl>
+                    {form.has_price_group && (
+                        <FormControl
+                            error={errors.price_group_id?.[0]}
+                            data-error-field="price_group_id"
+                        >
+                            <InlineLookup
+                                label="Kelompok harga"
+                                required
+                                disabled={!editing}
+                                items={priceGroups}
+                                value={priceGroup}
+                                displayValue={priceGroup?.name ?? ''}
+                                onValueChange={(item) =>
+                                    setForm({
+                                        ...form,
+                                        price_group_id: item.id,
+                                    })
+                                }
+                                getItemValue={(item) => item.id}
+                                getItemLabel={(item) => item.name}
+                                getSearchText={(item) =>
+                                    `${item.code} ${item.name}`
+                                }
+                                placeholder="Cari kelompok harga..."
+                                emptyMessage="Kelompok harga tidak ditemukan. Tambahkan di Sys Admin, menu Harga."
+                                showDetails={false}
+                                showFullList={false}
+                                portalContainer={portalContainer}
+                                columns={[
+                                    {
+                                        id: 'code',
+                                        header: 'Kode',
+                                        width: 120,
+                                        cell: (item) => item.code,
+                                    },
+                                    {
+                                        id: 'name',
+                                        header: 'Nama',
+                                        width: 220,
+                                        cell: (item) => item.name,
+                                    },
+                                ]}
+                            />
+                        </FormControl>
+                    )}
                     <FormControl
                         error={errors.max_visits_per_section_per_day?.[0]}
                         hint="Berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari. Isi 0 bila tidak dibatasi."
@@ -409,6 +508,16 @@ function PatientTypesPage(): ReactNode {
                                                 behaviorLabels[behavior],
                                         )
                                         .join(', ') || '—'}
+                                </DataTableText>
+                            ),
+                        },
+                        {
+                            id: 'price-group',
+                            header: 'Kelompok harga',
+                            width: 180,
+                            cell: (type) => (
+                                <DataTableText>
+                                    {type.price_group_name ?? '—'}
                                 </DataTableText>
                             ),
                         },
