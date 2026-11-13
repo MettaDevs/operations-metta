@@ -8,6 +8,8 @@ export const serviceLocationRowSchema = z.object({
     operating_unit: reference,
     section: reference.nullable(),
     location: reference.extend({ code: z.string() }),
+    // Obat termasuk jasa (IncludeJasa sistem lama): bernilai 0 di tagihan kasir.
+    includes_service: z.boolean(),
     version: z.number(),
 });
 
@@ -15,6 +17,7 @@ export const serviceLocationInputSchema = z.object({
     operating_unit_id: z.string(),
     section_id: z.string().nullable(),
     location_id: z.string(),
+    includes_service: z.boolean().optional(),
     version: z.number().optional(),
 });
 

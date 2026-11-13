@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+    automaticCancelReason,
+    lockChargeForChange,
     patientTypeMessage,
     registerBillingEventHandlers,
 } from '../../../../src/foundation/billing/index.ts';
+import { publishEvent } from '../../../../src/platform/events/index.ts';
 import {
     createBillingBusiness,
     json,
@@ -31,6 +34,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
     const { pool, browser, close } = operationsTestApp({ DB_POOL_SIZE: '8' });
     afterAll(close);
     let tenantId: string;
+    let legalEntityId: string;
     let cashier: Browser;
     let charges: ReturnType<typeof visitCharges>;
     let approver: { email: string; password: string };
@@ -67,6 +71,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             ],
         );
         tenantId = business.tenantId;
+        legalEntityId = business.legalEntityId;
         cashier = business.admin;
         charges = visitCharges(pool, {
             tenantId,
@@ -179,6 +184,76 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             automatic_payment_method_id: methods.BPJ,
         });
         expect(await paymentsOf(visitId)).toHaveLength(1);
+    });
+
+    test('an automatic payment follows its bill: drugs prepared after the visit completes settle it again', async () => {
+        const visitId = Bun.randomUUIDv7();
+        await charges.completedVisit(visitId, ['60000'], {
+            automatic_payment_method_id: methods.BPJ,
+        });
+        await charges.withDatabase((db) =>
+            db.transaction(async () => {
+                await lockChargeForChange(db, {
+                    tenantId,
+                    sourceModule: 'healthcare',
+                    visitId,
+                });
+                await publishEvent(db, {
+                    type: 'pharmacy.dispensing.charges-replaced.v1',
+                    tenantId,
+                    legalEntityId,
+                    data: {
+                        dispensing_id: Bun.randomUUIDv7(),
+                        dispensing_number: 'FAR-1',
+                        prescription_id: Bun.randomUUIDv7(),
+                        prescription_number: 'RSP-1',
+                        visit_id: visitId,
+                        registration_number: `REG-${visitId.slice(-4)}`,
+                        date: '2026-11-13',
+                        includes_service: false,
+                        lines: [
+                            {
+                                line_id: Bun.randomUUIDv7(),
+                                item: {
+                                    id: Bun.randomUUIDv7(),
+                                    code: 'OBT',
+                                    name: 'Obat',
+                                },
+                                quantity: '2',
+                                unit_price: '5000',
+                                discount_percent: '0',
+                            },
+                        ],
+                    },
+                });
+            }),
+        );
+        const payments = await pool.unsafe<
+            {
+                nilai: string;
+                status: string;
+                otomatis: boolean;
+                alasan: string | null;
+            }[]
+        >(
+            `select trim_scale(nilai)::text as nilai, status, otomatis, alasan_batal as alasan
+             from kasir where tenant_id = $1 and kunjungan_id = $2 order by created_at, id`,
+            [tenantId, visitId],
+        );
+        expect([...payments]).toEqual([
+            {
+                nilai: '60000',
+                status: 'batal',
+                otomatis: true,
+                alasan: automaticCancelReason,
+            },
+            {
+                nilai: '70000',
+                status: 'diposting',
+                otomatis: true,
+                alasan: null,
+            },
+        ]);
     });
 
     test('an automatic payment belongs to no clerk and can still be cancelled, after which the cashier pays the visit', async () => {

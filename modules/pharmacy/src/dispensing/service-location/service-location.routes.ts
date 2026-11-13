@@ -54,7 +54,11 @@ export function serviceLocationRoutes() {
             .input(
                 z.object({
                     params: z.object({ id: z.string() }),
-                    body: z.custom<{ location_id: string; version: number }>(),
+                    body: z.custom<{
+                        location_id: string;
+                        includes_service?: boolean;
+                        version: number;
+                    }>(),
                 }),
             )
             .handler(async ({ context, input }) =>

@@ -99,6 +99,12 @@ components:
         registration_number:
           type: string
           description: Nomor registrasi kunjungan (NoReg).
+        visit_id:
+          type: string
+          format: uuid
+          description: |
+            Id kunjungan asal resep. Field opsional sejak 14 November 2026; penerbit selalu mengirimnya. Farmasi memakainya
+            untuk mengirim biaya obat ke tagihan kunjungan itu di kasir.
         issued_at:
           type: string
           format: date-time

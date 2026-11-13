@@ -45,6 +45,11 @@ import {
     returnReversed,
 } from './dispensing-return.events.ts';
 import {
+    lockVisitCharges,
+    paidMessage,
+    publishDispensingCharges,
+} from '../dispensing/dispensing.events.ts';
+import {
     returnInputSchema,
     returnReverseInputSchema,
 } from './dispensing-return.schema.ts';
@@ -143,10 +148,13 @@ export class DispensingReturns {
                 operating_unit_id: z.string(),
                 location_id: z.string(),
                 handed_over_at: z.string(),
+                visit_id: z.string().nullable(),
             }),
-            `select id, operating_unit_id, lokasi_id as location_id, diserahkan_pada::text as handed_over_at
-             from bill_farmasi
-             where tenant_id = $1 and resep_id = $2 and status = 'diserahkan' and deleted_at is null`,
+            `select h.id, h.operating_unit_id, h.lokasi_id as location_id, h.diserahkan_pada::text as handed_over_at,
+                    r.kunjungan_id as visit_id
+             from bill_farmasi h
+             join far_tr_resep r on r.tenant_id = h.tenant_id and r.id = h.resep_id
+             where h.tenant_id = $1 and h.resep_id = $2 and h.status = 'diserahkan' and h.deleted_at is null`,
             [this.scope.tenantId, prescription.id],
         );
     }
@@ -371,6 +379,13 @@ export class DispensingReturns {
                 validation({
                     _form: 'Obat resep ini belum diserahkan, jadi belum ada yang bisa diretur.',
                 });
+            // Retur mengurangi Qty obat di tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
+            if (dispensing.visit_id)
+                await lockVisitCharges(this.db, {
+                    tenantId: this.scope.tenantId,
+                    visitId: dispensing.visit_id,
+                    message: paidMessage,
+                });
             const groups = await this.remaining(dispensing.id);
             const dispensed = await this.dispensingLines(dispensing.id);
             const taken = new Set<string>();
@@ -518,6 +533,7 @@ export class DispensingReturns {
                 inbound,
             );
             await publishReturn(this.db, this.scope, id, returnPosted);
+            await publishDispensingCharges(this.db, this.scope, dispensing.id);
         });
         return this.show(prescriptionId);
     }
@@ -543,6 +559,12 @@ export class DispensingReturns {
             if (current.status === 'dibatalkan') return;
             if (current.version !== version)
                 coded(409, 'stale_version', staleMessage);
+            if (dispensing?.visit_id)
+                await lockVisitCharges(this.db, {
+                    tenantId: this.scope.tenantId,
+                    visitId: dispensing.visit_id,
+                    message: paidMessage,
+                });
             const stamp = nowSql();
             await this.db.execute(
                 `update retur_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
@@ -560,6 +582,12 @@ export class DispensingReturns {
                 { type: returnSource, id: returnId },
             );
             await publishReturn(this.db, this.scope, returnId, returnReversed);
+            if (dispensing)
+                await publishDispensingCharges(
+                    this.db,
+                    this.scope,
+                    dispensing.id,
+                );
         });
         return this.show(prescriptionId);
     }

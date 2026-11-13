@@ -41,7 +41,8 @@ const rowSql = `select * from (
                            json_build_object('id', u.id, 'name', u.name) as operating_unit,
                            case when m.section_id is null then null
                                 else json_build_object('id', m.section_id, 'name', coalesce(s.name, '')) end as section,
-                           json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location
+                           json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
+                           m.termasuk_jasa as includes_service
                     from far_m_lokasi_layanan m
                     join organizations u on u.tenant_id = m.tenant_id and u.id = m.operating_unit_id
                     join gd_m_lokasi l on l.tenant_id = m.tenant_id and l.id = m.lokasi_id
@@ -238,6 +239,7 @@ export class ServiceLocations {
             operatingUnitId: data.operating_unit_id,
             sectionId,
             locationId: data.location_id,
+            includesService: data.includes_service ?? false,
         };
     }
 
@@ -275,6 +277,7 @@ export class ServiceLocations {
                 operating_unit_id: data.operatingUnitId,
                 section_id: data.sectionId,
                 lokasi_id: data.locationId,
+                termasuk_jasa: data.includesService,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -295,7 +298,7 @@ export class ServiceLocations {
         });
         const version = expectedVersion(request, body);
         const updated = await this.db.execute(
-            `update far_m_lokasi_layanan set lokasi_id = $1, updated_at = $2
+            `update far_m_lokasi_layanan set lokasi_id = $1, updated_at = $2, termasuk_jasa = $6
              where tenant_id = $3 and id = $4 and version = $5 and deleted_at is null`,
             [
                 data.locationId,
@@ -303,6 +306,7 @@ export class ServiceLocations {
                 this.scope.tenantId,
                 current.id,
                 version,
+                data.includesService,
             ],
         );
         if (!updated) coded(409, 'stale_version', staleMessage);

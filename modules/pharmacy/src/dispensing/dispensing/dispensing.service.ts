@@ -32,7 +32,12 @@ import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
 import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
-import { publishPrescriptionDispensed } from './dispensing.events.ts';
+import {
+    lockVisitCharges,
+    paidMessage,
+    publishDispensingCharges,
+    publishPrescriptionDispensed,
+} from './dispensing.events.ts';
 import {
     dispensingHeaderSchema,
     dispensingInputSchema,
@@ -90,6 +95,7 @@ const lockedSchema = z.object({
     issued_at: z.string(),
     price_group_id: z.string().nullable(),
     ktp_patient: z.boolean(),
+    visit_id: z.string().nullable(),
 });
 
 const itemLineSchema = z.object({
@@ -339,7 +345,8 @@ export class Dispensings {
                   lockedSchema,
                   `select r.id, r.operating_unit_id, u.name as operating_unit_name,
                           ${servingLocationSql('r')} as location_id, r.diterbitkan_pada::text as issued_at,
-                          r.kelompok_harga_id as price_group_id, r.pasien_ktp as ktp_patient
+                          r.kelompok_harga_id as price_group_id, r.pasien_ktp as ktp_patient,
+                          r.kunjungan_id as visit_id
                    from far_tr_resep r
                    join organizations u on u.tenant_id = r.tenant_id and u.id = r.operating_unit_id
                    where r.tenant_id = $1 and r.legal_entity_id = $2 and r.id = $3 and r.deleted_at is null
@@ -626,6 +633,12 @@ export class Dispensings {
             const locked = await this.lock(prescriptionId);
             const current = await this.active(locked.id);
             if (current && current.status !== 'draf') return;
+            // Obat yang disiapkan masuk tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
+            if (locked.visit_id)
+                await lockVisitCharges(this.db, {
+                    tenantId: this.scope.tenantId,
+                    visitId: locked.visit_id,
+                });
             const hasLines =
                 typeof body === 'object' &&
                 body !== null &&
@@ -671,9 +684,17 @@ export class Dispensings {
                 z.object({ number: z.string(), posting_date: z.string() }),
                 `update bill_farmasi h set status = 'disiapkan', lokasi_id = $1,
                         tanggal = (now() at time zone e.timezone)::date, disiapkan_pada = $2,
-                        disiapkan_oleh_user_id = $3, asisten_user_id = coalesce(h.asisten_user_id, $3), updated_at = $2
-                 from legal_entities e
+                        disiapkan_oleh_user_id = $3, asisten_user_id = coalesce(h.asisten_user_id, $3), updated_at = $2,
+                        termasuk_jasa = coalesce((
+                            select m.termasuk_jasa from far_m_lokasi_layanan m
+                            where m.tenant_id = r.tenant_id and m.legal_entity_id = r.legal_entity_id
+                              and m.operating_unit_id = r.operating_unit_id and m.deleted_at is null
+                              and (m.section_id = r.section_id or m.section_id is null)
+                            order by m.section_id is null
+                            limit 1), false)
+                 from legal_entities e, far_tr_resep r
                  where e.tenant_id = h.tenant_id and e.organization_id = h.legal_entity_id
+                   and r.tenant_id = h.tenant_id and r.id = h.resep_id
                    and h.tenant_id = $4 and h.id = $5 and h.status = 'draf'
                  returning h.nomor as number, h.tanggal::text as posting_date`,
                 [
@@ -774,6 +795,7 @@ export class Dispensings {
                         : [],
                 ),
             );
+            await publishDispensingCharges(this.db, this.scope, billId);
         });
         return this.show(prescriptionId);
     }
@@ -899,6 +921,13 @@ export class Dispensings {
             'dibatalkan',
             version,
             async (billId) => {
+                const visitId = (await this.lock(prescriptionId)).visit_id;
+                if (visitId)
+                    await lockVisitCharges(this.db, {
+                        tenantId: this.scope.tenantId,
+                        visitId,
+                        message: paidMessage,
+                    });
                 const stamp = nowSql();
                 await this.db.execute(
                     `update bill_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
@@ -915,6 +944,7 @@ export class Dispensings {
                     },
                     { type: dispensingSource, id: billId },
                 );
+                await publishDispensingCharges(this.db, this.scope, billId);
             },
         );
     }

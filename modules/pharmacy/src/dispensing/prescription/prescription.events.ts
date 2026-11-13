@@ -90,9 +90,9 @@ export async function receivePrescription(
         `insert into far_tr_resep (id, tenant_id, legal_entity_id, operating_unit_id, event_id, resep_sumber_id,
                                    nomor_resep, no_reg, diterbitkan_pada, diterima_pada, catatan, pasien_id, nrm,
                                    nama_pasien, tanggal_lahir, dokter_id, nama_dokter, section_id, nama_section,
-                                   kelompok_harga_id, pasien_ktp, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $10,
-                 $10)
+                                   kelompok_harga_id, pasien_ktp, kunjungan_id, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+                 $10, $10)
          on conflict (tenant_id, resep_sumber_id) do nothing`,
         [
             id,
@@ -116,6 +116,7 @@ export async function receivePrescription(
             data.section.name,
             data.price_group?.id ?? null,
             data.patient.ktp ?? true,
+            data.visit_id ?? null,
         ],
     );
     if (!inserted) {

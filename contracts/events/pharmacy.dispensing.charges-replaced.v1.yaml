@@ -1,0 +1,164 @@
+asyncapi: 3.0.0
+info:
+  title: pharmacy.dispensing.charges-replaced.v1
+  version: 1.0.0
+  description: |
+    Potret penuh biaya obat satu penyerahan farmasi untuk kasir, padanan blok BILLFarmasi di GetDetailRincianBiaya
+    sistem lama: baris OBAT ada sejak penyerahan disiapkan, dengan Qty = JmlPemakaian - JmlRetur. Diterbitkan module
+    farmasi (`modules/pharmacy`) lewat `publishEvent` di transaksi Siapkan, Batal siapkan, retur, dan batal retur. Harga
+    satuan dan persen diskon adalah nilai yang dibekukan saat Siapkan.
+
+    Penerima mengganti baris biaya terbuka penyerahan itu dengan isi `lines`: baris yang tidak ada lagi dihapus, jadi
+    `lines` kosong berarti penyerahan itu tidak lagi punya biaya (Batal siapkan, atau semua obat diretur).
+
+    `includes_service` adalah tanda obat termasuk jasa (IncludeJasa sistem lama) yang dipotret saat Siapkan dari Lokasi
+    layanan resep. Penerima mencatat obat semacam itu bernilai 0, dengan harga satuannya tetap sebagai harga asli.
+
+    Keadaan sebenarnya, 14 November 2026:
+    - Event hanya diantar di dalam runtime. Penerima: kasir Core (`src/foundation/billing/charge/`), yang menyimpan
+      barisnya di `kunjungan_kasir_detail`. Belum ada pengirim ke luar runtime.
+    - Resep yang diterima farmasi sebelum `healthcare.prescription.issued.v1` membawa `visit_id` tidak menerbitkan
+      event ini, karena kunjungannya tidak diketahui.
+    - Sesudah kunjungan dibayar kasir, Siapkan, Batal siapkan, retur, dan batal retur ditolak di farmasi lewat kunci
+      kasir (`lockChargeForChange`) sampai pembayarannya dibatalkan, jadi event ini tidak terbit untuk kunjungan yang
+      sudah dibayar kasir. Pembayaran otomatis dibatalkan kasir lalu dilunasi ulang dengan biaya yang baru.
+    - Biaya resep dan biaya racik (`SetupAwal.BiayaResepObat`, `BiayaRacikObat`) tidak dikirim. Keputusan pemilik
+      produk: keduanya kelak menjadi komponen biaya di finance, bukan setelan farmasi bernilai tetap.
+channels:
+  pharmacy.dispensing.charges-replaced.v1:
+    address: pharmacy.dispensing.charges-replaced.v1
+    messages:
+      dispensingChargesReplaced:
+        $ref: '#/components/messages/dispensingChargesReplaced'
+operations:
+  publishDispensingChargesReplaced:
+    action: send
+    channel:
+      $ref: '#/channels/pharmacy.dispensing.charges-replaced.v1'
+    messages:
+      - $ref: '#/channels/pharmacy.dispensing.charges-replaced.v1/messages/dispensingChargesReplaced'
+components:
+  messages:
+    dispensingChargesReplaced:
+      name: dispensingChargesReplaced
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          org_unit_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: pharmacy.dispensing.charges-replaced.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity resep.
+        org_unit_id:
+          type: string
+          format: uuid
+          description: Operating unit resep.
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/dispensing'
+    named:
+      type: object
+      additionalProperties: false
+      required: [id, code, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+    dispensing:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          dispensing_id,
+          dispensing_number,
+          prescription_id,
+          prescription_number,
+          visit_id,
+          registration_number,
+          date,
+          includes_service,
+          lines,
+        ]
+      properties:
+        dispensing_id:
+          type: string
+          format: uuid
+        dispensing_number:
+          type: string
+          description: Nomor penyerahan (NoBukti BILLFarmasi).
+        prescription_id:
+          type: string
+          format: uuid
+          description: Id resep dari `healthcare.prescription.issued.v1`.
+        prescription_number:
+          type: string
+        visit_id:
+          type: string
+          format: uuid
+          description: Kunjungan yang ditagih, dari `healthcare.prescription.issued.v1`.
+        registration_number:
+          type: string
+          description: Nomor registrasi kunjungan (NoReg).
+        date:
+          type: string
+          format: date
+          description: Tanggal penyerahan disiapkan.
+        includes_service:
+          type: boolean
+          description: Obat termasuk jasa, jadi bernilai 0 di tagihan.
+        lines:
+          type: array
+          description: Satu baris per baris penyerahan yang masih punya Qty sesudah retur.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line_id, item, quantity, unit_price, discount_percent]
+            properties:
+              line_id:
+                type: string
+                format: uuid
+                description: Id baris penyerahan.
+              item:
+                $ref: '#/components/schemas/named'
+              quantity:
+                type: string
+                description: Qty bersih dalam satuan baris (diserahkan dikurangi retur), teks desimal.
+              unit_price:
+                type: string
+                description: Harga per satuan baris yang dibekukan saat Siapkan, teks desimal.
+              discount_percent:
+                type: string
+                description: Persen diskon grading harga, teks desimal.
