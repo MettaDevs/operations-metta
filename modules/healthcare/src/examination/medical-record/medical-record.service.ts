@@ -36,6 +36,7 @@ import {
 } from './medical-record.allergies.ts';
 import {
     ExaminationOrders,
+    type DiagnosisChoices,
     practitionerId,
     practitionerOfUser,
 } from './medical-record.orders.ts';
@@ -732,10 +733,27 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
+            const savedDiagnoses = header
+                ? (await this.diagnosisRows(header.id)).map(
+                      (row) => row.icd10_id,
+                  )
+                : [];
+            const keptDiagnoses = new Set(
+                diagnoses
+                    ? diagnoses.map((row) => row.icd10_id)
+                    : savedDiagnoses,
+            );
+            const lineDiagnoses: DiagnosisChoices = {
+                kept: keptDiagnoses,
+                removed: new Set(
+                    savedDiagnoses.filter((id) => !keptDiagnoses.has(id)),
+                ),
+            };
             const procedures = uses('procedures')
                 ? await this.orders.readProcedures(
                       input.procedures,
                       header?.id ?? null,
+                      lineDiagnoses,
                       errors,
                   )
                 : null;
@@ -750,6 +768,7 @@ export class MedicalRecords {
                           : await this.allergies.activeDrugIds(
                                 destination.patient_id,
                             ),
+                      lineDiagnoses,
                       errors,
                   )
                 : null;
@@ -931,6 +950,16 @@ export class MedicalRecords {
                 header?.id ?? null,
                 destination.legal_entity_id,
                 await this.allergies.activeDrugIds(destination.patient_id),
+                {
+                    kept: new Set(
+                        header
+                            ? (await this.diagnosisRows(header.id)).map(
+                                  (row) => row.icd10_id,
+                              )
+                            : [],
+                    ),
+                    removed: new Set(),
+                },
                 errors,
             );
             if (Object.keys(errors).length) validation(errors);

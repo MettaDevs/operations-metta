@@ -169,7 +169,17 @@ type ProcedureLine = {
     procedure_id: string;
     quantity: number;
     doctor_id: string | null;
+    diagnosis_icd10_id: string | null;
 };
+
+// Diagnosa pemeriksaan yang boleh ditunjuk baris resep dan tindakan, menurut kode ICD-10-nya: yang tetap ada sesudah
+// Simpan, dan yang dibuang pada Simpan yang sama.
+export type DiagnosisChoices = {
+    kept: ReadonlySet<string>;
+    removed: ReadonlySet<string>;
+};
+
+const diagnosisMessage = 'Pilih diagnosa dari diagnosa pemeriksaan ini.';
 
 type ChosenUnit = { id: string; conversion: string };
 // Dosis obat tunggal dan kepala racikan; semuanya kosong pada komponen racikan. dose dalam dose_unit_id, sebagai teks
@@ -215,6 +225,7 @@ type PrescriptionLine = {
     usage_instruction_id: string | null;
     dosage: Dosage;
     preparation: CompoundPreparation;
+    diagnosis_icd10_id: string | null;
     notes: string | null;
 };
 type PrescriptionDraft = {
@@ -231,6 +242,8 @@ const savedProcedureSchema = z.object({
     procedure_name: z.string(),
     quantity: z.number(),
     doctor_id: z.string().nullable(),
+    diagnosis_id: z.string().nullable(),
+    diagnosis_icd10_id: z.string().nullable(),
     tariff: z.string(),
     added_by: z.string().nullable(),
     added_at: z.string().nullable(),
@@ -251,6 +264,8 @@ const savedPrescriptionSchema = z.object({
 const savedLineSchema = z.object({
     id: z.string(),
     urutan: z.number(),
+    diagnosis_id: z.string().nullable(),
+    diagnosis_icd10_id: z.string().nullable(),
     drug_id: z.string().nullable(),
     drug_code: z.string().nullable(),
     drug_name: z.string().nullable(),
@@ -295,6 +310,21 @@ const decimalNumber = (value: string | null) =>
 const lineKey = (line: { drug_id: string | null; compound: number | null }) =>
     line.drug_id ?? `racikan:${String(line.compound)}`;
 
+// Diagnosa di balik baris resep atau tindakan (reasonReference SATUSEHAT): salah satu diagnosa pemeriksaan ini, menurut
+// kode ICD-10-nya. Diagnosa yang dibuang pada Simpan yang sama melepas tautannya, karena layar tidak menampilkannya.
+function lineDiagnosis(
+    raw: unknown,
+    diagnoses: DiagnosisChoices,
+    field: string,
+    errors: Errors,
+): string | null {
+    if (missing(raw)) return null;
+    const id = typeof raw === 'string' ? lookupId(raw) : null;
+    if (id && diagnoses.kept.has(id)) return id;
+    if (!id || !diagnoses.removed.has(id)) add(errors, field, diagnosisMessage);
+    return null;
+}
+
 export class ExaminationOrders {
     constructor(
         private readonly db: Database,
@@ -329,9 +359,11 @@ export class ExaminationOrders {
             savedProcedureSchema,
             `select t.id, t.urutan, t.tindakan_id as procedure_id, m.kode as procedure_code,
                     m.nama as procedure_name, t.jumlah as quantity, t.dokter_id as doctor_id,
+                    t.diagnosa_id as diagnosis_id, dg.icd10_id as diagnosis_icd10_id,
                     trim_scale(t.tarif)::text as tariff, u.name as added_by, ${isoSql('t.created_at')} as added_at
              from sim_tr_pemeriksaan_tindakan t
              join sim_m_tindakan m on m.tenant_id = t.tenant_id and m.id = t.tindakan_id
+             left join sim_tr_pemeriksaan_diagnosa dg on dg.tenant_id = t.tenant_id and dg.id = t.diagnosa_id
              left join users u on u.id = t.created_by_user_id
              where t.tenant_id = $1 and t.pemeriksaan_id = $2 and t.deleted_at is null
              order by t.urutan, t.id`,
@@ -341,7 +373,8 @@ export class ExaminationOrders {
 
     async procedures(recordId: string | null): Promise<Procedure[]> {
         return (recordId ? await this.savedProcedures(recordId) : []).map(
-            ({ id: _id, urutan: _urutan, ...row }) => row,
+            ({ id: _id, urutan: _urutan, diagnosis_id: _diagnosis, ...row }) =>
+                row,
         );
     }
 
@@ -351,6 +384,7 @@ export class ExaminationOrders {
     async readProcedures(
         raw: unknown[] | undefined,
         recordId: string | null,
+        diagnoses: DiagnosisChoices,
         errors: Errors,
     ): Promise<ProcedureLine[]> {
         const saved = recordId ? await this.savedProcedures(recordId) : [];
@@ -411,11 +445,18 @@ export class ExaminationOrders {
                 field('doctor_id'),
                 errors,
             );
+            const diagnosis = lineDiagnosis(
+                row.diagnosis_icd10_id,
+                diagnoses,
+                field('diagnosis_icd10_id'),
+                errors,
+            );
             if (procedureId && typeof quantity === 'number')
                 rows.push({
                     procedure_id: procedureId,
                     quantity,
                     doctor_id: doctorId,
+                    diagnosis_icd10_id: diagnosis,
                 });
         }
         return rows;
@@ -524,6 +565,7 @@ export class ExaminationOrders {
         stamp: string,
     ): Promise<void> {
         const existing = await this.savedProcedures(recordId);
+        const diagnosisOf = await this.diagnosisIds(recordId);
         for (const item of existing)
             if (!rows.some((row) => row.procedure_id === item.procedure_id)) {
                 await this.db.execute(
@@ -542,6 +584,7 @@ export class ExaminationOrders {
                 urutan: index + 1,
                 jumlah: row.quantity,
                 dokter_id: row.doctor_id,
+                diagnosa_id: diagnosisOf(row.diagnosis_icd10_id),
             };
             const match = existing.find(
                 (item) => item.procedure_id === row.procedure_id,
@@ -557,7 +600,8 @@ export class ExaminationOrders {
             else if (
                 match.urutan !== values.urutan ||
                 match.quantity !== values.jumlah ||
-                match.doctor_id !== values.dokter_id
+                match.doctor_id !== values.dokter_id ||
+                match.diagnosis_id !== values.diagnosa_id
             )
                 await this.update('sim_tr_pemeriksaan_tindakan', match.id, {
                     ...values,
@@ -597,8 +641,10 @@ export class ExaminationOrders {
                     d.dosis_satuan_id as dose_unit_id, ds.kode as dose_unit_code, ds.nama as dose_unit_name,
                     d.rute_id as route_id, d.lama_hari as duration_days, d.dtd,
                     d.bentuk_sediaan_id as dosage_form_id, d.keterangan as notes,
-                    d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned
+                    d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned,
+                    d.diagnosa_id as diagnosis_id, dg.icd10_id as diagnosis_icd10_id
              from sim_tr_resep_detail d
+             left join sim_tr_pemeriksaan_diagnosa dg on dg.tenant_id = d.tenant_id and dg.id = d.diagnosa_id
              left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
              left join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
              left join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
@@ -675,6 +721,7 @@ export class ExaminationOrders {
                         duration_days: line.duration_days,
                         dtd: line.dtd,
                         dosage_form_id: line.dosage_form_id,
+                        diagnosis_icd10_id: line.diagnosis_icd10_id,
                         notes: line.notes,
                         dispensed_quantity:
                             line.dispensed === null
@@ -700,6 +747,7 @@ export class ExaminationOrders {
         recordId: string | null,
         legalEntityId: string,
         allergies: ReadonlySet<string>,
+        diagnoses: DiagnosisChoices,
         errors: Errors,
     ): Promise<PrescriptionDraft[]> {
         const saved = recordId ? await this.savedPrescriptions(recordId) : [];
@@ -732,6 +780,7 @@ export class ExaminationOrders {
                 before ? await this.savedLines(before.id) : [],
                 legalEntityId,
                 allergies,
+                diagnoses,
                 field('lines'),
                 errors,
             );
@@ -745,6 +794,7 @@ export class ExaminationOrders {
         saved: SavedLine[],
         legalEntityId: string,
         allergies: ReadonlySet<string>,
+        diagnoses: DiagnosisChoices,
         prefix: string,
         errors: Errors,
     ): Promise<PrescriptionLine[]> {
@@ -771,6 +821,12 @@ export class ExaminationOrders {
             }
             const signa = text(row.signa, 100, field('signa'), errors);
             const notes = text(row.notes, 500, field('notes'), errors);
+            const diagnosis = lineDiagnosis(
+                row.diagnosis_icd10_id,
+                diagnoses,
+                field('diagnosis_icd10_id'),
+                errors,
+            );
             const usageInstructionId = await this.usageInstruction(
                 row.usage_instruction_id,
                 saved,
@@ -818,6 +874,7 @@ export class ExaminationOrders {
                         field,
                         errors,
                     ),
+                    diagnosis_icd10_id: diagnosis,
                     notes,
                 });
                 continue;
@@ -880,6 +937,12 @@ export class ExaminationOrders {
                             field(name),
                             'Dosis komponen racikan diisi pada baris racikannya.',
                         );
+                if (diagnosis !== null)
+                    add(
+                        errors,
+                        field('diagnosis_icd10_id'),
+                        'Diagnosa komponen racikan diisi pada baris racikannya.',
+                    );
             }
             const quantity = decimal(
                 row.quantity,
@@ -916,6 +979,7 @@ export class ExaminationOrders {
                           )
                         : noDosage,
                 preparation: noPreparation,
+                diagnosis_icd10_id: compound === null ? diagnosis : null,
                 notes,
             });
         }
@@ -1131,6 +1195,20 @@ export class ExaminationOrders {
 
     // Draf yang kosong tidak disimpan, seperti sistem lama yang hanya membuat resep bila ada baris. Draf tersimpan yang
     // tidak dikirim lagi, atau dikosongkan, diberi deleted_at beserta barisnya.
+    // Baris diagnosa pemeriksaan menurut kode ICD-10-nya, dibaca sesudah diagnosa Simpan ini ditulis.
+    private async diagnosisIds(
+        recordId: string,
+    ): Promise<(icd10Id: string | null) => string | null> {
+        const rows = await this.db.rows(
+            z.object({ id: z.string(), icd10_id: z.string() }),
+            `select id, icd10_id from sim_tr_pemeriksaan_diagnosa
+             where tenant_id = $1 and pemeriksaan_id = $2 and deleted_at is null`,
+            [this.tenantId, recordId],
+        );
+        const ids = new Map(rows.map((row) => [row.icd10_id, row.id]));
+        return (icd10Id) => (icd10Id ? (ids.get(icd10Id) ?? null) : null);
+    }
+
     async writePrescriptions(
         recordId: string,
         drafts: PrescriptionDraft[],
@@ -1147,6 +1225,7 @@ export class ExaminationOrders {
         const kept = drafts.filter(
             (draft) => draft.lines.length > 0 || draft.notes !== null,
         );
+        const diagnosisOf = await this.diagnosisIds(recordId);
         for (const prescription of await this.savedPrescriptions(recordId))
             if (
                 prescription.status === 'draf' &&
@@ -1180,7 +1259,7 @@ export class ExaminationOrders {
                     updated_at: stamp,
                 });
             }
-            await this.writeLines(id, draft.lines, stamp);
+            await this.writeLines(id, draft.lines, diagnosisOf, stamp);
         }
     }
 
@@ -1188,6 +1267,7 @@ export class ExaminationOrders {
     private async writeLines(
         prescriptionId: string,
         lines: PrescriptionLine[],
+        diagnosisOf: (icd10Id: string | null) => string | null,
         stamp: string,
     ): Promise<void> {
         const existing = await this.savedLines(prescriptionId);
@@ -1212,6 +1292,7 @@ export class ExaminationOrders {
                 lama_hari: line.dosage.duration_days,
                 dtd: line.preparation.dtd,
                 bentuk_sediaan_id: line.preparation.dosage_form_id,
+                diagnosa_id: diagnosisOf(line.diagnosis_icd10_id),
                 keterangan: line.notes,
             };
             const match = existing.find(
@@ -1243,6 +1324,7 @@ export class ExaminationOrders {
                 match.duration_days !== values.lama_hari ||
                 match.dtd !== values.dtd ||
                 match.dosage_form_id !== values.bentuk_sediaan_id ||
+                match.diagnosis_id !== values.diagnosa_id ||
                 match.notes !== values.keterangan
             )
                 await this.update('sim_tr_resep_detail', match.id, {

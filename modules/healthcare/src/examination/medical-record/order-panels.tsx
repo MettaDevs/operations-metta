@@ -388,6 +388,7 @@ function ProcedureLines({
                                 procedure_name: null,
                                 quantity: 1,
                                 doctor_id: current.anamnesis?.doctor_id ?? null,
+                                diagnosis_icd10_id: null,
                                 tariff: null,
                                 added_by: null,
                                 added_at: null,
@@ -782,6 +783,7 @@ function PrescriptionLines({
         ...noDosage,
         dtd: null,
         dosage_form_id: null,
+        diagnosis_icd10_id: null,
         notes: null,
     };
     const pick = (line: number, drug: Drug) => {
@@ -824,6 +826,8 @@ function PrescriptionLines({
                           signa: null,
                           usage_instruction_id: null,
                           ...noDosage,
+                          // Alasan resep ada di baris racikannya, seperti dosis.
+                          diagnosis_icd10_id: null,
                       },
             );
         });
