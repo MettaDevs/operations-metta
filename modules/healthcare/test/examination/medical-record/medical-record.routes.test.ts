@@ -717,6 +717,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
             const saved = await json<Shown>(
                 await save(admin, id, {
                     ...opened.data,
+                    anamnesis: { ...opened.data.anamnesis, doctor_id: doctor },
                     physical: { ...physical, temperature: 36.5 },
                 }),
                 200,

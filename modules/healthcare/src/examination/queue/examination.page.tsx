@@ -447,6 +447,8 @@ function ExaminationRecord({
                                 <DischargePanel
                                     destinationId={entry.id}
                                     visitDate={entry.date}
+                                    startedAt={entry.started_at}
+                                    finishedAt={entry.finished_at}
                                     discharge={
                                         draft.discharge ?? shown.data.discharge
                                     }

@@ -1083,8 +1083,13 @@ describe.skipIf(!process.env.DB_HOST)(
                 ).status,
             ).toEqual([notStarted]);
             await start(id);
+            const opened = await show(admin, id);
             await json(
                 await save(admin, id, {
+                    anamnesis: {
+                        ...(opened.data.anamnesis as object),
+                        doctor_id: doctor,
+                    },
                     prescriptions: [draft([single(salbutamol.id)])],
                 }),
                 200,

@@ -105,6 +105,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
             }),
             200,
         );
+        await json(await clinic.examineBy(earlier), 200);
         await json(await clinic.finish(earlier), 200);
 
         current = (await clinic.visit()).destinationId;

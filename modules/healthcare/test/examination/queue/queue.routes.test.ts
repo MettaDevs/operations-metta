@@ -13,6 +13,8 @@ import {
 
 type Entry = {
     id: string;
+    started_at: string | null;
+    finished_at: string | null;
     visit_id: string;
     queue_number: number;
     queue_code: string;
@@ -57,6 +59,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
     let unitB: string;
     let umum: string;
     let patientId: string;
+    let doctorId: string;
     const sections: Record<string, string> = {};
     const rooms = { L1R1: '', L1R2: '', L1R3: '', B1: '' };
 
@@ -182,6 +185,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             'healthcare.service-setup.manage',
             'healthcare.visit.manage',
             'healthcare.examination.manage',
+            'healthcare.practitioner.manage',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
         await pool.unsafe(
@@ -233,6 +237,19 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
                 phone: '081200000005',
                 domicile_address: { street: 'Jl. Antrean No. 1' },
                 payment_methods: [{ patient_type_id: umum }],
+            })
+        ).id;
+        const [doctorProfession] = await pool.unsafe<{ id: string }[]>(
+            `select id from sim_m_profesi where tenant_id = $1 and kode = 'dokter' and deleted_at is null`,
+            [tenantId],
+        );
+        doctorId = (
+            await created(`${api}/practitioners`, {
+                name: 'Dokter Antrean',
+                nik: String(Date.now()).slice(-12).padStart(16, '5'),
+                gender: 'male',
+                phone: '081200000006',
+                profession_id: doctorProfession!.id,
             })
         ).id;
         for (const code of ['L1R1', 'L1R2', 'L1R3'] as const)
@@ -346,6 +363,8 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         expect([started.status, started.visit_status, started.room_id]).toEqual(
             ['diperiksa', 'diperiksa', rooms.L1R1],
         );
+        expect(started.started_at).not.toBeNull();
+        expect(started.finished_at).toBeNull();
         // Kunjungan yang sudah diperiksa tidak bisa dibatalkan di pendaftaran.
         const visit = await json<{ data: { version: number } }>(
             await admin.get(`${api}/visits/${second.visit_id}`),
@@ -367,14 +386,19 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         expect(
             (await refused(await act(admin, second.id, 'skip'))).errors.status,
         ).toEqual(['Pasien ini sedang diperiksa.']);
-        // Selesai periksa menunggu isian wajib periksa fisik tersimpan.
-        expect(
-            Object.keys(
-                (await refused(await act(admin, second.id, 'finish'))).errors,
-            ),
-        ).toContain('physical.pulse_rate');
+        // Selesai periksa menunggu isian wajib periksa fisik tersimpan dan dokter / tenaga medis yang memeriksa.
+        const incomplete = (
+            await refused(await act(admin, second.id, 'finish'))
+        ).errors;
+        expect(Object.keys(incomplete)).toContain('physical.pulse_rate');
+        expect(incomplete['anamnesis.doctor_id']).toEqual([
+            'Pilih dokter / tenaga medis yang memeriksa sebelum menyelesaikan pemeriksaan.',
+        ]);
         const record = await json<{
-            data: Record<string, unknown> & { physical: object };
+            data: Record<string, unknown> & {
+                physical: object;
+                anamnesis: object;
+            };
         }>(
             await admin.get(
                 `${api}/examination/destinations/${second.id}/medical-record`,
@@ -401,11 +425,61 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             ),
             200,
         );
+        expect(
+            Object.keys(
+                (await refused(await act(admin, second.id, 'finish'))).errors,
+            ),
+        ).toEqual(['anamnesis.doctor_id']);
+        const saved = await json<{
+            data: Record<string, unknown> & { anamnesis: object };
+        }>(
+            await admin.get(
+                `${api}/examination/destinations/${second.id}/medical-record`,
+            ),
+            200,
+        );
+        await json(
+            await admin.put(
+                `${api}/examination/destinations/${second.id}/medical-record`,
+                {
+                    ...saved.data,
+                    anamnesis: { ...saved.data.anamnesis, doctor_id: doctorId },
+                },
+            ),
+            200,
+        );
         const finished = await entry(await act(admin, second.id, 'finish'));
         expect([finished.status, finished.visit_status]).toEqual([
             'selesai',
             'selesai',
         ]);
+        expect(finished.started_at).toBe(started.started_at);
+        expect(finished.finished_at).not.toBeNull();
+        // Waktu kunjungan tersimpan di baris kunjungan, sama dengan riwayat antrean.
+        const [times] = await pool.unsafe<
+            {
+                registered: string;
+                started: string;
+                finished: string;
+                visit_finished: string;
+                log_started: string;
+                log_finished: string;
+            }[]
+        >(
+            `select d.didaftarkan_pada::text as registered, d.mulai_periksa_pada::text as started,
+                    d.selesai_periksa_pada::text as finished, r.selesai_pada::text as visit_finished,
+                    (select dilakukan_pada::text from sim_tr_antrean_panggilan
+                     where tujuan_id = d.id and aksi = 'mulai_periksa') as log_started,
+                    (select dilakukan_pada::text from sim_tr_antrean_panggilan
+                     where tujuan_id = d.id and aksi = 'selesai_periksa') as log_finished
+             from sim_tr_registrasi_tujuan d join sim_tr_registrasi r on r.id = d.registrasi_id
+             where d.id = $1`,
+            [second.id],
+        );
+        expect(times!.started).toBe(times!.log_started);
+        expect(times!.finished).toBe(times!.log_finished);
+        expect(times!.visit_finished).toBe(times!.finished);
+        expect(times!.registered <= times!.started).toBe(true);
         expect(
             (await refused(await act(admin, second.id, 'finish'))).errors
                 .status,

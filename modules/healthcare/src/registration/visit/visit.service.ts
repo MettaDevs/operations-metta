@@ -1019,6 +1019,7 @@ export class Visits {
                 kode_antrean: queueCode(section.queue_prefix, queue),
                 no_bukti: examinationNumber,
                 status: 'menunggu',
+                didaftarkan_pada: stamp,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -1134,10 +1135,15 @@ export class Visits {
             );
             const destinations = await this.db.rows(
                 z.object({ schedule_id: z.string().nullable() }),
-                `update sim_tr_registrasi_tujuan set status = 'batal', updated_at = $3
+                `update sim_tr_registrasi_tujuan set status = 'batal', batal_oleh = $3, batal_pada = $4, updated_at = $4
                  where tenant_id = $1 and registrasi_id = $2 and deleted_at is null and status <> 'batal'
                  returning jadwal_praktik_id as schedule_id`,
-                [this.workspace.tenantId, current.id, stamp],
+                [
+                    this.workspace.tenantId,
+                    current.id,
+                    this.workspace.userId,
+                    stamp,
+                ],
             );
             for (const destination of destinations)
                 if (destination.schedule_id)

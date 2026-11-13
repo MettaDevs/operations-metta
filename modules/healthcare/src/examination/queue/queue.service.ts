@@ -64,7 +64,9 @@ const entrySelect = `
            kl.kode as cluster_code, kl.nama as cluster_name, sh.nama as life_cycle_name,
            sk.nama as screening_category_name, sk.warna as screening_category_color,
            to_char(calls.called_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as called_at, calls.call_count,
-           asal_s.nama as referrer_section_name
+           asal_s.nama as referrer_section_name,
+           to_char(d.mulai_periksa_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as started_at,
+           to_char(d.selesai_periksa_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as finished_at
     from sim_tr_registrasi_tujuan d
     join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
     join sim_m_section s on s.tenant_id = d.tenant_id and s.id = d.section_id
@@ -525,7 +527,9 @@ export class ExaminationQueue {
             }
             await this.db.execute(
                 `update sim_tr_registrasi_tujuan
-                 set status = $3, ruangan_id = $4, posisi_antrean = coalesce($5, posisi_antrean), updated_at = $6
+                 set status = $3, ruangan_id = $4, posisi_antrean = coalesce($5, posisi_antrean), updated_at = $6,
+                     mulai_periksa_pada = coalesce($7, mulai_periksa_pada),
+                     selesai_periksa_pada = coalesce($8, selesai_periksa_pada)
                  where tenant_id = $1 and id = $2`,
                 [
                     this.workspace.tenantId,
@@ -534,6 +538,8 @@ export class ExaminationQueue {
                     action === 'lewati' ? null : roomId,
                     position,
                     stamp,
+                    action === 'mulai_periksa' ? stamp : null,
+                    action === 'selesai_periksa' ? stamp : null,
                 ],
             );
             await this.log(current.id, roomId, action, stamp);
@@ -572,8 +578,15 @@ export class ExaminationQueue {
         const refused = refusedTransition(from, to);
         if (refused) validation({ status: refused });
         await this.db.execute(
-            'update sim_tr_registrasi set status = $3, updated_at = $4 where tenant_id = $1 and id = $2',
-            [this.workspace.tenantId, visitId, to, stamp],
+            `update sim_tr_registrasi set status = $3, updated_at = $4, selesai_pada = $5
+             where tenant_id = $1 and id = $2`,
+            [
+                this.workspace.tenantId,
+                visitId,
+                to,
+                stamp,
+                to === 'selesai' ? stamp : null,
+            ],
         );
         if (to === 'selesai')
             await publishVisitCompleted(
