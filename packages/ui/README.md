@@ -66,7 +66,9 @@ tersimpan ketika kembali. Escape menutup lapisan teratas, setelah popup field; f
 kembali ke pemanggil. Kartu yang memanggil `usePageDialogRecord({ dirty })` tidak
 ditutup Escape, Kembali, atau Tutup sebelum pengguna memilih membuang perubahannya,
 siapa pun pembukanya; pemanggil cukup menutup kartu di `onOpenChange` tanpa konfirmasi
-sendiri. Di layar sempit halaman memenuhi konten, sedangkan jumlah lapisan
+sendiri. Pemanggil yang memegang isian dan merender `PageDialog` sendiri memberi
+`<PageDialog dirty>` dengan arti yang sama. `bun run check:ui` menolak kartu yang bisa
+diubah tanpa `dirty`. Di layar sempit halaman memenuhi konten, sedangkan jumlah lapisan
 masih terlihat. Motion menghormati prefers-reduced-motion. Di luar Shell, portal
 mengikuti viewport. Dialog konfirmasi kecil, AlertDialog, tooltip dan FieldHint tetap
 memakai komponen masing-masing. Halaman penuh biasa tidak otomatis diubah menjadi modal.

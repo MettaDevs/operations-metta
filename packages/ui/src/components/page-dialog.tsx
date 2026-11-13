@@ -114,8 +114,12 @@ type PageDialogContentProps = Omit<
 /** Kartu/pemilih halaman memakai stack R&D; konfirmasi kecil tetap memakai Dialog. */
 function PageDialog({
     onOpenChange,
+    dirty = false,
     ...props
-}: Omit<React.ComponentProps<typeof DialogPrimitive.Root>, 'modal'>) {
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Root>, 'modal'> & {
+    /** Isian milik pemanggil yang merender PageDialog sendiri belum disimpan; sama dengan `dirty` di usePageDialogRecord. */
+    dirty?: boolean;
+}) {
     const [recordStore] = React.useState(() =>
         createPageDialogRecordStore<PageDialogRecord>(),
     );
@@ -129,7 +133,7 @@ function PageDialog({
                 onOpenChange={(open) => {
                     // Escape, Kembali, dan Tutup lewat sini. Kartu yang melaporkan perubahan belum disimpan baru
                     // ditutup setelah pengguna memilih membuangnya, siapa pun pembukanya, termasuk Baru di lookup.
-                    if (open || !recordStore.getRecord()?.dirty) {
+                    if (open || !(dirty || recordStore.getRecord()?.dirty)) {
                         onOpenChange?.(open);
 
                         return;
