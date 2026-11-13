@@ -189,10 +189,12 @@ export const drugUnitSchema = z.object({
     quantity_per_unit: z.string(),
 });
 
-// Baris resep (SIMtrResepDetail): obat tunggal (compound kosong), kepala racikan "Racikan N" (drug_id kosong,
-// compound N), atau komponen racikan (drug_id dan compound terisi). Baris dikenali dari obatnya, atau dari nomor
-// racikannya untuk kepala racikan. Kode dan nama obat hanya dibaca.
+// Baris resep (SIMtrResepDetail): obat tunggal (compound kosong), kepala racikan "Racikan N" (is_compound_header,
+// drug_id kosong, compound N), atau komponen racikan (compound N, drug_id diisi). Kepala racikan ditandai sendiri
+// seperti SIMtrResepDetail.isRacikan sistem lama, karena komponen yang obatnya belum dipilih juga belum punya drug_id.
+// Baris dikenali dari obatnya, atau dari nomor racikannya untuk kepala racikan. Kode dan nama obat hanya dibaca.
 export const prescriptionLineSchema = z.object({
+    is_compound_header: z.boolean(),
     drug_id: text,
     drug_code: text,
     drug_name: text,

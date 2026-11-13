@@ -40,6 +40,12 @@ import type {
     MedicalRecordDraft,
     MedicalRecordMetadata,
 } from './medical-record-panels.tsx';
+import {
+    compoundNumbers,
+    isCompoundComponent,
+    placeLine,
+    removeLines,
+} from './prescription.lines.ts';
 
 // Panel Biaya Tindakan dan E-Resep tab Rekam Medis poli sistem lama (rekammedis/Services.php dan Eresep), dalam urutan
 // aslinya sesudah Prognosa.
@@ -733,9 +739,7 @@ function PrescriptionLines({
         `${prefix}.lines.${line}.${name}`;
     const rows = prescription.lines;
     const lines = rows.map((row, line) => ({ index: line, row }));
-    const compounds = rows
-        .filter((row) => !row.drug_id && row.compound !== null)
-        .map((row) => Number(row.compound));
+    const compounds = compoundNumbers(rows);
     // Draf yang belum ada di isi rekam medis lahir saat baris pertamanya ditambahkan, seperti form resep sistem lama
     // yang langsung terbuka bila kunjungan belum punya resep.
     const update = (next: (current: Prescription) => Prescription) =>
@@ -761,6 +765,7 @@ function PrescriptionLines({
             ),
         );
     const blankLine: PrescriptionLine = {
+        is_compound_header: false,
         drug_id: null,
         drug_code: null,
         drug_name: null,
@@ -804,12 +809,13 @@ function PrescriptionLines({
                 : {}),
         });
     };
-    // Komponen dipindah ke bawah racikannya, seperti baris komponen yang menjorok di bawah "Racikan N" sistem lama.
     const assign = (line: number, compound: number | null) =>
         setLines((current) => {
             const row = current[line];
             if (!row) return current;
-            const moved: PrescriptionLine =
+            return placeLine(
+                current,
+                line,
                 compound === null
                     ? { ...row, compound }
                     : {
@@ -818,15 +824,8 @@ function PrescriptionLines({
                           signa: null,
                           usage_instruction_id: null,
                           ...noDosage,
-                      };
-            const rest = current.filter((_, at) => at !== line);
-            if (compound === null) return [...rest, moved];
-            const last = rest.reduce(
-                (found, row, at) =>
-                    Number(row.compound) === compound ? at : found,
-                -1,
+                      },
             );
-            return [...rest.slice(0, last + 1), moved, ...rest.slice(last + 1)];
         });
     const usage = metadata.usage_instructions;
     const routes = metadata.medication_routes;
@@ -850,10 +849,8 @@ function PrescriptionLines({
                   ...doseUnits,
               ]
             : doseUnits;
-    const isHeader = (row: PrescriptionLine) =>
-        !row.drug_id && row.compound !== null;
-    const isComponent = (row: PrescriptionLine) =>
-        Boolean(row.drug_id) && row.compound !== null;
+    const isHeader = (row: PrescriptionLine) => row.is_compound_header;
+    const isComponent = isCompoundComponent;
 
     return (
         <div className="space-y-3" data-error-field={`${prefix}.id`}>
@@ -895,6 +892,7 @@ function PrescriptionLines({
                                         ...current,
                                         {
                                             ...blankLine,
+                                            is_compound_header: true,
                                             quantity: null,
                                             compound:
                                                 Math.max(0, ...compounds) + 1,
@@ -920,24 +918,14 @@ function PrescriptionLines({
                     )
                 }
                 onAddRow={() => setLines((current) => [...current, blankLine])}
-                onDeleteRows={(removed) => {
-                    // Racikan dihapus beserta komponennya, seperti "Hapus racikan ... beserta komponennya?".
-                    const gone = new Set(
-                        removed
-                            .filter((line) => isHeader(line.row))
-                            .map((line) => Number(line.row.compound)),
-                    );
+                onDeleteRows={(removed) =>
                     setLines((current) =>
-                        current.filter(
-                            (row, at) =>
-                                !removed.some((line) => line.index === at) &&
-                                !(
-                                    row.compound !== null &&
-                                    gone.has(Number(row.compound))
-                                ),
+                        removeLines(
+                            current,
+                            removed.map((line) => line.index),
                         ),
-                    );
-                }}
+                    )
+                }
                 emptyMessage={
                     readOnly
                         ? 'Resep ini tidak berisi obat.'
