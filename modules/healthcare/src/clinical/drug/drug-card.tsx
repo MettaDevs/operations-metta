@@ -117,6 +117,7 @@ export function DrugCard({
         code: drug?.code ?? '',
         name: drug?.name ?? '',
         base_unit_id: drug?.base_unit_id ?? null,
+        kfa_code: drug?.kfa_code ?? '',
         dosage_form_id: drug?.dosage_form_id ?? null,
         is_prescribable: drug?.is_prescribable ?? true,
     };
@@ -302,6 +303,25 @@ export function DrugCard({
                                     setForm({ ...form, base_unit_id: id })
                                 }
                                 portalContainer={portalContainer}
+                            />
+                        </FormControl>
+                        <FormControl
+                            error={errors.kfa_code?.[0]}
+                            hint="Kode obat di Kamus Farmasi dan Alat Kesehatan (KFA) Kemenkes, untuk SATUSEHAT. Boleh kosong."
+                        >
+                            <Input
+                                label="Kode KFA"
+                                maxLength={20}
+                                inputMode="numeric"
+                                data-error-field="kfa_code"
+                                value={form.kfa_code}
+                                readOnly={!editing}
+                                onChange={(event) =>
+                                    setForm({
+                                        ...form,
+                                        kfa_code: event.target.value,
+                                    })
+                                }
                             />
                         </FormControl>
                         <FormControl

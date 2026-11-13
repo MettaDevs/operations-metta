@@ -23,6 +23,7 @@ import { drugInputSchema, drugRowSchema } from './drug.schema.ts';
 const rowSql = `select * from (
                     select o.id, b.kode as code, b.nama as name, b.satuan_dasar_id as base_unit_id,
                            u.nama as base_unit_name, coalesce(b.satuan_jual_id, b.satuan_dasar_id) as sales_unit_id,
+                           b.kode_kfa as kfa_code,
                            o.bentuk_sediaan_id as dosage_form_id, f.nama as dosage_form_name,
                            o.boleh_diresepkan as is_prescribable, b.diblokir as is_blocked, b.version
                     from sim_m_obat o
@@ -178,6 +179,7 @@ export class Drugs {
             code: data.code,
             name: data.name,
             base_unit_id: data.base_unit_id ?? '',
+            kfa_code: data.kfa_code,
         };
         return {
             item,

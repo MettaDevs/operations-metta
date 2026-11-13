@@ -176,6 +176,7 @@ export function DrugLookup({
                               base_unit_name: '',
                               sales_unit_id: '',
                               units: [],
+                              kfa_code: null,
                               dosage_form_id: null,
                               dosage_form_name: null,
                               is_prescribable: true,
