@@ -734,7 +734,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         }
         expect(await sent()).toBe(sentBefore);
 
-        // Kasir belum punya pembatalan pembayaran, jadi pembayaran dibatalkan langsung di tabelnya.
+        // Pengganti API batal pembayaran kasir (irisan 6) sampai API itu ada; lane kasir menggantinya dengan panggilan API.
         await pool.unsafe(
             "update kasir set status = 'batal' where tenant_id = $1 and kunjungan_id = $2",
             [clinic.tenantId, visitId],

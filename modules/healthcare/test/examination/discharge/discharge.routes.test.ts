@@ -523,13 +523,17 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         expect(await visit()).toEqual({ status: 'diperiksa', finished: false });
         expect(await payable()).toBe(false);
         expect(
-            (
+            await refused(
                 await cashier.post(
                     `/api/v1/billing/visits/${visitId}/payments`,
                     { received: '0' },
-                )
-            ).status,
-        ).toBe(404);
+                ),
+            ),
+        ).toEqual({
+            _form: [
+                'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.',
+            ],
+        });
         const contract = await eventContract('healthcare.visit.reopened.v1');
         const sent = (
             await outboxEnvelopes(
