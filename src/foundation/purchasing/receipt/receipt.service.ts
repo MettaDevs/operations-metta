@@ -19,6 +19,7 @@ import {
     activeLegalEntity,
     baseQuantity,
     decimalInput,
+    defaultUnit,
     exists,
     parseInput,
     postItemLines,
@@ -318,12 +319,24 @@ export class Receipts {
                 ))
             )
                 fail('item_id', messages.item_id);
-            const conversion = await unitConversion(
-                this.db,
-                this.scope,
-                line.item_id,
-                line.unit_id,
-            );
+            // Seperti baris pembelian BC yang mengisi Unit of Measure Code dari Purch. Unit of Measure barang.
+            const unit = line.unit_id
+                ? {
+                      unitId: line.unit_id,
+                      conversion: await unitConversion(
+                          this.db,
+                          this.scope,
+                          line.item_id,
+                          line.unit_id,
+                      ),
+                  }
+                : await defaultUnit(
+                      this.db,
+                      this.scope,
+                      line.item_id,
+                      'purchase',
+                  );
+            const conversion = unit?.conversion ?? null;
             if (conversion === null) fail('unit_id', messages.unit_id);
             const quantity = decimalInput(line.quantity);
             if (quantity === null || quantity <= 0n)
@@ -397,7 +410,7 @@ export class Receipts {
             lines.push({
                 id: line.id ?? null,
                 itemId: line.item_id,
-                unitId: line.unit_id,
+                unitId: unit?.unitId ?? '',
                 conversion: conversion ?? one,
                 quantity: quantity ?? 0n,
                 unitCost: unitCost ?? 0n,

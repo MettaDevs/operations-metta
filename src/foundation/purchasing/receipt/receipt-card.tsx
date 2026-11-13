@@ -38,12 +38,13 @@ type CodeEntry = ApiBody<'inventoryFundingSourceList'>['data'][number];
 type Errors = Record<string, string[]>;
 
 type Reference = { id: string; code: string; name: string };
+type UnitChoice = Reference & { quantity_per_unit: string };
 type ItemChoice = Reference & {
     base_unit: Reference;
+    purchase_unit: UnitChoice;
     batch_required: boolean;
     expiry_required: boolean;
 };
-type UnitChoice = Reference & { quantity_per_unit: string };
 type Line = {
     key: string;
     id: string | null;
@@ -97,6 +98,10 @@ function linesOf(receipt: Receipt | null): Line[] {
             code: line.item.code,
             name: line.item.name,
             base_unit: { id: '', code: line.item.base_unit, name: '' },
+            purchase_unit: {
+                ...line.unit,
+                quantity_per_unit: line.quantity_per_unit,
+            },
             batch_required: line.item.batch_required,
             expiry_required: line.item.expiry_required,
         },
@@ -164,6 +169,7 @@ const loadItems = async (
             code: item.code,
             name: item.name,
             base_unit: item.base_unit,
+            purchase_unit: item.purchase_unit,
             batch_required: item.batch_required,
             expiry_required: item.expiry_required,
         })),
@@ -883,11 +889,7 @@ export function ReceiptCard({
                                                 onValueChange={(item) =>
                                                     change(index, {
                                                         item,
-                                                        unit: {
-                                                            ...item.base_unit,
-                                                            quantity_per_unit:
-                                                                '1',
-                                                        },
+                                                        unit: item.purchase_unit,
                                                     })
                                                 }
                                                 getItemValue={(item) => item.id}

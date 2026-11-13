@@ -51,8 +51,20 @@ const messages = {
 const storedSchema = z.object({
     id: z.string(),
     item_id: z.string(),
+    unit_id: z.string(),
     version: z.number(),
 });
+
+const unitUses = ['purchase', 'sales'] as const;
+export type UnitUse = (typeof unitUses)[number];
+const defaultUnitColumns: Record<UnitUse, string> = {
+    purchase: 'satuan_beli_id',
+    sales: 'satuan_jual_id',
+};
+const useLabels: Record<UnitUse, string> = {
+    purchase: 'satuan beli',
+    sales: 'satuan jual',
+};
 
 // Isi satuan baris dokumen: satuan dasar barang berisi 1, satuan kemasan aktif berisi konversinya. Barang yang tidak
 // ada atau satuan yang bukan milik barang itu dijawab null.
@@ -76,6 +88,35 @@ export async function unitConversion(
         [scope.tenantId, scope.legalEntityId, itemId, unitId],
     );
     return found ? fromNumeric(found.conversion, quantityScale) : null;
+}
+
+// Satuan bawaan barang untuk satu pemakaian beserta isinya dalam satuan dasar, untuk baris dokumen yang tidak memilih
+// satuan sendiri. Bawaan kosong berarti satuan dasar. Barang yang tidak ada dijawab null.
+export async function defaultUnit(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string },
+    itemId: string,
+    use: UnitUse,
+): Promise<{ unitId: string; conversion: bigint } | null> {
+    if (!lookupId(itemId)) return null;
+    const column = defaultUnitColumns[use];
+    const found = await db.one(
+        z.object({ unit_id: z.string(), conversion: z.string() }),
+        `select coalesce(b.${column}, b.satuan_dasar_id) as unit_id,
+                case when coalesce(b.${column}, b.satuan_dasar_id) = b.satuan_dasar_id then '1'
+                     else k.konversi::text end as conversion
+         from gd_m_barang b
+         left join gd_m_barang_satuan k on k.tenant_id = b.tenant_id and k.barang_id = b.id
+              and k.satuan_id = b.${column} and k.deleted_at is null
+         where b.tenant_id = $1 and b.legal_entity_id = $2 and b.id = $3 and b.deleted_at is null`,
+        [scope.tenantId, scope.legalEntityId, itemId],
+    );
+    return found
+        ? {
+              unitId: found.unit_id,
+              conversion: fromNumeric(found.conversion, quantityScale),
+          }
+        : null;
 }
 
 export class ItemUnits {
@@ -143,7 +184,7 @@ export class ItemUnits {
         const found = lookupId(entryId)
             ? await this.db.one(
                   storedSchema,
-                  `select id, barang_id as item_id, version from gd_m_barang_satuan
+                  `select id, barang_id as item_id, satuan_id as unit_id, version from gd_m_barang_satuan
                    where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null`,
                   [this.scope.tenantId, this.scope.legalEntityId, entryId],
               )
@@ -185,6 +226,27 @@ export class ItemUnits {
         };
     }
 
+    // Padanan TestItemSetup di Item Unit of Measure BC. Baris barang dikunci seperti di updateItem, supaya pemeriksaan
+    // satuan bawaan di sana tidak menyalip perubahan ini.
+    private async refuseDefaultUnit(
+        current: z.infer<typeof storedSchema>,
+        message: (uses: string) => string,
+    ): Promise<void> {
+        const item = await this.db.one(
+            z.object({
+                purchase: z.string().nullable(),
+                sales: z.string().nullable(),
+            }),
+            `select satuan_beli_id as purchase, satuan_jual_id as sales from gd_m_barang
+             where tenant_id = $1 and id = $2 for update`,
+            [this.scope.tenantId, current.item_id],
+        );
+        const uses = unitUses
+            .filter((use) => item?.[use] === current.unit_id)
+            .map((use) => useLabels[use]);
+        if (uses.length) validation({ unit_id: message(uses.join(' dan ')) });
+    }
+
     private unitTaken(error: unknown): void {
         if (violates(error, 'gd_m_barang_satuan_unique'))
             validation({
@@ -222,18 +284,26 @@ export class ItemUnits {
         const data = await this.checked(body, current.item_id);
         let updated = 0;
         try {
-            updated = await this.db.execute(
-                `update gd_m_barang_satuan set satuan_id = $1, konversi = $2, updated_at = $3
+            await this.db.transaction(async () => {
+                if (data.unitId !== current.unit_id)
+                    await this.refuseDefaultUnit(
+                        current,
+                        (uses) =>
+                            `Satuan ini ${uses} barang ini, jadi tidak bisa diganti. Ganti ${uses}nya di kartu barang lebih dulu.`,
+                    );
+                updated = await this.db.execute(
+                    `update gd_m_barang_satuan set satuan_id = $1, konversi = $2, updated_at = $3
                  where tenant_id = $4 and id = $5 and version = $6 and deleted_at is null`,
-                [
-                    data.unitId,
-                    data.conversion,
-                    nowSql(),
-                    this.scope.tenantId,
-                    current.id,
-                    expectedVersion(request, body),
-                ],
-            );
+                    [
+                        data.unitId,
+                        data.conversion,
+                        nowSql(),
+                        this.scope.tenantId,
+                        current.id,
+                        expectedVersion(request, body),
+                    ],
+                );
+            });
         } catch (error) {
             this.unitTaken(error);
             throw error;
@@ -245,16 +315,23 @@ export class ItemUnits {
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-item', 'update');
         const current = await this.stored(id);
-        const deleted = await this.db.execute(
-            `update gd_m_barang_satuan set deleted_at = $1, updated_at = $1
-             where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,
-            [
-                nowSql(),
-                this.scope.tenantId,
-                current.id,
-                expectedVersion(request, body),
-            ],
-        );
+        const deleted = await this.db.transaction(async () => {
+            await this.refuseDefaultUnit(
+                current,
+                (uses) =>
+                    `Satuan ini ${uses} barang ini, jadi tidak bisa dihapus. Ganti ${uses}nya di kartu barang lebih dulu.`,
+            );
+            return this.db.execute(
+                `update gd_m_barang_satuan set deleted_at = $1, updated_at = $1
+                 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null`,
+                [
+                    nowSql(),
+                    this.scope.tenantId,
+                    current.id,
+                    expectedVersion(request, body),
+                ],
+            );
+        });
         if (!deleted) coded(409, 'stale_version', staleMessage);
         return { status: 204, headers: {}, body: undefined };
     }

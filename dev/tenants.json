@@ -139,7 +139,9 @@
                 "units_of_measure": [
                     { "code": "TAB", "name": "Tablet" },
                     { "code": "KAP", "name": "Kapsul" },
-                    { "code": "SAC", "name": "Sachet" }
+                    { "code": "SAC", "name": "Sachet" },
+                    { "code": "STRIP", "name": "Strip" },
+                    { "code": "BOX", "name": "Kotak" }
                 ],
                 "funding_sources": [
                     { "code": "APBD", "name": "APBD" },
@@ -191,19 +193,24 @@
                         "drug_class": "BEBAS",
                         "generic": true,
                         "formulary": true,
+                        "packaging": [
+                            { "unit": "STRIP", "quantity_per_unit": 10 },
+                            { "unit": "BOX", "quantity_per_unit": 100 }
+                        ],
+                        "purchase_unit": "BOX",
                         "batches": [
                             {
                                 "batch_number": "PCT2703A",
                                 "expiry_date": "2027-03-31",
-                                "quantity": 200,
-                                "unit_cost": 120,
+                                "quantity": 2,
+                                "unit_cost": 12000,
                                 "funding_source": "APBD"
                             },
                             {
                                 "batch_number": "PCT2809B",
                                 "expiry_date": "2028-09-30",
-                                "quantity": 500,
-                                "unit_cost": 110,
+                                "quantity": 5,
+                                "unit_cost": 11000,
                                 "funding_source": "KAPITASI"
                             }
                         ],
@@ -279,19 +286,25 @@
                         "drug_class": "BEBAS",
                         "generic": true,
                         "formulary": true,
+                        "packaging": [
+                            { "unit": "STRIP", "quantity_per_unit": 10 },
+                            { "unit": "BOX", "quantity_per_unit": 100 }
+                        ],
+                        "purchase_unit": "BOX",
+                        "sales_unit": "STRIP",
                         "batches": [
                             {
                                 "batch_number": "ANT2704A",
                                 "expiry_date": "2027-04-30",
-                                "quantity": 100,
-                                "unit_cost": 90,
+                                "quantity": 1,
+                                "unit_cost": 9000,
                                 "funding_source": "APBD"
                             },
                             {
                                 "batch_number": "ANT2810B",
                                 "expiry_date": "2028-10-31",
-                                "quantity": 200,
-                                "unit_cost": 85,
+                                "quantity": 2,
+                                "unit_cost": 8500,
                                 "funding_source": "KAPITASI"
                             }
                         ],

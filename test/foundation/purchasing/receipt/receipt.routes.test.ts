@@ -237,6 +237,63 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
         ]);
     });
 
+    test("a line without a unit takes the item's purchase unit, and the base unit while none is chosen", async () => {
+        const syrup = await json<{
+            data: {
+                id: string;
+                code: string;
+                name: string;
+                version: number;
+            };
+        }>(
+            await business.admin.post(`${inventoryApi}/items`, {
+                code: 'SIRUP',
+                name: 'Sirup',
+                base_unit_id: business.uom.id,
+            }),
+            201,
+        );
+        const make = setup(business);
+        const crate = await make.code('units-of-measure', 'DUS');
+        const lineOf = () => ({
+            item_id: syrup.data.id,
+            quantity: 3,
+            unit_cost: 1200,
+        });
+        const before = await draft([lineOf()]);
+        expect(before.lines[0]).toMatchObject({
+            unit: { id: business.uom.id },
+            quantity_per_unit: '1',
+        });
+
+        await make.packaging(syrup.data.id, crate.id, 24);
+        await json(
+            await business.admin.patch(
+                `${inventoryApi}/items/${syrup.data.id}`,
+                {
+                    code: syrup.data.code,
+                    name: syrup.data.name,
+                    base_unit_id: business.uom.id,
+                    purchase_unit_id: crate.id,
+                    version: syrup.data.version,
+                },
+            ),
+            200,
+        );
+        const document = await posted([lineOf()]);
+        expect(document.lines[0]).toMatchObject({
+            unit: { id: crate.id, code: 'DUS' },
+            quantity_per_unit: '24',
+            quantity: '3',
+        });
+        expect(
+            (await ledger(document.id)).map((row) => [
+                row.quantity,
+                row.unit_cost,
+            ]),
+        ).toEqual([['72', '50']]);
+    });
+
     test('a tracked item refuses a line without batch or expiry at posting, and nothing reaches the ledger', async () => {
         const noBatch = await draft([
             boxLine({ batch_number: null, expiry_date: null }),
