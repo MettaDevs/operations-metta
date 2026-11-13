@@ -1,0 +1,82 @@
+asyncapi: 3.0.0
+info:
+  title: healthcare.visit.cancelled.v1
+  version: 1.0.0
+  description: |
+    Kunjungan dibatalkan. Diterbitkan module layanan kesehatan (`modules/healthcare`) di transaksi Batal kunjungan.
+    Penerima: kasir Core (`src/foundation/billing/charge/`), yang mengeluarkan kunjungan itu dari Daftar Pembayaran dan
+    menghapus baris biayanya yang belum ditagih.
+
+    Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime. Kunjungan hanya bisa dibatalkan sebelum
+    diperiksa, jadi baris biaya belum ada saat event ini terbit.
+channels:
+  healthcare.visit.cancelled.v1:
+    address: healthcare.visit.cancelled.v1
+    messages:
+      visitCancelled:
+        $ref: '#/components/messages/visitCancelled'
+operations:
+  publishVisitCancelled:
+    action: send
+    channel:
+      $ref: '#/channels/healthcare.visit.cancelled.v1'
+    messages:
+      - $ref: '#/channels/healthcare.visit.cancelled.v1/messages/visitCancelled'
+components:
+  messages:
+    visitCancelled:
+      name: visitCancelled
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          org_unit_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: healthcare.visit.cancelled.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity kunjungan.
+        org_unit_id:
+          type: string
+          format: uuid
+          description: Operating unit kunjungan.
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/cancellation'
+    cancellation:
+      type: object
+      additionalProperties: false
+      required: [visit_id, registration_number]
+      properties:
+        visit_id:
+          type: string
+          format: uuid
+        registration_number:
+          type: string

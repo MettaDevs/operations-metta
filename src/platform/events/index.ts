@@ -99,6 +99,7 @@ export async function publishEvent(
     const subscribed = handlers.get(envelope.type) ?? [];
     if (!subscribed.length) return envelope;
     // Handler menulis tabel module pemiliknya, dan tabel itu hanya ada setelah module terpasang di lingkungan ini.
+    // Handler Core (`core`) selalu berjalan, karena Core ada di setiap pemasangan.
     const installed = new Set(
         (
             await db.rows(
@@ -109,7 +110,8 @@ export async function publishEvent(
         ).map((row) => row.module_id),
     );
     for (const { moduleId, handler } of subscribed)
-        if (installed.has(moduleId)) await handler(db, envelope);
+        if (moduleId === 'core' || installed.has(moduleId))
+            await handler(db, envelope);
     return envelope;
 }
 

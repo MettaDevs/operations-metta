@@ -44,7 +44,10 @@ import {
     registerOrganizationDefaults,
 } from './foundation/number-sequence/index.ts';
 import { calendarRoutes } from './foundation/calendar/index.ts';
-import { billingRoutes } from './foundation/billing/index.ts';
+import {
+    billingRoutes,
+    registerBillingEventHandlers,
+} from './foundation/billing/index.ts';
 import { inventoryRoutes } from './foundation/inventory/index.ts';
 import { pricingRoutes } from './foundation/pricing/index.ts';
 import { purchasingRoutes } from './foundation/purchasing/index.ts';
@@ -69,6 +72,7 @@ import { organizationRoutes } from './platform/organization/index.ts';
 registerOrganizationDefaults();
 registerPharmacyEventHandlers();
 registerHealthcareEventHandlers();
+registerBillingEventHandlers();
 
 // Satu klien Valkey per proses Bun; ia tidak menyimpan apa pun milik request.
 function valkeySessions(config: Config): ValkeySessions | null {

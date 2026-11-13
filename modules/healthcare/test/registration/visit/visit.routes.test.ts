@@ -10,6 +10,10 @@ import {
     grantAllOrganizations,
     recordInstallation,
 } from '../../../../../test/support/tenant-fixtures.ts';
+import {
+    eventContract,
+    outboxEnvelopes,
+} from '../../../../../test/support/event-contracts.ts';
 
 type Destination = {
     section_id: string;
@@ -805,6 +809,24 @@ describe.skipIf(!process.env.DB_HOST)('visit registration', () => {
         expect(cancelled.destinations[0]!.status).toBe('batal');
         expect((await cancel(admin, cancelled)).status).toBe(422);
     }, 30_000);
+
+    test('cancelling a visit tells the cashier in the shape of its contract', async () => {
+        const visit = await registered({
+            patient_id: await patient('Pasien Batal Kasir'),
+            section_id: sections.Laboratorium,
+        });
+        await json(await cancel(admin, visit), 200);
+        const contract = await eventContract('healthcare.visit.cancelled.v1');
+        const sent = (
+            await outboxEnvelopes(
+                pool,
+                tenantId,
+                'healthcare.visit.cancelled.v1',
+            )
+        ).filter((envelope) => envelope.data.visit_id === visit.id);
+        expect(sent).toHaveLength(1);
+        expect(contract.safeParse(sent[0]).error).toBeUndefined();
+    });
 
     test('the same idempotency key returns the same visit', async () => {
         const patientId = await patient('Pasien Ulang');
