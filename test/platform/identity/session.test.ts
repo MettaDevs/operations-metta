@@ -22,7 +22,12 @@ test('encrypted cookies validate both the envelope MAC and the cookie-name prefi
     const data = JSON.parse(Buffer.from(encrypted, 'base64').toString()) as {
         value: string;
     };
-    data.value = data.value.slice(0, -2) + 'AA';
+    // Satu bit byte pertama ciphertext dibalik, jadi isinya selalu berubah. Mengganti dua huruf terakhir dengan 'AA'
+    // tidak mengubah apa pun bila keduanya kebetulan 'AA' (1 dari 4096).
+    const tampered = Buffer.from(data.value, 'base64');
+    tampered.writeUInt8(tampered.readUInt8(0) ^ 1, 0);
+    expect(tampered.toString('base64')).not.toBe(data.value);
+    data.value = tampered.toString('base64');
     expect(
         cipher.decrypt(
             'laravel-session',
