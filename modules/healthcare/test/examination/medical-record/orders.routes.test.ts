@@ -102,8 +102,6 @@ const vitals = {
     waist_circumference: 71,
 };
 const notStarted = 'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
-const finished =
-    'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.';
 
 // Panel Biaya Tindakan dan E-Resep halaman pemeriksaan: data acuan dari sistem lama, pesan sistem lama untuk tindakan
 // ganda, obat ganda, obat alergi, dan racikan tidak valid, baris diubah di tempat dan dihapus lunak, obat dari legal
@@ -376,6 +374,7 @@ describe.skipIf(!process.env.DB_HOST)(
             ).id;
             section = await created<Section>(admin, `${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'RESEP',
                 name: 'Poli Umum Resep',
                 kind: 'rawat_jalan',
                 room_ids: [room],
@@ -1364,7 +1363,7 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(unsaved).toEqual({ panels: 0 });
         });
 
-        test('procedures and prescriptions are locked before Mulai periksa and after Selesai periksa', async () => {
+        test('procedures and prescriptions are locked before Mulai periksa and still saved and sent after Selesai periksa', async () => {
             const id = await visit();
             const salbutamol = await drug('Salbutamol 2 mg');
             expect(
@@ -1396,18 +1395,17 @@ describe.skipIf(!process.env.DB_HOST)(
                 ),
                 200,
             );
-            expect((await refused(await send(admin, id))).status).toEqual([
-                finished,
+            const sent = await json<Shown>(await send(admin, id), 200);
+            expect(sent.data.prescriptions).toMatchObject([
+                { status: 'dikirim' },
             ]);
-            expect(
-                (await refused(await save(admin, id, { procedures: [] })))
-                    .status,
-            ).toEqual([finished]);
+            await json(await save(admin, id, { procedures: [] }), 200);
         });
 
         test('a section without the panels neither shows nor accepts them', async () => {
             const plain = await created<Section>(admin, `${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'TANPA-RESEP',
                 name: 'Poli Tanpa Resep',
                 kind: 'rawat_jalan',
                 room_ids: [room],

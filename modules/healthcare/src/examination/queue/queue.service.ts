@@ -27,6 +27,7 @@ import {
 import { referrerUnfinishedMessage } from '../discharge/discharge.behaviors.ts';
 import { missingRequired } from '../medical-record/medical-record.service.ts';
 import {
+    callInputSchema,
     callNextInputSchema,
     queueEntrySchema,
     startInputSchema,
@@ -34,8 +35,8 @@ import {
 } from './queue.schema.ts';
 import {
     isDestinationStatus,
-    queueTransitions,
-    refusedAction,
+    nextStatus,
+    refusedMessage,
     type QueueAction,
 } from './queue.statuses.ts';
 import { publishVisitCompleted } from '../../registration/visit/visit.events.ts';
@@ -52,7 +53,8 @@ function placeholders(start: number, count: number): string {
 
 // Tujuan kunjungan `d` beserta kunjungan `r`, pasien, dan panggilan terakhirnya. Syarat ditambahkan pemanggil.
 const entrySelect = `
-    select d.id, d.registrasi_id as visit_id, r.tanggal::text as date, d.section_id, s.nama as section_name,
+    select d.id, d.registrasi_id as visit_id, r.tanggal::text as date, d.section_id, s.kode as section_code,
+           s.nama as section_name,
            d.no_antrean as queue_number, d.kode_antrean as queue_code,
            coalesce(d.posisi_antrean, d.no_antrean) as queue_position, d.status, d.ruangan_id as room_id,
            ru.nama as room_name, d.nakes_id as practitioner_id, np.name as practitioner_name,
@@ -97,7 +99,9 @@ export class ExaminationQueue {
         private readonly workspace: Workspace,
     ) {}
 
-    // Section aktif di unit pengguna beserta ruangan aktif yang melayaninya, klaster, dan nakes berjadwal hari itu.
+    // Section aktif di unit pengguna beserta ruangan aktif yang melayaninya, klaster, nakes berjadwal hari itu, dan nakes
+    // milik pengguna (sim_m_nakes.user_id) untuk saringan bawaan, seperti dokter dan poli bawaan daftar poli sistem lama
+    // (poly/views/outpatient/datatable.php:126, 137).
     async metadata() {
         this.workspace.guard('examination', 'read');
         const date = await visitDate(this.db, this.workspace);
@@ -157,6 +161,15 @@ export class ExaminationQueue {
                  where tenant_id = $1 and deleted_at is null order by urutan, kode`,
                 [tenantId],
             ),
+            user_practitioner_ids: (
+                await this.db.rows(
+                    z.object({ id: z.string() }),
+                    `select id from sim_m_nakes
+                     where tenant_id = $1 and user_id = $2 and aktif and deleted_at is null
+                     order by id`,
+                    [tenantId, this.workspace.userId],
+                )
+            ).map((row) => row.id),
             permissions: {
                 manage: this.workspace.permissions.has(
                     'healthcare.examination.manage',
@@ -166,8 +179,9 @@ export class ExaminationQueue {
     }
 
     // Tujuan kunjungan satu hari (bawaan hari ini), urut posisi antrean, dengan penghitung per status. Penghitung
-    // mengikuti saringan selain status dan pencarian. Kunjungan batal tidak masuk antrean. `room_id` menambahkan
-    // pasien yang sedang dipanggil di ruangan itu.
+    // mengikuti saringan selain status dan pencarian. Tujuan batal ikut tampil dan dihitung sendiri, tetapi tidak masuk
+    // Total, seperti daftar poli sistem lama (poly/controllers/Outpatient.php:1332 dan 1480-1484). `room_id`
+    // menambahkan pasien yang sedang dipanggil di ruangan itu.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('examination', 'read');
         const date =
@@ -184,7 +198,6 @@ export class ExaminationQueue {
             'd.tenant_id = $1',
             'd.deleted_at is null',
             'r.deleted_at is null',
-            "d.status <> 'batal'",
             visitVisibility(this.workspace, bind),
             `r.tanggal = ${bind(date)}::date`,
         ];
@@ -201,6 +214,7 @@ export class ExaminationQueue {
                 in_examination: z.number(),
                 done: z.number(),
                 no_show: z.number(),
+                cancelled: z.number(),
                 total: z.number(),
             }),
             `select count(*) filter (where d.status = 'menunggu')::int as waiting,
@@ -208,7 +222,8 @@ export class ExaminationQueue {
                     count(*) filter (where d.status = 'diperiksa')::int as in_examination,
                     count(*) filter (where d.status = 'selesai')::int as done,
                     count(*) filter (where d.status = 'tidak_datang')::int as no_show,
-                    count(*)::int as total
+                    count(*) filter (where d.status = 'batal')::int as cancelled,
+                    count(*) filter (where d.status <> 'batal')::int as total
              from sim_tr_registrasi_tujuan d
              join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
              where ${filters.join(' and ')}`,
@@ -260,6 +275,7 @@ export class ExaminationQueue {
                 in_examination: 0,
                 done: 0,
                 no_show: 0,
+                cancelled: 0,
                 total: 0,
             },
             current: current ?? null,
@@ -269,6 +285,34 @@ export class ExaminationQueue {
     async show(id: string) {
         this.workspace.guard('examination', 'read');
         return { data: await this.present(id) };
+    }
+
+    // Tujuan di alamat halaman pemeriksaan: NoReg lalu kode section, urutan poly/outpatient/form/{NoReg}/{SectionID}
+    // sistem lama. Satu kunjungan bisa memegang tujuan batal dan tujuan hidup untuk section yang sama, karena rujuk
+    // internal hanya menolak section yang tujuannya masih hidup; tujuan hidup didahulukan, lalu tujuan batal terakhir.
+    // Section yang sudah dihapus tetap dicocokkan, supaya tautan kunjungan lamanya tetap terbuka.
+    async find(registrationNumber: string, sectionCode: string) {
+        this.workspace.guard('examination', 'read');
+        const bindings: Bind[] = [
+            this.workspace.tenantId,
+            registrationNumber,
+            sectionCode,
+        ];
+        const bind = (value: Bind) => {
+            bindings.push(value);
+            return `$${bindings.length}`;
+        };
+        const found = await this.db.one(
+            queueEntrySchema,
+            `${entrySelect}
+             where d.tenant_id = $1 and r.no_reg = $2 and lower(s.kode) = lower($3)
+               and d.deleted_at is null and r.deleted_at is null and ${visitVisibility(this.workspace, bind)}
+             order by d.status = 'batal', s.deleted_at is not null, d.batal_pada desc nulls last, d.id desc
+             limit 1`,
+            bindings,
+        );
+        if (!found) abort(404, 'Not Found');
+        return { data: found };
     }
 
     // Tujuan yang terlihat bagi pengguna. Yang lain dijawab 404, supaya keberadaannya tidak bocor.
@@ -339,11 +383,31 @@ export class ExaminationQueue {
         });
     }
 
+    // Ruangan yang masih memanggil pasien lain hari itu ditolak, supaya pasien itu tidak hilang dari ruangan. Baris
+    // ruangan dikunci lebih dulu, agar pemeriksaan ini tetap benar saat satu ruangan menekan Panggil dua kali.
+    private async claimRoom(roomId: string, date: string): Promise<void> {
+        await this.db.execute(
+            'select id from sim_m_ruangan where tenant_id = $1 and id = $2 for no key update',
+            [this.workspace.tenantId, roomId],
+        );
+        const busy = await this.db.one(
+            z.object({ queue_code: z.string() }),
+            `select d.kode_antrean as queue_code from sim_tr_registrasi_tujuan d
+             join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
+             where d.tenant_id = $1 and d.ruangan_id = $2 and d.status = 'dipanggil' and r.tanggal = $3::date
+               and d.deleted_at is null
+             limit 1`,
+            [this.workspace.tenantId, roomId, date],
+        );
+        if (busy)
+            validation({
+                room_id: `Ruangan ini masih memanggil ${busy.queue_code}. Mulai periksa, lewati, atau tandai tidak datang lebih dulu.`,
+            });
+    }
+
     // Panggil berikutnya: pasien menunggu dengan posisi terkecil di section hari ini masuk ke ruangan pemanggil. Baris
     // yang sedang dikunci ruangan lain dilewati (SKIP LOCKED), jadi dua ruangan yang memanggil bersamaan tidak pernah
-    // mendapat pasien yang sama dan tidak saling menunggu. Ruangan yang masih memanggil pasien lain ditolak, supaya
-    // pasien itu tidak hilang dari ruangan; baris ruangan dikunci agar pemeriksaan ini tetap benar saat satu ruangan
-    // menekan Panggil dua kali.
+    // mendapat pasien yang sama dan tidak saling menunggu.
     async callNext(body: unknown) {
         this.workspace.guard('examination', 'manage');
         const parsed = callNextInputSchema.safeParse(body);
@@ -354,23 +418,7 @@ export class ExaminationQueue {
             parsed.data.room_id,
         );
         const id = await this.db.transaction(async () => {
-            await this.db.execute(
-                'select id from sim_m_ruangan where tenant_id = $1 and id = $2 for no key update',
-                [this.workspace.tenantId, roomId],
-            );
-            const busy = await this.db.one(
-                z.object({ queue_code: z.string() }),
-                `select d.kode_antrean as queue_code from sim_tr_registrasi_tujuan d
-                 join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
-                 where d.tenant_id = $1 and d.ruangan_id = $2 and d.status = 'dipanggil' and r.tanggal = $3::date
-                   and d.deleted_at is null
-                 limit 1`,
-                [this.workspace.tenantId, roomId, date],
-            );
-            if (busy)
-                validation({
-                    room_id: `Ruangan ini masih memanggil ${busy.queue_code}. Mulai periksa, lewati, atau tandai tidak datang lebih dulu.`,
-                });
+            await this.claimRoom(roomId, date);
             const next = await this.db.one(
                 z.object({ id: z.string() }),
                 `select d.id from sim_tr_registrasi_tujuan d
@@ -402,13 +450,10 @@ export class ExaminationQueue {
         return { data: await this.present(id) };
     }
 
-    // Panggil ulang, lewati, tidak datang, mulai periksa, dan selesai periksa satu tujuan. Baris tujuan dan kunjungannya
-    // dikunci, jadi dua petugas yang menekan tombol berbeda bersamaan mendapat satu hasil dan satu penolakan.
-    async act(
-        id: string,
-        action: Exclude<QueueAction, 'panggil'>,
-        body: unknown,
-    ) {
+    // Tindakan atas satu tujuan: panggil (dari halaman pemeriksaan), panggil ulang, lewati, tidak datang, mulai periksa,
+    // dan selesai periksa. Baris tujuan dan kunjungannya dikunci, jadi dua petugas yang menekan tombol berbeda bersamaan
+    // mendapat satu hasil dan satu penolakan.
+    async act(id: string, action: QueueAction, body: unknown) {
         this.workspace.guard('examination', 'manage');
         await this.db.transaction(async () => {
             const bindings: Bind[] = [this.workspace.tenantId, lookupId(id)];
@@ -447,16 +492,36 @@ export class ExaminationQueue {
                 throw new Error(
                     `Unknown destination status: ${current.status}`,
                 );
-            const refused = refusedAction(action, current.status);
-            if (refused) validation({ status: refused });
+            const to = nextStatus(action, current.status);
+            if (!to) validation({ status: refusedMessage(current.status) });
             const stamp = nowSql();
-            const to = queueTransitions[action].to;
             let roomId = current.room_id;
             let position: number | null = null;
             switch (action) {
                 case 'panggil_ulang':
                 case 'tidak_datang':
                     break;
+                // Panggil satu pasien dari halaman pemeriksaan, seperti tombol Panggil di Status Pasien sistem lama,
+                // di luar urutan Panggil berikutnya. Ruangannya ruangan pemanggil dengan aturan satu panggilan per
+                // ruangan yang sama.
+                case 'panggil': {
+                    const parsed = callInputSchema.safeParse(body ?? {});
+                    if (!parsed.success)
+                        validation({
+                            room_id: 'Pilih ruangan tempat memanggil.',
+                        });
+                    roomId = (
+                        await this.sectionRoom(
+                            current.section_id,
+                            parsed.data.room_id,
+                        )
+                    ).roomId;
+                    await this.claimRoom(
+                        roomId,
+                        await visitDate(this.db, this.workspace),
+                    );
+                    break;
+                }
                 // Pemeriksaan selesai hanya bila isian wajib periksa fisik yang tersimpan sudah terisi, di section yang
                 // memakai Periksa fisik.
                 case 'selesai_periksa': {

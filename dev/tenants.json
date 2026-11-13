@@ -424,12 +424,14 @@
                 ],
                 "sections": [
                     {
+                        "code": "UMUM",
                         "name": "Poli Umum",
                         "kind": "rawat_jalan",
                         "queue_prefix": "A",
                         "rooms": ["R-UMUM"]
                     },
                     {
+                        "code": "PUSLING",
                         "name": "Pusling",
                         "kind": "rawat_jalan",
                         "queue_prefix": "P",

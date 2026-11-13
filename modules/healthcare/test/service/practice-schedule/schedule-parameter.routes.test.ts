@@ -154,6 +154,7 @@ describe.skipIf(!process.env.DB_HOST)('schedule parameters', () => {
         poli = (
             await created(`${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'PARAMETER',
                 name: 'Poli Parameter',
                 kind: 'rawat_jalan',
             })

@@ -19,9 +19,7 @@ import { Discharges } from '../discharge/discharge.service.ts';
 import {
     examinerPanelMissingMessage,
     examinerRequiredMessage,
-    finishedMessage,
     isRequirableField,
-    notStartedMessage,
     optionGroups,
     panelNames,
     panels,
@@ -54,6 +52,10 @@ import {
 } from './medical-record.schema.ts';
 import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 import { moduleId } from '../../module.ts';
+import {
+    destinationStatuses,
+    recordLockedMessage,
+} from '../queue/queue.statuses.ts';
 
 type Errors = Record<string, string[]>;
 type Values = Record<string, Bind>;
@@ -199,7 +201,7 @@ function readPanel(
 
 const destinationSchema = z.object({
     id: z.string(),
-    status: z.string(),
+    status: z.enum(destinationStatuses),
     section_id: z.string(),
     visit_id: z.string(),
     legal_entity_id: z.string(),
@@ -403,8 +405,9 @@ export async function missingRequired(
     return { ...errors, ...(await requiredErrors(db, tenantId, physical)) };
 }
 
-// Isi tab Rekam Medis satu tujuan kunjungan: dibaca siapa pun yang boleh melihat antrean pemeriksaan, diubah hanya
-// selama tujuan diperiksa (sesudah Mulai periksa, sebelum Selesai periksa) oleh yang boleh memeriksa.
+// Isi tab Rekam Medis satu tujuan kunjungan: dibaca siapa pun yang boleh melihat antrean pemeriksaan, diubah oleh yang
+// boleh memeriksa sesudah Mulai periksa, juga sesudah Selesai periksa (recordLockedMessage). Biaya yang sudah dibayar di
+// kasir dikunci kasir lewat lockChargeForChange.
 export class MedicalRecords {
     private readonly orders: ExaminationOrders;
     private readonly discharges: Discharges;
@@ -635,10 +638,8 @@ export class MedicalRecords {
         const input = parsed.data;
         await this.db.transaction(async () => {
             const destination = await this.destination(destinationId, true);
-            if (destination.status === 'selesai')
-                validation({ status: finishedMessage });
-            if (destination.status !== 'diperiksa')
-                validation({ status: notStartedMessage });
+            const locked = recordLockedMessage(destination.status);
+            if (locked) validation({ status: locked });
             const active = await sectionPanels(
                 this.db,
                 this.workspace.tenantId,
@@ -666,6 +667,14 @@ export class MedicalRecords {
                       errors,
                   )
                 : null;
+            // Pemeriksaan yang sudah selesai tetap punya dokter / tenaga medis yang memeriksa, juga sesudah Update.
+            if (
+                destination.status === 'selesai' &&
+                uses('anamnesis') &&
+                doctorId === null &&
+                !errors['anamnesis.doctor_id']
+            )
+                add(errors, 'anamnesis.doctor_id', examinerRequiredMessage);
             const nurseId = uses('anamnesis')
                 ? await this.practitioner(
                       input.anamnesis?.nurse_id,
@@ -875,7 +884,7 @@ export class MedicalRecords {
     // Kirim ke farmasi menyimpan draf resep lalu mengirimnya dalam satu transaksi, seperti SubmitEresep sistem lama yang
     // hanya membawa resep dan barisnya: isian rekam medis lain tidak ikut disimpan dan tidak diperiksa, jadi tetap di
     // layar sampai Simpan. Dokter dan perawat resep diambil dari Anamnesa yang sedang diisi. Batas ubahnya sama dengan
-    // Simpan: hanya selama tujuan diperiksa, dengan versi pemeriksaan yang dipegang layar.
+    // Simpan, dengan versi pemeriksaan yang dipegang layar.
     async sendPrescription(destinationId: string, body: unknown) {
         this.workspace.guard('examination', 'manage');
         const parsed = prescriptionSendSchema.safeParse(body);
@@ -891,10 +900,8 @@ export class MedicalRecords {
         const input = parsed.data;
         await this.db.transaction(async () => {
             const destination = await this.destination(destinationId, true);
-            if (destination.status === 'selesai')
-                validation({ status: finishedMessage });
-            if (destination.status !== 'diperiksa')
-                validation({ status: notStartedMessage });
+            const locked = recordLockedMessage(destination.status);
+            if (locked) validation({ status: locked });
             const active = await sectionPanels(
                 this.db,
                 this.workspace.tenantId,
@@ -1225,7 +1232,7 @@ export class MedicalRecords {
                 status: destination.status,
                 panels: active,
                 editable:
-                    destination.status === 'diperiksa' &&
+                    recordLockedMessage(destination.status) === null &&
                     this.workspace.permissions.has(
                         'healthcare.examination.manage',
                     ),

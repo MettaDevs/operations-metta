@@ -20,3 +20,8 @@ export const duplicateReferralMessage =
     'Sudah Terdapat Data Pada Poli yang Sama.';
 export const referrerUnfinishedMessage = (section: string) =>
     `Tidak Dapat Memulai Pemeriksaan Karena Pemeriksaan Di ${section} Belum Selesai.`;
+
+// Rekam medis tetap bisa diubah sesudah Selesai periksa, tetapi rujuk internal hanya dari pemeriksaan yang berjalan:
+// kunjungan yang semua tujuannya selesai tidak bisa kembali diperiksa.
+export const finishedReferralMessage =
+    'Pemeriksaan ini sudah selesai, jadi tidak dapat menambah rujuk internal.';

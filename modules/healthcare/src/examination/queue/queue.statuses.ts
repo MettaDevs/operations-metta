@@ -24,30 +24,61 @@ export const queueActions = [
 ] as const;
 export type QueueAction = (typeof queueActions)[number];
 
-// Lewati mengembalikan pasien ke antrean di belakang yang sedang menunggu. Tidak datang tidak dipanggil lagi, tetapi
-// pemeriksaannya tetap bisa dimulai dari daftar bila pasien datang belakangan, sama dengan pasien menunggu yang
-// diperiksa langsung tanpa dipanggil.
-export const queueTransitions: Record<
+// Status asal yang boleh untuk setiap tindakan beserta status tujuannya. Lewati mengembalikan pasien ke antrean di
+// belakang yang sedang menunggu. Tidak datang tidak dipilih Panggil berikutnya lagi, tetapi pasiennya tetap bisa
+// dipanggil dari halaman pemeriksaan atau diperiksa langsung bila ia datang belakangan, sama dengan pasien menunggu.
+// Panggil ulang juga boleh selama diperiksa tanpa mengubah status, seperti tombol Panggil sistem lama yang tetap tampil
+// selama SedangPeriksa (poly/views/form/statuspasien/index.php).
+const queueTransitions: Record<
     QueueAction,
-    { from: readonly DestinationStatus[]; to: DestinationStatus }
+    Partial<Record<DestinationStatus, DestinationStatus>>
 > = {
-    panggil: { from: ['menunggu'], to: 'dipanggil' },
-    panggil_ulang: { from: ['dipanggil'], to: 'dipanggil' },
-    lewati: { from: ['dipanggil'], to: 'menunggu' },
-    tidak_datang: { from: ['dipanggil'], to: 'tidak_datang' },
+    panggil: { menunggu: 'dipanggil', tidak_datang: 'dipanggil' },
+    panggil_ulang: { dipanggil: 'dipanggil', diperiksa: 'diperiksa' },
+    lewati: { dipanggil: 'menunggu' },
+    tidak_datang: { dipanggil: 'tidak_datang' },
     mulai_periksa: {
-        from: ['menunggu', 'dipanggil', 'tidak_datang'],
-        to: 'diperiksa',
+        menunggu: 'diperiksa',
+        dipanggil: 'diperiksa',
+        tidak_datang: 'diperiksa',
     },
-    selesai_periksa: { from: ['diperiksa'], to: 'selesai' },
+    selesai_periksa: { diperiksa: 'selesai' },
 };
 
-// Alasan tindakan ditolak untuk status sekarang, dalam kalimat untuk petugas, atau null bila boleh.
-export function refusedAction(
+// Status sesudah tindakan, atau null bila tindakan itu tidak boleh dari status sekarang.
+export function nextStatus(
     action: QueueAction,
     from: DestinationStatus,
-): string | null {
-    if (queueTransitions[action].from.includes(from)) return null;
+): DestinationStatus | null {
+    return queueTransitions[action][from] ?? null;
+}
+
+export const notStartedMessage =
+    'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
+
+// Rekam medis bisa diubah sesudah Mulai periksa, dan tetap bisa diubah sesudah Selesai periksa seperti sistem lama yang
+// mengganti Simpan menjadi Update (poly/views/form/statuspasien/index.php:282-294). Null berarti boleh; selain itu
+// alasan penolakannya.
+export function recordLockedMessage(status: DestinationStatus): string | null {
+    switch (status) {
+        case 'diperiksa':
+        case 'selesai':
+            return null;
+        case 'menunggu':
+        case 'dipanggil':
+        case 'tidak_datang':
+            return notStartedMessage;
+        case 'batal':
+            return refusedMessage(status);
+        default: {
+            const unknown: never = status;
+            return unknown;
+        }
+    }
+}
+
+// Alasan tindakan ditolak di status ini, dalam kalimat untuk petugas.
+export function refusedMessage(from: DestinationStatus): string {
     switch (from) {
         case 'menunggu':
             return 'Pasien ini belum dipanggil.';

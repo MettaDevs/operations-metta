@@ -27,7 +27,7 @@ import {
     UserX,
     Volume2,
 } from 'lucide-react';
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -46,8 +46,17 @@ import {
     timeText,
 } from './queue-display.tsx';
 import {
+    defaultPractitioner,
+    defaultSection,
+    placeRoom,
+    readPlace,
+    rememberPlace,
+    type Place,
+} from './queue-place.ts';
+import {
     destinationStatuses,
     isDestinationStatus,
+    nextStatus,
     type DestinationStatus,
 } from './queue.statuses.ts';
 
@@ -59,9 +68,6 @@ const ALL = 'all';
 type Row = ApiBody<'healthcareExaminationQueue'>['data'][number];
 type Counts = ApiBody<'healthcareExaminationQueue'>['counts'];
 type Search = z.infer<typeof searchSchema>;
-const queueStatuses = destinationStatuses.filter(
-    (status) => status !== 'batal',
-);
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
     section: z.string().max(100).optional(),
@@ -71,40 +77,27 @@ const searchSchema = z.object({
     status: z.enum(destinationStatuses).optional(),
 });
 
-const countOf: Record<Exclude<DestinationStatus, 'batal'>, keyof Counts> = {
+// Batal ikut dihitung dan ditampilkan seperti daftar poli sistem lama, tetapi tidak masuk Total
+// (poly/views/outpatient/datatable.php:86-93).
+const countOf: Record<DestinationStatus, keyof Counts> = {
     menunggu: 'waiting',
     dipanggil: 'called',
     diperiksa: 'in_examination',
     selesai: 'done',
     tidak_datang: 'no_show',
+    batal: 'cancelled',
 };
 
-// Poli dan ruangan terakhir di perangkat ini. Hanya kenyamanan: bila penyimpanan peramban diblokir, petugas memilih
-// ulang setiap kali membuka layar.
-const placeKey = 'healthcare.examination.place';
-const placeSchema = z.object({
-    section: z.string().optional(),
-    rooms: z.record(z.string(), z.string()).default({}),
-});
-type Place = z.infer<typeof placeSchema>;
+// Daftar dimuat ulang 30 detik sesudah layar terakhir berubah, seperti daftar poli sistem lama yang dimuat ulang setiap
+// 30 detik (poly/views/outpatient/datatable.php), supaya panggilan dan pemeriksaan dari ruangan lain ikut terlihat.
+const refreshMs = 30_000;
 
-function readPlace(): Place {
-    try {
-        const parsed = placeSchema.safeParse(
-            JSON.parse(localStorage.getItem(placeKey) ?? '{}'),
-        );
-        return parsed.success ? parsed.data : { rooms: {} };
-    } catch {
-        return { rooms: {} };
-    }
-}
-
-function rememberPlace(place: Place): void {
-    try {
-        localStorage.setItem(placeKey, JSON.stringify(place));
-    } catch {
-        // Penyimpanan peramban diblokir: poli dan ruangan tidak diingat.
-    }
+// Label sistem lama: Periksa sebelum pemeriksaan dimulai, Lihat sesudahnya.
+function openLabel(row: Row): string {
+    return isDestinationStatus(row.status) &&
+        nextStatus('mulai_periksa', row.status)
+        ? 'Periksa'
+        : 'Lihat';
 }
 
 function Counters({
@@ -124,7 +117,7 @@ function Counters({
             aria-label="Saring menurut status"
             className="flex flex-wrap items-center gap-1 text-xs"
         >
-            {queueStatuses.map((status) => (
+            {destinationStatuses.map((status) => (
                 <Button
                     key={status}
                     type="button"
@@ -204,18 +197,25 @@ function QueuePage(): ReactNode {
     const filterPanelId = useId();
 
     const section =
-        metadata.sections.find(
-            (item) => item.id === (search.section ?? place.section),
-        ) ?? metadata.sections[0];
+        metadata.sections.find((item) => item.id === search.section) ??
+        defaultSection(
+            metadata.sections,
+            place,
+            metadata.user_practitioner_ids,
+        );
     const sectionRooms = section?.rooms ?? [];
-    const roomId =
-        sectionRooms.find((room) => room.id === place.rooms[section?.id ?? ''])
-            ?.id ??
-        (sectionRooms.length === 1 ? sectionRooms[0]?.id : undefined);
+    const roomId = placeRoom(place, section?.id, sectionRooms);
     const date = search.date ?? metadata.date;
     const today = date === metadata.date;
     const canManage = metadata.permissions.manage && today;
-    const { cluster, practitioner, status } = search;
+    const { cluster, status } = search;
+    // Pilihan Semua nakes ditulis ke alamat sebagai ALL, supaya saringan nakes bawaan tidak kembali.
+    const practitionerChoice =
+        search.practitioner ??
+        defaultPractitioner(section, metadata.user_practitioner_ids) ??
+        ALL;
+    const practitioner =
+        practitionerChoice === ALL ? undefined : practitionerChoice;
     const gender = (code: string | null) =>
         code === null
             ? null
@@ -255,6 +255,10 @@ function QueuePage(): ReactNode {
         query: search.q ?? '',
         getKey: (row) => row.id,
     });
+    useEffect(() => {
+        const timer = setTimeout(list.reload, refreshMs);
+        return () => clearTimeout(timer);
+    });
     const setSearch = (next: Partial<Search>) =>
         void navigate({
             search: (previous) =>
@@ -274,10 +278,13 @@ function QueuePage(): ReactNode {
         setPlace(next);
         rememberPlace(next);
     };
-    const openExamination = (id: string) =>
+    const openExamination = (row: Row) =>
         void navigate({
-            to: '/healthcare/examination/queue/$destinationId',
-            params: { destinationId: id },
+            to: '/healthcare/examination/queue/$registrationNumber/$sectionCode',
+            params: {
+                registrationNumber: row.registration_number,
+                sectionCode: row.section_code,
+            },
         });
 
     // Satu tindakan antrean: pesan berhasil sebagai toast, penolakan tetap terlihat sampai tindakan berikutnya.
@@ -361,7 +368,7 @@ function QueuePage(): ReactNode {
             (saved) => `Pemeriksaan ${saved.queue_code} dimulai.`,
             'Pemeriksaan belum dimulai.',
         );
-        if (started) openExamination(started.id);
+        if (started) openExamination(started);
     };
     const finish = (row: Row) =>
         void run(
@@ -374,10 +381,12 @@ function QueuePage(): ReactNode {
             'Pemeriksaan belum diselesaikan.',
         );
 
+    // Periksa untuk pasien yang belum diperiksa dan Lihat untuk sisanya membuka halaman pemeriksaan, seperti daftar poli
+    // sistem lama; Panggil dan Mulai periksa ada di halaman itu juga.
     const rowActions = (row: Row): DataTableRowAction[] => {
-        const actions: DataTableRowAction[] = [];
-        if (row.status === 'diperiksa' || row.status === 'selesai')
-            actions.push({ id: 'open', label: 'Buka pemeriksaan' });
+        const actions: DataTableRowAction[] = [
+            { id: 'open', label: openLabel(row) },
+        ];
         if (!canManage) return actions;
         if (row.status === 'dipanggil')
             actions.push(
@@ -392,7 +401,7 @@ function QueuePage(): ReactNode {
         return actions;
     };
     const rowHandlers: Record<string, (row: Row) => void> = {
-        open: (row) => openExamination(row.id),
+        open: openExamination,
         recall,
         skip,
         'no-show': noShow,
@@ -493,10 +502,11 @@ function QueuePage(): ReactNode {
                                                 label: item.name,
                                             })),
                                         ]}
-                                        value={practitioner ?? ALL}
+                                        value={practitionerChoice}
                                         onValueChange={(value) =>
                                             setSearch({
-                                                practitioner: choice(value),
+                                                practitioner:
+                                                    value ?? undefined,
                                             })
                                         }
                                         searchPlaceholder="Cari nakes"
@@ -511,12 +521,14 @@ function QueuePage(): ReactNode {
                                                 value: ALL,
                                                 label: 'Semua status',
                                             },
-                                            ...queueStatuses.map((value) => ({
-                                                value,
-                                                label: destinationStatusLabels[
-                                                    value
-                                                ],
-                                            })),
+                                            ...destinationStatuses.map(
+                                                (value) => ({
+                                                    value,
+                                                    label: destinationStatusLabels[
+                                                        value
+                                                    ],
+                                                }),
+                                            ),
                                         ]}
                                         value={status ?? ALL}
                                         onValueChange={(value) =>
@@ -713,14 +725,10 @@ function QueuePage(): ReactNode {
                     }
                     showRowNumbers
                     actionsPlacement="inline"
-                    actions={[{ id: 'open', label: 'Buka pemeriksaan' }]}
+                    actions={[{ id: 'open', label: 'Periksa' }]}
                     getRowActions={rowActions}
                     onRowAction={(action, row) => rowHandlers[action]?.(row)}
-                    onRowClick={(row) =>
-                        row.status === 'diperiksa' || row.status === 'selesai'
-                            ? openExamination(row.id)
-                            : undefined
-                    }
+                    onRowClick={openExamination}
                     incremental={list}
                     emptyMessage={
                         section

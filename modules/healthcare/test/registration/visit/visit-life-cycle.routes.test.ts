@@ -173,6 +173,7 @@ describe.skipIf(!process.env.DB_HOST)('visit life cycle and cluster', () => {
         mapped = (
             await created(`${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'DEWASA',
                 name: 'Poli Dewasa',
                 kind: 'rawat_jalan',
                 cluster_ids: [k3?.id],
@@ -181,6 +182,7 @@ describe.skipIf(!process.env.DB_HOST)('visit life cycle and cluster', () => {
         open = (
             await created(`${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'LAB',
                 name: 'Laboratorium',
                 kind: 'penunjang',
             })

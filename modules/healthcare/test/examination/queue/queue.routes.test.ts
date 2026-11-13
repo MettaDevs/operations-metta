@@ -16,6 +16,8 @@ type Entry = {
     started_at: string | null;
     finished_at: string | null;
     visit_id: string;
+    registration_number: string;
+    section_code: string;
     queue_number: number;
     queue_code: string;
     queue_position: number;
@@ -35,6 +37,7 @@ type Queue = {
         in_examination: number;
         done: number;
         no_show: number;
+        cancelled: number;
         total: number;
     };
     current: Entry | null;
@@ -186,6 +189,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             'healthcare.visit.manage',
             'healthcare.examination.manage',
             'healthcare.practitioner.manage',
+            'healthcare.practice-schedule.manage',
         ]);
         await grantAllOrganizations(pool, tenantId, owner.membershipId);
         await pool.unsafe(
@@ -258,6 +262,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         sections['Poli Umum'] = (
             await created(`${api}/sections`, {
                 operating_unit_id: unitA,
+                code: 'UMUM',
                 name: 'Poli Umum',
                 kind: 'rawat_jalan',
                 queue_prefix: 'A',
@@ -267,6 +272,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         sections['Poli Gigi'] = (
             await created(`${api}/sections`, {
                 operating_unit_id: unitA,
+                code: 'GIGI',
                 name: 'Poli Gigi',
                 kind: 'rawat_jalan',
                 room_ids: [rooms.L1R3],
@@ -275,6 +281,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         sections['Poli B'] = (
             await created(`${api}/sections`, {
                 operating_unit_id: unitB,
+                code: 'POLI-B',
                 name: 'Poli B',
                 kind: 'rawat_jalan',
                 room_ids: [rooms.B1],
@@ -334,6 +341,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             in_examination: 0,
             done: 0,
             no_show: 0,
+            cancelled: 0,
             total: 3,
         });
 
@@ -492,6 +500,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             in_examination: 0,
             done: 1,
             no_show: 0,
+            cancelled: 0,
             total: 3,
         });
         const history = await pool.unsafe<
@@ -604,6 +613,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         const section = (
             await created(`${api}/sections`, {
                 operating_unit_id: unitA,
+                code: 'SERENTAK',
                 name: 'Poli Serentak',
                 kind: 'rawat_jalan',
                 room_ids: crowded,
@@ -650,4 +660,367 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             200, 422,
         ]);
     }, 120_000);
+
+    async function find(as: Browser, number: string, code: string) {
+        return as.get(
+            `${api}/examination/visits/${encodeURIComponent(number)}/sections/${encodeURIComponent(code)}`,
+        );
+    }
+
+    // Tujuan batal untuk section yang sama di kunjungan yang sama: rujuk internal hanya menolak section yang tujuannya
+    // masih hidup, jadi kunjungan bisa memegang keduanya.
+    async function cancelledCopy(destinationId: string, cancelledAt: string) {
+        const id = Bun.randomUUIDv7();
+        await pool.unsafe(
+            `insert into sim_tr_registrasi_tujuan
+                 (id, tenant_id, registrasi_id, urutan, section_id, no_antrean, kode_antrean, no_bukti, status,
+                  didaftarkan_pada, batal_pada, created_at, updated_at)
+             select $1, d.tenant_id, d.registrasi_id,
+                    (select max(urutan) + 1 from sim_tr_registrasi_tujuan where registrasi_id = d.registrasi_id),
+                    d.section_id, d.no_antrean, d.kode_antrean, d.no_bukti || '-' || $4, 'batal',
+                    d.didaftarkan_pada, $3::timestamp, now(), now()
+             from sim_tr_registrasi_tujuan d where d.id = $2`,
+            [id, destinationId, cancelledAt, id.slice(-8)],
+        );
+        return id;
+    }
+
+    test('the examination address opens NoReg and section code, ignoring case and preferring the live row', async () => {
+        const linkRoom = await room(unitA, 'T1');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'TAUTAN-1',
+                name: 'Poli Tautan',
+                kind: 'rawat_jalan',
+                room_ids: [linkRoom],
+            })
+        ).id;
+        const visit = await register(section);
+        const live = visit.destinations[0]!.id;
+        // Alamat lama memakai id tujuan; layar membaca NoReg dan kode section darinya lalu pindah ke alamat baru.
+        const byId = await entry(
+            await admin.get(`${api}/examination/destinations/${live}`),
+        );
+        expect(byId.section_code).toBe('TAUTAN-1');
+        const number = byId.registration_number;
+        expect((await entry(await find(admin, number, 'TAUTAN-1'))).id).toBe(
+            live,
+        );
+        expect((await entry(await find(admin, number, 'tautan-1'))).id).toBe(
+            live,
+        );
+
+        const older = await cancelledCopy(live, '2026-01-01 08:00:00');
+        const newer = await cancelledCopy(live, '2026-01-01 09:00:00');
+        expect((await entry(await find(admin, number, 'TAUTAN-1'))).id).toBe(
+            live,
+        );
+        await pool.unsafe(
+            `update sim_tr_registrasi_tujuan set status = 'batal', batal_pada = '2026-01-01 07:00:00' where id = $1`,
+            [live],
+        );
+        const cancelled = await entry(await find(admin, number, 'TAUTAN-1'));
+        expect([cancelled.id, cancelled.status]).toEqual([newer, 'batal']);
+        expect(cancelled.id).not.toBe(older);
+
+        expect((await find(admin, number, 'UMUM')).status).toBe(404);
+        expect((await find(admin, 'TIDAK-ADA', 'TAUTAN-1')).status).toBe(404);
+        const outsider = await member(['healthcare.visit.manage'], null);
+        expect((await find(outsider, number, 'TAUTAN-1')).status).toBe(403);
+        const clerkB = await member(
+            ['healthcare.examination.inquire'],
+            [unitB],
+        );
+        expect((await find(clerkB, number, 'TAUTAN-1')).status).toBe(404);
+
+        // Legal entity lain di tenant yang sama tidak melihat kunjungan ini.
+        const account = await createMember(pool, tenantId, [
+            'healthcare.examination.inquire',
+        ]);
+        await grantAllOrganizations(pool, tenantId, account.membershipId);
+        await pool.unsafe(
+            `insert into role_assignment_data_policy_scopes
+                 (id, tenant_id, role_assignment_id, policy_code, include_descendants, valid_from, created_at, updated_at)
+             select $1, $2, id, 'healthcare.patient-unit', false, now() - interval '1 day', now(), now()
+             from role_assignments where membership_id = $3`,
+            [Bun.randomUUIDv7(), tenantId, account.membershipId],
+        );
+        const otherCompany = browser();
+        await otherCompany.login(account.email, account.password);
+        expect((await find(otherCompany, number, 'TAUTAN-1')).status).toBe(200);
+        const second = (
+            await created('/api/v1/organizations', {
+                classification: 'legal_entity',
+                name: 'PT Klinik Uji Antrean Kedua',
+                company_code: `KR${Date.now() % 100000}`,
+                country_code: 'ID',
+            })
+        ).id;
+        await json(
+            await otherCompany.put('/api/v1/workspace-context', {
+                membership_id: account.membershipId,
+                legal_entity_id: second,
+            }),
+            200,
+        );
+        expect((await find(otherCompany, number, 'TAUTAN-1')).status).toBe(404);
+
+        // Tenant lain dengan kode section dan NoReg yang sama tidak sampai ke kunjungan ini.
+        const otherTenant = await createTenant(pool, 'Klinik Uji Antrean Lain');
+        await entitle(pool, otherTenant, 'healthcare');
+        await recordInstallation(pool, otherTenant, 'healthcare');
+        const stranger = await createMember(pool, otherTenant, [
+            'healthcare.examination.inquire',
+        ]);
+        await grantAllOrganizations(pool, otherTenant, stranger.membershipId);
+        const strangerSession = browser();
+        await strangerSession.login(stranger.email, stranger.password);
+        expect((await find(strangerSession, number, 'TAUTAN-1')).status).toBe(
+            404,
+        );
+    }, 60_000);
+
+    test('the examination page calls its own patient into the caller room, also after a no-show and during the examination', async () => {
+        const roomP1 = await room(unitA, 'P1');
+        const roomP2 = await room(unitA, 'P2');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'PANGGIL',
+                name: 'Poli Panggil',
+                kind: 'rawat_jalan',
+                queue_prefix: 'C',
+                room_ids: [roomP1, roomP2],
+            })
+        ).id;
+        const first = (await register(section)).destinations[0]!.id;
+        const second = (await register(section)).destinations[0]!.id;
+
+        // Pasien kedua dipanggil lebih dulu, di luar urutan Panggil berikutnya.
+        const called = await entry(
+            await act(admin, second, 'call', { room_id: roomP1 }),
+        );
+        expect([
+            called.queue_code,
+            called.status,
+            called.room_id,
+            called.call_count,
+        ]).toEqual(['C-002', 'dipanggil', roomP1, 1]);
+        expect(
+            (await refused(await act(admin, first, 'call'))).errors.room_id,
+        ).toEqual(['Pilih ruangan tempat memanggil.']);
+        expect(
+            Object.keys(
+                (
+                    await refused(
+                        await act(admin, first, 'call', {
+                            room_id: rooms.L1R3,
+                        }),
+                    )
+                ).errors,
+            ),
+        ).toEqual(['room_id']);
+        expect(
+            (
+                await refused(
+                    await act(admin, first, 'call', { room_id: roomP1 }),
+                )
+            ).errors.room_id,
+        ).toEqual([
+            'Ruangan ini masih memanggil C-002. Mulai periksa, lewati, atau tandai tidak datang lebih dulu.',
+        ]);
+        expect(
+            (
+                await refused(
+                    await act(admin, second, 'call', {
+                        room_id: roomP2,
+                    }),
+                )
+            ).errors.status,
+        ).toEqual(['Pasien ini sedang dipanggil.']);
+
+        // Pasien tidak datang dipanggil lagi, sama dengan pasien yang belum diperiksa di sistem lama.
+        await entry(await act(admin, second, 'no-show'));
+        const again = await entry(
+            await act(admin, second, 'call', { room_id: roomP2 }),
+        );
+        expect([again.status, again.room_id, again.call_count]).toEqual([
+            'dipanggil',
+            roomP2,
+            2,
+        ]);
+        await entry(await act(admin, second, 'start'));
+        // Panggil ulang selama diperiksa tidak mengubah status, seperti tombol Panggil sistem lama selama SedangPeriksa.
+        const recalled = await entry(await act(admin, second, 'recall'));
+        expect([
+            recalled.status,
+            recalled.room_id,
+            recalled.call_count,
+        ]).toEqual(['diperiksa', roomP2, 3]);
+        expect(
+            (
+                await refused(
+                    await act(admin, second, 'call', {
+                        room_id: roomP1,
+                    }),
+                )
+            ).errors.status,
+        ).toEqual(['Pasien ini sedang diperiksa.']);
+        const history = await pool.unsafe<{ aksi: string; room: string }[]>(
+            `select aksi, ruangan_id as room from sim_tr_antrean_panggilan
+             where tujuan_id = $1 order by dilakukan_pada, id`,
+            [second],
+        );
+        expect(history.map((row) => [row.aksi, row.room])).toEqual([
+            ['panggil', roomP1],
+            ['tidak_datang', roomP1],
+            ['panggil', roomP2],
+            ['mulai_periksa', roomP2],
+            ['panggil_ulang', roomP2],
+        ]);
+
+        const viewer = await member(['healthcare.examination.inquire'], null);
+        expect(
+            (await act(viewer, first, 'call', { room_id: roomP1 })).status,
+        ).toBe(403);
+    }, 60_000);
+
+    test('a cancelled visit stays in the list with its own count outside Total, and its examination only reads', async () => {
+        const cancelRoom = await room(unitA, 'C1');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'BATAL',
+                name: 'Poli Batal',
+                kind: 'rawat_jalan',
+                queue_prefix: 'C',
+                room_ids: [cancelRoom],
+            })
+        ).id;
+        const cancelled = await register(section);
+        const waiting = await register(section);
+        const visit = await json<{ data: { version: number } }>(
+            await admin.get(`${api}/visits/${cancelled.id}`),
+            200,
+        );
+        await json(
+            await admin.post(`${api}/visits/${cancelled.id}/cancel`, {
+                version: visit.data.version,
+                reason: 'Salah poli',
+            }),
+            200,
+        );
+        const cancelledId = cancelled.destinations[0]!.id;
+        const listed = await queue(admin, `section_id=${section}`);
+        expect(listed.data.map((row) => [row.queue_code, row.status])).toEqual([
+            ['C-001', 'batal'],
+            ['C-002', 'menunggu'],
+        ]);
+        expect(listed.counts).toEqual({
+            waiting: 1,
+            called: 0,
+            in_examination: 0,
+            done: 0,
+            no_show: 0,
+            cancelled: 1,
+            total: 1,
+        });
+        expect(
+            (await queue(admin, `section_id=${section}&status=batal`)).data.map(
+                (row) => row.id,
+            ),
+        ).toEqual([cancelledId]);
+        // Panggil berikutnya tetap hanya memanggil yang menunggu.
+        expect(
+            (await entry(await callNext(admin, section, cancelRoom))).id,
+        ).toBe(waiting.destinations[0]!.id);
+
+        const recordPath = `${api}/examination/destinations/${cancelledId}/medical-record`;
+        const record = await json<{
+            data: Record<string, unknown>;
+            context: { status: string; editable: boolean };
+        }>(await admin.get(recordPath), 200);
+        expect([record.context.status, record.context.editable]).toEqual([
+            'batal',
+            false,
+        ]);
+        expect(
+            (await refused(await admin.put(recordPath, record.data))).errors
+                .status,
+        ).toEqual(['Kunjungan ini sudah dibatalkan.']);
+        expect(
+            (
+                await refused(
+                    await act(admin, cancelledId, 'start', {
+                        room_id: cancelRoom,
+                    }),
+                )
+            ).errors.status,
+        ).toEqual(['Kunjungan ini sudah dibatalkan.']);
+    }, 60_000);
+
+    test('the queue metadata names the active nakes of the signed-in user for the default filters', async () => {
+        const nakesRoom = await room(unitA, 'N1');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'NAKES',
+                name: 'Poli Nakes',
+                kind: 'rawat_jalan',
+                room_ids: [nakesRoom],
+            })
+        ).id;
+        type Metadata = {
+            date: string;
+            sections: { id: string; practitioners: { id: string }[] }[];
+            user_practitioner_ids: string[];
+        };
+        const metadata = async (as: Browser) =>
+            json<Metadata>(await as.get(`${api}/examination/metadata`), 200);
+        const session = (
+            await created(`${api}/practice-sessions`, {
+                name: 'Sesi Nakes',
+                start_time: '00:00',
+                end_time: '23:59',
+            })
+        ).id;
+        await created(`${api}/practice-schedules`, {
+            section_id: section,
+            date: (await metadata(admin)).date,
+            practitioner_id: doctorId,
+            session_id: session,
+            capacity: null,
+        });
+        const doctor = await member(['healthcare.examination.manage'], null);
+        const shell = await json<{ auth: { user: { id: string } } }>(
+            await doctor.get('/api/v1/shell'),
+            200,
+        );
+        expect((await metadata(doctor)).user_practitioner_ids).toEqual([]);
+        await pool.unsafe('update sim_m_nakes set user_id = $2 where id = $1', [
+            doctorId,
+            shell.auth.user.id,
+        ]);
+        try {
+            const linked = await metadata(doctor);
+            expect(linked.user_practitioner_ids).toEqual([doctorId]);
+            expect(
+                linked.sections
+                    .find((row) => row.id === section)
+                    ?.practitioners.map((row) => row.id),
+            ).toEqual([doctorId]);
+            expect((await metadata(admin)).user_practitioner_ids).toEqual([]);
+            await pool.unsafe(
+                'update sim_m_nakes set aktif = false where id = $1',
+                [doctorId],
+            );
+            expect((await metadata(doctor)).user_practitioner_ids).toEqual([]);
+        } finally {
+            await pool.unsafe(
+                'update sim_m_nakes set user_id = null, aktif = true where id = $1',
+                [doctorId],
+            );
+        }
+    }, 60_000);
 });

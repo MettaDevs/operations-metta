@@ -5,6 +5,7 @@ import {
     createClinic,
     json,
     login,
+    refused,
     vitals,
     type Clinic,
 } from '../../support/examination-fixture.ts';
@@ -12,6 +13,7 @@ import {
     eventContract,
     outboxEnvelopes,
 } from '../../../../../test/support/event-contracts.ts';
+import { testPassword } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Entry = { id: string; version: number };
 type Line = {
@@ -39,8 +41,9 @@ type StoredComponent = {
 const pricing = '/api/v1/pricing';
 
 // Tarif Biaya Tindakan: dihitung server dengan pencarian tarif sistem lama saat baris pertama kali disimpan, lalu
-// dibekukan bersama komponennya, dan sama dengan tarif yang ditampilkan saat tindakan dipilih. Butuh PostgreSQL yang
-// sudah dimigrasi; dilewati bila DB_HOST kosong.
+// dibekukan bersama komponennya, dan sama dengan tarif yang ditampilkan saat tindakan dipilih. Biayanya sampai ke kasir,
+// juga saat diubah sesudah Selesai periksa, sampai kasir membayarnya. Butuh PostgreSQL yang sudah dimigrasi; dilewati
+// bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -573,6 +576,83 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                 komponen: 0,
                 live: false,
             },
+        ]);
+    });
+
+    test('an Update after Selesai periksa replaces the open cashier lines, and a paid visit refuses it with the cashier lock', async () => {
+        const id = await examination(types.general);
+        await saved(id, [line(procedures.injection, 3)]);
+        await json(await clinic.finish(id), 200);
+        const [visit] = await pool.unsafe<{ id: string }[]>(
+            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
+            [id],
+        );
+        const charges = async () => [
+            ...(await pool.unsafe<
+                { kode: string; qty: string; nilai: string; status: string }[]
+            >(
+                `select jenis_biaya_kode as kode, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai, status
+                 from kunjungan_kasir_detail
+                 where tenant_id = $1 and kunjungan_id = $2 and deleted_at is null
+                 order by jenis_biaya_kode`,
+                [clinic.tenantId, visit!.id],
+            )),
+        ];
+        await saved(id, [
+            line(procedures.injection),
+            line(procedures.unpriced),
+        ]);
+        expect(await charges()).toEqual([
+            { kode: 'J-INJ', qty: '1', nilai: '50000', status: 'terbuka' },
+            { kode: 'J-KOSONG', qty: '1', nilai: '0', status: 'terbuka' },
+        ]);
+
+        const cashier = await login(pool, browser, clinic.tenantId, [
+            'core.billing-setup.manage',
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        await json(
+            await cashier.post('/api/v1/billing/payment-methods', {
+                code: 'TUN',
+                name: 'Tunai',
+                behavior: 'tunai',
+                counted_at_close: true,
+            }),
+            201,
+        );
+        await json(
+            await cashier.post('/api/v1/billing/clerks/start', {
+                password: testPassword,
+            }),
+            201,
+        );
+        await json(
+            await cashier.post(`/api/v1/billing/visits/${visit!.id}/payments`, {
+                received: '1000000',
+            }),
+            201,
+        );
+        const current = await clinic.show(id);
+        expect(
+            await refused(
+                await clinic.admin.put(clinic.recordPath(id), {
+                    ...current.data,
+                    anamnesis: {
+                        ...(current.data.anamnesis as object),
+                        doctor_id: clinic.doctor,
+                    },
+                    procedures: [line(procedures.injection, 5)],
+                }),
+            ),
+        ).toEqual({
+            _form: [
+                'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.',
+            ],
+        });
+        expect(await charges()).toEqual([
+            { kode: 'J-INJ', qty: '1', nilai: '50000', status: 'ditagih' },
+            { kode: 'J-KOSONG', qty: '1', nilai: '0', status: 'ditagih' },
         ]);
     });
 });

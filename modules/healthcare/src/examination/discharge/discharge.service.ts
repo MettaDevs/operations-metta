@@ -26,14 +26,12 @@ import {
     schedulesForRegistration,
 } from '../../service/practice-schedule/practice-schedule.service.ts';
 import { isQueueMode } from '../../service/section/section.queue-modes.ts';
-import {
-    finishedMessage,
-    notStartedMessage,
-    type OptionGroup,
-} from '../medical-record/medical-record.fields.ts';
+import type { OptionGroup } from '../medical-record/medical-record.fields.ts';
 import { practitionerId } from '../medical-record/medical-record.orders.ts';
+import { notStartedMessage } from '../queue/queue.statuses.ts';
 import {
     duplicateReferralMessage,
+    finishedReferralMessage,
     isDischargeBehavior,
     type DischargeBehavior,
 } from './discharge.behaviors.ts';
@@ -441,7 +439,7 @@ export class Discharges {
         await this.db.transaction(async () => {
             const destination = await this.destination(destinationId, true);
             if (destination.status === 'selesai')
-                validation({ status: finishedMessage });
+                validation({ status: finishedReferralMessage });
             if (destination.status !== 'diperiksa')
                 validation({ status: notStartedMessage });
             const errors: Errors = {};

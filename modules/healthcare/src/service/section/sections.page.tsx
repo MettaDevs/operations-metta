@@ -95,6 +95,7 @@ function SectionCard({
             : metadata.permissions.update;
     const blank = {
         operating_unit_id: section?.operating_unit_id ?? null,
+        code: section?.code ?? '',
         name: section?.name ?? '',
         kind: section?.kind ?? null,
         document_code: section?.document_code ?? '',
@@ -148,6 +149,7 @@ function SectionCard({
         setMessage(null);
         const body = {
             operating_unit_id: form.operating_unit_id ?? '',
+            code: form.code,
             name: form.name,
             kind: form.kind ?? '',
             document_code: form.document_code || null,
@@ -182,7 +184,7 @@ function SectionCard({
             !(await confirm({
                 title: `Delete section ${section.name}?`,
                 description:
-                    'Section tidak bisa dipilih lagi. Namanya bisa dipakai lagi untuk section baru di unit yang sama.',
+                    'Section tidak bisa dipilih lagi. Kodenya bisa dipakai lagi untuk section baru, dan namanya untuk section baru di unit yang sama.',
                 confirmLabel: 'Delete',
                 destructive: true,
             }))
@@ -280,6 +282,22 @@ function SectionCard({
                                 readOnly
                             />
                         )}
+                    </FormControl>
+                    <FormControl
+                        error={errors.code?.[0]}
+                        hint="Tampil di alamat halaman pemeriksaan pasien, jadi tidak boleh sama dengan section lain di unit mana pun."
+                    >
+                        <Input
+                            label="Kode"
+                            required
+                            maxLength={20}
+                            data-error-field="code"
+                            value={form.code}
+                            readOnly={!editing}
+                            onChange={(event) =>
+                                setForm({ ...form, code: event.target.value })
+                            }
+                        />
                     </FormControl>
                     <FormControl error={errors.name?.[0]}>
                         <Input
@@ -728,6 +746,15 @@ function SectionsPage(): ReactNode {
                             : 'Belum ada section yang cocok.'
                     }
                     columns={[
+                        {
+                            id: 'code',
+                            header: 'Kode',
+                            width: 110,
+                            cell: (section) => (
+                                <DataTableText>{section.code}</DataTableText>
+                            ),
+                            sortValue: (section) => section.code,
+                        },
                         {
                             id: 'name',
                             header: 'Section',

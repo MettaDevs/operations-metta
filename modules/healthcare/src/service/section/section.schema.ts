@@ -14,6 +14,8 @@ export const sectionRowSchema = z.object({
     id: z.string(),
     operating_unit_id: z.string(),
     operating_unit_name: z.string(),
+    // Kode pendek yang diketik pengguna, unik per tenant; bagian alamat halaman pemeriksaan.
+    code: z.string(),
     name: z.string(),
     // Kode dari katalog section.kinds.ts.
     kind: z.string(),
@@ -45,6 +47,7 @@ export const sectionListQuerySchema = listParametersSchema.extend({
 
 export const sectionInputSchema = z.object({
     operating_unit_id: z.string(),
+    code: z.string(),
     name: z.string(),
     kind: z.string(),
     document_code: z.string().nullable().optional(),

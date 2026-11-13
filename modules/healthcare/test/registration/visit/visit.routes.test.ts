@@ -356,6 +356,7 @@ describe.skipIf(!process.env.DB_HOST)('visit registration', () => {
             sections[name] = (
                 await created(`${api}/sections`, {
                     operating_unit_id: unit,
+                    code: name,
                     name,
                     kind: 'rawat_jalan',
                     ...extra,

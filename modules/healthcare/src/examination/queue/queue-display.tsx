@@ -1,5 +1,7 @@
+import { Button } from '@operations-metta/ui/button';
 import { cn } from '@operations-metta/ui/utils';
 import type { ReactNode } from 'react';
+import { ApiError, errorText } from '@core/platform/shell/index.ts';
 import {
     isDestinationStatus,
     type DestinationStatus,
@@ -75,4 +77,49 @@ export function timeText(value: string | null): string | null {
               minute: '2-digit',
           })
         : null;
+}
+
+export const examinationNotFound =
+    'Kunjungan tidak ditemukan di legal entity dan unit kerja aktif.';
+
+// Keadaan memuat halaman pemeriksaan: pesan memuat, atau kegagalannya beserta Coba lagi.
+export function Loading({
+    query,
+    notFound,
+    failed,
+    loading,
+}: {
+    query: { isError: boolean; error: unknown; refetch: () => unknown };
+    notFound: string;
+    failed: string;
+    loading: string;
+}): ReactNode {
+    return (
+        <div className="space-y-3 p-6">
+            <p
+                role={query.isError ? 'alert' : 'status'}
+                className={
+                    query.isError
+                        ? 'text-sm text-destructive'
+                        : 'text-sm text-muted-foreground'
+                }
+            >
+                {query.isError
+                    ? query.error instanceof ApiError &&
+                      query.error.status === 404
+                        ? notFound
+                        : errorText(query.error, failed)
+                    : loading}
+            </p>
+            {query.isError && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void query.refetch()}
+                >
+                    Coba lagi
+                </Button>
+            )}
+        </div>
+    );
 }

@@ -9,6 +9,7 @@ import {
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
 import type {
+    callInputSchema,
     callNextInputSchema,
     queueListQuerySchema,
     startInputSchema,
@@ -33,7 +34,7 @@ export function examinationQueueRoutes() {
             inputStructure: 'detailed',
             outputStructure: 'detailed',
         });
-    const action = (suffix: string, name: Exclude<QueueAction, 'panggil'>) =>
+    const action = (suffix: string, name: QueueAction) =>
         route('POST', `/destinations/{id}/${suffix}`)
             .input(recordInput.extend({ body: z.unknown().optional() }))
             .handler(async ({ context, input }) =>
@@ -69,6 +70,42 @@ export function examinationQueueRoutes() {
             .input(recordInput)
             .handler(async ({ context, input }) =>
                 ok(await (await queue(context)).show(input.params.id)),
+            ),
+        // Alamat halaman pemeriksaan: NoReg lalu kode section.
+        healthcareExaminationFind: route(
+            'GET',
+            '/visits/{registrationNumber}/sections/{sectionCode}',
+        )
+            .input(
+                z.object({
+                    params: z.object({
+                        registrationNumber: z.string(),
+                        sectionCode: z.string(),
+                    }),
+                }),
+            )
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await queue(context)
+                    ).find(
+                        input.params.registrationNumber,
+                        input.params.sectionCode,
+                    ),
+                ),
+            ),
+        healthcareExaminationCall: route('POST', '/destinations/{id}/call')
+            .input(
+                recordInput.extend({
+                    body: z.custom<z.input<typeof callInputSchema>>(),
+                }),
+            )
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await queue(context, input.body)
+                    ).act(input.params.id, 'panggil', input.body),
+                ),
             ),
         healthcareExaminationRecall: action('recall', 'panggil_ulang'),
         healthcareExaminationSkip: action('skip', 'lewati'),
