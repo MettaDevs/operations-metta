@@ -15,6 +15,28 @@ export function isPriceLocation(value: string): value is PriceLocation {
     return Object.hasOwn(priceLocations, value);
 }
 
+// Cara tipe pasien mendapat tarif jasa (sim_m_tipe_pasien.tarif_jasa). Sistem lama memilihnya dari JenisKerjasamaID yang
+// ditulis mati di Services::datatable_charge_collection, dan langkah pencariannya berbeda per pemasangan, jadi di sini
+// setiap fungsi tarif sistem lama menjadi satu kode. Langkahnya ada di procedure-price.lookup.ts.
+export const procedureTariffs = {
+    // Tipe di luar daftar PHP: tidak memanggil fungsi tarif apa pun.
+    none: 'Tanpa tarif jasa',
+    // GetTarifBiayaNonKerjasama Kuta 1 dan Penta.
+    general: 'Tarif umum',
+    // GetTarifBiayaNonKerjasama Seroja: tanpa langkah terakhir "jasa saja, tipe apa pun".
+    general_own_group: 'Tarif umum, tanpa tarif kelompok harga lain',
+    // GetTarifBiayaJKN_BUFF Kuta 1 dan Penta.
+    bpjs: 'Tarif BPJS',
+    // GetTarifBiayaJKN_BUFF Seroja: berhenti di tarif semua kelas tanpa dokter.
+    bpjs_matching_only:
+        'Tarif BPJS, tanpa tarif kelas, dokter, atau kelompok harga lain',
+} as const;
+export type ProcedureTariff = keyof typeof procedureTariffs;
+
+export function isProcedureTariff(value: string): value is ProcedureTariff {
+    return Object.hasOwn(procedureTariffs, value);
+}
+
 // money: uang (money SQL Server), 0 atau lebih karena isian mask-number sistem lama menjadikan angka negatif 0.
 // number: persen dan Qty, isian teks biasa di sistem lama tanpa batas bawah.
 export type PriceNumberKind = 'money' | 'number';
