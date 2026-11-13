@@ -1042,7 +1042,7 @@ export class StockCounts {
             if (location.transit) validation({ location_id: transitMessage });
             await lockItemLocations(
                 this.db,
-                this.scope.tenantId,
+                this.scope,
                 lines.map((line) => ({
                     itemId: line.itemId,
                     locationId: location.id,

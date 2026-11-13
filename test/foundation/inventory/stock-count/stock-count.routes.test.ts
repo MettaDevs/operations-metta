@@ -920,4 +920,49 @@ describe.skipIf(!process.env.DB_HOST)('stock counts', () => {
         ).toBe(403);
         expect(await ledger(ready.id)).toHaveLength(0);
     });
+
+    test('a count dated in a closed inventory period is refused at posting and at reversal until the period is reopened', async () => {
+        const header = { count_date: '2026-08-15', posting_date: '2026-08-15' };
+        const counted = async (code: string) => {
+            const store = await business.location(code);
+            const item = await business.item(code);
+            await business.posted(
+                'masuk',
+                store.id,
+                [{ item_id: item.id, quantity: 10, unit_cost: 100 }],
+                '2026-08-01',
+            );
+            const positions = await calculate({
+                location_id: store.id,
+                item_ids: [item.id],
+                posting_date: '2026-08-15',
+            });
+            return finished(store.id, linesFrom(positions, { '-': 7 }), header);
+        };
+        const count = await done(
+            await post(await counted('PERIODE-A'), '2026-08-15'),
+        );
+        const pending = await counted('PERIODE-B');
+        const period = await business.closedPeriod('2026-08-31');
+        expect(
+            (await refused(await post(pending, '2026-08-15')))._form?.[0],
+        ).toContain(
+            'Periode persediaan Agustus 2026 sudah ditutup, jadi stok bertanggal 15 Agustus 2026 tidak bisa diposting.',
+        );
+        expect(await ledger(pending.id)).toEqual([]);
+        expect(
+            (await refused(await act(count, 'reverse')))._form?.[0],
+        ).toContain(
+            'posting bertanggal 15 Agustus 2026 tidak bisa dibatalkan.',
+        );
+        expect((await ledger(count.id)).map((row) => row.reversal)).toEqual([
+            false,
+        ]);
+        expect((await business.reopenPeriod(period)).status).toBe(200);
+        expect((await act(count, 'reverse')).status).toBe(200);
+        expect((await ledger(count.id)).map((row) => row.reversal)).toEqual([
+            false,
+            true,
+        ]);
+    });
 });

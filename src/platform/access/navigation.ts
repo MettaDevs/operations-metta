@@ -246,6 +246,13 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.inventory-setup.read',
                 },
                 {
+                    id: 'inventory-periods',
+                    label: 'Periode persediaan',
+                    href: '/sysadmin/inventory/periods',
+                    section: 'Setup',
+                    permission: 'core.inventory-period.read',
+                },
+                {
                     id: 'locations',
                     label: 'Lokasi',
                     href: '/sysadmin/inventory/locations',

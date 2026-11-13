@@ -43,6 +43,7 @@ import { page as foundationInventoryCodeListFundingSourcesPage } from './foundat
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
 import { page as foundationInventoryCodeListReasonCodesPage } from './foundation/inventory/code-list/reason-codes.page.tsx';
 import { page as foundationInventoryCodeListUnitsOfMeasurePage } from './foundation/inventory/code-list/units-of-measure.page.tsx';
+import { page as foundationInventoryInventoryPeriodInventoryPeriodsPage } from './foundation/inventory/inventory-period/inventory-periods.page.tsx';
 import { page as foundationInventoryItemCategoryItemCategoriesPage } from './foundation/inventory/item-category/item-categories.page.tsx';
 import { page as foundationInventoryItemLedgerItemLedgerEntriesPage } from './foundation/inventory/item-ledger/item-ledger-entries.page.tsx';
 import { page as foundationInventoryItemUnitItemUnitsPage } from './foundation/inventory/item-unit/item-units.page.tsx';
@@ -527,6 +528,17 @@ const foundationInventoryCodeListUnitsOfMeasureRoute = createRoute({
     staticData: { title: foundationInventoryCodeListUnitsOfMeasurePage.title },
 });
 
+const foundationInventoryInventoryPeriodInventoryPeriodsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationInventoryInventoryPeriodInventoryPeriodsPage.path,
+    component: foundationInventoryInventoryPeriodInventoryPeriodsPage.component,
+    validateSearch:
+        foundationInventoryInventoryPeriodInventoryPeriodsPage.validateSearch,
+    staticData: {
+        title: foundationInventoryInventoryPeriodInventoryPeriodsPage.title,
+    },
+});
+
 const foundationInventoryItemCategoryItemCategoriesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryItemCategoryItemCategoriesPage.path,
@@ -845,6 +857,7 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryCodeListProcurementProgramsRoute,
         foundationInventoryCodeListReasonCodesRoute,
         foundationInventoryCodeListUnitsOfMeasureRoute,
+        foundationInventoryInventoryPeriodInventoryPeriodsRoute,
         foundationInventoryItemCategoryItemCategoriesRoute,
         foundationInventoryItemLedgerItemLedgerEntriesRoute,
         foundationInventoryItemUnitItemUnitsRoute,

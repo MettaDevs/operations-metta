@@ -614,4 +614,35 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
         ).toBe(403);
         expect(await ledger(document.id)).toEqual([]);
     });
+
+    test('a receipt dated in a closed inventory period is refused at posting and at reversal until the period is reopened', async () => {
+        const early = (
+            await json<{ data: Receipt }>(
+                await post(
+                    await draft([plainLine(4)], { posting_date: '2026-08-14' }),
+                ),
+                200,
+            )
+        ).data;
+        const late = await draft([plainLine(2)], {
+            posting_date: '2026-08-20',
+        });
+        const period = await business.closedPeriod('2026-08-31');
+        expect((await refused(await post(late)))._form?.[0]).toContain(
+            'Periode persediaan Agustus 2026 sudah ditutup, jadi stok bertanggal 20 Agustus 2026 tidak bisa diposting.',
+        );
+        expect(await ledger(late.id)).toEqual([]);
+        expect((await refused(await reverse(early)))._form?.[0]).toContain(
+            'posting bertanggal 14 Agustus 2026 tidak bisa dibatalkan.',
+        );
+        expect((await ledger(early.id)).map((row) => row.reversal)).toEqual([
+            false,
+        ]);
+        expect((await business.reopenPeriod(period)).status).toBe(200);
+        expect((await reverse(early)).status).toBe(200);
+        expect((await ledger(early.id)).map((row) => row.reversal)).toEqual([
+            false,
+            true,
+        ]);
+    });
 });

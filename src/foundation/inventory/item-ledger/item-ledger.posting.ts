@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import { validation } from '../../../platform/http/index.ts';
 import {
+    lockInventoryPeriods,
+    refuseClosedPeriod,
+} from '../inventory-period/inventory-period.service.ts';
+import {
     amountOf,
     amountScale,
     display,
@@ -217,14 +221,16 @@ function openEntry(row: z.infer<typeof openSchema>): OpenEntry {
 // Satu penulis per barang dan lokasi. Kunci diambil berurutan menurut teksnya, jadi dua dokumen berbaris banyak yang
 // menyentuh barang yang sama tidak pernah saling menunggu dalam urutan terbalik. Dokumen yang membaca stok sebelum
 // memposting, seperti opname, mengambil kunci yang sama lebih dulu; kunci advisory transaksi boleh diambil ulang.
+// Kunci bersama periode persediaan selalu diambil lebih dulu, supaya penutupan periode menunggu penulis ini selesai.
 export async function lockItemLocations(
     db: Database,
-    tenantId: string,
+    scope: { tenantId: string; legalEntityId: string },
     pairs: { itemId: string; locationId: string }[],
 ) {
+    await lockInventoryPeriods(db, scope);
     const keys = pairs.map(
         (pair) =>
-            `gd_tr_kartu_gudang:${tenantId}:${pair.itemId}:${pair.locationId}`,
+            `gd_tr_kartu_gudang:${scope.tenantId}:${pair.itemId}:${pair.locationId}`,
     );
     for (const key of [...new Set(keys)].sort())
         await db.execute(
@@ -355,7 +361,8 @@ class Ledger {
 
 // Mesin posting stok (Item Jnl.-Post Line di BC): satu pintu untuk setiap dokumen yang menggerakkan stok. Berjalan di
 // dalam transaksi pemanggil, yang menjaga dokumennya sendiri dari posting ganda; indeks unik kunci idempoten menjadi
-// penjaga terakhir. Penolakan dilempar sebagai 422 dengan nama field `<field baris>.<isian>`.
+// penjaga terakhir. Penolakan dilempar sebagai 422 dengan nama field `<field baris>.<isian>`; tanggal posting di periode
+// persediaan yang sudah ditutup ditolak untuk seluruh dokumen (`_form`).
 export async function postItemLines(
     db: Database,
     context: PostingContext,
@@ -369,7 +376,7 @@ export async function postItemLines(
     const prepared = await prepare(db, context, lines);
     await lockItemLocations(
         db,
-        context.tenantId,
+        context,
         lines.flatMap((line) =>
             line.kind === 'transfer'
                 ? [
@@ -379,6 +386,7 @@ export async function postItemLines(
                 : [{ itemId: line.itemId, locationId: line.locationId }],
         ),
     );
+    await refuseClosedPeriod(db, context, context.postingDate, 'post');
     // Batch baru dicatat lebih dulu dalam urutan tetap. Dua dokumen di lokasi berbeda tidak berbagi kunci barang dan
     // lokasi, jadi tanpa urutan ini keduanya bisa saling menunggu batch baru yang sama.
     const newBatches = prepared
@@ -1037,7 +1045,8 @@ function openInbound(
 // Membatalkan posting satu dokumen sumber tanpa mengubah baris lamanya (Undo di BC). Setiap baris sumber mendapat baris
 // pembalik yang menunjuknya, bertanggal sama dengan aslinya. Baris masuk hanya boleh dibalik selama stoknya belum
 // tersentuh (sisa = jumlah). Baris keluar dibalik dengan membuka lagi stok yang diambilnya: batch, kedaluwarsa, dan
-// harga satuannya sama dengan baris masuk asalnya.
+// harga satuannya sama dengan baris masuk asalnya. Karena baris pembalik bertanggal sama dengan aslinya, posting di
+// periode persediaan yang sudah ditutup tidak bisa dibatalkan, sama dengan Undo di BC.
 export async function reverseItemEntries(
     db: Database,
     context: { tenantId: string; legalEntityId: string; userId: string | null },
@@ -1057,7 +1066,7 @@ export async function reverseItemEntries(
     );
     await lockItemLocations(
         db,
-        tenantId,
+        context,
         touched.map((pair) => ({
             itemId: pair.item_id,
             locationId: pair.location_id,
@@ -1082,6 +1091,14 @@ export async function reverseItemEntries(
     );
     if (reversed)
         validation({ _form: 'Posting dokumen ini sudah dibatalkan.' });
+    await refuseClosedPeriod(
+        db,
+        context,
+        entries
+            .map((entry) => entry.posting_date)
+            .reduce((left, right) => (right < left ? right : left)),
+        'reverse',
+    );
     if (
         entries.some(
             (entry) =>
