@@ -9,6 +9,7 @@ const foreignCash = { id: 'tunai-valuta', active: true };
 // Penjualan mata uang lokal: nilai lokal sama dengan nilai dalam mata uangnya.
 const local = (value: string) => ({ local: value, currency: value });
 const noRates = new Map<string, Decimal>();
+const noOpenings = new Map<string, string>();
 const toTwoDecimals = (value: Decimal) => value.rounded(2);
 const toWholeRupiah = (value: Decimal) => value.rounded(0);
 
@@ -22,6 +23,7 @@ test('a Kuta session closes to the same shortage as the legacy system when only 
             total: '150000',
             byMethod: new Map([['tunai', local('150000')]]),
         },
+        noOpenings,
         new Map([['tunai', '100000']]),
         noRates,
         toWholeRupiah,
@@ -30,6 +32,7 @@ test('a Kuta session closes to the same shortage as the legacy system when only 
         lines: [
             {
                 paymentMethodId: 'tunai',
+                opening: '0',
                 system: '150000',
                 systemLocal: '150000',
                 counted: '100000',
@@ -39,6 +42,7 @@ test('a Kuta session closes to the same shortage as the legacy system when only 
             },
             {
                 paymentMethodId: 'kartu',
+                opening: '0',
                 system: '0',
                 systemLocal: '0',
                 counted: '0',
@@ -48,6 +52,7 @@ test('a Kuta session closes to the same shortage as the legacy system when only 
             },
         ],
         transactions: 2,
+        openingTotal: '0',
         systemTotal: '150000',
         clerkTotal: '100000',
         differenceTotal: '-50000',
@@ -66,6 +71,7 @@ test('a guarantor sale counts toward the session total but not toward the differ
                 ['bpjs', local('250000')],
             ]),
         },
+        noOpenings,
         new Map([
             ['tunai', '75000'],
             ['kartu', '100000.50'],
@@ -92,6 +98,7 @@ test('an inactive counted method is closed only when it sold something in the se
             total: '50000',
             byMethod: new Map([['edc-lama', local('50000')]]),
         },
+        noOpenings,
         new Map(),
         noRates,
         toWholeRupiah,
@@ -118,6 +125,7 @@ test('foreign cash is counted in its own currency, and its difference is valued 
                 ['tunai-valuta', { local: '200694', currency: '12.35' }],
             ]),
         },
+        noOpenings,
         new Map([
             ['tunai', '0'],
             ['tunai-valuta', '12.30'],
@@ -128,6 +136,7 @@ test('foreign cash is counted in its own currency, and its difference is valued 
     expect(closed.lines).toEqual([
         {
             paymentMethodId: 'tunai',
+            opening: '0',
             system: '-694',
             systemLocal: '-694',
             counted: '0',
@@ -137,6 +146,7 @@ test('foreign cash is counted in its own currency, and its difference is valued 
         },
         {
             paymentMethodId: 'tunai-valuta',
+            opening: '0',
             system: '12.35',
             systemLocal: '200694',
             counted: '12.3',
@@ -151,4 +161,70 @@ test('foreign cash is counted in its own currency, and its difference is valued 
         closed.clerkTotal,
         closed.differenceTotal,
     ]).toEqual(['200000', '200490', '-121']);
+});
+
+test('opening cash enters the expected drawer, so local change for foreign cash no longer shows a false difference', () => {
+    // Sesi yang sama dengan tes sebelumnya, tetapi laci dibuka dengan 1.000.000 rupiah dan 5 valuta. Kembalian 694 rupiah
+    // keluar dari uang awal itu, jadi kasir menghitung 999.306 rupiah dan 17,30 valuta. Selisih rupiah 0; valuta tetap
+    // kurang 0,05 = 815 rupiah dengan kurs hari Clerk End 16.300.
+    const closed = closeClerk(
+        [cash, foreignCash],
+        {
+            transactions: 1,
+            total: '200000',
+            byMethod: new Map([
+                ['tunai', local('-694')],
+                ['tunai-valuta', { local: '200694', currency: '12.35' }],
+            ]),
+        },
+        new Map([
+            ['tunai', '1000000'],
+            ['tunai-valuta', '5'],
+        ]),
+        new Map([
+            ['tunai', '999306'],
+            ['tunai-valuta', '17.30'],
+        ]),
+        new Map([['tunai-valuta', Decimal.of('16300')]]),
+        toWholeRupiah,
+    );
+    expect(
+        closed.lines.map((line) => [
+            line.paymentMethodId,
+            line.opening,
+            line.system,
+            line.counted,
+            line.difference,
+            line.differenceLocal,
+        ]),
+    ).toEqual([
+        ['tunai', '1000000', '-694', '999306', '0', '0'],
+        ['tunai-valuta', '5', '12.35', '17.3', '-0.05', '-815'],
+    ]);
+    // Uang awal dan jumlah fisik dinilai dengan kurs hari itu: 1.000.000 + 5 x 16.300 = 1.081.500, dan 999.306 + 17,30 x
+    // 16.300 = 1.281.296.
+    expect([
+        closed.openingTotal,
+        closed.systemTotal,
+        closed.clerkTotal,
+        closed.differenceTotal,
+    ]).toEqual(['1081500', '200000', '1281296', '-815']);
+});
+
+test('an inactive cash method with only opening cash is still counted, so its cash is not lost', () => {
+    const retired = { id: 'tunai-lama', active: false };
+    const closed = closeClerk(
+        [cash, retired],
+        { transactions: 0, total: '0', byMethod: new Map() },
+        new Map([['tunai-lama', '50000']]),
+        new Map([['tunai-lama', '50000']]),
+        noRates,
+        toWholeRupiah,
+    );
+    expect(
+        closed.lines.map((line) => [line.paymentMethodId, line.difference]),
+    ).toEqual([
+        ['tunai', '0'],
+        ['tunai-lama', '0'],
+    ]);
 });

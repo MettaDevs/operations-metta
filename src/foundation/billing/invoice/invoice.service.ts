@@ -215,6 +215,7 @@ export class Invoices {
                 number: z.string(),
                 received: z.string(),
                 change: z.string(),
+                cash_label: z.string().nullable(),
                 lines: z.array(
                     z.object({
                         label: z.string(),
@@ -225,8 +226,20 @@ export class Invoices {
                     }),
                 ),
             }),
+            // Tunai mata uang lokal tersimpan bersih (uang diterima dikurangi kembalian), dan negatif bila kembalian tunai
+            // valuta melebihi uang yang diterima. Layar menampilkannya seperti saat kasir mengisi: uang diterima di bawah
+            // label jenis bayar tunai, lalu Kembalian, jadi barisnya tidak ikut daftar jenis bayar lain.
             `select k.no_bukti as number, trim_scale(k.jumlah_bayar)::text as received,
                     trim_scale(k.nilai_kembalian)::text as change,
+                    coalesce((select coalesce(j.label_kasir, j.nama)
+                              from kasir_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
+                              where d.tenant_id = k.tenant_id and d.kasir_id = k.id and j.perilaku = 'tunai'
+                                and d.mata_uang = $4
+                              limit 1),
+                             (select coalesce(j.label_kasir, j.nama) from jenis_bayar j
+                              where j.tenant_id = k.tenant_id and j.legal_entity_id = k.legal_entity_id
+                                and j.perilaku = 'tunai' and j.mata_uang is null and j.aktif and j.deleted_at is null
+                              order by j.urutan, j.kode limit 1)) as cash_label,
                     coalesce((select json_agg(json_build_object('label', coalesce(j.label_kasir, j.nama),
                                                                 'amount', trim_scale(d.nilai)::text,
                                                                 'currency_code', d.mata_uang,
@@ -234,10 +247,16 @@ export class Invoices {
                                                                 'rate', trim_scale(d.kurs)::text)
                                               order by j.urutan, j.kode)
                               from kasir_detail d join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
-                              where d.tenant_id = k.tenant_id and d.kasir_id = k.id), '[]'::json) as lines
+                              where d.tenant_id = k.tenant_id and d.kasir_id = k.id
+                                and not (j.perilaku = 'tunai' and d.mata_uang = $4)), '[]'::json) as lines
              from kasir k
              where k.tenant_id = $1 and k.legal_entity_id = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
-            [this.scope.tenantId, this.scope.legalEntityId, visitId],
+            [
+                this.scope.tenantId,
+                this.scope.legalEntityId,
+                visitId,
+                localCurrencyCode,
+            ],
         );
         return {
             data: {

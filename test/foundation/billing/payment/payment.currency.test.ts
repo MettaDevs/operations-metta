@@ -187,6 +187,10 @@ describe.skipIf(!process.env.DB_HOST)(
             await json(
                 await cashier.post('/api/v1/billing/clerks/start', {
                     password: testPassword,
+                    opening: {
+                        [methods.TUN!]: '1000000',
+                        [methods[foreign]!]: '10',
+                    },
                 }),
                 201,
             );
@@ -305,6 +309,29 @@ describe.skipIf(!process.env.DB_HOST)(
                 currency_amount: '12.35',
                 exchange_rate: '16250.5',
             });
+            // Pembayaran tersimpan tampil seperti saat diisi: uang tunai yang diterima di bawah label tunai, lalu
+            // Kembalian, bukan baris tunai -694.
+            const shown = await json<{
+                data: { payment: Record<string, unknown> };
+            }>(
+                await cashier.get(`/api/v1/billing/visits/${visits.exact}`),
+                200,
+            );
+            expect(shown.data.payment).toEqual({
+                number: expect.any(String),
+                received: '0',
+                change: '694',
+                cash_label: 'TUN',
+                lines: [
+                    {
+                        label: foreign,
+                        amount: '200694',
+                        currency_code: foreign,
+                        currency_amount: '12.35',
+                        rate: '16250.5',
+                    },
+                ],
+            });
         });
 
         test('the foreign amount keeps its own precision, and the local amount is rounded once at the local precision', async () => {
@@ -411,7 +438,7 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         });
 
-        test('Clerk End counts foreign cash in its own currency and values its difference at the closing rate', async () => {
+        test('Clerk End counts foreign cash in its own currency with its opening cash, and the local change leaves no false difference', async () => {
             const current = await json<{
                 data: {
                     id: string;
@@ -429,16 +456,18 @@ describe.skipIf(!process.env.DB_HOST)(
                 [foreign, 2],
             ]);
             // Valuta sesi ini: 12,35 + 6,15 + 6,25 = 24,75, senilai 400.634,58 rupiah dengan kurs saat dibayar. Tunai rupiah
-            // bersih -694 + 59,42 = -634,58 karena kembalian valuta keluar dari laci rupiah. Kasir menghitung 24,70 valuta
-            // dan 0 rupiah; kurs hari ini 16.250,5.
+            // bersih -694 + 59,42 = -634,58 karena kembalian valuta keluar dari laci rupiah, dari uang awal 1.000.000. Kasir
+            // menghitung 999.365,42 rupiah dan 34,70 valuta (uang awal 10); kurs hari ini 16.250,5.
             const ended = await json<{
                 data: {
+                    opening_total: string;
                     system_total: string;
                     clerk_total: string;
                     difference_total: string;
                     lines: {
                         code: string;
                         currency_code: string;
+                        opening_amount: string;
                         system_amount: string;
                         counted_amount: string;
                         difference: string;
@@ -452,8 +481,8 @@ describe.skipIf(!process.env.DB_HOST)(
                     {
                         password: testPassword,
                         counts: {
-                            [methods.TUN!]: '0',
-                            [methods[foreign]!]: '24.70',
+                            [methods.TUN!]: '999365.42',
+                            [methods[foreign]!]: '34.70',
                         },
                         version: current.data.version,
                     },
@@ -464,6 +493,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 ended.data.lines.map((line) => [
                     line.code,
                     line.currency_code,
+                    line.opening_amount,
                     line.system_amount,
                     line.counted_amount,
                     line.difference,
@@ -471,23 +501,35 @@ describe.skipIf(!process.env.DB_HOST)(
                     line.difference_local,
                 ]),
             ).toEqual([
-                ['TUN', 'IDR', '-634.58', '0', '634.58', '1', '634.58'],
+                [
+                    'TUN',
+                    'IDR',
+                    '1000000',
+                    '-634.58',
+                    '999365.42',
+                    '0',
+                    '1',
+                    '0',
+                ],
                 [
                     foreign,
                     foreign,
+                    '10',
                     '24.75',
-                    '24.7',
+                    '34.7',
                     '-0.05',
                     '16250.5',
                     '-812.53',
                 ],
             ]);
-            // Jumlah fisik dinilai dengan kurs hari ini: 24,70 x 16.250,5 = 401.387,35.
+            // Uang awal dan jumlah fisik dinilai dengan kurs hari ini: 1.000.000 + 10 x 16.250,5 = 1.162.505, dan
+            // 999.365,42 + 34,70 x 16.250,5 = 1.563.257,77.
             expect([
+                ended.data.opening_total,
                 ended.data.system_total,
                 ended.data.clerk_total,
                 ended.data.difference_total,
-            ]).toEqual(['400000', '401387.35', '-177.95']);
+            ]).toEqual(['1162505', '400000', '1563257.77', '-812.53']);
         });
     },
 );

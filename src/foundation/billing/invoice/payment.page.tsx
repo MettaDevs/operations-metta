@@ -216,6 +216,22 @@ function PaymentPage(): ReactNode {
                                         readOnly
                                     />
                                 </FormControl>
+                                {(payment.received !== '0' ||
+                                    payment.change !== '0') && (
+                                    <FormControl>
+                                        <Input
+                                            label={
+                                                payment.cash_label ??
+                                                'Uang diterima'
+                                            }
+                                            value={displayAmount(
+                                                payment.received,
+                                                data.amount_decimals,
+                                            )}
+                                            readOnly
+                                        />
+                                    </FormControl>
+                                )}
                                 {payment.lines.map((line) => (
                                     <FormControl
                                         key={line.label}
