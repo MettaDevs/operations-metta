@@ -52,16 +52,19 @@ const formOf = (record: CurrencyPrecision | null) => ({
 
 export function CurrencyCard({
     record,
+    localCurrency,
     canManage,
     onSaved,
     onClose,
 }: {
     record: CurrencyPrecision | null;
+    localCurrency: string;
     canManage: boolean;
     onSaved: (record: CurrencyPrecision) => void;
     onClose: () => void;
 }): ReactNode {
     const editing = canManage;
+    const local = record?.currency_code === localCurrency;
     const [form, setForm] = useState(() => formOf(record));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -169,14 +172,21 @@ export function CurrencyCard({
             />
             <PageDialogBody className="py-3">
                 <FormGrid>
-                    <FormControl error={errors.currency_code?.[0]}>
+                    <FormControl
+                        error={errors.currency_code?.[0]}
+                        hint={
+                            local
+                                ? 'Mata uang lokal tenant. Kodenya tetap; presisi dan pembulatannya bisa disetel.'
+                                : undefined
+                        }
+                    >
                         <Input
                             label="Kode mata uang"
                             required
                             maxLength={3}
                             data-error-field="currency_code"
                             value={form.currency_code}
-                            readOnly={!editing}
+                            readOnly={!editing || local}
                             onChange={(event) =>
                                 setForm({
                                     ...form,

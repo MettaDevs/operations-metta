@@ -12,7 +12,10 @@ import {
     staleMessage,
     validation,
 } from '../../platform/http/index.ts';
-import { roundingMethods } from '../../platform/money/index.ts';
+import {
+    localCurrencyCode,
+    roundingMethods,
+} from '../../platform/money/index.ts';
 import {
     amountDecimalOptions,
     amountInput,
@@ -70,6 +73,9 @@ function checked(body: unknown) {
     };
 }
 
+const localCodeMessage =
+    'Kode mata uang lokal tidak bisa diubah. Presisi dan pembulatannya tetap bisa disetel.';
+
 function codeTaken(error: unknown): void {
     if (
         sqlErrorCode(error) === '23505' &&
@@ -99,6 +105,7 @@ export class Currencies {
             can_manage: this.workspace.permissions.has(
                 'core.reference-data.update',
             ),
+            local_currency: localCurrencyCode,
         };
     }
 
@@ -137,6 +144,13 @@ export class Currencies {
         this.workspace.guard('reference-data', 'update');
         const current = await this.row(id);
         const data = checked(body);
+        // Kode mata uang lokal dibaca kasir, farmasi, dan aset sebagai mata uang pembukuan, dan pembayaran yang
+        // tersimpan merujuknya; hanya presisinya yang boleh berubah.
+        if (
+            current.currency_code === localCurrencyCode &&
+            data.currency_code !== localCurrencyCode
+        )
+            validation({ currency_code: localCodeMessage });
         let updated = 0;
         try {
             updated = await this.db.execute(
