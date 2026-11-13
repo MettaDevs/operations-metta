@@ -12,6 +12,7 @@ import {
     activeLegalEntity,
     createItem,
     deleteItem,
+    itemUnits,
     parseInput,
     updateItem,
     type ItemInput,
@@ -21,7 +22,8 @@ import { drugInputSchema, drugRowSchema } from './drug.schema.ts';
 
 const rowSql = `select * from (
                     select o.id, b.kode as code, b.nama as name, b.satuan_dasar_id as base_unit_id,
-                           u.nama as base_unit_name, o.bentuk_sediaan_id as dosage_form_id, f.nama as dosage_form_name,
+                           u.nama as base_unit_name, coalesce(b.satuan_jual_id, b.satuan_dasar_id) as sales_unit_id,
+                           o.bentuk_sediaan_id as dosage_form_id, f.nama as dosage_form_name,
                            o.boleh_diresepkan as is_prescribable, b.diblokir as is_blocked, b.version
                     from sim_m_obat o
                     join gd_m_barang b on b.tenant_id = o.tenant_id and b.legal_entity_id = o.legal_entity_id
@@ -80,6 +82,16 @@ export class Drugs {
         };
     }
 
+    // Pilihan satuan setiap obat, supaya E-Resep bisa menulis jumlah dalam satuan kemasan tanpa izin kartu barang.
+    private async withUnits(rows: z.infer<typeof drugRowSchema>[]) {
+        const units = await itemUnits(
+            this.db,
+            this.scope,
+            rows.map((row) => row.id),
+        );
+        return rows.map((row) => ({ ...row, units: units.get(row.id) ?? [] }));
+    }
+
     async list(parameters: URLSearchParams) {
         this.workspace.guard('drug', 'read');
         const scope = this.scope;
@@ -106,7 +118,9 @@ export class Drugs {
             defaultDirection: 'asc',
         });
         return {
-            data: batch.data.map((row) => drugRowSchema.parse(row)),
+            data: await this.withUnits(
+                batch.data.map((row) => drugRowSchema.parse(row)),
+            ),
             next_cursor: batch.next_cursor,
         };
     }
@@ -122,6 +136,12 @@ export class Drugs {
             : undefined;
         if (!found) abort(404, 'Not Found');
         return found;
+    }
+
+    private async shown(id: string) {
+        const [row] = await this.withUnits([await this.row(id)]);
+        if (!row) abort(404, 'Not Found');
+        return row;
     }
 
     // Isian barang diteruskan ke persediaan Core, yang memeriksanya dan melaporkan kesalahan bentuk sediaan dalam
@@ -189,7 +209,11 @@ export class Drugs {
             });
             return created;
         });
-        return { status: 201, headers: {}, body: { data: await this.row(id) } };
+        return {
+            status: 201,
+            headers: {},
+            body: { data: await this.shown(id) },
+        };
     }
 
     // Kategori, profil pelacakan, tolak stok minus, dan blokir tidak ada di kartu obat, jadi nilainya dibawa dari barang
@@ -237,7 +261,11 @@ export class Drugs {
                 ],
             );
         });
-        return { status: 200, headers: {}, body: { data: await this.row(id) } };
+        return {
+            status: 200,
+            headers: {},
+            body: { data: await this.shown(id) },
+        };
     }
 
     // Obat yang sudah dipakai resep atau dicatat sebagai alergi pasien tidak bisa dihapus; matikan Boleh diresepkan

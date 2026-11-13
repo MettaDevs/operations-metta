@@ -336,13 +336,14 @@ describe.skipIf(!process.env.DB_HOST)('drugs', () => {
         };
         const prescribed = await create(admin, { name: 'Diresepkan' });
         await insertUnchecked(
-            `insert into sim_tr_resep_detail (id, tenant_id, resep_id, urutan, obat_id, jumlah)
-             values ($1, $2, $3, 1, $4, 10)`,
+            `insert into sim_tr_resep_detail (id, tenant_id, resep_id, urutan, obat_id, jumlah, satuan_id, konversi)
+             values ($1, $2, $3, 1, $4, 10, $5, 1)`,
             [
                 Bun.randomUUIDv7(),
                 business.tenantId,
                 Bun.randomUUIDv7(),
                 prescribed.id,
+                business.uom.id,
             ],
         );
         expect(

@@ -293,7 +293,7 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
             ),
         ).toEqual({
             'lines.0.quantity': [
-                'Paling banyak 6: yang diserahkan dikurangi yang sudah diretur.',
+                'Paling banyak 6 TAB: yang diserahkan dikurangi yang sudah diretur.',
             ],
         });
         expect(
@@ -330,7 +330,7 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
             ),
         ).toEqual({
             'lines.0.quantity': [
-                'Paling banyak 2: yang diserahkan dikurangi yang sudah diretur.',
+                'Paling banyak 2 TAB: yang diserahkan dikurangi yang sudah diretur.',
             ],
         });
         const reversed = (
@@ -486,6 +486,228 @@ describe.skipIf(!process.env.DB_HOST)('handover event and returns', () => {
                 ['P-A', '3', '100', 'APBD'],
                 ['P-B', '2', '120', 'BLUD'],
             ]);
+        } finally {
+            item = original;
+        }
+    });
+
+    test('strips prescribed, tablets handed over, and strips returned: events name each unit and stock moves in tablets', async () => {
+        const strip = await pharmacy.created(
+            `${inventoryApi}/units-of-measure`,
+            { code: 'STRIP', name: 'Strip' },
+        );
+        const fresh = await pharmacy.item('ANT-STRIP', {
+            tracking_code_id: (
+                await pool.unsafe<{ id: string }[]>(
+                    'select profil_pelacakan_id as id from gd_m_barang where id = $1',
+                    [item.id],
+                )
+            )[0]?.id,
+        });
+        await pharmacy.created(`${inventoryApi}/item-units`, {
+            item_id: fresh.id,
+            unit_id: strip.id,
+            quantity_per_unit: 10,
+        });
+        const original = item;
+        item = fresh;
+        try {
+            await receive([
+                {
+                    batch: 'S-A',
+                    expiry: '2027-01-31',
+                    quantity: 10,
+                    cost: 100,
+                    funding: apbd,
+                },
+                {
+                    batch: 'S-B',
+                    expiry: '2027-12-31',
+                    quantity: 30,
+                    cost: 110,
+                    funding: blud,
+                },
+            ]);
+            const { prescriptionId, data } = await pharmacy.issue([
+                {
+                    item,
+                    quantity: '3',
+                    unit: strip,
+                    quantity_per_unit: '10',
+                },
+            ]);
+            const [queued] = await pharmacy.queued(prescriptionId);
+            const id = queued?.id ?? '';
+            const proposed = (
+                await json<{
+                    data: { lines: { prescription_line_id: string }[] };
+                }>(await pharmacy.admin.get(dispensing(id)), 200)
+            ).data;
+            const prepared = await json<{
+                data: { dispensing: { version: number } | null };
+            }>(
+                await pharmacy.admin.post(dispensing(id, '/prepare'), {
+                    lines: proposed.lines.map((line) => ({
+                        prescription_line_id: line.prescription_line_id,
+                        quantity: '25',
+                        unit_id: pharmacy.uom.id,
+                        reason: 'Stok strip utuh kurang',
+                    })),
+                }),
+                200,
+            );
+            await json(
+                await pharmacy.admin.post(dispensing(id, '/hand-over'), {
+                    version: prepared.data.dispensing?.version,
+                }),
+                200,
+            );
+            const tablet = { id: pharmacy.uom.id, code: 'TAB' };
+            const [handed] = (
+                await outboxEnvelopes(pool, pharmacy.tenantId, dispensed)
+            ).filter((row) => row.data.prescription_id === prescriptionId);
+            (await eventContract(dispensed)).parse(handed);
+            expect(handed?.data.lines).toMatchObject([
+                {
+                    prescription_line_id: data.lines[0]?.id,
+                    unit: tablet,
+                    quantity: '25',
+                    quantity_per_unit: '1',
+                    base_unit: tablet,
+                    base_quantity: '25',
+                    prescribed_unit: { id: strip.id, code: 'STRIP' },
+                    prescribed_quantity: '3',
+                    batches: [
+                        { batch_number: 'S-A', quantity: '10' },
+                        { batch_number: 'S-B', quantity: '15' },
+                    ],
+                },
+            ]);
+
+            const shown = (
+                await json<{ data: Returns }>(
+                    await pharmacy.admin.get(returnsPath(id)),
+                    200,
+                )
+            ).data;
+            const row = (batch: string) =>
+                shown.returnable.find(
+                    (entry) => entry.batch?.batch_number === batch,
+                );
+            const give = (
+                lines: { batch: string; quantity: string; unit: string }[],
+            ) =>
+                pharmacy.admin.post(returnsPath(id), {
+                    reason: 'Pasien sembuh',
+                    lines: lines.map((line) => ({
+                        dispensing_line_id: row(line.batch)?.dispensing_line_id,
+                        batch_id: row(line.batch)?.batch?.id ?? null,
+                        quantity: line.quantity,
+                        unit_id: line.unit,
+                    })),
+                });
+            expect(
+                await refused(
+                    await give([
+                        { batch: 'S-B', quantity: '2', unit: strip.id },
+                    ]),
+                ),
+            ).toEqual({
+                'lines.0.quantity': [
+                    'Paling banyak 15 TAB: yang diserahkan dikurangi yang sudah diretur.',
+                ],
+            });
+            const first = (
+                await json<{ data: Returns }>(
+                    await give([
+                        { batch: 'S-B', quantity: '1', unit: strip.id },
+                    ]),
+                    200,
+                )
+            ).data.returns.at(-1);
+            expect(await returnEntries(first?.id ?? '')).toMatchObject([
+                { batch: 'S-B', quantity: '10', unit_cost: '110' },
+            ]);
+            const second = (
+                await json<{ data: Returns }>(
+                    await give([
+                        { batch: 'S-A', quantity: '1', unit: strip.id },
+                        { batch: 'S-B', quantity: '5', unit: pharmacy.uom.id },
+                    ]),
+                    200,
+                )
+            ).data.returns.at(-1);
+            expect(
+                (await returnEntries(second?.id ?? '')).map((entry) => [
+                    entry.batch,
+                    entry.quantity,
+                ]),
+            ).toEqual([
+                ['S-A', '10'],
+                ['S-B', '5'],
+            ]);
+            expect(
+                await refused(
+                    await give([
+                        { batch: 'S-A', quantity: '1', unit: pharmacy.uom.id },
+                    ]),
+                ),
+            ).toEqual({
+                'lines.0.quantity': [
+                    'Obat batch ini sudah diretur seluruhnya.',
+                ],
+            });
+            const stored = await pool.unsafe<
+                { jumlah: string; satuan: string; konversi: string }[]
+            >(
+                `select trim_scale(d.jumlah)::text as jumlah, s.kode as satuan,
+                        trim_scale(d.konversi)::text as konversi
+                 from retur_farmasi_detail d join gd_m_satuan s on s.id = d.satuan_id
+                 where d.retur_farmasi_id = $1 order by d.urutan`,
+                [second?.id ?? ''],
+            );
+            expect([...stored]).toEqual([
+                { jumlah: '1', satuan: 'STRIP', konversi: '10' },
+                { jumlah: '5', satuan: 'TAB', konversi: '1' },
+            ]);
+            const contract = await eventContract('pharmacy.return.posted.v1');
+            const posted = (
+                await outboxEnvelopes(
+                    pool,
+                    pharmacy.tenantId,
+                    'pharmacy.return.posted.v1',
+                )
+            ).filter(
+                (envelope) => envelope.data.prescription_id === prescriptionId,
+            );
+            for (const envelope of posted) contract.parse(envelope);
+            expect(posted.map((envelope) => envelope.data.lines)).toMatchObject(
+                [
+                    [
+                        {
+                            unit: { id: strip.id, code: 'STRIP' },
+                            quantity: '1',
+                            base_unit: tablet,
+                            base_quantity: '10',
+                            returned_base_quantity: '10',
+                            batches: [{ batch_number: 'S-B', quantity: '10' }],
+                        },
+                    ],
+                    [
+                        {
+                            unit: tablet,
+                            quantity: '15',
+                            base_unit: tablet,
+                            base_quantity: '15',
+                            returned_base_quantity: '25',
+                            batches: [
+                                { batch_number: 'S-A', quantity: '10' },
+                                { batch_number: 'S-B', quantity: '5' },
+                            ],
+                        },
+                    ],
+                ],
+            );
         } finally {
             item = original;
         }

@@ -8,7 +8,8 @@ import { idSchema } from '@core/platform/http/index.ts';
 
 // Obat resep yang sudah diserahkan farmasi (pharmacy.prescription.dispensed.v1, kontrak di
 // contracts/events/pharmacy.prescription.dispensed.v1.yaml). Module ini tidak meng-import module farmasi, jadi bagian
-// isi yang dibacanya ditulis di sini; field lain dilewati.
+// isi yang dibacanya ditulis di sini; field lain dilewati. Jumlah yang diserahkan dicatat dalam satuan dasar:
+// base_quantity, atau quantity pada pesan lama yang belum membawanya, karena pesan itu ditulis dalam satuan dasar.
 export const prescriptionDispensed =
     'pharmacy.prescription.dispensed.v1' as const;
 
@@ -18,13 +19,17 @@ const dispensedSchema = z.object({
     dispensing_number: z.string().min(1).max(50),
     dispensed_at: z.iso.datetime(),
     lines: z.array(
-        z.object({ prescription_line_id: idSchema, quantity: decimalText }),
+        z.object({
+            prescription_line_id: idSchema,
+            quantity: decimalText,
+            base_quantity: decimalText.optional(),
+        }),
     ),
 });
 
 // Retur yang diposting dan Batal retur membawa isi yang sama. Yang dibaca di sini hanya total retur per baris resep
-// dalam satuan dasar, satuan yang sama dengan jumlah resep dan jumlah yang diserahkan, jadi retur dalam satuan lain
-// (misalnya strip) tetap dikurangkan dengan benar.
+// dalam satuan dasar, satuan yang sama dengan jumlah yang diserahkan, jadi retur dalam satuan lain (misalnya strip)
+// tetap dikurangkan dengan benar.
 export const returnPosted = 'pharmacy.return.posted.v1' as const;
 export const returnReversed = 'pharmacy.return.reversed.v1' as const;
 
@@ -94,7 +99,7 @@ export async function receiveDispensing(
             `update sim_tr_resep_detail set jumlah_diserahkan = $1, updated_at = $2
              where tenant_id = $3 and resep_id = $4 and id = $5`,
             [
-                line.quantity,
+                line.base_quantity ?? line.quantity,
                 stamp,
                 envelope.tenant_id,
                 prescription.id,

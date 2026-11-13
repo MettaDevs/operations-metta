@@ -14,8 +14,9 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    baseQuantity,
     decimalInput,
-    fromNumeric,
+    itemUnits,
     openStock,
     parseInput,
     postItemLines,
@@ -23,6 +24,7 @@ import {
     reverseItemEntries,
     toNumeric,
     issuedSlices,
+    unitConversion,
 } from '@core/foundation/inventory/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { moduleId } from '../../module.ts';
@@ -34,15 +36,21 @@ import {
     dispensingInputSchema,
     handOverInputSchema,
     versionInputSchema,
+    type DispensingLine,
     type DispensingStatus,
 } from './dispensing.schema.ts';
+import {
+    exactBase,
+    quantityOf,
+    quantityText,
+    type LineUnit,
+} from './dispensing.units.ts';
 
 export const dispensingSource = 'bill_farmasi';
 export const dispensingNumberReference = 'pharmacy.dispensing-number';
 
-const quantityText = (value: bigint) =>
-    toNumeric(value, quantityScale).replace(/\.?0+$/, '');
-const quantityOf = (text: string) => fromNumeric(text, quantityScale);
+export const inexactBaseMessage =
+    'Jumlah ini dalam satuan dasar lebih dari empat angka di belakang koma. Ganti satuan atau jumlahnya.';
 
 const personSql = (column: string) => `(select case when u.id is null then null
         else json_build_object('id', u.id, 'name', u.name) end from users u where u.id = ${column})`;
@@ -71,11 +79,22 @@ const lockedSchema = z.object({
     issued_at: z.string(),
 });
 
+// Baris obat resep. Resep dari pesan yang belum membawa satuan ditulis dalam satuan dasar barang dengan isi 1.
 const itemLineSchema = z.object({
     id: z.string(),
     order: z.number(),
     item_id: z.string(),
     quantity: z.string(),
+    unit_id: z.string(),
+    unit_code: z.string(),
+    unit_name: z.string(),
+    conversion: z.string(),
+});
+type ItemLine = z.infer<typeof itemLineSchema>;
+
+const prescribedUnit = (line: ItemLine): LineUnit => ({
+    unitId: line.unit_id,
+    quantityPerUnit: quantityOf(line.conversion),
 });
 
 const messages = {
@@ -86,6 +105,7 @@ const messages = {
     lines: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
     prescription_line_id: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
     quantity: 'Isi jumlah 0 atau lebih.',
+    unit_id: 'Pilih satuan obat ini dari daftar.',
     batch_id: 'Pilih batch dari daftar.',
     reason: 'Alasan paling banyak 200 karakter.',
     version: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
@@ -183,17 +203,25 @@ export class Dispensings {
     private async itemLines(prescriptionId: string) {
         return this.db.rows(
             itemLineSchema,
-            `select id, urutan as "order", barang_id as item_id, jumlah::text as quantity
-             from far_tr_resep_detail
-             where tenant_id = $1 and resep_id = $2 and barang_id is not null and deleted_at is null
-             order by urutan, id`,
+            `select d.id, d.urutan as "order", d.barang_id as item_id, d.jumlah::text as quantity,
+                    coalesce(d.satuan_id, b.satuan_dasar_id) as unit_id, coalesce(d.kode_satuan, s.kode) as unit_code,
+                    coalesce(d.nama_satuan, s.nama) as unit_name, d.konversi::text as conversion
+             from far_tr_resep_detail d
+             join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+             join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+             where d.tenant_id = $1 and d.resep_id = $2 and d.barang_id is not null and d.deleted_at is null
+             order by d.urutan, d.id`,
             [this.scope.tenantId, prescriptionId],
         );
     }
 
     // Baris penyerahan aktif; tanpa penyerahan aktif, usulan dari penyerahan terakhir yang dibatalkan (supaya jumlah,
-    // batch, dan alasan yang sudah diisi tidak hilang), atau dari jumlah resep.
-    private async lines(prescriptionId: string, active: Header | undefined) {
+    // satuan, batch, dan alasan yang sudah diisi tidak hilang), atau dari jumlah dan satuan resep. units: pilihan satuan
+    // barang itu, satuan dasar lebih dulu.
+    private async lines(
+        prescriptionId: string,
+        active: Header | undefined,
+    ): Promise<DispensingLine[]> {
         const source = active
             ? active.id
             : (
@@ -211,6 +239,12 @@ export class Dispensings {
                       id: z.string(),
                       prescription_line_id: z.string(),
                       quantity: z.string(),
+                      unit: z.object({
+                          id: z.string(),
+                          code: z.string(),
+                          name: z.string(),
+                      }),
+                      conversion: z.string(),
                       reason: z.string().nullable(),
                       batch: z
                           .object({
@@ -221,10 +255,12 @@ export class Dispensings {
                           .nullable(),
                   }),
                   `select d.id, d.resep_detail_id as prescription_line_id, d.jumlah::text as quantity,
-                          d.alasan as reason,
+                          json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
+                          d.konversi::text as conversion, d.alasan as reason,
                           case when t.id is null then null else json_build_object(
                               'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end as batch
                    from bill_farmasi_detail d
+                   join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
                    left join gd_m_batch t on t.tenant_id = d.tenant_id and t.id = d.batch_id
                    where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null`,
                   [this.scope.tenantId, source],
@@ -240,7 +276,13 @@ export class Dispensings {
                       id: active.id,
                   })
                 : [];
-        return (await this.itemLines(prescriptionId)).map((line) => {
+        const itemLines = await this.itemLines(prescriptionId);
+        const units = await itemUnits(
+            this.db,
+            this.scope,
+            itemLines.map((line) => line.item_id),
+        );
+        return itemLines.map((line) => {
             const saved = byLine.get(line.id);
             return {
                 id: active ? (saved?.id ?? null) : null,
@@ -248,6 +290,15 @@ export class Dispensings {
                 quantity: quantityText(
                     quantityOf(saved?.quantity ?? line.quantity),
                 ),
+                unit: saved?.unit ?? {
+                    id: line.unit_id,
+                    code: line.unit_code,
+                    name: line.unit_name,
+                },
+                quantity_per_unit: quantityText(
+                    quantityOf(saved?.conversion ?? line.conversion),
+                ),
+                units: units.get(line.item_id) ?? [],
                 batch: saved?.batch ?? null,
                 reason: saved?.reason ?? null,
                 taken: taken
@@ -296,8 +347,25 @@ export class Dispensings {
         );
     }
 
-    // Isian draf: satu baris per obat resep, jumlah 0 sampai jumlah resep, alasan wajib bila kurang dari resep, batch
-    // milik barang itu, lokasi milik legal entity ini, apoteker dan asisten anggota tenant.
+    // Satuan baris penyerahan, seperti satuan baris pengiriman BC yang bawaannya satuan baris pesanan. Satuan resep
+    // memakai isi yang disalin saat resep diterima; satuan lain harus satuan barang itu sendiri, dengan isinya sekarang.
+    private async dispensingUnit(
+        raw: string | null | undefined,
+        source: ItemLine,
+    ): Promise<LineUnit | null> {
+        const unitId = raw || source.unit_id;
+        if (unitId === source.unit_id) return prescribedUnit(source);
+        const conversion = lookupId(unitId)
+            ? await unitConversion(this.db, this.scope, source.item_id, unitId)
+            : null;
+        return conversion === null
+            ? null
+            : { unitId, quantityPerUnit: conversion };
+    }
+
+    // Isian draf: satu baris per obat resep dalam satuan resep atau satuan lain barang itu, jumlah 0 sampai jumlah resep
+    // (dibandingkan dalam satuan dasar), alasan wajib bila kurang dari resep, batch milik barang itu, lokasi milik legal
+    // entity ini, apoteker dan asisten anggota tenant.
     private async checked(prescriptionId: string, body: unknown) {
         const data = parseInput(dispensingInputSchema, body, messages);
         const errors: Record<string, string> = {};
@@ -309,6 +377,7 @@ export class Dispensings {
             order: number;
             itemId: string;
             quantity: bigint;
+            unit: LineUnit;
             batchId: string | null;
             reason: string | null;
         }[] = [];
@@ -321,18 +390,30 @@ export class Dispensings {
                 continue;
             }
             seen.add(source.id);
-            const ordered = quantityOf(source.quantity);
+            const ordered = exactBase(
+                quantityOf(source.quantity),
+                prescribedUnit(source),
+            );
+            const unit = await this.dispensingUnit(line.unit_id, source);
+            if (!unit) errors[`${field}.unit_id`] = messages.unit_id;
             const quantity = decimalInput(line.quantity);
+            const dispensed =
+                quantity !== null && unit ? exactBase(quantity, unit) : null;
             if (quantity === null || quantity < 0n)
                 errors[`${field}.quantity`] =
                     'Isi jumlah 0 atau lebih, paling banyak empat angka di belakang koma.';
-            else if (quantity > ordered)
+            else if (
+                unit &&
+                baseQuantity(quantity, unit.quantityPerUnit) === null
+            )
+                errors[`${field}.quantity`] = inexactBaseMessage;
+            else if (dispensed !== null && dispensed > ordered)
                 errors[`${field}.quantity`] =
-                    `Jumlah yang diserahkan paling banyak ${quantityText(ordered)}, sesuai resep.`;
+                    `Jumlah yang diserahkan paling banyak ${quantityText(quantityOf(source.quantity))} ${source.unit_code}, sesuai resep.`;
             const reason = line.reason?.trim() || null;
             if (reason && reason.length > 200)
                 errors[`${field}.reason`] = messages.reason;
-            else if (quantity !== null && quantity < ordered && !reason)
+            else if (dispensed !== null && dispensed < ordered && !reason)
                 errors[`${field}.reason`] =
                     'Tulis alasan obat diserahkan kurang dari resep, misalnya stok habis.';
             const batchId = line.batch_id || null;
@@ -359,6 +440,7 @@ export class Dispensings {
                 order: source.order,
                 itemId: source.item_id,
                 quantity: quantity ?? 0n,
+                unit: unit ?? prescribedUnit(source),
                 batchId,
                 reason,
             });
@@ -467,10 +549,13 @@ export class Dispensings {
             );
         for (const line of input.lines) {
             const updated = await this.db.execute(
-                `update bill_farmasi_detail set jumlah = $1, batch_id = $2, alasan = $3, updated_at = $4
-                 where tenant_id = $5 and bill_farmasi_id = $6 and resep_detail_id = $7 and deleted_at is null`,
+                `update bill_farmasi_detail set jumlah = $1, satuan_id = $2, konversi = $3, batch_id = $4, alasan = $5,
+                        updated_at = $6
+                 where tenant_id = $7 and bill_farmasi_id = $8 and resep_detail_id = $9 and deleted_at is null`,
                 [
                     toNumeric(line.quantity, quantityScale),
+                    line.unit.unitId,
+                    toNumeric(line.unit.quantityPerUnit, quantityScale),
                     line.batchId,
                     line.reason,
                     stamp,
@@ -489,6 +574,11 @@ export class Dispensings {
                     urutan: line.order,
                     barang_id: line.itemId,
                     jumlah: toNumeric(line.quantity, quantityScale),
+                    satuan_id: line.unit.unitId,
+                    konversi: toNumeric(
+                        line.unit.quantityPerUnit,
+                        quantityScale,
+                    ),
                     batch_id: line.batchId,
                     alasan: line.reason,
                     created_at: stamp,
@@ -545,6 +635,7 @@ export class Dispensings {
                         order: line.order,
                         itemId: line.item_id,
                         quantity: quantityOf(line.quantity),
+                        unit: prescribedUnit(line),
                         batchId: null,
                         reason: null,
                     })),
@@ -578,13 +669,29 @@ export class Dispensings {
                     id: z.string(),
                     item_id: z.string(),
                     quantity: z.string(),
+                    conversion: z.string(),
                     batch_id: z.string().nullable(),
                 }),
-                `select id, barang_id as item_id, jumlah::text as quantity, batch_id from bill_farmasi_detail
+                `select id, barang_id as item_id, jumlah::text as quantity, konversi::text as conversion, batch_id
+                 from bill_farmasi_detail
                  where tenant_id = $1 and bill_farmasi_id = $2 and deleted_at is null
                  order by urutan, id`,
                 [this.scope.tenantId, billId],
             );
+            // Stok keluar dalam satuan dasar: jumlah baris x isi satuannya.
+            const outbound = lines.map((line, index) => ({
+                line,
+                field: `lines.${index}`,
+                quantity: baseQuantity(
+                    quantityOf(line.quantity),
+                    quantityOf(line.conversion),
+                ),
+            }));
+            const inexact = outbound.find((entry) => entry.quantity === null);
+            if (inexact)
+                validation({
+                    [`${inexact.field}.quantity`]: inexactBaseMessage,
+                });
             await postItemLines(
                 this.db,
                 {
@@ -598,15 +705,14 @@ export class Dispensings {
                         number: claimed.number,
                     },
                 },
-                lines.flatMap((line, index) => {
-                    const quantity = quantityOf(line.quantity);
-                    return quantity > 0n
+                outbound.flatMap(({ line, field, quantity }) =>
+                    quantity !== null && quantity > 0n
                         ? [
                               {
                                   kind: 'outbound' as const,
                                   entryKind: 'penyerahan' as const,
                                   key: `${dispensingSource}:${line.id}`,
-                                  field: `lines.${index}`,
+                                  field,
                                   sourceLineId: line.id,
                                   itemId: line.item_id,
                                   quantity,
@@ -614,8 +720,8 @@ export class Dispensings {
                                   batchId: line.batch_id,
                               },
                           ]
-                        : [];
-                }),
+                        : [],
+                ),
             );
         });
         return this.show(prescriptionId);

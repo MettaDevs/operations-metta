@@ -1143,6 +1143,7 @@ export class MedicalRecords {
         if (uses('prescriptions'))
             data.prescriptions = await this.orders.prescriptions(
                 header?.id ?? null,
+                destination.legal_entity_id,
             );
         if (uses('discharge'))
             data.discharge = await this.discharges.present(destination.id);

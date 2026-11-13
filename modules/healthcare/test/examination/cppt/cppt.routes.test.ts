@@ -1,4 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+    Database,
+    type JsonObject,
+} from '../../../../../src/platform/database/index.ts';
+import { publishEvent } from '../../../../../src/platform/events/index.ts';
+import { eventContract } from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
     api,
@@ -214,12 +220,12 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                     {
                         number: null,
                         status: 'draf',
+                        handed_over: false,
                         lines: [
                             {
                                 compound: null,
                                 drug_name: 'Parasetamol 500 mg',
-                                unit_name: 'Tablet',
-                                quantity: 10,
+                                quantity: '10 TAB',
                                 signa: '3x1',
                                 usage_instruction: 'Setelah Makan',
                             },
@@ -281,5 +287,263 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         const outsider = await login(pool, browser, clinic.tenantId, []);
         expect((await cppt(current, outsider)).status).toBe(403);
         expect((await history(current, outsider)).status).toBe(403);
+    });
+
+    test('P writes the prescription until the pharmacy hands it over, then what the patient kept, in the written unit when it comes out whole', async () => {
+        const stockKeeper = await login(pool, browser, clinic.tenantId, [
+            'core.inventory-item.manage',
+        ]);
+        const strip = (
+            await json<{ data: { id: string } }>(
+                await clinic.admin.post('/api/v1/inventory/units-of-measure', {
+                    code: 'STRIP',
+                    name: 'Strip',
+                }),
+                201,
+            )
+        ).data.id;
+        const drug = async (code: string) =>
+            (
+                await json<{
+                    data: {
+                        id: string;
+                        code: string;
+                        name: string;
+                        version: number;
+                    };
+                }>(
+                    await clinic.admin.post(`${api}/drugs`, {
+                        code,
+                        name: `Obat ${code}`,
+                        base_unit_id: clinic.unitTab,
+                        dosage_form_id: null,
+                        is_prescribable: true,
+                    }),
+                    201,
+                )
+            ).data;
+        const antacid = await drug('ANT');
+        await json(
+            await stockKeeper.post('/api/v1/inventory/item-units', {
+                item_id: antacid.id,
+                unit_id: strip,
+                quantity_per_unit: 10,
+            }),
+            201,
+        );
+        await json(
+            await stockKeeper.patch(`/api/v1/inventory/items/${antacid.id}`, {
+                code: antacid.code,
+                name: antacid.name,
+                base_unit_id: clinic.unitTab,
+                category_id: null,
+                version: antacid.version,
+                sales_unit_id: strip,
+            }),
+            200,
+        );
+        const kept = await drug('SIMPAN');
+        const back = await drug('KEMBALI');
+        const { destinationId } = await clinic.visit();
+        await json(await clinic.start(destinationId), 200);
+        const line = (drugId: string, quantity: number) => ({
+            drug_id: drugId,
+            compound: null,
+            quantity,
+            signa: '3x1',
+            usage_instruction_id: null,
+            notes: null,
+        });
+        await json(
+            await clinic.save(destinationId, {
+                prescriptions: [
+                    {
+                        id: null,
+                        notes: null,
+                        lines: [
+                            line(antacid.id, 2),
+                            line(kept.id, 10),
+                            line(back.id, 5),
+                        ],
+                    },
+                ],
+            }),
+            200,
+        );
+        type Plan = {
+            status: string;
+            handed_over: boolean;
+            lines: { drug_name: string | null; quantity: string | null }[];
+        }[];
+        const plan = async () =>
+            (
+                await json<{ data: { plan: { prescriptions: Plan } } }>(
+                    await cppt(destinationId),
+                    200,
+                )
+            ).data.plan.prescriptions;
+        const eResep = async () =>
+            (
+                (await clinic.show(destinationId)).data.prescriptions as {
+                    lines: {
+                        dispensed_quantity: string | null;
+                        returned_quantity: string | null;
+                    }[];
+                }[]
+            )[0]?.lines.map((row) => [
+                row.dispensed_quantity,
+                row.returned_quantity,
+            ]);
+        const written = [
+            { drug_name: 'Obat ANT', quantity: '2 STRIP' },
+            { drug_name: 'Obat SIMPAN', quantity: '10 TAB' },
+            { drug_name: 'Obat KEMBALI', quantity: '5 TAB' },
+        ];
+        expect(await plan()).toMatchObject([
+            { status: 'draf', handed_over: false, lines: written },
+        ]);
+        const record = await clinic.show(destinationId);
+        await json(
+            await clinic.admin.post(
+                `${api}/examination/destinations/${destinationId}/prescriptions/send`,
+                {
+                    version: record.data.version,
+                    prescriptions: record.data.prescriptions,
+                },
+            ),
+            200,
+        );
+        expect(await plan()).toMatchObject([
+            { status: 'dikirim', handed_over: false, lines: written },
+        ]);
+
+        const [sent] = await pool.unsafe<{ id: string; number: string }[]>(
+            `select r.id, r.nomor as number from sim_tr_resep r
+             join sim_tr_pemeriksaan p on p.id = r.pemeriksaan_id
+             where p.tujuan_id = $1 and r.deleted_at is null`,
+            [destinationId],
+        );
+        const lineIds = (
+            await pool.unsafe<{ id: string }[]>(
+                'select id from sim_tr_resep_detail where resep_id = $1 and deleted_at is null order by urutan',
+                [sent?.id ?? ''],
+            )
+        ).map((row) => row.id);
+        const tablet = { id: clinic.unitTab, code: 'TAB', name: 'Tablet' };
+        const inStrips = { id: strip, code: 'STRIP', name: 'Strip' };
+        // Diterbitkan seperti module farmasi menerbitkannya, lalu diperiksa terhadap berkas kontrak.
+        const publish = async (
+            type:
+                | 'pharmacy.prescription.dispensed.v1'
+                | 'pharmacy.return.posted.v1',
+            data: JsonObject,
+        ) => {
+            const connection = await pool.reserve();
+            try {
+                const db = new Database(
+                    connection,
+                    undefined,
+                    Bun.randomUUIDv7(),
+                );
+                const envelope = await db.transaction(() =>
+                    publishEvent(db, {
+                        type,
+                        tenantId: clinic.tenantId,
+                        legalEntityId: clinic.legalEntityId,
+                        orgUnitId: clinic.unit,
+                        data,
+                    }),
+                );
+                (await eventContract(type)).parse(envelope);
+            } finally {
+                connection.release();
+            }
+        };
+        const header = {
+            dispensing_id: Bun.randomUUIDv7(),
+            dispensing_number: 'U1-FAR-00000009',
+            prescription_id: sent?.id ?? '',
+            prescription_number: sent?.number ?? '',
+            location: {
+                id: Bun.randomUUIDv7(),
+                code: 'FARMASI',
+                name: 'Farmasi',
+            },
+        };
+        const item = (drugId: string) => ({
+            id: drugId,
+            code: 'X',
+            name: 'Obat',
+        });
+        await publish('pharmacy.prescription.dispensed.v1', {
+            ...header,
+            dispensed_at: '2026-11-13T05:00:00Z',
+            pharmacist: null,
+            assistant: null,
+            lines: [
+                [antacid.id, inStrips, '2', '10', '20'] as const,
+                [kept.id, tablet, '10', '1', '10'] as const,
+                [back.id, tablet, '5', '1', '5'] as const,
+            ].map(([drugId, unit, quantity, isi, base], index) => ({
+                prescription_line_id: lineIds[index] ?? '',
+                item: item(drugId),
+                unit,
+                quantity_per_unit: isi,
+                base_unit: tablet,
+                base_quantity: base,
+                prescribed_unit: unit,
+                prescribed_quantity: quantity,
+                quantity,
+                reason: null,
+                batches: [],
+            })),
+        });
+        expect(await plan()).toMatchObject([
+            { status: 'dikirim', handed_over: true, lines: written },
+        ]);
+        expect(await eResep()).toEqual([
+            ['2 STRIP', null],
+            ['10 TAB', null],
+            ['5 TAB', null],
+        ]);
+
+        await publish('pharmacy.return.posted.v1', {
+            ...header,
+            return_id: Bun.randomUUIDv7(),
+            return_number: 'U1-RTF-00000001',
+            return_date: '2026-11-13',
+            reason: 'Pasien sembuh',
+            posted_at: '2026-11-13T06:00:00Z',
+            lines: [
+                { at: 0, drugId: antacid.id },
+                { at: 2, drugId: back.id },
+            ].map(({ at, drugId }) => ({
+                prescription_line_id: lineIds[at] ?? '',
+                item: item(drugId),
+                unit: tablet,
+                quantity: '5',
+                base_unit: tablet,
+                base_quantity: '5',
+                returned_base_quantity: '5',
+                batches: [
+                    { batch_number: null, expiry_date: null, quantity: '5' },
+                ],
+            })),
+        });
+        expect(await plan()).toMatchObject([
+            {
+                status: 'dikirim',
+                handed_over: true,
+                lines: [
+                    { drug_name: 'Obat ANT', quantity: '15 TAB' },
+                    { drug_name: 'Obat SIMPAN', quantity: '10 TAB' },
+                ],
+            },
+        ]);
+        expect(await eResep()).toEqual([
+            ['15 TAB', '5 TAB'],
+            ['10 TAB', null],
+            ['0 TAB', '5 TAB'],
+        ]);
     });
 });

@@ -44,15 +44,26 @@ export async function refused(response: Response) {
 
 type Reference = { id: string; code: string; name: string };
 
+// Baris obat ditulis dalam unit (bawaannya satuan dasar TAB) dengan isinya dalam satuan dasar, seperti layanan
+// kesehatan menulisnya.
 export type IssuedLine = {
     item?: Reference | null;
     compound?: number | null;
     quantity?: string | null;
+    unit?: Reference;
+    quantity_per_unit?: string;
     requested_quantity?: string | null;
     signa?: string | null;
 };
 
 let issuedContract: Promise<z.ZodType> | null = null;
+
+// Referensi seperti di kontrak event: tanpa field lain dari jawaban API.
+const reference = ({ id, code, name }: Reference): Reference => ({
+    id,
+    code,
+    name,
+});
 
 export async function createPharmacy(
     pool: postgres.Sql,
@@ -155,8 +166,16 @@ export async function createPharmacy(
                     : null,
                 compound: line.compound ?? null,
                 quantity: line.quantity ?? null,
-                unit: line.item
-                    ? { id: uom.id, code: uom.code, name: uom.name }
+                unit: line.item ? reference(line.unit ?? uom) : null,
+                quantity_per_unit: line.item
+                    ? (line.quantity_per_unit ?? '1')
+                    : null,
+                base_unit: line.item ? reference(uom) : null,
+                base_quantity: line.item
+                    ? String(
+                          Number(line.quantity ?? 0) *
+                              Number(line.quantity_per_unit ?? 1),
+                      )
                     : null,
                 requested_quantity: line.requested_quantity ?? null,
                 signa: line.signa ?? null,

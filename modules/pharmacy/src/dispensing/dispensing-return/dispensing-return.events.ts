@@ -17,8 +17,9 @@ const reference = z.object({
 
 // Dipanggil di transaksi yang memposting atau membatalkan retur, sesudah statusnya ditulis. returned_base_quantity
 // setiap baris adalah total retur yang masih berlaku atas baris resep itu sesudah perubahan ini, dalam satuan dasar,
-// jadi penerima cukup menyalinnya dan hasilnya sama walau event diantar ulang. Retur hari ini hanya dalam satuan dasar,
-// jadi unit sama dengan base_unit dan quantity sama dengan base_quantity.
+// jadi penerima cukup menyalinnya dan hasilnya sama walau event diantar ulang. Satu baris event menggabungkan baris
+// retur per batch atas satu baris resep: unit dan quantity memakai satuan baris retur bila semuanya sama, kalau tidak
+// satuan dasar. Batch selalu dalam satuan dasar, seperti stok.
 export async function publishReturn(
     db: Database,
     scope: { tenantId: string; legalEntityId: string },
@@ -72,23 +73,28 @@ export async function publishReturn(
         }),
         `select rd.baris_sumber_id as prescription_line_id,
                 json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item,
-                json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
-                trim_scale(sum(d.jumlah))::text as quantity,
+                case when count(distinct d.satuan_id) = 1
+                     then (array_agg(json_build_object('id', u.id, 'code', u.kode, 'name', u.nama)))[1]
+                     else json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) end as unit,
+                trim_scale(case when count(distinct d.satuan_id) = 1 then sum(d.jumlah)
+                                else sum(d.jumlah * d.konversi) end)::text as quantity,
                 json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as base_unit,
-                trim_scale(sum(d.jumlah))::text as base_quantity,
-                (select trim_scale(coalesce(sum(x.jumlah), 0))::text
+                trim_scale(sum(d.jumlah * d.konversi))::text as base_quantity,
+                (select trim_scale(coalesce(sum(x.jumlah * x.konversi), 0))::text
                  from retur_farmasi_detail x
                  join retur_farmasi y on y.tenant_id = x.tenant_id and y.id = x.retur_farmasi_id
                  where x.tenant_id = d.tenant_id and x.bill_farmasi_detail_id = d.bill_farmasi_detail_id
                    and x.deleted_at is null and y.status = 'diposting' and y.deleted_at is null)
                     as returned_base_quantity,
                 json_agg(json_build_object('batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa,
-                                           'quantity', trim_scale(d.jumlah)::text) order by d.urutan) as batches
+                                           'quantity', trim_scale(d.jumlah * d.konversi)::text)
+                         order by d.urutan) as batches
          from retur_farmasi_detail d
          join bill_farmasi_detail fd on fd.tenant_id = d.tenant_id and fd.id = d.bill_farmasi_detail_id
          join far_tr_resep_detail rd on rd.tenant_id = fd.tenant_id and rd.id = fd.resep_detail_id
          join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
          join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
+         join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
          left join gd_m_batch t on t.tenant_id = d.tenant_id and t.id = d.batch_id
          where d.tenant_id = $1 and d.retur_farmasi_id = $2 and d.deleted_at is null
          group by d.tenant_id, d.bill_farmasi_detail_id, rd.baris_sumber_id, b.id, s.id

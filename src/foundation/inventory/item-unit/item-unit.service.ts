@@ -26,21 +26,22 @@ import { itemUnitInputSchema, itemUnitRowSchema } from './item-unit.schema.ts';
 
 // Satuan dasar ditulis sebagai baris pertama dengan isi 1. Satuan kemasan yang kebetulan sama dengan satuan dasar
 // (satuan dasar barang diganti sesudahnya) tidak ditampilkan, supaya satu satuan hanya punya satu isi.
-const unitsSql = `select * from (
+const unitsOf = (items: string) => `select * from (
                       select s.id, null::uuid as entry_id, b.id as item_id, s.kode as code, s.nama as name,
                              1::numeric as conversion, '1' as quantity_per_unit, true as is_base, 0 as version
                       from gd_m_barang b
                       join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
-                      where b.tenant_id = $1 and b.legal_entity_id = $2 and b.id = $3 and b.deleted_at is null
+                      where b.tenant_id = $1 and b.legal_entity_id = $2 and b.id ${items} and b.deleted_at is null
                       union all
                       select s.id, k.id, k.barang_id, s.kode, s.nama, k.konversi, trim_scale(k.konversi)::text,
                              false, k.version
                       from gd_m_barang_satuan k
                       join gd_m_barang b on b.tenant_id = k.tenant_id and b.id = k.barang_id and b.deleted_at is null
                       join gd_m_satuan s on s.tenant_id = k.tenant_id and s.id = k.satuan_id
-                      where k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id = $3 and k.deleted_at is null
+                      where k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id ${items} and k.deleted_at is null
                         and k.satuan_id <> b.satuan_dasar_id) units
                   where true`;
+const unitsSql = unitsOf('= $3');
 
 const messages = {
     item_id: 'Pilih barang dari daftar.',
@@ -117,6 +118,35 @@ export async function defaultUnit(
               conversion: fromNumeric(found.conversion, quantityScale),
           }
         : null;
+}
+
+const itemUnitOptionSchema = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    quantity_per_unit: z.string(),
+});
+export type ItemUnitOption = z.infer<typeof itemUnitOptionSchema>;
+
+// Pilihan satuan baris dokumen untuk beberapa barang sekaligus, satuan dasar lebih dulu lalu satuan kemasan menurut
+// isinya. Untuk layar module yang penggunanya tidak memegang izin kartu barang, misalnya E-Resep dan penyerahan obat.
+export async function itemUnits(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string },
+    itemIds: string[],
+): Promise<Map<string, ItemUnitOption[]>> {
+    const ids = [...new Set(itemIds.filter((id) => lookupId(id)))];
+    const units = new Map<string, ItemUnitOption[]>();
+    if (!ids.length) return units;
+    const rows = await db.rows(
+        itemUnitOptionSchema.extend({ item_id: z.string() }),
+        `${unitsOf(`in (${ids.map((_, index) => `$${index + 3}`).join(', ')})`)}
+         order by units.item_id, units.is_base desc, units.conversion, units.code`,
+        [scope.tenantId, scope.legalEntityId, ...ids],
+    );
+    for (const { item_id: itemId, ...unit } of rows)
+        units.set(itemId, [...(units.get(itemId) ?? []), unit]);
+    return units;
 }
 
 export class ItemUnits {

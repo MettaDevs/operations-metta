@@ -110,6 +110,7 @@ export async function receivePrescription(
             nama_barang: line.item?.name ?? null,
             racikan_ke: line.compound,
             jumlah: line.quantity,
+            konversi: line.item ? (line.quantity_per_unit ?? '1') : null,
             satuan_id: line.unit?.id ?? null,
             kode_satuan: line.unit?.code ?? null,
             nama_satuan: line.unit?.name ?? null,

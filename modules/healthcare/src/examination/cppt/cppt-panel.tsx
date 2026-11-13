@@ -26,6 +26,7 @@ import {
     dentalSections,
     fallRiskResults,
 } from '../medical-record/medical-record-panels.tsx';
+import { prescriptionStatusLabels } from '../medical-record/order-panels.tsx';
 
 // Panel CPPT di kolom kiri halaman pemeriksaan, seperti panel Catatan Perkembangan Pasien Terintegrasi sistem lama
 // (form/cppt/index.php dan reports/history/cppt_history.php): S/O/A/P pemeriksaan ini, lalu Riwayat kunjungan pasien
@@ -36,6 +37,18 @@ type Visit = ApiBody<'healthcareVisitHistory'>['data'][number];
 
 const value = (number: number | null, unit: string): string | null =>
     number === null ? null : `${number} ${unit}`;
+
+type PlanPrescription = Cppt['plan']['prescriptions'][number];
+
+// Baris resep seperti CPPT sistem lama: komponen racikan menjorok di bawah racikannya, jumlah beserta satuannya.
+const prescriptionLines = (prescription: PlanPrescription): string[] =>
+    prescription.lines.map((line) =>
+        line.drug_name === null
+            ? `Racikan ${line.compound ?? ''} (${line.requested_quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}`
+            : `${line.compound === null ? '' : '  '}${line.drug_name} (Qty: ${line.quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}${line.usage_instruction ? ` · ${line.usage_instruction}` : ''}`,
+    );
+
+const planText = (lines: string[]) => (lines.length ? lines.join('\n') : null);
 
 function Lines({ rows }: { rows: [string, ReactNode][] }): ReactNode {
     const shown = rows.filter(
@@ -190,18 +203,30 @@ export function CpptView({ cppt }: { cppt: Cppt }): ReactNode {
                                 : null,
                         ],
                         [
+                            'Obat direalisasi',
+                            planText(
+                                plan.prescriptions
+                                    .filter((row) => row.handed_over)
+                                    .flatMap(prescriptionLines),
+                            ),
+                        ],
+                        [
                             'Resep',
-                            plan.prescriptions.length
-                                ? plan.prescriptions
-                                      .flatMap((prescription) =>
-                                          prescription.lines.map((line) =>
-                                              line.drug_name === null
-                                                  ? `Racikan ${line.compound ?? ''} (${line.requested_quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}`
-                                                  : `${line.compound === null ? '' : '  '}${line.drug_name} (Qty: ${line.quantity ?? ''} ${line.unit_name ?? ''})${line.signa ? ` · ${line.signa}` : ''}${line.usage_instruction ? ` · ${line.usage_instruction}` : ''}`,
-                                          ),
-                                      )
-                                      .join('\n')
-                                : null,
+                            planText(
+                                plan.prescriptions
+                                    .filter((row) => !row.handed_over)
+                                    .flatMap((prescription) => [
+                                        [
+                                            prescription.number,
+                                            prescriptionStatusLabels[
+                                                prescription.status
+                                            ],
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · '),
+                                        ...prescriptionLines(prescription),
+                                    ]),
+                            ),
                         ],
                     ]}
                 />

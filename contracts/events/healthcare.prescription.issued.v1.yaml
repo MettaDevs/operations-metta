@@ -145,7 +145,11 @@ components:
         - kepala racikan ("Racikan N"): `item` kosong, `compound` N, `requested_quantity` terisi, signa dan aturan pakai
           racikan;
         - komponen racikan: `item` terisi, `compound` N, `quantity` terisi, tanpa signa dan aturan pakai.
-        Jumlah ditulis sebagai teks desimal dalam satuan dasar barang (`unit`).
+        Jumlah ditulis sebagai teks desimal. `quantity` dalam `unit`, satuan yang ditulis dokter (bawaannya satuan jual
+        barang), dan `quantity_per_unit` isi satuan itu dalam satuan dasar barang (`base_unit`), disalin saat baris
+        resep disimpan. `base_quantity` adalah `quantity` x `quantity_per_unit`. Penerbit selalu mengisi ketiganya untuk
+        baris obat dan mengosongkannya pada kepala racikan. Ketiganya ditambahkan sesudah versi ini terbit, jadi
+        opsional: pesan tanpa ketiganya ditulis dalam satuan dasar, yaitu `unit` adalah satuan dasar barang.
       required: [id, order, item, compound, quantity, unit, requested_quantity, signa, usage_instruction, notes]
       properties:
         id:
@@ -169,6 +173,19 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/reference'
+        quantity_per_unit:
+          type: [string, 'null']
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Isi `unit` dalam satuan dasar barang, misalnya 10 untuk strip berisi 10 tablet.
+        base_unit:
+          description: Satuan dasar barang.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/reference'
+        base_quantity:
+          type: [string, 'null']
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: '`quantity` dalam satuan dasar (`base_unit`).'
         requested_quantity:
           type: [string, 'null']
           pattern: '^[0-9]+(\.[0-9]+)?$'

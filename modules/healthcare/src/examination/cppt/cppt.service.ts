@@ -4,6 +4,11 @@ import type { Bind, Database } from '@core/platform/database/index.ts';
 import { abort, incrementalList, lookupId } from '@core/platform/http/index.ts';
 import { visitVisibility } from '../../registration/visit/visit.service.ts';
 import { panels } from '../medical-record/medical-record.fields.ts';
+import {
+    baseQuantityText,
+    quantityOf,
+    quantityText,
+} from '../medical-record/prescription.units.ts';
 import { cpptSchema, visitHistoryRowSchema, type Cppt } from './cppt.schema.ts';
 
 const nakesName = (alias: string, column: string) =>
@@ -20,6 +25,91 @@ const dentalSelect = Object.entries(panels.dental.fields)
             : `g.${spec.column} as ${field}`,
     )
     .join(', ');
+
+const writtenPrescriptionSchema = z.object({
+    number: z.string().nullable(),
+    status: z.enum(['draf', 'dikirim']),
+    handed_over: z.boolean(),
+    lines: z.array(
+        z.object({
+            compound: z.number().nullable(),
+            drug_name: z.string().nullable(),
+            quantity: z.string().nullable(),
+            unit_code: z.string().nullable(),
+            conversion: z.string().nullable(),
+            base_unit_code: z.string().nullable(),
+            dispensed: z.string().nullable(),
+            returned: z.string().nullable(),
+            requested_quantity: z.number().nullable(),
+            signa: z.string().nullable(),
+            usage_instruction: z.string().nullable(),
+            notes: z.string().nullable(),
+        }),
+    ),
+});
+type WrittenPrescription = z.infer<typeof writtenPrescriptionSchema>;
+type PlanLine = Cppt['plan']['prescriptions'][number]['lines'][number];
+
+// Baris resep di P. Resep yang sudah diserahkan menulis yang dipegang pasien dalam satuan baris bila habis dibagi
+// isinya, kalau tidak dalam satuan dasar; obat yang habis diretur tidak ditulis, begitu pula kepala racikan yang semua
+// komponennya habis diretur.
+function planLines({
+    handed_over: handedOver,
+    lines,
+}: WrittenPrescription): PlanLine[] {
+    const shown = lines.flatMap(
+        ({
+            quantity,
+            unit_code: unitCode,
+            conversion,
+            base_unit_code: baseUnitCode,
+            dispensed,
+            returned,
+            ...line
+        }): PlanLine[] => {
+            if (line.drug_name === null || !unitCode || !conversion)
+                return [{ ...line, quantity: null }];
+            if (!handedOver)
+                return [
+                    {
+                        ...line,
+                        quantity: quantityText(
+                            quantityOf(quantity ?? '0'),
+                            unitCode,
+                        ),
+                    },
+                ];
+            const kept =
+                quantityOf(dispensed ?? '0') - quantityOf(returned ?? '0');
+            return kept > 0n
+                ? [
+                      {
+                          ...line,
+                          quantity: baseQuantityText(
+                              kept,
+                              {
+                                  code: unitCode,
+                                  quantityPerUnit: quantityOf(conversion),
+                              },
+                              baseUnitCode ?? '',
+                          ),
+                      },
+                  ]
+                : [];
+        },
+    );
+    return handedOver
+        ? shown.filter(
+              (line) =>
+                  line.drug_name !== null ||
+                  shown.some(
+                      (other) =>
+                          other.drug_name !== null &&
+                          other.compound === line.compound,
+                  ),
+          )
+        : shown;
+}
 
 // CPPT pemeriksaan rawat jalan: S/O/A/P satu pemeriksaan disusun dari rekam medisnya, dan Riwayat kunjungan pasien.
 // Yang terlihat sama dengan Riwayat diagnosa: kunjungan di legal entity dan unit kerja pengguna.
@@ -158,16 +248,19 @@ export class Cppts {
             : [];
         const prescriptions = recordId
             ? await this.db.rows(
-                  cpptSchema.shape.plan.shape.prescriptions.element,
-                  `select rs.nomor as number, rs.status,
+                  writtenPrescriptionSchema,
+                  `select rs.nomor as number, rs.status, rs.diserahkan_pada is not null as handed_over,
                           coalesce((select json_agg(json_build_object(
-                                        'compound', rd.racikan_ke, 'drug_name', ob.nama, 'unit_name', so.nama,
-                                        'quantity', rd.jumlah::float8,
+                                        'compound', rd.racikan_ke, 'drug_name', ob.nama,
+                                        'quantity', rd.jumlah::text, 'unit_code', so.kode,
+                                        'conversion', rd.konversi::text, 'base_unit_code', bu.kode,
+                                        'dispensed', rd.jumlah_diserahkan::text, 'returned', rd.jumlah_diretur::text,
                                         'requested_quantity', rd.jumlah_permintaan::float8, 'signa', rd.signa,
                                         'usage_instruction', ap.nama, 'notes', rd.keterangan) order by rd.urutan)
                                     from sim_tr_resep_detail rd
                                     left join gd_m_barang ob on ob.tenant_id = rd.tenant_id and ob.id = rd.obat_id
-                                    left join gd_m_satuan so on so.tenant_id = ob.tenant_id and so.id = ob.satuan_dasar_id
+                                    left join gd_m_satuan so on so.tenant_id = rd.tenant_id and so.id = rd.satuan_id
+                                    left join gd_m_satuan bu on bu.tenant_id = ob.tenant_id and bu.id = ob.satuan_dasar_id
                                     left join sim_m_aturan_pakai ap
                                          on ap.tenant_id = rd.tenant_id and ap.id = rd.aturan_pakai_id
                                     where rd.tenant_id = rs.tenant_id and rd.resep_id = rs.id
@@ -218,7 +311,12 @@ export class Cppts {
                     drug_therapy: row.drug_therapy,
                     non_drug_therapy: row.non_drug_therapy,
                     procedures,
-                    prescriptions,
+                    prescriptions: prescriptions.map((prescription) => ({
+                        number: prescription.number,
+                        status: prescription.status,
+                        handed_over: prescription.handed_over,
+                        lines: planLines(prescription),
+                    })),
                 },
             }),
         };

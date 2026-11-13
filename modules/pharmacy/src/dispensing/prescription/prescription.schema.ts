@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decimalInput } from '@core/foundation/inventory/index.ts';
 import { idSchema, listParametersSchema } from '@core/platform/http/index.ts';
 
 // Isi event healthcare.prescription.issued.v1 yang dibaca module ini, menurut kontrak
@@ -6,6 +7,12 @@ import { idSchema, listParametersSchema } from '@core/platform/http/index.ts';
 // di sini dan diuji terhadap berkas kontrak itu. Field yang tidak dikenal dilewati, supaya field opsional baru di versi
 // yang sama tidak membuat resep terlewat.
 const decimalText = z.string().regex(/^[0-9]+(\.[0-9]+)?$/);
+// Isi satuan muat di konversi numeric(18,4) dan lebih dari 0, supaya resep yang isinya tidak sah dilewati, bukan gagal
+// disimpan.
+const quantityPerUnit = decimalText.refine((value) => {
+    const parsed = decimalInput(value);
+    return parsed !== null && parsed > 0n;
+});
 // Panjang teks mengikuti kolom far_tr_resep; teks yang lebih panjang membuat resep dilewati, bukan gagal disimpan.
 const text = (max: number) => z.string().max(max);
 const reference = z.object({
@@ -20,6 +27,8 @@ const issuedLineSchema = z.object({
     compound: z.number().int().min(1).nullable(),
     quantity: decimalText.nullable(),
     unit: reference.nullable(),
+    // Isi unit dalam satuan dasar. Pesan yang belum membawanya ditulis dalam satuan dasar, jadi isinya 1.
+    quantity_per_unit: quantityPerUnit.nullable().optional(),
     requested_quantity: decimalText.nullable(),
     signa: text(100).nullable(),
     usage_instruction: text(150).nullable(),
@@ -105,8 +114,10 @@ export const prescriptionLineSchema = z.object({
     order: z.number(),
     item: locationSchema.nullable(),
     compound: z.number().nullable(),
+    // Jumlah dalam unit, satuan yang ditulis dokter; quantity_per_unit isi unit itu dalam satuan dasar.
     quantity: z.string().nullable(),
     unit: locationSchema.nullable(),
+    quantity_per_unit: z.string().nullable(),
     requested_quantity: z.string().nullable(),
     signa: z.string().nullable(),
     usage_instruction: z.string().nullable(),

@@ -40,7 +40,18 @@ const lineSchema = z.object({
     unit_id: z.string().nullable(),
     unit_code: z.string().nullable(),
     unit_name: z.string().nullable(),
+    quantity_per_unit: z.string().nullable(),
+    base_unit_id: z.string().nullable(),
+    base_unit_code: z.string().nullable(),
+    base_unit_name: z.string().nullable(),
+    base_quantity: z.string().nullable(),
 });
+
+const reference = (
+    id: string | null,
+    code: string | null,
+    name: string | null,
+) => (id === null ? null : { id, code, name });
 
 // Dipanggil di transaksi yang mengubah resep dari draf menjadi dikirim, sesudah nomor dan dokternya ditulis.
 export async function publishPrescriptionIssued(
@@ -74,10 +85,13 @@ export async function publishPrescriptionIssued(
         `select d.id, d.urutan as "order", d.racikan_ke as compound, trim_scale(d.jumlah)::text as quantity,
                 trim_scale(d.jumlah_permintaan)::text as requested_quantity, d.signa, a.nama as usage_instruction,
                 d.keterangan as notes, b.id as item_id, b.kode as item_code, b.nama as item_name, u.id as unit_id,
-                u.kode as unit_code, u.nama as unit_name
+                u.kode as unit_code, u.nama as unit_name, trim_scale(d.konversi)::text as quantity_per_unit,
+                bu.id as base_unit_id, bu.kode as base_unit_code, bu.nama as base_unit_name,
+                trim_scale(d.jumlah * d.konversi)::text as base_quantity
          from sim_tr_resep_detail d
          left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.obat_id
-         left join gd_m_satuan u on u.tenant_id = b.tenant_id and u.id = b.satuan_dasar_id
+         left join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
+         left join gd_m_satuan bu on bu.tenant_id = b.tenant_id and bu.id = b.satuan_dasar_id
          left join sim_m_aturan_pakai a on a.tenant_id = d.tenant_id and a.id = d.aturan_pakai_id
          where d.tenant_id = $1 and d.resep_id = $2 and d.deleted_at is null
          order by d.urutan, d.id`,
@@ -108,24 +122,17 @@ export async function publishPrescriptionIssued(
             lines: lines.map((line) => ({
                 id: line.id,
                 order: line.order,
-                item:
-                    line.item_id === null
-                        ? null
-                        : {
-                              id: line.item_id,
-                              code: line.item_code,
-                              name: line.item_name,
-                          },
+                item: reference(line.item_id, line.item_code, line.item_name),
                 compound: line.compound,
                 quantity: line.quantity,
-                unit:
-                    line.unit_id === null
-                        ? null
-                        : {
-                              id: line.unit_id,
-                              code: line.unit_code,
-                              name: line.unit_name,
-                          },
+                unit: reference(line.unit_id, line.unit_code, line.unit_name),
+                quantity_per_unit: line.quantity_per_unit,
+                base_unit: reference(
+                    line.base_unit_id,
+                    line.base_unit_code,
+                    line.base_unit_name,
+                ),
+                base_quantity: line.base_quantity,
                 requested_quantity: line.requested_quantity,
                 signa: line.signa,
                 usage_instruction: line.usage_instruction,

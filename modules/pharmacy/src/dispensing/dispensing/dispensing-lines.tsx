@@ -10,6 +10,7 @@ import {
     type LookupRequest,
     type Reference,
 } from '@operations-metta/ui/master-lookup';
+import { Select } from '@operations-metta/ui/select';
 import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api } from '@core/platform/shell/index.ts';
@@ -30,11 +31,14 @@ export type Taken = {
     quantity: string;
 };
 
+export type UnitOption = Reference & { quantity_per_unit: string };
+
 // Isian satu obat resep. Jumlah disimpan sebagai teks yang tampil di isian (12,5) dan baru diubah ke angka API saat
-// dikirim.
+// dikirim; jumlah itu dalam unit, satuan resep atau satuan lain barang yang sama.
 export type LineDraft = {
     prescriptionLineId: string;
     quantity: string;
+    unit: Reference;
     batch: PickedBatch | null;
     reason: string;
     taken: Taken[];
@@ -138,14 +142,24 @@ type Row = {
     draft: LineDraft | null;
 };
 
-// Satu baris per batch yang diambil, supaya batch kedua tidak terpotong di kolom yang sempit.
-function TakenBatches({ taken }: { taken: Taken[] }): ReactNode {
+const unitLabel = (unit: UnitOption) =>
+    `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
+
+// Satu baris per batch yang diambil, supaya batch kedua tidak terpotong di kolom yang sempit. Jumlah batch dalam
+// satuan dasar, seperti stok.
+function TakenBatches({
+    taken,
+    baseCode,
+}: {
+    taken: Taken[];
+    baseCode: string;
+}): ReactNode {
     if (!taken.length) return <DataTableText>—</DataTableText>;
     return (
         <DataTableText multiline>
             {taken.map((part, at) => (
                 <span key={at} className="block tabular-nums">
-                    {`${part.batch_number ?? 'Tanpa batch'}${part.expiry_date ? ` · ED ${displayDate(part.expiry_date)}` : ''} · ${displayNumber(part.quantity)}`}
+                    {`${part.batch_number ?? 'Tanpa batch'}${part.expiry_date ? ` · ED ${displayDate(part.expiry_date)}` : ''} · ${displayNumber(part.quantity)} ${baseCode}`}
                 </span>
             ))}
         </DataTableText>
@@ -162,6 +176,7 @@ export function DispensingLines({
     prepared,
     errors,
     stock,
+    units,
     locationId,
     portalContainer,
 }: {
@@ -172,6 +187,8 @@ export function DispensingLines({
     prepared: boolean;
     errors: Record<string, string[]>;
     stock: Map<string, string>;
+    // Pilihan satuan per baris resep, satuan dasar lebih dulu.
+    units: Map<string, UnitOption[]>;
     locationId: string | null;
     portalContainer: RefObject<HTMLElement | null>;
 }): ReactNode {
@@ -197,6 +214,15 @@ export function DispensingLines({
             ),
         );
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
+    const baseCode = (line: PrescriptionLine) =>
+        units.get(line.id)?.[0]?.code ?? '';
+    // Pilihan satuan baris ini, ditambah satuan isiannya bila satuan itu sejak itu dilepas dari barangnya.
+    const choices = (draft: LineDraft): UnitOption[] => {
+        const options = units.get(draft.prescriptionLineId) ?? [];
+        return options.some((unit) => unit.id === draft.unit.id)
+            ? options
+            : [{ ...draft.unit, quantity_per_unit: '1' }, ...options];
+    };
 
     const columns: DataTableColumn<Row>[] = [
         {
@@ -259,7 +285,9 @@ export function DispensingLines({
             align: 'right',
             cell: ({ line }) =>
                 line.item
-                    ? text(displayNumber(stock.get(line.item.id) ?? '0'))
+                    ? text(
+                          `${displayNumber(stock.get(line.item.id) ?? '0')} ${baseCode(line)}`,
+                      )
                     : null,
         });
     columns.push(
@@ -289,13 +317,55 @@ export function DispensingLines({
                 ),
         },
         {
+            id: 'unit',
+            header: 'Satuan',
+            content,
+            minWidth: 150,
+            cell: ({ draft, index }) =>
+                draft === null ? null : editing ? (
+                    <FormControl
+                        error={error(index, 'unit_id')}
+                        data-error-field={field(index ?? 0, 'unit_id')}
+                    >
+                        <Select
+                            label="Satuan"
+                            required
+                            items={choices(draft).map((unit) => ({
+                                value: unit.id,
+                                label: unitLabel(unit),
+                            }))}
+                            value={draft.unit.id}
+                            onValueChange={(value) => {
+                                const unit = choices(draft).find(
+                                    (option) => option.id === value,
+                                );
+                                if (unit)
+                                    update(draft.prescriptionLineId, {
+                                        unit: {
+                                            id: unit.id,
+                                            code: unit.code,
+                                            name: unit.name,
+                                        },
+                                    });
+                            }}
+                            portalContainer={portalContainer}
+                        />
+                    </FormControl>
+                ) : (
+                    text(draft.unit.code)
+                ),
+        },
+        {
             id: 'batch',
             header: prepared ? 'Batch diambil' : 'Batch',
             content: prepared ? 'text' : content,
             minWidth: prepared ? 240 : 200,
             cell: ({ line, draft, index }) =>
                 draft === null || !line.item ? null : prepared ? (
-                    <TakenBatches taken={draft.taken} />
+                    <TakenBatches
+                        taken={draft.taken}
+                        baseCode={baseCode(line)}
+                    />
                 ) : editing ? (
                     <BatchLookup
                         itemId={line.item.id}

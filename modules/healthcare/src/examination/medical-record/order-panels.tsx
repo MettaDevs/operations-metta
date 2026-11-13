@@ -5,6 +5,7 @@ import {
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
 import { DataTableText } from '@operations-metta/ui/data-table';
+import { displayNumber } from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl } from '@operations-metta/ui/form-control';
@@ -52,7 +53,32 @@ type PrescriptionLine = Prescription['lines'][number];
 type DrugAllergy = NonNullable<Draft['drug_allergies']>[number];
 type Errors = Record<string, string[]>;
 
+type DrugUnit = PrescriptionLine['units'][number];
+
 const NOT_COMPOUND = 'none';
+
+// Satuan baris obat; isinya disalin ulang oleh server saat Simpan.
+const unitValues = (unit: DrugUnit | undefined) => ({
+    unit_id: unit?.id ?? null,
+    unit_code: unit?.code ?? null,
+    unit_name: unit?.name ?? null,
+    quantity_per_unit: unit?.quantity_per_unit ?? null,
+});
+const unitLabel = (unit: DrugUnit) =>
+    `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
+// Pilihan satuan obat, ditambah satuan tersimpan baris ini bila satuan itu sejak itu dilepas dari obatnya.
+const unitChoices = (row: PrescriptionLine): DrugUnit[] =>
+    row.unit_id && !row.units.some((unit) => unit.id === row.unit_id)
+        ? [
+              {
+                  id: row.unit_id,
+                  code: row.unit_code ?? '',
+                  name: row.unit_name ?? '',
+                  quantity_per_unit: row.quantity_per_unit ?? '1',
+              },
+              ...row.units,
+          ]
+        : row.units;
 const compoundLabel = (compound: number | string) => `Racikan ${compound}`;
 const drugLabel = (drug: { code: string | null; name: string }) =>
     drug.code ? `${drug.code} - ${drug.name}` : drug.name;
@@ -112,6 +138,8 @@ function DrugLookup({
                               name: value.name,
                               base_unit_id: '',
                               base_unit_name: '',
+                              sales_unit_id: '',
+                              units: [],
                               dosage_form_id: null,
                               dosage_form_name: null,
                               is_prescribable: true,
@@ -617,7 +645,7 @@ const emptyPrescription: Prescription = {
     lines: [],
 };
 
-const statusLabel = {
+export const prescriptionStatusLabels = {
     draf: 'Draf',
     dikirim: 'Dikirim ke farmasi',
     dibatalkan: 'Dibatalkan',
@@ -648,7 +676,7 @@ function PrescriptionFacts({
                     >
                         {prescription.dispensed_at
                             ? 'Diserahkan farmasi'
-                            : statusLabel[prescription.status]}
+                            : prescriptionStatusLabels[prescription.status]}
                     </Badge>
                 </dd>
             </div>
@@ -743,7 +771,11 @@ function PrescriptionLines({
         drug_id: null,
         drug_code: null,
         drug_name: null,
+        unit_id: null,
+        unit_code: null,
         unit_name: null,
+        quantity_per_unit: null,
+        units: [],
         compound: null,
         quantity: 1,
         requested_quantity: null,
@@ -764,7 +796,10 @@ function PrescriptionLines({
             drug_id: drug.id,
             drug_code: drug.code,
             drug_name: drug.name,
-            unit_name: drug.base_unit_name,
+            units: drug.units,
+            ...unitValues(
+                drug.units.find((unit) => unit.id === drug.sales_unit_id),
+            ),
         });
     };
     // Komponen dipindah ke bawah racikannya, seperti baris komponen yang menjorok di bawah "Racikan N" sistem lama.
@@ -969,14 +1004,41 @@ function PrescriptionLines({
                     {
                         id: 'unit',
                         header: 'Satuan',
-                        minWidth: 90,
-                        cell: ({ row }) => (
-                            <DataTableText>
-                                {isHeader(row)
-                                    ? 'Racikan'
-                                    : (row.unit_name ?? '')}
-                            </DataTableText>
-                        ),
+                        content: readOnly ? 'text' : 'control',
+                        minWidth: 150,
+                        cell: ({ index: line, row }) =>
+                            readOnly || !row.drug_id ? (
+                                <DataTableText>
+                                    {isHeader(row)
+                                        ? 'Racikan'
+                                        : (row.unit_code ?? '')}
+                                </DataTableText>
+                            ) : (
+                                <FormControl
+                                    error={error(field(line, 'unit_id'))}
+                                    data-error-field={field(line, 'unit_id')}
+                                >
+                                    <Select
+                                        label="Satuan"
+                                        items={unitChoices(row).map((unit) => ({
+                                            value: unit.id,
+                                            label: unitLabel(unit),
+                                        }))}
+                                        value={row.unit_id ?? ''}
+                                        onValueChange={(value) =>
+                                            change(
+                                                line,
+                                                unitValues(
+                                                    unitChoices(row).find(
+                                                        (unit) =>
+                                                            unit.id === value,
+                                                    ),
+                                                ),
+                                            )
+                                        }
+                                    />
+                                </FormControl>
+                            ),
                     },
                     {
                         id: 'signa',
@@ -1153,9 +1215,9 @@ function PrescriptionLines({
                                       <DataTableText>
                                           {isHeader(row)
                                               ? ''
-                                              : `${String(row.dispensed_quantity ?? 0)}${
+                                              : `${row.dispensed_quantity ?? ''}${
                                                     row.returned_quantity
-                                                        ? ` (${String(row.returned_quantity)} dikembalikan)`
+                                                        ? ` (${row.returned_quantity} dikembalikan)`
                                                         : ''
                                                 }`}
                                       </DataTableText>
