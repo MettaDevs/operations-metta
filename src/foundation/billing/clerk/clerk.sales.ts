@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Database } from '../../../platform/database/index.ts';
-import type { ClerkSales } from './clerk.close.ts';
+import type { ClerkOpenings, ClerkSales } from './clerk.close.ts';
 
 // Penjualan kasir selama sesi: pembayaran yang membawa clerk itu dan tidak batal, jumlah dan nilainya, semua jenis
 // bayar, dan nilai per jenis bayar dalam mata uang lokal dan dalam mata uang jenis bayar itu. Sistem lama mencocokkan
@@ -39,4 +39,18 @@ export async function clerkSales(
             ]),
         ),
     };
+}
+
+// Uang awal laci yang diisi saat Clerk Start, per jenis bayar dalam mata uangnya.
+export async function clerkOpenings(
+    db: Database,
+    clerk: { tenantId: string; id: string },
+): Promise<ClerkOpenings> {
+    const rows = await db.rows(
+        z.object({ id: z.string(), amount: z.string() }),
+        `select jenis_bayar_id as id, trim_scale(jumlah)::text as amount
+         from clerk_uang_awal where tenant_id = $1 and clerk_id = $2`,
+        [clerk.tenantId, clerk.id],
+    );
+    return new Map(rows.map((row) => [row.id, row.amount]));
 }

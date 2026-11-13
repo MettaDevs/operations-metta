@@ -185,6 +185,13 @@ function ClerksPage(): ReactNode {
                             cell: (clerk) => amount(String(clerk.transactions)),
                         },
                         {
+                            id: 'opening_total',
+                            header: 'Uang Awal',
+                            width: 140,
+                            align: 'right',
+                            cell: (clerk) => amount(clerk.opening_total),
+                        },
+                        {
                             id: 'system_total',
                             header: 'Jumlah Sistem',
                             width: 140,

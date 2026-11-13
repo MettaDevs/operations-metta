@@ -25,12 +25,13 @@ import {
     missingRateMessage,
     roundAmount,
 } from '../../currency/index.ts';
-import type { Decimal } from '../../../platform/money/index.ts';
+import { Decimal } from '../../../platform/money/index.ts';
 import { closeClerk, countedMethods } from './clerk.close.ts';
-import { clerkSales } from './clerk.sales.ts';
+import { clerkOpenings, clerkSales } from './clerk.sales.ts';
 import {
     clerkEndInputSchema,
     clerkLineSchema,
+    type clerkOpeningMethodSchema,
     clerkRowSchema,
     clerkStartInputSchema,
 } from './clerk.schema.ts';
@@ -54,16 +55,19 @@ type Scope = { tenantId: string; legalEntityId: string; userId: string };
 const rowSql = `select * from (
                     select c.id, c.kode as code, c.status, c.user_id, u.name as user_name,
                            ${isoSql('c.waktu_mulai')} as started_at, ${isoSql('c.waktu_akhir')} as ended_at,
-                           c.jumlah_transaksi as transactions, trim_scale(c.jumlah_total_system)::text as system_total,
+                           c.jumlah_transaksi as transactions,
+                           trim_scale(c.jumlah_uang_awal)::text as opening_total,
+                           trim_scale(c.jumlah_total_system)::text as system_total,
                            trim_scale(c.jumlah_total_clerk)::text as clerk_total,
                            trim_scale(c.jumlah_total_selisih)::text as difference_total, c.version
                     from clerk c join users u on u.id = c.user_id
                     where c.tenant_id = $1 and c.legal_entity_id = $2) clerks
                 where true`;
 
-// Jenis bayar yang dihitung saat Clerk End, aktif maupun tidak, berurut seperti di layar kasir.
+// Jenis bayar yang dihitung saat Clerk End, aktif maupun tidak, berurut seperti di layar kasir. Jenis bayar tunai yang
+// aktif juga diisi uang awalnya saat Clerk Start.
 const countedMethodsSql = `select id, kode as code, coalesce(label_kasir, nama) as name, aktif as active,
-                                  coalesce(mata_uang, $3) as currency_code
+                                  perilaku = 'tunai' as cash, coalesce(mata_uang, $3) as currency_code
                            from jenis_bayar
                            where tenant_id = $1 and legal_entity_id = $2 and dihitung_tutup_kas and deleted_at is null
                            order by urutan, kode`;
@@ -72,6 +76,7 @@ const countedMethodSchema = z.object({
     code: z.string(),
     name: z.string(),
     active: z.boolean(),
+    cash: z.boolean(),
     currency_code: z.string(),
 });
 
@@ -179,15 +184,15 @@ export class Clerks {
     // Clerk End, baris yang tersimpan beserta jumlah sistem dan selisihnya.
     private async detail(clerk: z.infer<typeof clerkRowSchema>) {
         const currency = new Currency(this.db, this.scope.tenantId);
+        const session = { tenantId: this.scope.tenantId, id: clerk.id };
+        const openings = await clerkOpenings(this.db, session);
         const lines =
             clerk.status === 'start'
                 ? await Promise.all(
                       countedMethods(
                           await this.methods(),
-                          await clerkSales(this.db, {
-                              tenantId: this.scope.tenantId,
-                              id: clerk.id,
-                          }),
+                          await clerkSales(this.db, session),
+                          openings,
                       ).map(async (method) => ({
                           payment_method_id: method.id,
                           code: method.code,
@@ -196,6 +201,7 @@ export class Clerks {
                           amount_decimals: (
                               await currency.precision(method.currency_code)
                           ).amount_decimals,
+                          opening_amount: openings.get(method.id) ?? '0',
                           system_amount: null,
                           counted_amount: null,
                           difference: null,
@@ -207,7 +213,8 @@ export class Clerks {
                       clerkLineSchema,
                       `select d.jenis_bayar_id as payment_method_id, j.kode as code,
                               coalesce(j.label_kasir, j.nama) as name, d.mata_uang as currency_code,
-                              p.amount_decimals, trim_scale(d.jumlah_sistem)::text as system_amount,
+                              p.amount_decimals, trim_scale(d.uang_awal)::text as opening_amount,
+                              trim_scale(d.jumlah_sistem)::text as system_amount,
                               trim_scale(d.jumlah_total)::text as counted_amount,
                               trim_scale(d.jumlah_selisih)::text as difference, trim_scale(d.kurs)::text as rate,
                               trim_scale(d.selisih_lokal)::text as difference_local
@@ -246,15 +253,78 @@ export class Clerks {
         );
         return {
             data: found ? await this.detail(await this.row(found.id)) : null,
+            opening_methods: found ? [] : await this.openingMethods(),
+            local_currency: localCurrencyCode,
             can_operate: this.workspace.permissions.has('core.clerk.update'),
             password_required: password.exists,
         };
     }
 
+    // Jenis bayar tunai aktif yang dihitung saat Clerk End, dengan presisi jumlah mata uangnya.
+    private async openingMethods(): Promise<
+        z.infer<typeof clerkOpeningMethodSchema>[]
+    > {
+        const currency = new Currency(this.db, this.scope.tenantId);
+        return Promise.all(
+            (await this.methods())
+                .filter((method) => method.active && method.cash)
+                .map(async (method) => ({
+                    payment_method_id: method.id,
+                    code: method.code,
+                    name: method.name,
+                    currency_code: method.currency_code,
+                    amount_decimals: (
+                        await currency.precision(method.currency_code)
+                    ).amount_decimals,
+                })),
+        );
+    }
+
+    // Uang awal yang diketik kasir, diperiksa dengan presisi jumlah mata uang jenis bayarnya. Hanya yang bukan nol
+    // dikembalikan.
+    private async openings(
+        typed: Record<string, string | number> | undefined,
+    ): Promise<{ methodId: string; currency: string; amount: string }[]> {
+        const methods = new Map(
+            (await this.openingMethods()).map((method) => [
+                method.payment_method_id,
+                method,
+            ]),
+        );
+        const errors: Record<string, string> = {};
+        const openings = [];
+        for (const [methodId, raw] of Object.entries(typed ?? {})) {
+            const method = methods.get(methodId);
+            if (!method) {
+                errors.opening =
+                    'Uang awal hanya untuk jenis bayar tunai yang dihitung saat Clerk End. Muat ulang, lalu isi lagi.';
+                continue;
+            }
+            const amount =
+                String(raw).trim() === ''
+                    ? '0'
+                    : amountInput(raw, method.amount_decimals);
+            if (amount === null)
+                errors[`opening.${methodId}`] =
+                    `Isi uang awal 0 atau lebih, ${decimalsHint(method.amount_decimals)}.`;
+            else if (Decimal.of(amount).compare(Decimal.of('0')) !== 0)
+                openings.push({
+                    methodId,
+                    currency: method.currency_code,
+                    amount,
+                });
+        }
+        if (Object.keys(errors).length) validation(errors);
+        return openings;
+    }
+
     async start(body: unknown, password: PasswordCheck) {
         this.workspace.guard('clerk', 'update');
         const input = clerkStartInputSchema.safeParse(body);
-        await checkedPassword(input.data?.password, password);
+        if (!input.success)
+            validation({ opening: 'Isi uang awal per jenis bayar tunai.' });
+        await checkedPassword(input.data.password, password);
+        const openings = await this.openings(input.data.opening);
         const scope = this.scope;
         const today = await this.db.one(
             z.object({ date: z.string() }),
@@ -264,20 +334,34 @@ export class Clerks {
         );
         if (!today) abort(404, 'Not Found');
         const id = Bun.randomUUIDv7();
-        // Kode acak bisa sama walau sangat jarang; kode lain dicoba sebelum menyerah.
+        // Kode acak bisa sama walau sangat jarang; kode lain dicoba sebelum menyerah. Transaksinya diulang utuh, karena
+        // PostgreSQL membatalkan seluruh transaksi yang menabrak constraint.
         for (let attempt = 0; ; attempt++) {
             const stamp = nowSql();
             try {
-                await this.db.insert('clerk', {
-                    id,
-                    tenant_id: scope.tenantId,
-                    legal_entity_id: scope.legalEntityId,
-                    kode: clerkCode(today.date),
-                    user_id: scope.userId,
-                    status: 'start',
-                    waktu_mulai: stamp,
-                    created_at: stamp,
-                    updated_at: stamp,
+                await this.db.transaction(async () => {
+                    await this.db.insert('clerk', {
+                        id,
+                        tenant_id: scope.tenantId,
+                        legal_entity_id: scope.legalEntityId,
+                        kode: clerkCode(today.date),
+                        user_id: scope.userId,
+                        status: 'start',
+                        waktu_mulai: stamp,
+                        created_at: stamp,
+                        updated_at: stamp,
+                    });
+                    for (const opening of openings)
+                        await this.db.insert('clerk_uang_awal', {
+                            id: Bun.randomUUIDv7(),
+                            tenant_id: scope.tenantId,
+                            clerk_id: id,
+                            jenis_bayar_id: opening.methodId,
+                            mata_uang: opening.currency,
+                            jumlah: opening.amount,
+                            created_at: stamp,
+                            updated_at: stamp,
+                        });
                 });
                 break;
             } catch (error) {
@@ -313,11 +397,10 @@ export class Clerks {
         if (!parsed.success)
             validation({ counts: 'Isi jumlah fisik per jenis bayar.' });
         await checkedPassword(parsed.data.password, password);
-        const sales = await clerkSales(this.db, {
-            tenantId: this.scope.tenantId,
-            id: clerk.id,
-        });
-        const methods = countedMethods(await this.methods(), sales);
+        const session = { tenantId: this.scope.tenantId, id: clerk.id };
+        const sales = await clerkSales(this.db, session);
+        const openings = await clerkOpenings(this.db, session);
+        const methods = countedMethods(await this.methods(), sales, openings);
         const byId = new Map(methods.map((method) => [method.id, method]));
         const currency = new Currency(this.db, this.scope.tenantId);
         const precision = await currency.precision(localCurrencyCode);
@@ -361,18 +444,25 @@ export class Clerks {
                 );
         }
         if (Object.keys(errors).length) validation(errors);
-        const closed = closeClerk(methods, sales, counts, rates, (value) =>
-            roundAmount(value, precision),
+        const closed = closeClerk(
+            methods,
+            sales,
+            openings,
+            counts,
+            rates,
+            (value) => roundAmount(value, precision),
         );
         await this.db.transaction(async () => {
             const stamp = nowSql();
             const updated = await this.db.execute(
-                `update clerk set status = 'end', waktu_akhir = $1, jumlah_transaksi = $2, jumlah_total_system = $3,
-                                  jumlah_total_clerk = $4, jumlah_total_selisih = $5, updated_at = $1
-                 where tenant_id = $6 and id = $7 and status = 'start' and version = $8`,
+                `update clerk set status = 'end', waktu_akhir = $1, jumlah_transaksi = $2, jumlah_uang_awal = $3,
+                                  jumlah_total_system = $4, jumlah_total_clerk = $5, jumlah_total_selisih = $6,
+                                  updated_at = $1
+                 where tenant_id = $7 and id = $8 and status = 'start' and version = $9`,
                 [
                     stamp,
                     closed.transactions,
+                    closed.openingTotal,
                     closed.systemTotal,
                     closed.clerkTotal,
                     closed.differenceTotal,
@@ -391,6 +481,7 @@ export class Clerks {
                     mata_uang:
                         byId.get(line.paymentMethodId)?.currency_code ??
                         localCurrencyCode,
+                    uang_awal: line.opening,
                     jumlah_sistem: line.system,
                     jumlah_sistem_lokal: line.systemLocal,
                     jumlah_total: line.counted,

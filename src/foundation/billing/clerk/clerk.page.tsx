@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    type ApiBody,
     definePage,
     errorText,
     FormErrorHeader,
@@ -61,15 +62,27 @@ function PasswordField({
     );
 }
 
+type OpeningMethod = ApiBody<'billingClerkCurrent'>['opening_methods'][number];
+
+// Isian layar (titik ribuan, koma desimal) ke teks desimal API; isian yang tidak terbaca dikirim apa adanya supaya
+// server menolaknya per isian.
+const typedAmount = (text: string) =>
+    text.trim() ? (parseDisplayNumber(text) ?? text.trim()) : '0';
+
 function ClerkStart({
+    openingMethods,
+    localCurrency,
     passwordRequired,
     canOperate,
     onStarted,
 }: {
+    openingMethods: OpeningMethod[];
+    localCurrency: string;
     passwordRequired: boolean;
     canOperate: boolean;
     onStarted: () => Promise<unknown>;
 }): ReactNode {
+    const [opening, setOpening] = useState<Record<string, string>>({});
     const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -80,7 +93,17 @@ function ClerkStart({
         setMessage(null);
         try {
             const { body } = await api.billingClerkStart({
-                body: passwordRequired ? { password } : {},
+                body: {
+                    opening: Object.fromEntries(
+                        openingMethods.map((method) => [
+                            method.payment_method_id,
+                            typedAmount(
+                                opening[method.payment_method_id] ?? '',
+                            ),
+                        ]),
+                    ),
+                    ...(passwordRequired ? { password } : {}),
+                },
             });
             toast.success(body.message);
             await onStarted();
@@ -113,6 +136,52 @@ function ClerkStart({
             </Alert>
             {canOperate && (
                 <>
+                    {openingMethods.length > 0 && (
+                        <>
+                            <h2 className="text-sm font-semibold">Uang Awal</h2>
+                            <FormGrid>
+                                {openingMethods.map((method) => {
+                                    const field = `opening.${method.payment_method_id}`;
+                                    const local =
+                                        method.currency_code === localCurrency;
+                                    return (
+                                        <FormControl
+                                            key={method.payment_method_id}
+                                            error={errors[field]?.[0]}
+                                            hint={
+                                                local
+                                                    ? 'Uang tunai yang sudah ada di laci sebelum transaksi pertama, termasuk uang kecil untuk kembalian.'
+                                                    : `Jumlah lembar ${method.currency_code} yang sudah ada di laci, dalam ${method.currency_code}.`
+                                            }
+                                        >
+                                            <Input
+                                                label={
+                                                    local
+                                                        ? method.name
+                                                        : `${method.name} (${method.currency_code})`
+                                                }
+                                                inputMode="decimal"
+                                                placeholder="0"
+                                                data-error-field={field}
+                                                value={
+                                                    opening[
+                                                        method.payment_method_id
+                                                    ] ?? ''
+                                                }
+                                                onChange={(event) =>
+                                                    setOpening({
+                                                        ...opening,
+                                                        [method.payment_method_id]:
+                                                            event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </FormControl>
+                                    );
+                                })}
+                            </FormGrid>
+                        </>
+                    )}
                     {passwordRequired && (
                         <PasswordField
                             value={password}
@@ -243,12 +312,16 @@ function ClerkEnd({
                                 <FormControl
                                     key={line.payment_method_id}
                                     error={errors[field]?.[0]}
-                                    hint={
+                                    hint={`${
                                         line.currency_code ===
                                         clerk.local_currency
                                             ? 'Jumlah fisik yang ada di laci atau di slip, bukan jumlah sistem.'
                                             : `Jumlah lembar ${line.currency_code} yang ada di laci, dalam ${line.currency_code}, bukan nilai rupiahnya.`
-                                    }
+                                    }${
+                                        line.opening_amount === '0'
+                                            ? ''
+                                            : ` Termasuk uang awal ${displayNumber(line.opening_amount)}.`
+                                    }`}
                                 >
                                     <Input
                                         label={
@@ -327,7 +400,13 @@ function ClerkPage(): ReactNode {
         }),
     );
     const [ended, setEnded] = useState<Clerk | null>(null);
-    const { data, password_required, can_operate } = current.data;
+    const {
+        data,
+        opening_methods,
+        local_currency,
+        password_required,
+        can_operate,
+    } = current.data;
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
             <RecordActionBar
@@ -366,6 +445,8 @@ function ClerkPage(): ReactNode {
                     />
                 ) : (
                     <ClerkStart
+                        openingMethods={opening_methods}
+                        localCurrency={local_currency}
                         passwordRequired={password_required}
                         canOperate={can_operate}
                         onStarted={() => current.refetch()}

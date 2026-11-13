@@ -34,6 +34,7 @@ type Clerk = {
     code: string;
     status: 'start' | 'end';
     transactions: number;
+    opening_total: string;
     system_total: string;
     clerk_total: string;
     difference_total: string;
@@ -41,6 +42,7 @@ type Clerk = {
     lines: {
         payment_method_id: string;
         code: string;
+        opening_amount: string;
         system_amount: string | null;
         counted_amount: string | null;
         difference: string | null;
@@ -48,6 +50,8 @@ type Clerk = {
 };
 type Current = {
     data: Clerk | null;
+    opening_methods: { payment_method_id: string; code: string }[];
+    local_currency: string;
     password_required: boolean;
     can_operate: boolean;
 };
@@ -153,8 +157,16 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             await cashier.get(`${api}/current`),
             200,
         );
+        // Uang awal hanya untuk jenis bayar tunai yang dihitung saat Clerk End.
         expect(current).toEqual({
             data: null,
+            opening_methods: [
+                expect.objectContaining({
+                    payment_method_id: methods.TUN,
+                    code: 'TUN',
+                }),
+            ],
+            local_currency: 'IDR',
             password_required: true,
             can_operate: true,
         });
@@ -170,9 +182,33 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
                 'Password Anda Salah... Proses tidak dapat dilanjutkan.',
             ],
         });
+        expect(
+            await refused(
+                await cashier.post(`${api}/start`, {
+                    password: 'kata-sandi-uji-yang-panjang',
+                    opening: { [methods.TUN!]: '-1', [methods.BNK!]: '5000' },
+                }),
+            ),
+        ).toEqual({
+            opening: [
+                'Uang awal hanya untuk jenis bayar tunai yang dihitung saat Clerk End. Muat ulang, lalu isi lagi.',
+            ],
+            [`opening.${methods.TUN}`]: [
+                'Isi uang awal 0 atau lebih, paling banyak dua angka di belakang koma.',
+            ],
+        });
+        expect(
+            (
+                await pool.unsafe<{ id: string }[]>(
+                    'select id from clerk where tenant_id = $1',
+                    [tenantId],
+                )
+            ).length,
+        ).toBe(0);
         const started = await json<{ data: Clerk; message: string }>(
             await cashier.post(`${api}/start`, {
                 password: 'kata-sandi-uji-yang-panjang',
+                opening: { [methods.TUN!]: '100000' },
             }),
             201,
         );
@@ -186,12 +222,16 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             new RegExp(`^C-${today?.date}-[0-9A-Z]{5}$`),
         );
         expect(started.data.status).toBe('start');
-        // Clerk End diisi buta: jenis bayar yang dihitung tampil tanpa jumlah sistem.
+        // Clerk End diisi buta: jenis bayar yang dihitung tampil dengan uang awalnya, tanpa jumlah sistem.
         expect(
-            started.data.lines.map((line) => [line.code, line.system_amount]),
+            started.data.lines.map((line) => [
+                line.code,
+                line.opening_amount,
+                line.system_amount,
+            ]),
         ).toEqual([
-            ['TUN', null],
-            ['BNK', null],
+            ['TUN', '100000', null],
+            ['BNK', '0', null],
         ]);
         expect(
             (
@@ -227,7 +267,7 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         ).toBe(403);
     });
 
-    test('Clerk End counts only the methods counted at close, and the difference is counted minus system', async () => {
+    test('Clerk End counts only the methods counted at close, and the difference is counted minus opening cash and system', async () => {
         const clerk = (
             await json<Current>(await cashier.get(`${api}/current`), 200)
         ).data;
@@ -258,15 +298,22 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         expect(ended.data).toMatchObject({
             status: 'end',
             transactions: 0,
+            opening_total: '100000',
             system_total: '0',
             clerk_total: '125000.5',
-            difference_total: '125000.5',
+            difference_total: '25000.5',
         });
         const stored = await pool.unsafe<
-            { kode: string; sistem: string; total: string; selisih: string }[]
+            {
+                kode: string;
+                awal: string;
+                sistem: string;
+                total: string;
+                selisih: string;
+            }[]
         >(
-            `select j.kode, d.jumlah_sistem::text as sistem, d.jumlah_total::text as total,
-                    d.jumlah_selisih::text as selisih
+            `select j.kode, d.uang_awal::text as awal, d.jumlah_sistem::text as sistem,
+                    d.jumlah_total::text as total, d.jumlah_selisih::text as selisih
              from clerk_detail d join jenis_bayar j on j.id = d.jenis_bayar_id
              where d.clerk_id = $1 order by j.kode`,
             [clerk.id],
@@ -274,15 +321,17 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         expect([...stored]).toEqual([
             {
                 kode: 'BNK',
+                awal: '0.0000',
                 sistem: '0.0000',
                 total: '0.0000',
                 selisih: '0.0000',
             },
             {
                 kode: 'TUN',
+                awal: '100000.0000',
                 sistem: '0.0000',
                 total: '125000.5000',
-                selisih: '125000.5000',
+                selisih: '25000.5000',
             },
         ]);
         expect(
@@ -325,10 +374,14 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             200,
         );
         expect(
-            shown.data.lines.map((line) => [line.code, line.difference]),
+            shown.data.lines.map((line) => [
+                line.code,
+                line.opening_amount,
+                line.difference,
+            ]),
         ).toEqual([
-            ['TUN', '125000.5'],
-            ['BNK', '0'],
+            ['TUN', '100000', '25000.5'],
+            ['BNK', '0', '0'],
         ]);
     });
 });

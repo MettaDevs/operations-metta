@@ -13,9 +13,9 @@ export const dateTime = (value: string) =>
         timeStyle: 'short',
     });
 
-// Hasil Clerk End, blok Jumlah Sistem dan Jumlah Clerk layar Lihat Clerk sistem lama: ringkasan sesi lalu jumlah sistem,
-// jumlah fisik, dan selisih per jenis bayar yang dihitung, dalam mata uang jenis bayar itu, dengan kurs hari Clerk End
-// dan selisihnya dalam mata uang lokal untuk jenis bayar bermata uang asing.
+// Hasil Clerk End, blok Jumlah Sistem dan Jumlah Clerk layar Lihat Clerk sistem lama: ringkasan sesi lalu uang awal,
+// jumlah sistem, jumlah fisik, dan selisih per jenis bayar yang dihitung, dalam mata uang jenis bayar itu, dengan kurs
+// hari Clerk End dan selisihnya dalam mata uang lokal untuk jenis bayar bermata uang asing.
 export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
     const amount = (value: string | null) =>
         value === null ? '' : displayNumber(value);
@@ -43,6 +43,13 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         readOnly
                     />
                 </FormControl>
+                <FormControl hint="Uang di laci saat Clerk Start, semua jenis bayar tunai, dinilai dengan kurs hari Clerk End.">
+                    <Input
+                        label="Uang Awal"
+                        value={amount(clerk.opening_total)}
+                        readOnly
+                    />
+                </FormControl>
                 <FormControl hint="Nilai semua pembayaran kasir ini selama clerk, semua jenis bayar.">
                     <Input
                         label="Jumlah Total"
@@ -57,7 +64,7 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         readOnly
                     />
                 </FormControl>
-                <FormControl hint="Jumlah Clerk dikurangi Jumlah Sistem, hanya untuk jenis bayar yang dihitung saat Clerk End. Minus berarti uang kurang.">
+                <FormControl hint="Jumlah Clerk dikurangi uang awal dan Jumlah Sistem, hanya untuk jenis bayar yang dihitung saat Clerk End. Minus berarti uang kurang.">
                     <Input
                         label="Jumlah Selisih"
                         value={amount(clerk.difference_total)}
@@ -84,6 +91,13 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         header: 'Mata Uang',
                         width: 110,
                         cell: (line) => text(line.currency_code),
+                    },
+                    {
+                        id: 'opening_amount',
+                        header: 'Uang Awal',
+                        width: 160,
+                        align: 'right',
+                        cell: (line) => text(amount(line.opening_amount)),
                     },
                     {
                         id: 'system_amount',
