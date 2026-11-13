@@ -40,8 +40,8 @@ import { DestinationStatusText } from '../queue/queue-display.tsx';
 
 // Panel Status Pasien sistem lama (form/statuspasien/index.php) di kolom kiri halaman pemeriksaan: pilihan status dari
 // data acuan tenant, lalu isian yang dibuka perilaku status itu. Status ikut Simpan rekam medis. Tambah Rujuk Internal
-// membuat tujuan baru saat itu juga, seperti form RujukInternalForm.php, dan hanya ada selama pemeriksaan berjalan
-// (`onRefer` null sesudahnya).
+// membuat tujuan baru saat itu juga, seperti form RujukInternalForm.php, selama rekam medis boleh diubah, juga sesudah
+// Selesai periksa (`onRefer` null bila tidak).
 
 type Discharge = NonNullable<MedicalRecordDraft['discharge']>;
 type ReferralInput = ApiBody<'healthcareInternalReferralOptions'>['data'];

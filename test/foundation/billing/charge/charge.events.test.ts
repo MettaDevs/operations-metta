@@ -15,8 +15,9 @@ type Stored = {
 };
 
 // Penerima kasir untuk biaya pemeriksaan dan kunjungan, lewat publishEvent seperti penerbitnya: potret biaya mengganti
-// baris terbuka pemeriksaan itu, baris yang sudah ditagih tidak disentuh, event yang sama hanya diproses sekali, dan
-// kunjungan batal membuang baris terbukanya. Diperiksa dengan SQL langsung ke tabel kasir.
+// baris terbuka pemeriksaan itu, baris yang sudah ditagih tidak disentuh, event yang sama hanya diproses sekali,
+// kunjungan yang dibuka kembali keluar dari daftar sampai selesai lagi, dan kunjungan batal membuang baris terbukanya.
+// Diperiksa dengan SQL langsung ke tabel kasir.
 describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -70,6 +71,28 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
             registration_number: 'REG-1',
             lines: rows,
         });
+
+    const complete = () =>
+        publish('healthcare.visit.completed.v1', {
+            visit_id: visitId,
+            registration_number: 'REG-1',
+            date: '2026-11-13',
+            registered_at: '2026-11-13T01:00:00Z',
+            patient: {
+                id: Bun.randomUUIDv7(),
+                medical_record_number: '000001',
+                name: 'Pasien Uji',
+            },
+            patient_type: { id: Bun.randomUUIDv7(), name: 'UMUM' },
+            guarantor: null,
+            card_number: null,
+            sections: [{ id: Bun.randomUUIDv7(), name: 'Poli Umum' }],
+        });
+    const visit = () =>
+        pool.unsafe<{ status: string; pasien_nama: string }[]>(
+            'select status, pasien_nama from kunjungan_kasir where tenant_id = $1 and kunjungan_id = $2',
+            [tenantId, visitId],
+        );
 
     async function stored(): Promise<Stored[]> {
         return [
@@ -157,28 +180,26 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
         );
     });
 
-    test('a completed visit enters the cashier list, and a cancelled one leaves it with its open lines', async () => {
+    test('a reopened visit leaves the cashier list with its open lines kept until it is completed again', async () => {
         await charges([line(lines.wound, 'J-LUKA', '1')]);
-        await publish('healthcare.visit.completed.v1', {
+        await complete();
+        await publish('healthcare.visit.reopened.v1', {
             visit_id: visitId,
             registration_number: 'REG-1',
-            date: '2026-11-13',
-            registered_at: '2026-11-13T01:00:00Z',
-            patient: {
-                id: Bun.randomUUIDv7(),
-                medical_record_number: '000001',
-                name: 'Pasien Uji',
-            },
-            patient_type: { id: Bun.randomUUIDv7(), name: 'UMUM' },
-            guarantor: null,
-            card_number: null,
-            sections: [{ id: Bun.randomUUIDv7(), name: 'Poli Umum' }],
         });
-        const visit = () =>
-            pool.unsafe<{ status: string; pasien_nama: string }[]>(
-                'select status, pasien_nama from kunjungan_kasir where tenant_id = $1 and kunjungan_id = $2',
-                [tenantId, visitId],
-            );
+        expect((await visit())[0]?.status).toBe('dibuka');
+        expect(
+            (await stored())
+                .filter((row) => row.live)
+                .map((row) => [row.kode, row.status]),
+        ).toEqual([['J-LUKA', 'terbuka']]);
+        await complete();
+        expect((await visit())[0]?.status).toBe('selesai');
+    });
+
+    test('a completed visit enters the cashier list, and a cancelled one leaves it with its open lines', async () => {
+        await charges([line(lines.wound, 'J-LUKA', '1')]);
+        await complete();
         expect([...(await visit())]).toEqual([
             { status: 'selesai', pasien_nama: 'Pasien Uji' },
         ]);

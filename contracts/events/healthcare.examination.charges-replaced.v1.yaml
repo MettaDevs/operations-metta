@@ -4,9 +4,11 @@ info:
   version: 1.0.0
   description: |
     Potret penuh Biaya Tindakan satu pemeriksaan rawat jalan untuk kasir. Diterbitkan module layanan kesehatan
-    (`modules/healthcare`) lewat `publishEvent` di transaksi Simpan rekam medis yang membawa Biaya Tindakan, sama dengan
-    sistem lama yang menulis ulang `SIMtrRJTransaksi` setiap kali poli menyimpan. Tarif dan komponen adalah nilai yang
-    dibekukan saat baris pertama kali disimpan.
+    (`modules/healthcare`) lewat `publishEvent` di transaksi Simpan rekam medis yang mengubah Biaya Tindakan: baris
+    bertambah atau berkurang, atau Qty atau dokter sebuah baris berubah. Sistem lama menulis ulang `SIMtrRJTransaksi`
+    setiap kali poli menyimpan; di sini Simpan yang tidak mengubah baris tindakan tidak menerbitkan apa pun, karena
+    potret terakhir yang diterima kasir masih sama. Tarif dan komponen adalah nilai yang dibekukan saat baris pertama
+    kali disimpan.
 
     Penerima mengganti baris biaya terbuka pemeriksaan itu dengan isi `lines`: baris yang tidak ada lagi dihapus, jadi
     `lines` kosong berarti pemeriksaan itu tidak lagi punya biaya tindakan.
@@ -16,7 +18,9 @@ info:
      barisnya di `kunjungan_kasir_detail`. Belum ada pengirim ke luar runtime.
     - Belum membawa BHP, obat, lab, dan daftar jenis bayar yang diizinkan tipe pasien; itu menyusul sebagai field
      opsional.
-    - Baris yang sudah ditagih kasir belum dikunci di layanan kesehatan; kuncinya menyusul bersama Simpan pembayaran.
+    - Sesudah kunjungan dibayar, Simpan yang mengubah Biaya Tindakan ditolak di layanan kesehatan lewat kunci kasir
+     (`lockChargeForChange`) sampai pembayarannya dibatalkan, jadi event ini tidak terbit untuk kunjungan yang sudah
+     dibayar.
 channels:
   healthcare.examination.charges-replaced.v1:
     address: healthcare.examination.charges-replaced.v1

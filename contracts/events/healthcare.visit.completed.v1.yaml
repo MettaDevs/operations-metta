@@ -6,7 +6,8 @@ info:
     Kunjungan selesai diperiksa (StatusPeriksa = 'CO' sistem lama): semua tujuannya selesai. Diterbitkan module layanan
     kesehatan (`modules/healthcare`) di transaksi yang sama dengan perubahan status kunjungan menjadi `selesai`. Isinya
     potret pasien, tipe pasien, penjamin, dan section kunjungan, supaya kasir menampilkan Daftar Pembayaran tanpa
-    membaca tabel layanan kesehatan.
+    membaca tabel layanan kesehatan. Kunjungan yang dibuka kembali (`healthcare.visit.reopened.v1`) menerbitkannya lagi
+    saat selesai lagi, dengan potret yang diperbarui.
 
     Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime. Penerima: kasir Core
     (`src/foundation/billing/charge/`), yang mencatatnya di `kunjungan_kasir`.

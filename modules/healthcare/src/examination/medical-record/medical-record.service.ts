@@ -406,8 +406,8 @@ export async function missingRequired(
 }
 
 // Isi tab Rekam Medis satu tujuan kunjungan: dibaca siapa pun yang boleh melihat antrean pemeriksaan, diubah oleh yang
-// boleh memeriksa sesudah Mulai periksa, juga sesudah Selesai periksa (recordLockedMessage). Biaya yang sudah dibayar di
-// kasir dikunci kasir lewat lockChargeForChange.
+// boleh memeriksa sesudah Mulai periksa, juga sesudah Selesai periksa (recordLockedMessage). Sesudah kasir membayar
+// kunjungannya, hanya Simpan yang mengubah biaya yang ditolak, lewat lockChargeForChange; isi klinis tetap bisa diubah.
 export class MedicalRecords {
     private readonly orders: ExaminationOrders;
     private readonly discharges: Discharges;
@@ -852,22 +852,28 @@ export class MedicalRecords {
                     stamp,
                 );
             if (procedures) {
-                await lockChargeForChange(this.db, {
-                    tenantId: this.workspace.tenantId,
-                    sourceModule: moduleId,
-                    visitId: destination.visit_id,
-                });
+                const charged = await this.orders.proceduresChargeChanged(
+                    recordId,
+                    procedures,
+                );
+                if (charged)
+                    await lockChargeForChange(this.db, {
+                        tenantId: this.workspace.tenantId,
+                        sourceModule: moduleId,
+                        visitId: destination.visit_id,
+                    });
                 await this.orders.writeProcedures(
                     recordId,
                     destination.visit_id,
                     procedures,
                     stamp,
                 );
-                await publishExaminationCharges(
-                    this.db,
-                    this.workspace.tenantId,
-                    recordId,
-                );
+                if (charged)
+                    await publishExaminationCharges(
+                        this.db,
+                        this.workspace.tenantId,
+                        recordId,
+                    );
             }
             if (prescriptions)
                 await this.orders.writePrescriptions(

@@ -14,6 +14,7 @@ export const chargesReplaced =
     'healthcare.examination.charges-replaced.v1' as const;
 export const visitCompleted = 'healthcare.visit.completed.v1' as const;
 export const visitCancelled = 'healthcare.visit.cancelled.v1' as const;
+export const visitReopened = 'healthcare.visit.reopened.v1' as const;
 const processedTable = 'kasir_event_diproses';
 
 const chargesSchema = z.object({
@@ -62,7 +63,7 @@ const visitSchema = z.object({
     sections: z.array(z.object({ id: z.string(), name: z.string() })),
 });
 
-const cancelSchema = z.object({ visit_id: z.string() });
+const visitIdSchema = z.object({ visit_id: z.string() });
 
 function parsed<S extends z.ZodType>(
     schema: S,
@@ -243,7 +244,7 @@ export async function receiveVisitCancelled(
     db: Database,
     envelope: EventEnvelope,
 ): Promise<void> {
-    const data = parsed(cancelSchema, envelope);
+    const data = parsed(visitIdSchema, envelope);
     if (!data) return;
     if (await alreadyProcessed(db, processedTable, envelope)) return;
     const stamp = nowSql();
@@ -262,4 +263,20 @@ export async function receiveVisitCancelled(
     );
     for (const row of retired)
         await retireComponents(db, envelope.tenant_id, row.id, stamp);
+}
+
+// Kunjungan yang kembali diperiksa keluar dari Daftar Pembayaran dan tidak bisa dibayar sampai selesai lagi; kunjungan
+// selesai berikutnya mengembalikannya ke `selesai`. Baris biayanya tetap terbuka, karena pemeriksaannya masih berlaku.
+export async function receiveVisitReopened(
+    db: Database,
+    envelope: EventEnvelope,
+): Promise<void> {
+    const data = parsed(visitIdSchema, envelope);
+    if (!data) return;
+    if (await alreadyProcessed(db, processedTable, envelope)) return;
+    await db.execute(
+        `update kunjungan_kasir set status = 'dibuka', updated_at = $1
+         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4 and status = 'selesai'`,
+        [nowSql(), envelope.tenant_id, source, data.visit_id],
+    );
 }

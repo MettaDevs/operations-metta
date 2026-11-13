@@ -1,0 +1,86 @@
+asyncapi: 3.0.0
+info:
+  title: healthcare.visit.reopened.v1
+  version: 1.0.0
+  description: |
+    Kunjungan yang sudah selesai kembali diperiksa. Diterbitkan module layanan kesehatan (`modules/healthcare`) di
+    transaksi Tambah Rujuk Internal dari poli yang sudah Selesai periksa, saat semua tujuan kunjungan sudah selesai.
+    Kunjungan yang sudah dibayar menolak rujukan itu lebih dulu, jadi event ini hanya terbit untuk kunjungan yang belum
+    dibayar. Sesudah poli rujukan Selesai periksa, `healthcare.visit.completed.v1` terbit lagi untuk kunjungan yang
+    sama.
+
+    Penerima: kasir Core (`src/foundation/billing/charge/`), yang menandai `kunjungan_kasir` kunjungan itu `dibuka`,
+    sehingga ia keluar dari Daftar Pembayaran dan tidak bisa dibayar sampai selesai lagi. Baris biayanya tetap terbuka.
+
+    Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime.
+channels:
+  healthcare.visit.reopened.v1:
+    address: healthcare.visit.reopened.v1
+    messages:
+      visitReopened:
+        $ref: '#/components/messages/visitReopened'
+operations:
+  publishVisitReopened:
+    action: send
+    channel:
+      $ref: '#/channels/healthcare.visit.reopened.v1'
+    messages:
+      - $ref: '#/channels/healthcare.visit.reopened.v1/messages/visitReopened'
+components:
+  messages:
+    visitReopened:
+      name: visitReopened
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          org_unit_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: healthcare.visit.reopened.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity kunjungan.
+        org_unit_id:
+          type: string
+          format: uuid
+          description: Operating unit kunjungan.
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/reopening'
+    reopening:
+      type: object
+      additionalProperties: false
+      required: [visit_id, registration_number]
+      properties:
+        visit_id:
+          type: string
+          format: uuid
+        registration_number:
+          type: string

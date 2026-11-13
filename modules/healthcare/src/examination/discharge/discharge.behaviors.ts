@@ -21,7 +21,6 @@ export const duplicateReferralMessage =
 export const referrerUnfinishedMessage = (section: string) =>
     `Tidak Dapat Memulai Pemeriksaan Karena Pemeriksaan Di ${section} Belum Selesai.`;
 
-// Rekam medis tetap bisa diubah sesudah Selesai periksa, tetapi rujuk internal hanya dari pemeriksaan yang berjalan:
-// kunjungan yang semua tujuannya selesai tidak bisa kembali diperiksa.
-export const finishedReferralMessage =
-    'Pemeriksaan ini sudah selesai, jadi tidak dapat menambah rujuk internal.';
+// Rujuk internal sesudah Selesai periksa membuka kembali kunjungan, jadi kunjungan yang sudah dibayar menolaknya.
+export const paidReferralMessage =
+    'Kunjungan ini sudah dibayar di kasir. Batalkan pembayarannya dulu untuk menambah rujuk internal.';

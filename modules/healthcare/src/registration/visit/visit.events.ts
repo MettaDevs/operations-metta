@@ -5,9 +5,10 @@ import { moduleId } from '../../module.ts';
 
 // Kunjungan ke kasir. Kunjungan yang selesai (StatusPeriksa = 'CO' sistem lama) masuk Daftar Pembayaran, dengan potret
 // pasien, tipe pasien, dan penjaminnya, supaya kasir tidak membaca tabel layanan kesehatan. Kunjungan yang batal
-// keluar dari daftar itu. Kontraknya di contracts/events/.
+// keluar dari daftar itu, dan kunjungan yang dibuka kembali keluar sampai selesai lagi. Kontraknya di contracts/events/.
 export const visitCompleted = `${moduleId}.visit.completed.v1` as const;
 export const visitCancelled = `${moduleId}.visit.cancelled.v1` as const;
+export const visitReopened = `${moduleId}.visit.reopened.v1` as const;
 
 const visitSchema = z.object({
     visit_id: z.string(),
@@ -79,9 +80,26 @@ export async function publishVisitCancelled(
     tenantId: string,
     visitId: string,
 ): Promise<void> {
+    await publishVisitChange(db, visitCancelled, tenantId, visitId);
+}
+
+export async function publishVisitReopened(
+    db: Database,
+    tenantId: string,
+    visitId: string,
+): Promise<void> {
+    await publishVisitChange(db, visitReopened, tenantId, visitId);
+}
+
+async function publishVisitChange(
+    db: Database,
+    type: typeof visitCancelled | typeof visitReopened,
+    tenantId: string,
+    visitId: string,
+): Promise<void> {
     const found = await visit(db, tenantId, visitId);
     await publishEvent(db, {
-        type: visitCancelled,
+        type,
         tenantId,
         legalEntityId: found.legal_entity_id,
         ...(found.operating_unit_id

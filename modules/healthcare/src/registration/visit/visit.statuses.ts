@@ -1,5 +1,6 @@
 // Status kunjungan dan perpindahannya. Kodenya disimpan di sim_tr_registrasi.status. Pendaftaran menulis terdaftar;
-// antrean poli memindahkannya ke diperiksa lalu selesai. Batal hanya dari terdaftar.
+// antrean poli memindahkannya ke diperiksa lalu selesai. Batal hanya dari terdaftar. Selesai kembali ke diperiksa hanya
+// lewat rujuk internal sebelum dibayar (Discharges.reopen), di luar tabel ini, karena butuh kunci kasir.
 export const visitStatuses = [
     'terdaftar',
     'diperiksa',
