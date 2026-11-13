@@ -1,6 +1,7 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { displayNumber } from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
@@ -160,6 +161,24 @@ const loadItems = async (
         nextCursor: body.next_cursor,
     };
 };
+
+const itemColumns: DataTableColumn<ItemChoice>[] = [
+    { id: 'code', header: 'Kode', width: 110, cell: (item) => item.code },
+    { id: 'name', header: 'Nama', width: 260, cell: (item) => item.name },
+    {
+        id: 'base_unit',
+        header: 'Satuan dasar',
+        width: 110,
+        cell: (item) => item.base_unit,
+    },
+];
+// Barang baru di baris amprah diminta dalam satuan dasarnya; satuan lain dipilih per baris.
+const baseUnit = (item: ItemChoice): UnitChoice => ({
+    id: item.base_unit_id,
+    code: item.base_unit,
+    name: '',
+    quantity_per_unit: '1',
+});
 
 function LocationLookup({
     label: title,
@@ -714,16 +733,16 @@ export function TransferOrderCard({
         }
     };
 
-    const addLine = () =>
+    const addLines = (items: (ItemChoice | null)[]) =>
         setLines((current) => [
             ...current,
-            {
+            ...items.map((item) => ({
                 key: nextKey(),
                 id: null,
-                item: null,
-                unit: null,
+                item,
+                unit: item ? baseUnit(item) : null,
                 quantity: '',
-            },
+            })),
         ]);
 
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
@@ -1047,7 +1066,20 @@ export function TransferOrderCard({
                                   }
                                 : undefined
                         }
-                        onAddRow={editable ? addLine : undefined}
+                        onAddRow={editable ? () => addLines([null]) : undefined}
+                        selectRecords={
+                            editable
+                                ? {
+                                      noun: 'barang',
+                                      loadItems: itemLoader,
+                                      columns: itemColumns,
+                                      getItemValue: (item) => item.id,
+                                      getItemLabel: label,
+                                      focusColumnId: 'quantity',
+                                      onAdd: addLines,
+                                  }
+                                : undefined
+                        }
                         onDeleteRows={
                             editable
                                 ? (removed) =>
@@ -1065,7 +1097,7 @@ export function TransferOrderCard({
                         }
                         emptyMessage={
                             editable
-                                ? 'Belum ada barang. Pilih Tambah untuk menambahkan barang yang diminta.'
+                                ? 'Belum ada barang. Pilih Tambah atau Tambah banyak untuk menambahkan barang yang diminta.'
                                 : 'Amprah ini tidak berisi barang.'
                         }
                         columns={[
@@ -1099,13 +1131,7 @@ export function TransferOrderCard({
                                                 onValueChange={(item) =>
                                                     change(index, {
                                                         item,
-                                                        unit: {
-                                                            id: item.base_unit_id,
-                                                            code: item.base_unit,
-                                                            name: '',
-                                                            quantity_per_unit:
-                                                                '1',
-                                                        },
+                                                        unit: baseUnit(item),
                                                     })
                                                 }
                                                 getItemValue={(item) => item.id}
@@ -1114,29 +1140,7 @@ export function TransferOrderCard({
                                                 emptyMessage="Barang tidak ditemukan."
                                                 popupClassName="w-[36rem]"
                                                 showDetails={false}
-                                                columns={[
-                                                    {
-                                                        id: 'code',
-                                                        header: 'Kode',
-                                                        width: 110,
-                                                        cell: (item) =>
-                                                            item.code,
-                                                    },
-                                                    {
-                                                        id: 'name',
-                                                        header: 'Nama',
-                                                        width: 260,
-                                                        cell: (item) =>
-                                                            item.name,
-                                                    },
-                                                    {
-                                                        id: 'base_unit',
-                                                        header: 'Satuan dasar',
-                                                        width: 110,
-                                                        cell: (item) =>
-                                                            item.base_unit,
-                                                    },
-                                                ]}
+                                                columns={itemColumns}
                                             />
                                         </FormControl>
                                     ) : (

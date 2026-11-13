@@ -38,7 +38,7 @@ import {
     parseDisplayNumber,
 } from '@operations-metta/ui/display-number';
 import { ItemCard } from '../item/item-card.tsx';
-import { ItemLookup } from '../item/item-lookup.tsx';
+import { ItemLookup, selectItems } from '../item/item-lookup.tsx';
 import { LocationCard } from '../location/location-card.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
 import {
@@ -95,6 +95,12 @@ export const stockCountStatusLabels: Record<StockCount['status'], string> = {
 const today = () => new Date().toLocaleDateString('sv-SE');
 let keys = 0;
 const nextKey = () => `baris-${++keys}`;
+const baseUnit = (item: ItemChoice): UnitChoice => ({
+    id: item.base_unit_id,
+    code: item.base_unit,
+    name: '',
+    quantity_per_unit: '1',
+});
 const numberFormat =
     'Tulis angka seperti 12.500 atau 1,5. Titik untuk ribuan, koma untuk desimal.';
 
@@ -455,16 +461,7 @@ export function StockCountCard({
         setLines((existing) =>
             existing.map((line) =>
                 line.key === key
-                    ? {
-                          ...line,
-                          item,
-                          unit: {
-                              id: item.base_unit_id,
-                              code: item.base_unit,
-                              name: '',
-                              quantity_per_unit: '1',
-                          },
-                      }
+                    ? { ...line, item, unit: baseUnit(item) }
                     : line,
             ),
         );
@@ -521,23 +518,21 @@ export function StockCountCard({
     };
     const master = masterCard();
 
+    const manualLine = (item: ItemChoice | null): Line => ({
+        key: nextKey(),
+        id: null,
+        manual: true,
+        item,
+        batch: null,
+        batch_number: '',
+        expiry_date: '',
+        unit: item ? baseUnit(item) : null,
+        expected: null,
+        quantity_counted: '',
+        description: '',
+    });
     const addLine = () =>
-        setLines((existing) => [
-            ...existing,
-            {
-                key: nextKey(),
-                id: null,
-                manual: true,
-                item: null,
-                batch: null,
-                batch_number: '',
-                expiry_date: '',
-                unit: null,
-                expected: null,
-                quantity_counted: '',
-                description: '',
-            },
-        ]);
+        setLines((existing) => [...existing, manualLine(null)]);
 
     // Posisi stok yang sudah ada di dokumen tidak ditambahkan lagi.
     const appendPositions = (positions: Position[]) => {
@@ -869,6 +864,20 @@ export function StockCountCard({
                                 : undefined
                         }
                         onAddRow={editable ? addLine : undefined}
+                        selectRecords={
+                            editable
+                                ? selectItems(
+                                      (items) =>
+                                          setLines((existing) => [
+                                              ...existing,
+                                              ...items.map((item) =>
+                                                  manualLine(itemChoice(item)),
+                                              ),
+                                          ]),
+                                      'quantity_counted',
+                                  )
+                                : undefined
+                        }
                         onDeleteRows={
                             editable
                                 ? (removed) =>
@@ -886,7 +895,7 @@ export function StockCountCard({
                         }
                         emptyMessage={
                             editable
-                                ? 'Belum ada barang. Pilih Hitung baris untuk mengambil stok lokasi ini, atau Tambah untuk barang temuan.'
+                                ? 'Belum ada barang. Pilih Hitung baris untuk mengambil stok lokasi ini, atau Tambah dan Tambah banyak untuk barang temuan.'
                                 : 'Opname ini tidak berisi barang.'
                         }
                         columns={[
