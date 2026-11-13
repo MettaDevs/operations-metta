@@ -13,6 +13,12 @@ type ChargeComponent = {
     code: string;
     name: string;
     sort_order: number;
+    account_group: string;
+    posting_to: string;
+    payable_to: string;
+    service_group: string;
+    includes_incentive: boolean;
+    excludes_hospital_cost: boolean;
     is_active: boolean;
     version: number;
 };
