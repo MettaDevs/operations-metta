@@ -168,8 +168,9 @@ export class ExaminationQueue {
     }
 
     // Tujuan kunjungan satu hari (bawaan hari ini), urut posisi antrean, dengan penghitung per status. Penghitung
-    // mengikuti saringan selain status dan pencarian. Kunjungan batal tidak masuk antrean. `room_id` menambahkan
-    // pasien yang sedang dipanggil di ruangan itu.
+    // mengikuti saringan selain status dan pencarian. Tujuan batal ikut tampil dan dihitung sendiri, tetapi tidak masuk
+    // Total, seperti daftar poli sistem lama (poly/controllers/Outpatient.php:1332 dan 1480-1484). `room_id`
+    // menambahkan pasien yang sedang dipanggil di ruangan itu.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('examination', 'read');
         const date =
@@ -186,7 +187,6 @@ export class ExaminationQueue {
             'd.tenant_id = $1',
             'd.deleted_at is null',
             'r.deleted_at is null',
-            "d.status <> 'batal'",
             visitVisibility(this.workspace, bind),
             `r.tanggal = ${bind(date)}::date`,
         ];
@@ -203,6 +203,7 @@ export class ExaminationQueue {
                 in_examination: z.number(),
                 done: z.number(),
                 no_show: z.number(),
+                cancelled: z.number(),
                 total: z.number(),
             }),
             `select count(*) filter (where d.status = 'menunggu')::int as waiting,
@@ -210,7 +211,8 @@ export class ExaminationQueue {
                     count(*) filter (where d.status = 'diperiksa')::int as in_examination,
                     count(*) filter (where d.status = 'selesai')::int as done,
                     count(*) filter (where d.status = 'tidak_datang')::int as no_show,
-                    count(*)::int as total
+                    count(*) filter (where d.status = 'batal')::int as cancelled,
+                    count(*) filter (where d.status <> 'batal')::int as total
              from sim_tr_registrasi_tujuan d
              join sim_tr_registrasi r on r.tenant_id = d.tenant_id and r.id = d.registrasi_id
              where ${filters.join(' and ')}`,
@@ -262,6 +264,7 @@ export class ExaminationQueue {
                 in_examination: 0,
                 done: 0,
                 no_show: 0,
+                cancelled: 0,
                 total: 0,
             },
             current: current ?? null,

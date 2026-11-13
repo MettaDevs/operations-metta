@@ -66,9 +66,6 @@ const ALL = 'all';
 type Row = ApiBody<'healthcareExaminationQueue'>['data'][number];
 type Counts = ApiBody<'healthcareExaminationQueue'>['counts'];
 type Search = z.infer<typeof searchSchema>;
-const queueStatuses = destinationStatuses.filter(
-    (status) => status !== 'batal',
-);
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
     section: z.string().max(100).optional(),
@@ -78,12 +75,15 @@ const searchSchema = z.object({
     status: z.enum(destinationStatuses).optional(),
 });
 
-const countOf: Record<Exclude<DestinationStatus, 'batal'>, keyof Counts> = {
+// Batal ikut dihitung dan ditampilkan seperti daftar poli sistem lama, tetapi tidak masuk Total
+// (poly/views/outpatient/datatable.php:86-93).
+const countOf: Record<DestinationStatus, keyof Counts> = {
     menunggu: 'waiting',
     dipanggil: 'called',
     diperiksa: 'in_examination',
     selesai: 'done',
     tidak_datang: 'no_show',
+    batal: 'cancelled',
 };
 
 // Daftar dimuat ulang 30 detik sesudah layar terakhir berubah, seperti daftar poli sistem lama yang dimuat ulang setiap
@@ -115,7 +115,7 @@ function Counters({
             aria-label="Saring menurut status"
             className="flex flex-wrap items-center gap-1 text-xs"
         >
-            {queueStatuses.map((status) => (
+            {destinationStatuses.map((status) => (
                 <Button
                     key={status}
                     type="button"
@@ -508,12 +508,14 @@ function QueuePage(): ReactNode {
                                                 value: ALL,
                                                 label: 'Semua status',
                                             },
-                                            ...queueStatuses.map((value) => ({
-                                                value,
-                                                label: destinationStatusLabels[
-                                                    value
-                                                ],
-                                            })),
+                                            ...destinationStatuses.map(
+                                                (value) => ({
+                                                    value,
+                                                    label: destinationStatusLabels[
+                                                        value
+                                                    ],
+                                                }),
+                                            ),
                                         ]}
                                         value={status ?? ALL}
                                         onValueChange={(value) =>

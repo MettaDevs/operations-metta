@@ -37,6 +37,7 @@ type Queue = {
         in_examination: number;
         done: number;
         no_show: number;
+        cancelled: number;
         total: number;
     };
     current: Entry | null;
@@ -339,6 +340,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             in_examination: 0,
             done: 0,
             no_show: 0,
+            cancelled: 0,
             total: 3,
         });
 
@@ -497,6 +499,7 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
             in_examination: 0,
             done: 1,
             no_show: 0,
+            cancelled: 0,
             total: 3,
         });
         const history = await pool.unsafe<
@@ -880,5 +883,79 @@ describe.skipIf(!process.env.DB_HOST)('examination queue', () => {
         expect(
             (await act(viewer, first, 'call', { room_id: roomP1 })).status,
         ).toBe(403);
+    }, 60_000);
+
+    test('a cancelled visit stays in the list with its own count outside Total, and its examination only reads', async () => {
+        const cancelRoom = await room(unitA, 'C1');
+        const section = (
+            await created(`${api}/sections`, {
+                operating_unit_id: unitA,
+                code: 'BATAL',
+                name: 'Poli Batal',
+                kind: 'rawat_jalan',
+                queue_prefix: 'C',
+                room_ids: [cancelRoom],
+            })
+        ).id;
+        const cancelled = await register(section);
+        const waiting = await register(section);
+        const visit = await json<{ data: { version: number } }>(
+            await admin.get(`${api}/visits/${cancelled.id}`),
+            200,
+        );
+        await json(
+            await admin.post(`${api}/visits/${cancelled.id}/cancel`, {
+                version: visit.data.version,
+                reason: 'Salah poli',
+            }),
+            200,
+        );
+        const cancelledId = cancelled.destinations[0]!.id;
+        const listed = await queue(admin, `section_id=${section}`);
+        expect(listed.data.map((row) => [row.queue_code, row.status])).toEqual([
+            ['C-001', 'batal'],
+            ['C-002', 'menunggu'],
+        ]);
+        expect(listed.counts).toEqual({
+            waiting: 1,
+            called: 0,
+            in_examination: 0,
+            done: 0,
+            no_show: 0,
+            cancelled: 1,
+            total: 1,
+        });
+        expect(
+            (await queue(admin, `section_id=${section}&status=batal`)).data.map(
+                (row) => row.id,
+            ),
+        ).toEqual([cancelledId]);
+        // Panggil berikutnya tetap hanya memanggil yang menunggu.
+        expect(
+            (await entry(await callNext(admin, section, cancelRoom))).id,
+        ).toBe(waiting.destinations[0]!.id);
+
+        const recordPath = `${api}/examination/destinations/${cancelledId}/medical-record`;
+        const record = await json<{
+            data: Record<string, unknown>;
+            context: { status: string; editable: boolean };
+        }>(await admin.get(recordPath), 200);
+        expect([record.context.status, record.context.editable]).toEqual([
+            'batal',
+            false,
+        ]);
+        expect(
+            (await refused(await admin.put(recordPath, record.data))).errors
+                .status,
+        ).toEqual(['Kunjungan ini sudah dibatalkan.']);
+        expect(
+            (
+                await refused(
+                    await act(admin, cancelledId, 'start', {
+                        room_id: cancelRoom,
+                    }),
+                )
+            ).errors.status,
+        ).toEqual(['Kunjungan ini sudah dibatalkan.']);
     }, 60_000);
 });
