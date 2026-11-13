@@ -29,11 +29,20 @@ const reference = (alias: string) =>
     `case when ${alias}.id is null then null else json_build_object(
          'id', ${alias}.id, 'code', ${alias}.kode, 'name', ${alias}.nama) end`;
 
+const defaultUnitSql = (column: string) =>
+    `(select json_build_object('id', s.id, 'code', s.kode, 'name', s.nama, 'quantity_per_unit',
+             case when s.id = b.satuan_dasar_id then '1' else trim_scale(k.konversi)::text end)
+      from gd_m_satuan s
+      left join gd_m_barang_satuan k on k.tenant_id = b.tenant_id and k.barang_id = b.id and k.satuan_id = s.id
+           and k.deleted_at is null
+      where s.tenant_id = b.tenant_id and s.id = coalesce(b.${column}, b.satuan_dasar_id))`;
+
 const rowSql = `select * from (
                     select b.id, b.kode as code, b.nama as name, b.tolak_stok_minus as refuse_negative_stock,
                            b.diblokir as is_blocked, b.version, b.kategori_id as category_id,
                            b.satuan_dasar_id as base_unit_id, b.profil_pelacakan_id as tracking_code_id,
-                           ${reference('unit')} as base_unit, ${reference('category')} as category,
+                           ${reference('unit')} as base_unit, ${defaultUnitSql('satuan_beli_id')} as purchase_unit,
+                           ${defaultUnitSql('satuan_jual_id')} as sales_unit, ${reference('category')} as category,
                            ${reference('profile')} as tracking_code,
                            coalesce(profile.wajib_batch, false) as batch_required,
                            coalesce(profile.wajib_kedaluwarsa, false) as expiry_required,
@@ -56,8 +65,55 @@ const rowSql = `select * from (
 const storedSchema = z.object({
     id: z.string(),
     satuan_dasar_id: z.string(),
+    satuan_beli_id: z.string().nullable(),
+    satuan_jual_id: z.string().nullable(),
     profil_pelacakan_id: z.string().nullable(),
 });
+
+const defaultUnitMessage =
+    'Pilih satuan dasar atau salah satu satuan kemasan barang ini.';
+
+async function isPackagingUnit(
+    db: Database,
+    scope: ItemScope,
+    itemId: string,
+    unitId: string,
+): Promise<boolean> {
+    if (!lookupId(unitId)) return false;
+    const found = await db.one(
+        z.object({ id: z.string() }),
+        `select id from gd_m_barang_satuan
+         where tenant_id = $1 and legal_entity_id = $2 and barang_id = $3 and satuan_id = $4 and deleted_at is null`,
+        [scope.tenantId, scope.legalEntityId, itemId, unitId],
+    );
+    return found !== undefined;
+}
+
+// Satuan dasar disimpan kosong. Barang baru (itemId kosong) belum punya satuan kemasan, jadi hanya satuan dasar yang sah.
+async function defaultUnits(
+    db: Database,
+    scope: ItemScope,
+    itemId: string | null,
+    baseUnitId: string,
+    requested: { purchase: string | null; sales: string | null },
+): Promise<{ purchase: string | null; sales: string | null }> {
+    const errors: Record<string, string> = {};
+    const checked = async (unitId: string | null, field: string) => {
+        if (unitId === null || unitId === baseUnitId) return null;
+        if (
+            itemId === null ||
+            !(await isPackagingUnit(db, scope, itemId, unitId))
+        )
+            errors[field] = defaultUnitMessage;
+        return unitId;
+    };
+    const units = {
+        purchase: await checked(requested.purchase, 'purchase_unit_id'),
+        sales: await checked(requested.sales, 'sales_unit_id'),
+    };
+    if (Object.keys(errors).length) validation(errors);
+    return units;
+}
 
 function codeTaken(error: unknown): void {
     if (violates(error, 'gd_m_barang_kode_unique'))
@@ -108,6 +164,8 @@ async function checked(
         trackingCodeId,
         refuseNegative: data.refuse_negative_stock ?? null,
         isBlocked: data.is_blocked ?? false,
+        purchaseUnitId: data.purchase_unit_id,
+        salesUnitId: data.sales_unit_id,
     };
 }
 
@@ -147,6 +205,10 @@ export async function createItem(
                   )
               )?.id ?? null)
             : (data.trackingCodeId ?? null);
+    const units = await defaultUnits(db, scope, null, data.baseUnitId, {
+        purchase: data.purchaseUnitId ?? null,
+        sales: data.salesUnitId ?? null,
+    });
     const id = Bun.randomUUIDv7();
     const stamp = nowSql();
     try {
@@ -157,6 +219,8 @@ export async function createItem(
             kode: data.code,
             nama: data.name,
             satuan_dasar_id: data.baseUnitId,
+            satuan_beli_id: units.purchase,
+            satuan_jual_id: units.sales,
             kategori_id: data.categoryId,
             profil_pelacakan_id: trackingCodeId,
             tolak_stok_minus: data.refuseNegative,
@@ -189,7 +253,7 @@ export async function updateItem(
             const stored = lookupId(id)
                 ? await db.one(
                       storedSchema,
-                      `select id, satuan_dasar_id, profil_pelacakan_id from gd_m_barang
+                      `select id, satuan_dasar_id, satuan_beli_id, satuan_jual_id, profil_pelacakan_id from gd_m_barang
                        where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
                        for update`,
                       [scope.tenantId, scope.legalEntityId, id],
@@ -214,10 +278,27 @@ export async function updateItem(
                 locked.base_unit_id =
                     'Barang ini masih punya stok atau kekurangan stok yang belum tertutup, jadi satuan dasarnya tidak bisa diubah.';
             if (Object.keys(locked).length) validation(locked);
+            const units = await defaultUnits(
+                db,
+                scope,
+                stored.id,
+                data.baseUnitId,
+                {
+                    purchase:
+                        data.purchaseUnitId === undefined
+                            ? stored.satuan_beli_id
+                            : data.purchaseUnitId,
+                    sales:
+                        data.salesUnitId === undefined
+                            ? stored.satuan_jual_id
+                            : data.salesUnitId,
+                },
+            );
             updated = await db.execute(
                 `update gd_m_barang set kode = $1, nama = $2, satuan_dasar_id = $3, kategori_id = $4,
-                        profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, updated_at = $8
-                 where tenant_id = $9 and id = $10 and version = $11 and deleted_at is null`,
+                        profil_pelacakan_id = $5, tolak_stok_minus = $6, diblokir = $7, satuan_beli_id = $8,
+                        satuan_jual_id = $9, updated_at = $10
+                 where tenant_id = $11 and id = $12 and version = $13 and deleted_at is null`,
                 [
                     data.code,
                     data.name,
@@ -226,6 +307,8 @@ export async function updateItem(
                     trackingCodeId,
                     data.refuseNegative,
                     data.isBlocked,
+                    units.purchase,
+                    units.sales,
                     nowSql(),
                     scope.tenantId,
                     stored.id,

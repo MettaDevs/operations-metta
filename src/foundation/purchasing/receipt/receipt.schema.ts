@@ -14,7 +14,8 @@ const amount = z.union([z.number(), z.string()]);
 export const receiptLineInputSchema = z.object({
     id: z.string().nullable().optional(),
     item_id: z.string(),
-    unit_id: z.string(),
+    // Kosong berarti satuan beli barang.
+    unit_id: z.string().nullable().optional(),
     quantity: amount,
     unit_cost: amount,
     discount_percent: amount.nullable().optional(),

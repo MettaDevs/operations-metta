@@ -39,7 +39,11 @@ export {
     type IssuedSlice,
     type StockBatch,
 } from './item-ledger/source-entries.ts';
-export { unitConversion } from './item-unit/item-unit.service.ts';
+export {
+    defaultUnit,
+    unitConversion,
+    type UnitUse,
+} from './item-unit/item-unit.service.ts';
 export {
     createItem,
     deleteItem,

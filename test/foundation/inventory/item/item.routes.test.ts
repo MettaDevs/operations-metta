@@ -298,4 +298,176 @@ describe.skipIf(!process.env.DB_HOST)('inventory items', () => {
             'DAFTAR-3',
         ]);
     });
+
+    describe('purchase and sales units', () => {
+        type DefaultUnit = { code: string; quantity_per_unit: string };
+        type UnitItem = Item & {
+            purchase_unit: DefaultUnit;
+            sales_unit: DefaultUnit;
+        };
+        let box: { id: string };
+        let strip: { id: string };
+        let bottle: { id: string };
+        let item: UnitItem;
+        let boxEntry: { entry_id: string; version: number };
+        const entryPath = () =>
+            `${inventoryApi}/item-units/${boxEntry.entry_id}`;
+        const stored = async () =>
+            (
+                await pool.unsafe<
+                    { purchase: string | null; sales: string | null }[]
+                >(
+                    'select satuan_beli_id as purchase, satuan_jual_id as sales from gd_m_barang where id = $1',
+                    [item.id],
+                )
+            )[0];
+
+        beforeAll(async () => {
+            const unit = async (code: string) =>
+                (
+                    await json<{ data: { id: string } }>(
+                        await business.admin.post(
+                            `${inventoryApi}/units-of-measure`,
+                            { code, name: `Satuan ${code}` },
+                        ),
+                        201,
+                    )
+                ).data;
+            [box, strip, bottle] = await Promise.all([
+                unit('KTK'),
+                unit('STR'),
+                unit('BTL'),
+            ]);
+        });
+
+        test('a new item takes the base unit for both and refuses a packaging unit it cannot have yet', async () => {
+            item = await business.item<UnitItem>('BAWAAN-1');
+            expect([item.purchase_unit, item.sales_unit]).toMatchObject([
+                { code: 'TAB', quantity_per_unit: '1' },
+                { code: 'TAB', quantity_per_unit: '1' },
+            ]);
+            expect(
+                Object.keys(
+                    await refused(
+                        await business.admin.post(path, {
+                            code: 'BAWAAN-2',
+                            name: 'Barang BAWAAN-2',
+                            base_unit_id: business.uom.id,
+                            purchase_unit_id: box.id,
+                        }),
+                    ),
+                ),
+            ).toEqual(['purchase_unit_id']);
+        });
+
+        test('only packaging units of the item are accepted, and a caller that does not send them keeps them', async () => {
+            const packaging = async (unitId: string, quantity: number) =>
+                (
+                    await json<{
+                        data: { entry_id: string; version: number };
+                    }>(
+                        await business.admin.post(
+                            `${inventoryApi}/item-units`,
+                            {
+                                item_id: item.id,
+                                unit_id: unitId,
+                                quantity_per_unit: quantity,
+                            },
+                        ),
+                        201,
+                    )
+                ).data;
+            boxEntry = await packaging(box.id, 100);
+            await packaging(strip.id, 10);
+            expect(
+                Object.keys(
+                    await refused(
+                        await change(item, {
+                            purchase_unit_id: bottle.id,
+                            sales_unit_id: 'bukan-id',
+                        }),
+                    ),
+                ).sort(),
+            ).toEqual(['purchase_unit_id', 'sales_unit_id']);
+            const chosen = await json<{ data: UnitItem }>(
+                await change(item, {
+                    purchase_unit_id: box.id,
+                    sales_unit_id: strip.id,
+                }),
+                200,
+            );
+            expect([
+                chosen.data.purchase_unit,
+                chosen.data.sales_unit,
+            ]).toMatchObject([
+                { code: 'KTK', quantity_per_unit: '100' },
+                { code: 'STR', quantity_per_unit: '10' },
+            ]);
+            item = (
+                await json<{ data: UnitItem }>(
+                    await change(chosen.data, {}),
+                    200,
+                )
+            ).data;
+            expect(item.purchase_unit.code).toBe('KTK');
+            expect(await stored()).toEqual({
+                purchase: box.id,
+                sales: strip.id,
+            });
+        });
+
+        test('a packaging unit in use cannot be deleted or swapped, only resized, until the base unit is chosen again', async () => {
+            expect(
+                await refused(
+                    await business.admin.delete(entryPath(), {
+                        version: boxEntry.version,
+                    }),
+                ),
+            ).toEqual({
+                unit_id: [
+                    'Satuan ini satuan beli barang ini, jadi tidak bisa dihapus. Ganti satuan belinya di kartu barang lebih dulu.',
+                ],
+            });
+            expect(
+                Object.keys(
+                    await refused(
+                        await business.admin.patch(entryPath(), {
+                            item_id: item.id,
+                            unit_id: bottle.id,
+                            quantity_per_unit: 100,
+                            version: boxEntry.version,
+                        }),
+                    ),
+                ),
+            ).toEqual(['unit_id']);
+            const resized = await json<{ data: { version: number } }>(
+                await business.admin.patch(entryPath(), {
+                    item_id: item.id,
+                    unit_id: box.id,
+                    quantity_per_unit: 50,
+                    version: boxEntry.version,
+                }),
+                200,
+            );
+            const based = await json<{ data: UnitItem }>(
+                await change(item, {
+                    purchase_unit_id: business.uom.id,
+                    sales_unit_id: null,
+                }),
+                200,
+            );
+            expect(based.data.purchase_unit).toMatchObject({
+                code: 'TAB',
+                quantity_per_unit: '1',
+            });
+            expect(await stored()).toEqual({ purchase: null, sales: null });
+            expect(
+                (
+                    await business.admin.delete(entryPath(), {
+                        version: resized.data.version,
+                    })
+                ).status,
+            ).toBe(204);
+        });
+    });
 });

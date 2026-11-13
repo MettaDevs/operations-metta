@@ -26,7 +26,13 @@ const drugSchema = codeName.extend({
     drug_class: z.string(),
     generic: z.boolean(),
     formulary: z.boolean(),
-    // Batch yang masuk gudang lewat penerimaan vendor, dalam satuan dasar.
+    // Satuan beli dan jual berisi kode satuan; kosong berarti satuan dasar.
+    packaging: z
+        .array(z.object({ unit: z.string(), quantity_per_unit: z.number() }))
+        .default([]),
+    purchase_unit: z.string().optional(),
+    sales_unit: z.string().optional(),
+    // Batch yang masuk gudang lewat penerimaan vendor. Jumlah dan harga dalam satuan beli obat itu.
     batches: z.array(
         z.object({
             batch_number: z.string(),
@@ -544,6 +550,21 @@ async function seedInventory(
             drug.code,
             (row) => row.id === id,
         );
+        for (const packaging of drug.packaging) {
+            const unitId = required(units, packaging.unit, 'Satuan');
+            const existing = await api.find(
+                idRow,
+                `${coreInventory}/item-units?item_id=${id}`,
+                packaging.unit,
+                (row) => row.id === unitId,
+            );
+            if (!existing)
+                await api.call('POST', `${coreInventory}/item-units`, {
+                    item_id: id,
+                    unit_id: unitId,
+                    quantity_per_unit: packaging.quantity_per_unit,
+                });
+        }
         if (item && !item.category)
             await api.call('PATCH', `${coreInventory}/items/${id}`, {
                 code: item.code,
@@ -551,6 +572,12 @@ async function seedInventory(
                 base_unit_id: item.base_unit.id,
                 category_id: required(categories, drug.category, 'Kategori'),
                 tracking_code_id: categoryTracking.get(drug.category),
+                purchase_unit_id: drug.purchase_unit
+                    ? required(units, drug.purchase_unit, 'Satuan')
+                    : null,
+                sales_unit_id: drug.sales_unit
+                    ? required(units, drug.sales_unit, 'Satuan')
+                    : null,
                 version: item.version,
             });
         // Versi 0 berarti obat ini belum pernah diberi data farmasi.
@@ -594,7 +621,6 @@ async function seedInventory(
             lines: inventory.drugs.flatMap((drug) =>
                 drug.batches.map((batch) => ({
                     item_id: items.get(drug.code)?.id,
-                    unit_id: items.get(drug.code)?.unit,
                     quantity: batch.quantity,
                     unit_cost: batch.unit_cost,
                     batch_number: batch.batch_number,

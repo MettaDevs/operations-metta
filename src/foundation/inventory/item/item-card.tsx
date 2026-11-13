@@ -30,6 +30,7 @@ import { unitsOfMeasure } from '../code-list/code-list-sources.ts';
 import { UnitOfMeasureLookup } from '../code-list/code-list-lookup.tsx';
 import { ItemCategoryCard } from '../item-category/item-category-card.tsx';
 import { ItemCategoryLookup } from '../item-category/item-category-lookup.tsx';
+import { ItemUnitLookup } from '../item-unit/item-unit-lookup.tsx';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 import { PolicySelect } from '../setup/stock-policy-options.tsx';
 import { StockkeepingUnits } from '../stockkeeping-unit/stockkeeping-units.tsx';
@@ -60,6 +61,8 @@ const formOf = (item: Item | null) => ({
     code: item?.code ?? '',
     name: item?.name ?? '',
     baseUnit: referenceOf(item?.base_unit ?? null),
+    purchaseUnit: referenceOf(item?.purchase_unit ?? null),
+    salesUnit: referenceOf(item?.sales_unit ?? null),
     hasCategory: item?.category != null,
     category: referenceOf(item?.category ?? null),
     hasTracking: item?.tracking_code != null,
@@ -76,6 +79,19 @@ const formOf = (item: Item | null) => ({
     isBlocked: item?.is_blocked ?? false,
 });
 type ItemForm = ReturnType<typeof formOf>;
+
+const withBaseUnit = (form: ItemForm, unit: Reference): ItemForm => {
+    const follows = (current: Reference | null) =>
+        current === null || current.id === form.baseUnit?.id
+            ? referenceOf(unit)
+            : current;
+    return {
+        ...form,
+        baseUnit: referenceOf(unit),
+        purchaseUnit: follows(form.purchaseUnit),
+        salesUnit: follows(form.salesUnit),
+    };
+};
 
 const withCategory = (
     form: ItemForm,
@@ -176,6 +192,8 @@ export function ItemCard({
                     ? null
                     : form.negativeStock === 'refuse',
             is_blocked: form.isBlocked,
+            purchase_unit_id: form.purchaseUnit?.id ?? null,
+            sales_unit_id: form.salesUnit?.id ?? null,
         };
         try {
             const { body: saved } = record
@@ -239,10 +257,9 @@ export function ItemCard({
                             canManage
                             onSaved={(unit) => {
                                 close();
-                                setForm((current) => ({
-                                    ...current,
-                                    baseUnit: referenceOf(unit),
-                                }));
+                                setForm((current) =>
+                                    withBaseUnit(current, unit),
+                                );
                             }}
                             onClose={close}
                         />
@@ -410,10 +427,7 @@ export function ItemCard({
                                         field="base_unit_id"
                                         value={form.baseUnit}
                                         onChange={(unit) =>
-                                            setForm({
-                                                ...form,
-                                                baseUnit: referenceOf(unit),
-                                            })
+                                            setForm(withBaseUnit(form, unit))
                                         }
                                         disabled={!editing || unitLocked}
                                         error={errors.base_unit_id?.[0]}
@@ -429,6 +443,51 @@ export function ItemCard({
                                                 : undefined
                                         }
                                     />
+                                    {record && (
+                                        <>
+                                            <ItemUnitLookup
+                                                itemId={record.id}
+                                                label="Satuan beli"
+                                                field="purchase_unit_id"
+                                                value={form.purchaseUnit}
+                                                onChange={(unit) =>
+                                                    setForm({
+                                                        ...form,
+                                                        purchaseUnit:
+                                                            referenceOf(unit),
+                                                    })
+                                                }
+                                                disabled={!editing}
+                                                error={
+                                                    errors.purchase_unit_id?.[0]
+                                                }
+                                                hint="Satuan yang terisi lebih dulu di baris penerimaan barang ini. Satuan kemasan seperti kotak ditambahkan di Satuan barang."
+                                                portalContainer={
+                                                    portalContainer
+                                                }
+                                            />
+                                            <ItemUnitLookup
+                                                itemId={record.id}
+                                                label="Satuan jual"
+                                                field="sales_unit_id"
+                                                value={form.salesUnit}
+                                                onChange={(unit) =>
+                                                    setForm({
+                                                        ...form,
+                                                        salesUnit:
+                                                            referenceOf(unit),
+                                                    })
+                                                }
+                                                disabled={!editing}
+                                                error={
+                                                    errors.sales_unit_id?.[0]
+                                                }
+                                                portalContainer={
+                                                    portalContainer
+                                                }
+                                            />
+                                        </>
+                                    )}
                                     <FormControl
                                         error={errors.is_blocked?.[0]}
                                         hint="Barang yang diblokir tidak bisa dipilih di dokumen stok baru."
