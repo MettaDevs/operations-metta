@@ -4566,5 +4566,29 @@
                 "outputStructure": "detailed"
             }
         }
+    },
+    "pharmacySetupShow": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/setup",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacySetupUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PUT",
+                "path": "/api/modules/pharmacy/v1/setup",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
     }
 }

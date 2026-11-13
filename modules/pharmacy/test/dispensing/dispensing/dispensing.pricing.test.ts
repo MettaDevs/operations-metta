@@ -30,8 +30,9 @@ type StoredLine = {
 
 // Harga obat di penyerahan: dihitung saat Siapkan dari harga dasar barang, kelompok harga pembeli di resep (dari event
 // resep), kelompok grading obat, dan grading harga obat, lalu disalin ke bill_farmasi_detail dan tidak berubah saat
-// grading diubah sesudahnya. Batal siapkan lalu Siapkan lagi menghitung ulang. Isi baris dibaca lewat SQL. Butuh
-// PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
+// grading diubah sesudahnya. Batal siapkan lalu Siapkan lagi menghitung ulang. Harga satuan dibulatkan menurut setelan
+// farmasi saat disiapkan. Isi baris dibaca lewat SQL. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST
+// kosong.
 describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -260,5 +261,63 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
         expect(line?.harga_satuan).toBe(
             String(Math.round(Number(line?.harga_dasar) * 10)),
         );
+    });
+
+    test('Siapkan rounds the unit price to the pharmacy setting of that time: four decimals stay, the line amount is rounded to sen, and a later setting change leaves the line', async () => {
+        await json(
+            await pharmacy.admin.patch(`${inventoryApi}/items/${item.id}`, {
+                code: item.code,
+                name: item.name,
+                base_unit_id: pharmacy.uom.id,
+                base_price: '84.3817',
+                version: (
+                    await pool.unsafe<{ version: number }[]>(
+                        'select version from gd_m_barang where id = $1',
+                        [item.id],
+                    )
+                )[0]?.version,
+            }),
+            200,
+        );
+        const setting = async (
+            unit_price_decimals: number,
+            version: number | null,
+        ) =>
+            json<{ data: { version: number } }>(
+                await pharmacy.admin.put(`${api}/setup`, {
+                    unit_price_decimals,
+                    version,
+                }),
+                200,
+            );
+        const columns = async (billId: string) => [
+            ...(await pool.unsafe<{ harga_satuan: string }[]>(
+                'select harga_satuan::text as harga_satuan from bill_farmasi_detail where bill_farmasi_id = $1',
+                [billId],
+            )),
+        ];
+
+        const saved = await setting(4, null);
+        const exact = await prepare(await prescribe(null));
+        const exactBill = exact.dispensing?.id ?? '';
+        expect(await columns(exactBill)).toEqual([
+            { harga_satuan: '843.8170' },
+        ]);
+        expect(exact.lines.map((line) => line.price)).toEqual([
+            { unit_price: '843.817', discount_percent: '0', amount: '1687.63' },
+        ]);
+        expect(exact.dispensing?.total_amount).toBe('1687.63');
+
+        await setting(0, saved.data.version);
+        expect(await columns(exactBill)).toEqual([
+            { harga_satuan: '843.8170' },
+        ]);
+        const whole = await prepare(await prescribe(null));
+        expect(await columns(whole.dispensing?.id ?? '')).toEqual([
+            { harga_satuan: '844.0000' },
+        ]);
+        expect(whole.lines.map((line) => line.price)).toEqual([
+            { unit_price: '844', discount_percent: '0', amount: '1688' },
+        ]);
     });
 });

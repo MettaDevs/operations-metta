@@ -398,7 +398,7 @@ export function DrugPriceCard({
                                     'markupPercent',
                                     'markup_percent',
                                     '% naik',
-                                    'Harga jual = harga dasar x (1 + % naik / 100), dibulatkan ke rupiah.',
+                                    'Harga jual = harga dasar x (1 + % naik / 100), dibulatkan menurut Setelan farmasi.',
                                 )}
                                 {amount(
                                     'discountPercent',
