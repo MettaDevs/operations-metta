@@ -8,6 +8,10 @@ import {
     vitals,
     type Clinic,
 } from '../../support/examination-fixture.ts';
+import {
+    eventContract,
+    outboxEnvelopes,
+} from '../../../../../test/support/event-contracts.ts';
 
 type Entry = { id: string; version: number };
 type Line = {
@@ -502,5 +506,73 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                 )
             ).status,
         ).toBe(404);
+    });
+    test('saving procedures sends the frozen charges to the cashier, and saving again replaces them instead of adding', async () => {
+        const id = await examination(types.general);
+        await saved(id, [
+            line(procedures.injection, 3),
+            line(procedures.unpriced),
+        ]);
+        await saved(id, [line(procedures.injection, 2)]);
+        await saved(id, [line(procedures.injection, 2)]);
+        const [visit] = await pool.unsafe<{ id: string }[]>(
+            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
+            [id],
+        );
+        const contract = await eventContract(
+            'healthcare.examination.charges-replaced.v1',
+        );
+        const sent = (
+            await outboxEnvelopes(
+                pool,
+                clinic.tenantId,
+                'healthcare.examination.charges-replaced.v1',
+            )
+        ).filter((envelope) => envelope.data.visit_id === visit?.id);
+        expect(sent).toHaveLength(3);
+        for (const envelope of sent)
+            expect(contract.safeParse(envelope).error).toBeUndefined();
+        expect(
+            (
+                sent.at(-1)?.data.lines as {
+                    procedure_id: string;
+                    quantity: string;
+                    tariff: string;
+                }[]
+            ).map((row) => [row.procedure_id, row.quantity, row.tariff]),
+        ).toEqual([[procedures.injection, '2', '50000']]);
+        const charges = await pool.unsafe<
+            {
+                kode: string;
+                qty: string;
+                nilai: string;
+                komponen: number;
+                live: boolean;
+            }[]
+        >(
+            `select r.jenis_biaya_kode as kode, trim_scale(r.qty)::text as qty, trim_scale(r.nilai)::text as nilai,
+                    (select count(*)::int from rincian_biaya_komponen c
+                     where c.rincian_biaya_id = r.id and c.deleted_at is null) as komponen,
+                    r.deleted_at is null as live
+             from rincian_biaya r where r.tenant_id = $1 and r.kunjungan_id = $2
+             order by r.deleted_at nulls first, r.jenis_biaya_kode`,
+            [clinic.tenantId, visit!.id],
+        );
+        expect([...charges]).toEqual([
+            {
+                kode: 'J-INJ',
+                qty: '2',
+                nilai: '50000',
+                komponen: 2,
+                live: true,
+            },
+            {
+                kode: expect.any(String),
+                qty: '1',
+                nilai: '0',
+                komponen: 0,
+                live: false,
+            },
+        ]);
     });
 });

@@ -4,7 +4,10 @@ import {
     type JsonObject,
 } from '../../../../../src/platform/database/index.ts';
 import { publishEvent } from '../../../../../src/platform/events/index.ts';
-import { eventContract } from '../../../../../test/support/event-contracts.ts';
+import {
+    eventContract,
+    outboxEnvelopes,
+} from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
     api,
@@ -544,5 +547,32 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
             ['10 TAB', null],
             ['0 TAB', '5 TAB'],
         ]);
+    });
+    test('a visit whose destinations are all finished reaches the cashier list in the shape of its contract', async () => {
+        const [visit] = await pool.unsafe<{ id: string }[]>(
+            'select registrasi_id as id from sim_tr_registrasi_tujuan where id = $1',
+            [earlier],
+        );
+        const contract = await eventContract('healthcare.visit.completed.v1');
+        const sent = (
+            await outboxEnvelopes(
+                pool,
+                clinic.tenantId,
+                'healthcare.visit.completed.v1',
+            )
+        ).filter((envelope) => envelope.data.visit_id === visit?.id);
+        expect(sent).toHaveLength(1);
+        expect(contract.safeParse(sent[0]).error).toBeUndefined();
+        const [cashier] = await pool.unsafe<
+            { status: string; pasien_nrm: string }[]
+        >(
+            'select status, pasien_nrm from kunjungan_kasir where tenant_id = $1 and kunjungan_id = $2',
+            [clinic.tenantId, visit!.id],
+        );
+        expect(cashier?.status).toBe('selesai');
+        expect(cashier?.pasien_nrm).toBe(
+            (sent[0]?.data.patient as { medical_record_number: string })
+                .medical_record_number,
+        );
     });
 });

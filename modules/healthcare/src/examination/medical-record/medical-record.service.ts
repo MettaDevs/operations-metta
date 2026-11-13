@@ -29,6 +29,7 @@ import {
     type OptionGroup,
     type PanelName,
 } from './medical-record.fields.ts';
+import { publishExaminationCharges } from './charges.events.ts';
 import { ExaminationOrders, practitionerId } from './medical-record.orders.ts';
 import {
     examinationPanels,
@@ -820,13 +821,19 @@ export class MedicalRecords {
                     drugAllergies,
                     stamp,
                 );
-            if (procedures)
+            if (procedures) {
                 await this.orders.writeProcedures(
                     recordId,
                     destination.visit_id,
                     procedures,
                     stamp,
                 );
+                await publishExaminationCharges(
+                    this.db,
+                    this.workspace.tenantId,
+                    recordId,
+                );
+            }
             if (prescriptions)
                 await this.orders.writePrescriptions(
                     recordId,

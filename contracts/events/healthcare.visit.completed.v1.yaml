@@ -1,0 +1,137 @@
+asyncapi: 3.0.0
+info:
+  title: healthcare.visit.completed.v1
+  version: 1.0.0
+  description: |
+    Kunjungan selesai diperiksa (StatusPeriksa = 'CO' sistem lama): semua tujuannya selesai. Diterbitkan module layanan
+    kesehatan (`modules/healthcare`) di transaksi yang sama dengan perubahan status kunjungan menjadi `selesai`. Isinya
+    potret pasien, tipe pasien, penjamin, dan section kunjungan, supaya kasir menampilkan Daftar Pembayaran tanpa
+    membaca tabel layanan kesehatan.
+
+    Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime. Penerima: kasir Core
+    (`src/foundation/billing/charge/`), yang mencatatnya di `kunjungan_kasir`.
+channels:
+  healthcare.visit.completed.v1:
+    address: healthcare.visit.completed.v1
+    messages:
+      visitCompleted:
+        $ref: '#/components/messages/visitCompleted'
+operations:
+  publishVisitCompleted:
+    action: send
+    channel:
+      $ref: '#/channels/healthcare.visit.completed.v1'
+    messages:
+      - $ref: '#/channels/healthcare.visit.completed.v1/messages/visitCompleted'
+components:
+  messages:
+    visitCompleted:
+      name: visitCompleted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          org_unit_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: healthcare.visit.completed.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity kunjungan.
+        org_unit_id:
+          type: string
+          format: uuid
+          description: Operating unit kunjungan.
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/visit'
+    named:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    visit:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          visit_id,
+          registration_number,
+          date,
+          registered_at,
+          patient,
+          patient_type,
+          guarantor,
+          card_number,
+          sections,
+        ]
+      properties:
+        visit_id:
+          type: string
+          format: uuid
+        registration_number:
+          type: string
+          description: Nomor registrasi kunjungan (NoReg).
+        date:
+          type: string
+          format: date
+        registered_at:
+          type: string
+          format: date-time
+        patient:
+          type: object
+          additionalProperties: false
+          required: [id, medical_record_number, name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            medical_record_number:
+              type: string
+              description: NRM.
+            name:
+              type: string
+        patient_type:
+          $ref: '#/components/schemas/named'
+        guarantor:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/named'
+        card_number:
+          type: [string, 'null']
+        sections:
+          type: array
+          description: Section tujuan kunjungan, berurutan.
+          items:
+            $ref: '#/components/schemas/named'

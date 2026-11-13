@@ -38,6 +38,7 @@ import {
     refusedAction,
     type QueueAction,
 } from './queue.statuses.ts';
+import { publishVisitCompleted } from '../../registration/visit/visit.events.ts';
 
 export const nobodyWaitingMessage =
     'Belum ada pasien yang menunggu di poli ini.';
@@ -574,5 +575,11 @@ export class ExaminationQueue {
             'update sim_tr_registrasi set status = $3, updated_at = $4 where tenant_id = $1 and id = $2',
             [this.workspace.tenantId, visitId, to, stamp],
         );
+        if (to === 'selesai')
+            await publishVisitCompleted(
+                this.db,
+                this.workspace.tenantId,
+                visitId,
+            );
     }
 }

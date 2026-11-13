@@ -51,6 +51,7 @@ import {
     isVisitStatus,
     refusedTransition,
 } from './visit.statuses.ts';
+import { publishVisitCancelled } from './visit.events.ts';
 
 export const visitNumberReference = `${moduleId}.visit-number`;
 export const examinationNumberReference = `${moduleId}.examination-number`;
@@ -1125,6 +1126,11 @@ export class Visits {
                     stamp,
                     reason,
                 ],
+            );
+            await publishVisitCancelled(
+                this.db,
+                this.workspace.tenantId,
+                current.id,
             );
             const destinations = await this.db.rows(
                 z.object({ schedule_id: z.string().nullable() }),

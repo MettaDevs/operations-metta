@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { registerHealthcareEventHandlers } from '../modules/healthcare/src/index.ts';
 import { registerPharmacyEventHandlers } from '../modules/pharmacy/src/index.ts';
+import { registerBillingEventHandlers } from './foundation/billing/index.ts';
 import { registerOrganizationDefaults } from './foundation/number-sequence/index.ts';
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
@@ -25,6 +26,7 @@ registerOrganizationDefaults();
 // Event yang diterbitkan operasi worker diantar ke module penerimanya, sama dengan proses HTTP.
 registerPharmacyEventHandlers();
 registerHealthcareEventHandlers();
+registerBillingEventHandlers();
 startErrorReporting(config, 'worker');
 if (
     !config.CONTROL_PLANE_URL ||
