@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { base, ok } from '../http/index.ts';
 import {
+    coreAreas,
     navigationGroupSchema,
-    sysAdminArea,
     visibleNavigation,
 } from './navigation.ts';
 import { Workspace } from './workspace.ts';
@@ -115,7 +115,7 @@ export function shellRoutes() {
                     },
                     navigation: visibleNavigation(
                         [
-                            sysAdminArea,
+                            ...coreAreas,
                             ...moduleAreas.filter((area) =>
                                 usable.has(area.id),
                             ),

@@ -7,7 +7,7 @@ import {
     ShieldPlus,
     Users,
 } from 'lucide-react';
-import { sysAdminArea } from '../../../src/platform/access/navigation.ts';
+import { coreAreas } from '../../../src/platform/access/navigation.ts';
 import {
     navigationIcon,
     productIcon,
@@ -30,8 +30,10 @@ test('a rail group icon comes from its lucide name in the data, and an unknown o
     expect(navigationIcon(null)).toBe(Folder);
 });
 
-test('every Sys Admin icon is one the Shell knows', () => {
-    expect(productIcon(sysAdminArea.icon)).not.toBe(Boxes);
-    for (const group of sysAdminArea.groups)
-        expect(navigationIcon(group.icon ?? null)).not.toBe(Folder);
+test('every Core app icon is one the Shell knows', () => {
+    for (const area of coreAreas) {
+        expect(productIcon(area.icon)).not.toBe(Boxes);
+        for (const group of area.groups)
+            expect(navigationIcon(group.icon ?? null)).not.toBe(Folder);
+    }
 });

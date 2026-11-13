@@ -45,6 +45,9 @@ import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../module
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
 import { page as modulesPharmacySrcDrugSetupPharmacySetupPage } from '../modules/pharmacy/src/drug/setup/pharmacy-setup.page.tsx';
+import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
+import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
+import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
@@ -580,6 +583,32 @@ const modulesPharmacySrcDrugSetupPharmacySetupRoute = createRoute({
     staticData: { title: modulesPharmacySrcDrugSetupPharmacySetupPage.title },
 });
 
+const foundationBillingDashboardDashboardRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingDashboardDashboardPage.path,
+    component: foundationBillingDashboardDashboardPage.component,
+    staticData: { title: foundationBillingDashboardDashboardPage.title },
+});
+
+const foundationBillingMerchantMerchantsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingMerchantMerchantsPage.path,
+    component: foundationBillingMerchantMerchantsPage.component,
+    validateSearch: foundationBillingMerchantMerchantsPage.validateSearch,
+    staticData: { title: foundationBillingMerchantMerchantsPage.title },
+});
+
+const foundationBillingPaymentMethodPaymentMethodsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingPaymentMethodPaymentMethodsPage.path,
+    component: foundationBillingPaymentMethodPaymentMethodsPage.component,
+    validateSearch:
+        foundationBillingPaymentMethodPaymentMethodsPage.validateSearch,
+    staticData: {
+        title: foundationBillingPaymentMethodPaymentMethodsPage.title,
+    },
+});
+
 const foundationCalendarCalendarsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationCalendarCalendarsPage.path,
@@ -972,6 +1001,9 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDrugDrugDrugsRoute,
         modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
         modulesPharmacySrcDrugSetupPharmacySetupRoute,
+        foundationBillingDashboardDashboardRoute,
+        foundationBillingMerchantMerchantsRoute,
+        foundationBillingPaymentMethodPaymentMethodsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,
