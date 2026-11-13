@@ -81,11 +81,13 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
     }
     const guard = () =>
         withDatabase((db) =>
-            openClerk(db, {
-                tenantId,
-                legalEntityId,
-                userId: cashierUserId,
-            }),
+            db.transaction(() =>
+                openClerk(db, {
+                    tenantId,
+                    legalEntityId,
+                    userId: cashierUserId,
+                }),
+            ),
         );
 
     // Penolakan pintu pembayaran, atau null bila kasir boleh membayar.

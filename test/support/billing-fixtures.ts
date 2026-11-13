@@ -1,4 +1,6 @@
 import type postgres from 'postgres';
+import { Database } from '../../src/platform/database/index.ts';
+import { publishEvent } from '../../src/platform/events/index.ts';
 import type { Browser } from './operations-app.ts';
 import {
     createMember,
@@ -65,4 +67,77 @@ export async function createBillingBusiness(
     await admin.login(member.email, member.password);
     const legalEntityId = await legalEntity(admin, `PT ${name}`);
     return { tenantId, member, admin, legalEntityId };
+}
+
+// Event layanan kesehatan yang membawa kunjungan selesai dan biayanya ke kasir, masing-masing di transaksinya sendiri
+// seperti layanan kesehatan mengirimnya.
+export function visitCharges(
+    pool: postgres.Sql,
+    scope: { tenantId: string; legalEntityId: string },
+) {
+    async function withDatabase<T>(
+        work: (db: Database) => Promise<T>,
+    ): Promise<T> {
+        const connection = await pool.reserve();
+        try {
+            return await work(
+                new Database(connection, undefined, Bun.randomUUIDv7()),
+            );
+        } finally {
+            connection.release();
+        }
+    }
+    const publish = (type: string, data: Record<string, unknown>) =>
+        withDatabase((db) =>
+            db.transaction(() =>
+                publishEvent(db, {
+                    type: type as `${string}.${string}.${string}.v1`,
+                    tenantId: scope.tenantId,
+                    legalEntityId: scope.legalEntityId,
+                    data: data as Record<string, string>,
+                }),
+            ),
+        );
+    // Kunjungan selesai dengan satu baris tindakan per tarif.
+    async function completedVisit(visitId: string, tariffs: string[]) {
+        await publish('healthcare.visit.completed.v1', {
+            visit_id: visitId,
+            registration_number: `REG-${visitId.slice(-4)}`,
+            date: '2026-11-13',
+            registered_at: '2026-11-13T01:00:00Z',
+            patient: {
+                id: Bun.randomUUIDv7(),
+                medical_record_number: visitId.slice(-6),
+                name: 'Pasien Uji',
+            },
+            patient_type: { id: Bun.randomUUIDv7(), name: 'UMUM' },
+            guarantor: null,
+            card_number: null,
+            sections: [{ id: Bun.randomUUIDv7(), name: 'Poli Umum' }],
+        });
+        await publish('healthcare.examination.charges-replaced.v1', {
+            examination_id: Bun.randomUUIDv7(),
+            visit_id: visitId,
+            registration_number: `REG-${visitId.slice(-4)}`,
+            lines: tariffs.map((tariff, index) => ({
+                line_id: Bun.randomUUIDv7(),
+                procedure_id: Bun.randomUUIDv7(),
+                procedure_code: `J-${index}`,
+                procedure_name: `Tindakan ${index}`,
+                service_group_id: null,
+                service_group_name: 'Tindakan Medis',
+                service_group_order: 1,
+                category_name: null,
+                quantity: '1',
+                tariff,
+                doctor_id: null,
+                doctor_name: null,
+                section_id: Bun.randomUUIDv7(),
+                section_name: 'Poli Umum',
+                date: '2026-11-13',
+                components: [],
+            })),
+        });
+    }
+    return { withDatabase, publish, completedVisit };
 }

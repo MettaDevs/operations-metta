@@ -106,16 +106,21 @@ const violates = (error: unknown, constraint: string) =>
     error instanceof Error &&
     error.message.includes(constraint);
 
-// Clerk yang sedang berjalan milik kasir itu di legal entity itu. Pembayaran memanggilnya sebelum menyimpan, dan
-// ditolak dengan pesan sistem lama bila kasir belum Clerk Start.
+// Clerk yang sedang berjalan milik kasir itu di legal entity itu. Pembayaran memanggilnya di dalam transaksi Simpan,
+// sebelum mengunci kunjungannya, dan ditolak dengan pesan sistem lama bila kasir belum Clerk Start. Baris clerk dikunci
+// bersama sampai pembayaran selesai, jadi Clerk End menunggu pembayaran yang sedang disimpan, dan pembayaran yang datang
+// sesudah Clerk End mengunci clerk menunggu lalu ditolak.
 export async function openClerk(
     db: Database,
     scope: Scope,
 ): Promise<{ id: string; code: string }> {
+    if (!db.inTransaction)
+        throw new Error('openClerk wajib di dalam transaksi pembayaran.');
     const found = await db.one(
         z.object({ id: z.string(), code: z.string() }),
         `select id, kode as code from clerk
-         where tenant_id = $1 and legal_entity_id = $2 and user_id = $3 and status = 'start'`,
+         where tenant_id = $1 and legal_entity_id = $2 and user_id = $3 and status = 'start'
+         for share`,
         [scope.tenantId, scope.legalEntityId, scope.userId],
     );
     if (!found) validation({ _form: clerkNotStartedMessage });
@@ -397,68 +402,91 @@ export class Clerks {
         if (!parsed.success)
             validation({ counts: 'Isi jumlah fisik per jenis bayar.' });
         await checkedPassword(parsed.data.password, password);
-        const session = { tenantId: this.scope.tenantId, id: clerk.id };
-        const sales = await clerkSales(this.db, session);
-        const openings = await clerkOpenings(this.db, session);
-        const methods = countedMethods(await this.methods(), sales, openings);
-        const byId = new Map(methods.map((method) => [method.id, method]));
-        const currency = new Currency(this.db, this.scope.tenantId);
+        const scope = this.scope;
+        const currency = new Currency(this.db, scope.tenantId);
         const precision = await currency.precision(localCurrencyCode);
-        const counts = new Map<string, string>();
-        const errors: Record<string, string> = {};
-        for (const [methodId, raw] of Object.entries(
-            parsed.data.counts ?? {},
-        )) {
-            const method = byId.get(methodId);
-            if (!method) {
-                errors.counts =
-                    'Ada jenis bayar yang tidak dihitung saat Clerk End. Muat ulang, lalu isi lagi.';
-                continue;
+        // Baris clerk dikunci lebih dulu, lalu penjualannya dihitung di transaksi yang sama. Simpan dan Batal pembayaran
+        // mengunci baris yang sama sebelum kunjungannya, jadi pembayaran yang sedang disimpan atau dibatalkan selesai
+        // dulu dan terhitung apa adanya, dan pembayaran yang datang sesudahnya mendapati clerk ini sudah Clerk End.
+        await this.db.transaction(async () => {
+            const locked = await this.db.one(
+                z.object({ status: z.string(), version: z.number() }),
+                `select status, version from clerk where tenant_id = $1 and id = $2 for update`,
+                [scope.tenantId, clerk.id],
+            );
+            if (locked?.status !== 'start')
+                coded(409, 'clerk_ended', 'Proses Clerk End sudah dilakukan');
+            const session = { tenantId: scope.tenantId, id: clerk.id };
+            const sales = await clerkSales(this.db, session);
+            const openings = await clerkOpenings(this.db, session);
+            const methods = countedMethods(
+                await this.methods(),
+                sales,
+                openings,
+            );
+            const byId = new Map(methods.map((method) => [method.id, method]));
+            const counts = new Map<string, string>();
+            const errors: Record<string, string> = {};
+            for (const [methodId, raw] of Object.entries(
+                parsed.data.counts ?? {},
+            )) {
+                const method = byId.get(methodId);
+                if (!method) {
+                    errors.counts =
+                        'Ada jenis bayar yang tidak dihitung saat Clerk End. Muat ulang, lalu isi lagi.';
+                    continue;
+                }
+                // Jumlah fisik dalam mata uang jenis bayar itu, dengan presisi jumlahnya.
+                const decimals = (
+                    await currency.precision(method.currency_code)
+                ).amount_decimals;
+                const amount =
+                    String(raw).trim() === ''
+                        ? '0'
+                        : amountInput(raw, decimals);
+                if (amount === null)
+                    errors[`counts.${methodId}`] =
+                        `Isi jumlah 0 atau lebih, ${decimalsHint(decimals)}.`;
+                else counts.set(methodId, amount);
             }
-            // Jumlah fisik dalam mata uang jenis bayar itu, dengan presisi jumlahnya.
-            const decimals = (await currency.precision(method.currency_code))
-                .amount_decimals;
-            const amount =
-                String(raw).trim() === '' ? '0' : amountInput(raw, decimals);
-            if (amount === null)
-                errors[`counts.${methodId}`] =
-                    `Isi jumlah 0 atau lebih, ${decimalsHint(decimals)}.`;
-            else counts.set(methodId, amount);
-        }
-        // Kurs hari Clerk End untuk menilai selisih mata uang asing; kurs yang belum diisi ditolak di isiannya.
-        const today = await this.db.one(
-            z.object({ date: z.string() }),
-            `select (now() at time zone l.timezone)::date::text as date
-             from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
-            [this.scope.tenantId, this.scope.legalEntityId],
-        );
-        const date = today?.date ?? nowSql().slice(0, 10);
-        const rates = new Map<string, Decimal>();
-        for (const method of methods) {
-            const rate = await currency.findRate(method.currency_code, date);
-            if (rate) rates.set(method.id, rate);
-            else
-                errors[`counts.${method.id}`] = missingRateMessage(
+            // Kurs hari Clerk End untuk menilai selisih mata uang asing; kurs yang belum diisi ditolak di isiannya.
+            const today = await this.db.one(
+                z.object({ date: z.string() }),
+                `select (now() at time zone l.timezone)::date::text as date
+                 from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
+                [scope.tenantId, scope.legalEntityId],
+            );
+            const date = today?.date ?? nowSql().slice(0, 10);
+            const rates = new Map<string, Decimal>();
+            for (const method of methods) {
+                const rate = await currency.findRate(
                     method.currency_code,
                     date,
                 );
-        }
-        if (Object.keys(errors).length) validation(errors);
-        const closed = closeClerk(
-            methods,
-            sales,
-            openings,
-            counts,
-            rates,
-            (value) => roundAmount(value, precision),
-        );
-        await this.db.transaction(async () => {
+                if (rate) rates.set(method.id, rate);
+                else
+                    errors[`counts.${method.id}`] = missingRateMessage(
+                        method.currency_code,
+                        date,
+                    );
+            }
+            if (Object.keys(errors).length) validation(errors);
+            if (locked.version !== expectedVersion(request, body))
+                coded(409, 'stale_version', staleMessage);
+            const closed = closeClerk(
+                methods,
+                sales,
+                openings,
+                counts,
+                rates,
+                (value) => roundAmount(value, precision),
+            );
             const stamp = nowSql();
-            const updated = await this.db.execute(
+            await this.db.execute(
                 `update clerk set status = 'end', waktu_akhir = $1, jumlah_transaksi = $2, jumlah_uang_awal = $3,
                                   jumlah_total_system = $4, jumlah_total_clerk = $5, jumlah_total_selisih = $6,
                                   updated_at = $1
-                 where tenant_id = $7 and id = $8 and status = 'start' and version = $9`,
+                 where tenant_id = $7 and id = $8`,
                 [
                     stamp,
                     closed.transactions,
@@ -466,16 +494,14 @@ export class Clerks {
                     closed.systemTotal,
                     closed.clerkTotal,
                     closed.differenceTotal,
-                    this.scope.tenantId,
+                    scope.tenantId,
                     clerk.id,
-                    expectedVersion(request, body),
                 ],
             );
-            if (!updated) coded(409, 'stale_version', staleMessage);
             for (const line of closed.lines)
                 await this.db.insert('clerk_detail', {
                     id: Bun.randomUUIDv7(),
-                    tenant_id: this.scope.tenantId,
+                    tenant_id: scope.tenantId,
                     clerk_id: clerk.id,
                     jenis_bayar_id: line.paymentMethodId,
                     mata_uang:
