@@ -138,6 +138,12 @@ const rules: { name: string; bad: string; good: string; message: string }[] = [
         message: 'Form harus memakai noValidate',
     },
     {
+        name: 'a disabled button still shows the title that explains it',
+        bad: `const buttonVariants = cva('inline-flex disabled:pointer-events-none disabled:opacity-50'); <Button disabled title="Simpan dulu" className="disabled:pointer-events-none">Posting</Button>;`,
+        good: `const buttonVariants = cva('inline-flex disabled:opacity-50'); <Button disabled title="Simpan dulu">Posting</Button>;`,
+        message: 'jangan pakai disabled:pointer-events-none',
+    },
+    {
         name: 'no browser leave-page popup',
         bad: `event.returnValue = '';`,
         good: `event.preventDefault();`,
