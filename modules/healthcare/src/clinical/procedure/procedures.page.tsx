@@ -17,12 +17,20 @@ import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
-import { api, definePage, orpc } from '@core/platform/shell/index.ts';
+import { toast } from 'sonner';
+import {
+    api,
+    definePage,
+    errorText,
+    orpc,
+    type ApiBody,
+} from '@core/platform/shell/index.ts';
 import { ProcedureCard, type Procedure } from './procedure-card.tsx';
 
 // Tindakan milik klinik, dipilih di baris Biaya Tindakan pemeriksaan.
 
 const route = getRouteApi('/_app/healthcare/clinical/procedures');
+type Row = ApiBody<'healthcareProcedureList'>['data'][number];
 const ALL = 'all';
 type Search = z.infer<typeof searchSchema>;
 const searchSchema = z.object({
@@ -57,7 +65,18 @@ function ProceduresPage(): ReactNode {
                 ),
             replace: true,
         });
-    const loader = useCallback<ListLoader<Procedure>>(
+    // Kartu memuat tindakan beserta tab Detail Harga, yang tidak ikut di baris daftar.
+    const show = async (row: Row) => {
+        try {
+            const { body } = await api.healthcareProcedureShow({
+                params: { id: row.id },
+            });
+            setOpen(body.data);
+        } catch (caught) {
+            toast.error(errorText(caught, 'Tindakan belum bisa dibuka.'));
+        }
+    };
+    const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.healthcareProcedureList(
                 {
@@ -200,8 +219,8 @@ function ProceduresPage(): ReactNode {
                     showRowNumbers
                     actionsPlacement="inline"
                     actions={[{ id: 'open', label: 'Buka' }]}
-                    onRowAction={(_, procedure) => setOpen(procedure)}
-                    onRowClick={(procedure) => setOpen(procedure)}
+                    onRowAction={(_, procedure) => void show(procedure)}
+                    onRowClick={(procedure) => void show(procedure)}
                     sort={list.sort}
                     onSortChange={list.onSortChange}
                     serverSort

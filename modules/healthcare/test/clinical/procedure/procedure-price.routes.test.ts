@@ -152,15 +152,23 @@ describe.skipIf(!process.env.DB_HOST)('procedure price tab', () => {
     }, 120_000);
 
     test('two price rows keep their components, and each row price is the plain sum of its components', async () => {
+        await created(clinic.admin, `${api}/patient-types`, {
+            code: 'PU',
+            name: 'Pasien umum',
+            is_default: true,
+            price_group_id: groups.general.id,
+        });
         const metadata = await json<{
             price_groups: { code: string }[];
+            default_price_group_id: string | null;
             doctors: { id: string }[];
-            charge_components: { code: string }[];
         }>(await clinic.admin.get(`${api}/procedures/metadata`), 200);
         expect(metadata.price_groups.map((group) => group.code)).toEqual([
             'ASR',
             'UMUM',
         ]);
+        // Tipe Pasien bawaan form harga sistem lama (UMUM) menjadi kelompok harga tipe pasien bawaan.
+        expect(metadata.default_price_group_id).toBe(groups.general.id);
         expect(metadata.doctors.map((doctor) => doctor.id)).toContain(
             clinic.doctor,
         );

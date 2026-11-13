@@ -180,6 +180,19 @@ export class ProcedurePrices {
                  where tenant_id = $1 and deleted_at is null order by kode`,
                 tenant,
             ),
+            // Tipe Pasien bawaan form harga sistem lama adalah UMUM (JenisPasienID 3), tipe pasien bawaan pasien baru.
+            // Di sini: kelompok harga tipe pasien bawaan tenant.
+            default_price_group_id:
+                (
+                    await this.db.one(
+                        z.object({ id: z.string() }),
+                        `select t.kelompok_harga_id as id from sim_m_tipe_pasien t
+                         join kelompok_harga g on g.tenant_id = t.tenant_id and g.id = t.kelompok_harga_id
+                         where t.tenant_id = $1 and t.bawaan and t.deleted_at is null
+                           and g.aktif and g.deleted_at is null`,
+                        tenant,
+                    )
+                )?.id ?? null,
             care_classes: await ordered('sim_m_kelas'),
             specialties: await this.db.rows(
                 z.object({ id: z.string(), name: z.string() }),
