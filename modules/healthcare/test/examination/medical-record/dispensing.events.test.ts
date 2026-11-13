@@ -166,7 +166,14 @@ describe.skipIf(!process.env.DB_HOST)(
             }
         }
 
-        async function hand(prescriptionId: string, quantities: string[]) {
+        async function hand(
+            prescriptionId: string,
+            quantities: string[],
+            people: {
+                pharmacist: string;
+                assistant: string | null;
+            } = { pharmacist: Bun.randomUUIDv7(), assistant: null },
+        ) {
             const data = {
                 dispensing_id: Bun.randomUUIDv7(),
                 dispensing_number: 'U1-FAR-00000001',
@@ -178,8 +185,10 @@ describe.skipIf(!process.env.DB_HOST)(
                     code: 'FARMASI',
                     name: 'Farmasi',
                 },
-                pharmacist: { id: Bun.randomUUIDv7(), name: 'Apoteker Uji' },
-                assistant: null,
+                pharmacist: { id: people.pharmacist, name: 'Apoteker Uji' },
+                assistant: people.assistant
+                    ? { id: people.assistant, name: 'Asisten Uji' }
+                    : null,
                 lines: lineIds.map((line, index) => ({
                     prescription_line_id: line.id,
                     item: { id: line.drug_id, code: 'X', name: 'Obat' },
@@ -281,6 +290,43 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(shown?.lines.map((line) => line.dispensed_quantity)).toEqual(
                 ['10 TAB', '4 TAB'],
             );
+        });
+
+        test('the prescription keeps the practitioners linked to the pharmacist and assistant accounts at hand-over', async () => {
+            const shell = await json<{ auth: { user: { id: string } } }>(
+                await clinic.admin.get('/api/v1/shell'),
+                200,
+            );
+            const nakes = () =>
+                pool.unsafe<
+                    {
+                        pharmacist: string | null;
+                        assistant: string | null;
+                    }[]
+                >(
+                    `select apoteker_nakes_id as pharmacist, asisten_apoteker_nakes_id as assistant
+                     from sim_tr_resep where id = $1`,
+                    [prescription.id],
+                );
+            await pool.unsafe(
+                'update sim_m_nakes set user_id = $1 where id = $2',
+                [shell.auth.user.id, clinic.nurse],
+            );
+            try {
+                await hand(prescription.id, ['10', '4'], {
+                    pharmacist: shell.auth.user.id,
+                    assistant: Bun.randomUUIDv7(),
+                });
+                expect((await nakes())[0]).toEqual({
+                    pharmacist: clinic.nurse,
+                    assistant: null,
+                });
+            } finally {
+                await pool.unsafe(
+                    'update sim_m_nakes set user_id = null where id = $1',
+                    [clinic.nurse],
+                );
+            }
         });
 
         test('the same event delivered twice is recorded once, and an unknown prescription is skipped', async () => {

@@ -3,7 +3,7 @@ import type { Workspace } from '@core/platform/access/index.ts';
 import { isoSql, type Database } from '@core/platform/database/index.ts';
 import { isRecord, lookupId } from '@core/platform/http/index.ts';
 import { duplicateAllergyMessage } from './medical-record.messages.ts';
-import { text } from './medical-record.orders.ts';
+import { practitionerOfUser, text } from './medical-record.orders.ts';
 import {
     allergyCategories,
     allergyItemSchema,
@@ -364,6 +364,13 @@ export class PatientAllergies {
                     updated_at: stamp,
                 });
         }
+        const recorder = list.added.length
+            ? await practitionerOfUser(
+                  this.db,
+                  this.tenantId,
+                  this.workspace.userId,
+              )
+            : null;
         for (const row of list.added)
             await this.db.insert('sim_m_pasien_alergi', {
                 id: Bun.randomUUIDv7(),
@@ -378,6 +385,7 @@ export class PatientAllergies {
                 pemeriksaan_id: recordId,
                 dicatat_pada: stamp,
                 dicatat_oleh: this.workspace.userId,
+                dicatat_oleh_nakes_id: recorder,
                 created_at: stamp,
                 updated_at: stamp,
             });
