@@ -3,10 +3,17 @@ import type { Bind, Database } from '@core/platform/database/index.ts';
 import { dateSchema, lookupId } from '@core/platform/http/index.ts';
 import { Decimal } from '@core/platform/money/index.ts';
 import {
+    lookupProcedurePrice,
+    type ChosenPrice,
+    type TariffStep,
+} from './procedure-price.lookup.ts';
+import {
     componentNumberFields,
     isPriceLocation,
+    isProcedureTariff,
     priceNumberFields,
     priceSumFields,
+    type PriceLocation,
     type PriceNumberKind,
 } from './procedure-price.options.ts';
 import {
@@ -142,6 +149,82 @@ const invalidNumber = {
     money: 'diisi angka 0 atau lebih, paling banyak empat angka di belakang koma.',
     number: 'diisi angka, paling banyak empat angka di belakang koma.',
 } as const;
+
+// Baris harga hidup tindakan untuk pencarian tarif, urutan id uuidv7 (urutan dibuat), padanan ListHargaID.
+const candidatesSql = `
+    select id, kelompok_harga_id as "priceGroupId", kelas_id as "careClassId", spesialisasi_id as "specialtyId",
+           nakes_id as "doctorId", kategori_operasi_id as "operationCategoryId", pasien_ktp as "ktpPatient",
+           cyto as cito, lokasi as location, harga_lama::text as "previousPrice", harga_baru::text as "newPrice",
+           tgl_harga_baru::text as "newPriceDate", harga_bpjs_lama::text as "previousBpjsPrice",
+           harga_bpjs::text as "bpjsPrice", tgl_harga_baru_bpjs::text as "bpjsPriceDate"
+    from sim_m_tindakan_harga
+    where tenant_id = $1 and tindakan_id = $2 and deleted_at is null
+    order by id`;
+const candidateRow = z.object({
+    id: z.string(),
+    priceGroupId: z.string(),
+    careClassId: z.string().nullable(),
+    specialtyId: z.string().nullable(),
+    doctorId: z.string().nullable(),
+    operationCategoryId: z.string().nullable(),
+    ktpPatient: z.boolean(),
+    cito: z.boolean(),
+    location: z.string(),
+    previousPrice: z.string(),
+    newPrice: z.string(),
+    newPriceDate: z.string(),
+    previousBpjsPrice: z.string(),
+    bpjsPrice: z.string(),
+    bpjsPriceDate: z.string().nullable(),
+});
+
+// Komponen baris harga terpilih seperti GetDetailKomponenTarifNonKerjasama dan GetDetailKomponenTarifJKN: tarif BPJS
+// memakai Harga Lama/Baru BPJS dan Insentif HC (%) sebagai harga dan persen insentifnya. Urutan kode komponen, padanan
+// kunci KomponenBiayaID sistem lama.
+const componentsSql = `
+    select c.komponen_biaya_id as "chargeComponentId", b.kode as "chargeComponentCode",
+           b.nama as "chargeComponentName", c.qty::text as quantity, c.harga_awal::text as "initialPrice",
+           c.harga_awal_lama::text as "previousInitialPrice", c.persen_pajak_titipan::text as "taxDepositPercent",
+           c.include_insentif as "includesIncentive",
+           (case when $3::boolean then c.harga_bpjs_lama else c.harga_lama end)::text as "previousPrice",
+           (case when $3::boolean then c.harga_bpjs else c.harga_baru end)::text as price,
+           (case when $3::boolean then c.persen_insentif_hc else c.persen_insentif end)::text as "incentivePercent"
+    from sim_m_tindakan_harga_komponen c
+    join komponen_biaya b on b.tenant_id = c.tenant_id and b.id = c.komponen_biaya_id
+    where c.tenant_id = $1 and c.tindakan_harga_id = $2 and c.deleted_at is null
+    order by b.kode, c.id`;
+const lookupComponent = z.object({
+    chargeComponentId: z.string(),
+    chargeComponentCode: z.string(),
+    chargeComponentName: z.string(),
+    quantity: z.string(),
+    initialPrice: z.string(),
+    previousInitialPrice: z.string(),
+    taxDepositPercent: z.string(),
+    includesIncentive: z.boolean(),
+    previousPrice: z.string(),
+    price: z.string(),
+    incentivePercent: z.string(),
+});
+export type LookupComponent = z.infer<typeof lookupComponent>;
+
+// Tarif jasa yang didapat tindakan untuk pasien. step: langkah pencarian yang terpilih (null untuk tipe tanpa tarif);
+// price null berarti tanpa tarif, juga bila saringan sesudah langkah mengosongkan hasilnya.
+export type ProcedurePriceLookup = {
+    step: TariffStep | null;
+    price: (ChosenPrice & { components: LookupComponent[] }) | null;
+};
+
+// Masukan dari poli: tindakan, tipe pasien kunjungan, dokter pemeriksa (nakes) atau kosong, kelas atau kosong, KTP
+// pasien, dan lokasi (RJ). Cyto dan kategori operasi tetap 0 dan ALL, seperti panggilan poli sistem lama.
+export type ProcedurePriceLookupInput = {
+    procedureId: string;
+    patientTypeId: string;
+    practitionerId: string | null;
+    careClassId: string | null;
+    ktpPatient: boolean;
+    location: PriceLocation | null;
+};
 
 function keysOf<T extends object>(object: T): (keyof T & string)[] {
     return Object.keys(object).filter((key): key is keyof T & string =>
@@ -461,6 +544,87 @@ export class ProcedurePrices {
                     });
             }
         }
+    }
+
+    // Tarif tindakan untuk pasien, pengganti GetTarifBiayaNonKerjasama/GetTarifBiayaJKN_BUFF dan saringan PHP-nya.
+    // null bila tindakan atau tipe pasien tidak ada. Tipe pasien yang dihapus atau nonaktif tetap dibaca, karena
+    // kunjungan yang sudah memakainya tetap menunjuknya. Nakes dibaca tanpa melihat statusnya, seperti Vw_Dokter.
+    async lookup(
+        input: ProcedurePriceLookupInput,
+    ): Promise<ProcedurePriceLookup | null> {
+        if (!lookupId(input.procedureId) || !lookupId(input.patientTypeId))
+            return null;
+        const procedure = await this.db.one(
+            z.object({
+                variesByCito: z.boolean(),
+                variesByOperationCategory: z.boolean(),
+            }),
+            `select variabel_cyto as "variesByCito", variabel_kategori_operasi as "variesByOperationCategory"
+             from sim_m_tindakan where tenant_id = $1 and id = $2 and deleted_at is null`,
+            [this.tenantId, input.procedureId],
+        );
+        const patientType = await this.db.one(
+            z.object({
+                tariff: z.string(),
+                priceGroupId: z.string().nullable(),
+            }),
+            `select tarif_jasa as tariff, coalesce(kelompok_harga_tarif_id, kelompok_harga_id) as "priceGroupId"
+             from sim_m_tipe_pasien where tenant_id = $1 and id = $2`,
+            [this.tenantId, input.patientTypeId],
+        );
+        if (
+            !procedure ||
+            !patientType ||
+            !isProcedureTariff(patientType.tariff)
+        )
+            return null;
+        // Nakes yang tidak dikenal tetap dicari sebagai dokter tanpa spesialis, seperti DokterID yang tidak ada di
+        // Vw_Dokter.
+        const doctorId =
+            input.practitionerId !== null && lookupId(input.practitionerId)
+                ? input.practitionerId
+                : null;
+        const doctor = doctorId
+            ? {
+                  id: doctorId,
+                  specialtyId:
+                      (
+                          await this.db.one(
+                              z.object({ id: z.string().nullable() }),
+                              `select spesialisasi_id as id from sim_m_nakes where tenant_id = $1 and id = $2`,
+                              [this.tenantId, doctorId],
+                          )
+                      )?.id ?? null,
+              }
+            : null;
+        const prices = (
+            await this.db.rows(candidateRow, candidatesSql, [
+                this.tenantId,
+                input.procedureId,
+            ])
+        ).flatMap(({ location, ...row }) =>
+            isPriceLocation(location) ? [{ ...row, location }] : [],
+        );
+        const result = lookupProcedurePrice(
+            { ...procedure, prices },
+            {
+                tariff: patientType.tariff,
+                priceGroupId: patientType.priceGroupId,
+                doctor,
+                careClassId: input.careClassId,
+                cito: false,
+                operationCategoryId: null,
+                ktpPatient: input.ktpPatient,
+                location: input.location,
+            },
+        );
+        if (!result.price) return { step: result.step, price: null };
+        const components = await this.db.rows(lookupComponent, componentsSql, [
+            this.tenantId,
+            result.price.priceRowId,
+            result.price.kind === 'bpjs',
+        ]);
+        return { step: result.step, price: { ...result.price, components } };
     }
 
     // Tindakan yang dihapus membawa harganya, supaya master yang hanya dipakai harga itu bisa dihapus.

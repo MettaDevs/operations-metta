@@ -47,7 +47,9 @@ export type PriceLookupRequest = {
     location: PriceLocation | null;
 };
 
+// kind general: Harga Baru, Harga Lama, Tanggal Harga Baru. kind bpjs: kolom BPJS-nya.
 export type ChosenPrice = {
+    kind: TariffPrice;
     priceRowId: string;
     price: string;
     previousPrice: string;
@@ -122,10 +124,12 @@ export const tariffSteps = {
 } as const satisfies Record<string, StepPattern>;
 export type TariffStep = keyof typeof tariffSteps;
 
+// general: Harga Baru, saringan cyto dan kategori operasi GetTarifBiayaNonKerjasama, dan saringan KTP PHP.
+// bpjs: Harga Baru BPJS tanpa saringan itu, karena PHP memanggil GetTarifBiayaJKN_BUFF langsung.
+export type TariffPrice = 'general' | 'bpjs';
+
 type TariffMethod = {
-    // general: Harga Baru, saringan cyto dan kategori operasi GetTarifBiayaNonKerjasama, dan saringan KTP PHP.
-    // bpjs: Harga Baru BPJS tanpa saringan itu, karena PHP memanggil GetTarifBiayaJKN_BUFF langsung.
-    price: 'general' | 'bpjs';
+    price: TariffPrice;
     steps: readonly TariffStep[];
 };
 
@@ -270,12 +274,14 @@ export function lookupProcedurePrice(
         price:
             method.price === 'general'
                 ? {
+                      kind: 'general',
                       priceRowId: chosen.id,
                       price: chosen.newPrice,
                       previousPrice: chosen.previousPrice,
                       priceDate: chosen.newPriceDate,
                   }
                 : {
+                      kind: 'bpjs',
                       priceRowId: chosen.id,
                       price: chosen.bpjsPrice,
                       previousPrice: chosen.previousBpjsPrice,
