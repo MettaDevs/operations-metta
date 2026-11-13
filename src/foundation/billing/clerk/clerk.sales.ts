@@ -2,19 +2,29 @@ import { z } from 'zod';
 import type { Database } from '../../../platform/database/index.ts';
 import type { ClerkOpenings, ClerkSales } from './clerk.close.ts';
 
-// Penjualan kasir selama sesi: pembayaran yang membawa clerk itu dan tidak batal, jumlah dan nilainya, semua jenis
-// bayar, dan nilai per jenis bayar dalam mata uang lokal dan dalam mata uang jenis bayar itu. Sistem lama mencocokkan
-// pembayaran lewat user dan jam mulai clerk saja.
+// Uang yang diterima kasir selama sesi, per baris jenis bayar: baris pembayaran yang membawa clerk itu dan tidak batal,
+// ditambah pembayaran hutang (pelunasan bon) di clerk itu yang tidak batal, karena uang pelunasan juga masuk laci.
+// Pelunasan selalu mata uang lokal. Sistem lama mencocokkan pembayaran lewat user dan jam mulai clerk saja.
+const receiptsSql = `select d.jenis_bayar_id, d.nilai, d.nilai_valuta
+                     from kasir_detail d join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
+                     where k.tenant_id = $1 and k.clerk_id = $2 and k.status = 'diposting'
+                     union all
+                     select o.jenis_bayar_id, o.nilai, o.nilai
+                     from pembayaran_outstanding o
+                     where o.tenant_id = $1 and o.clerk_id = $2 and o.status = 'diposting'`;
+
+// Penjualan kasir selama sesi: jumlah transaksi (pembayaran dan pembayaran hutang) dan nilainya, semua jenis bayar, dan
+// nilai per jenis bayar dalam mata uang lokal dan dalam mata uang jenis bayar itu.
 export async function clerkSales(
     db: Database,
     clerk: { tenantId: string; id: string },
 ): Promise<ClerkSales> {
     const [header] = await db.rows(
         z.object({ transactions: z.number(), total: z.string() }),
-        `select count(*)::int as transactions,
-                coalesce((select sum(d.nilai) from kasir_detail d join kasir k on k.id = d.kasir_id
-                          where k.tenant_id = $1 and k.clerk_id = $2 and k.status = 'diposting'), 0)::text as total
-         from kasir where tenant_id = $1 and clerk_id = $2 and status = 'diposting'`,
+        `select (select count(*) from kasir where tenant_id = $1 and clerk_id = $2 and status = 'diposting')::int
+                + (select count(*) from pembayaran_outstanding
+                   where tenant_id = $1 and clerk_id = $2 and status = 'diposting')::int as transactions,
+                coalesce((select sum(nilai) from (${receiptsSql}) receipts), 0)::text as total`,
         [clerk.tenantId, clerk.id],
     );
     const byMethod = await db.rows(
@@ -23,10 +33,9 @@ export async function clerkSales(
             local: z.string(),
             currency_amount: z.string(),
         }),
-        `select d.jenis_bayar_id as id, sum(d.nilai)::text as local, sum(d.nilai_valuta)::text as currency_amount
-         from kasir_detail d join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
-         where k.tenant_id = $1 and k.clerk_id = $2 and k.status = 'diposting'
-         group by d.jenis_bayar_id`,
+        `select jenis_bayar_id as id, sum(nilai)::text as local, sum(nilai_valuta)::text as currency_amount
+         from (${receiptsSql}) receipts
+         group by jenis_bayar_id`,
         [clerk.tenantId, clerk.id],
     );
     return {

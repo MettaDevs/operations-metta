@@ -413,6 +413,12 @@ export const billingArea: NavigationAreaEntry = {
                     href: '/billing/payments',
                     permission: 'core.payment.read',
                 },
+                {
+                    id: 'receivable-payments',
+                    label: 'Pembayaran Hutang',
+                    href: '/billing/receivable-payments',
+                    permission: 'core.payment.read',
+                },
             ],
         },
         {

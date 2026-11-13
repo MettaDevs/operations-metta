@@ -17,6 +17,7 @@ import { paymentRoutes } from './payment/payment.routes.ts';
 import { discountRoutes } from './discount/discount.routes.ts';
 import { merchantRoutes } from './merchant/merchant.routes.ts';
 import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
+import { receivablePaymentRoutes } from './receivable-payment/receivable-payment.routes.ts';
 
 // Kasir Core: jenis bayar (mJenisBayar sistem lama) dengan perilaku dari katalog di kode, merchan (SIMmMerchan), dan
 // clerk (SIMtrClerk), sesi kas kasir dari Clerk Start sampai Clerk End. Layarnya membentuk aplikasi Kasir di katalog
@@ -31,6 +32,7 @@ export {
     lockChargeForChange,
     patientTypeMessage,
 } from './payment/payment.service.ts';
+export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
 
 let registered = false;
 
@@ -54,5 +56,6 @@ export function billingRoutes() {
         ...clerkRoutes(),
         ...invoiceRoutes(),
         ...paymentRoutes(),
+        ...receivablePaymentRoutes(),
     };
 }

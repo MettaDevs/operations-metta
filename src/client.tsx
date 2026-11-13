@@ -54,6 +54,7 @@ import { page as foundationBillingInvoicePaymentPage } from './foundation/billin
 import { page as foundationBillingInvoicePaymentsPage } from './foundation/billing/invoice/payments.page.tsx';
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
+import { page as foundationBillingReceivablePaymentReceivablePaymentsPage } from './foundation/billing/receivable-payment/receivable-payments.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationCurrencyCurrenciesPage } from './foundation/currency/currencies.page.tsx';
@@ -672,6 +673,18 @@ const foundationBillingPaymentMethodPaymentMethodsRoute = createRoute({
     },
 });
 
+const foundationBillingReceivablePaymentReceivablePaymentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingReceivablePaymentReceivablePaymentsPage.path,
+    component:
+        foundationBillingReceivablePaymentReceivablePaymentsPage.component,
+    validateSearch:
+        foundationBillingReceivablePaymentReceivablePaymentsPage.validateSearch,
+    staticData: {
+        title: foundationBillingReceivablePaymentReceivablePaymentsPage.title,
+    },
+});
+
 const foundationCalendarCalendarsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationCalendarCalendarsPage.path,
@@ -1087,6 +1100,7 @@ const routeTree = rootRoute.addChildren([
         foundationBillingInvoicePaymentsRoute,
         foundationBillingMerchantMerchantsRoute,
         foundationBillingPaymentMethodPaymentMethodsRoute,
+        foundationBillingReceivablePaymentReceivablePaymentsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationCurrencyCurrenciesRoute,
