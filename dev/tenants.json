@@ -422,6 +422,37 @@
                         "rooms": ["R-PUSLING"]
                     }
                 ],
+                "procedure_groups": [
+                    { "code": "TM", "name": "Tindakan Medis" },
+                    { "code": "LAB", "name": "Laboratorium" }
+                ],
+                "procedure_categories": [
+                    { "code": "TND", "name": "Tindakan", "group": "TM" },
+                    { "code": "HEM", "name": "Hematologi", "group": "LAB" }
+                ],
+                "procedures": [
+                    {
+                        "code": "JAS0001",
+                        "name": "Konsultasi dokter umum",
+                        "group": "TM",
+                        "category": "TND",
+                        "sections": ["Poli Umum", "Pusling"]
+                    },
+                    {
+                        "code": "JAS0002",
+                        "name": "Jahit luka kecil",
+                        "group": "TM",
+                        "category": "TND",
+                        "sections": ["Poli Umum"]
+                    },
+                    {
+                        "code": "JAS0003",
+                        "name": "Hemoglobin",
+                        "group": "LAB",
+                        "category": "HEM",
+                        "sections": ["Pusling"]
+                    }
+                ],
                 "practitioners": [
                     {
                         "name": "dr. Contoh Sehat",

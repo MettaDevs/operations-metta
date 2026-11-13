@@ -243,6 +243,16 @@ function ProceduresPage(): ReactNode {
                                 procedure.group_name ?? '',
                         },
                         {
+                            id: 'category_name',
+                            header: 'Kategori',
+                            width: 200,
+                            cell: (procedure) => (
+                                <DataTableText>
+                                    {procedure.category_name ?? ''}
+                                </DataTableText>
+                            ),
+                        },
+                        {
                             id: 'status',
                             header: 'Status',
                             width: 110,
