@@ -48,9 +48,11 @@ export function Icd10Card({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: icd10 ? `${icd10.code} ${icd10.name}` : 'ICD-10 baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

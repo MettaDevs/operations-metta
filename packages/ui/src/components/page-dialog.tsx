@@ -37,6 +37,8 @@ import {
     DialogToolbar as PageDialogToolbar,
 } from './dialog';
 import { FieldHint } from './field';
+import { useConfirmation } from './use-confirmation';
+import { discardChangesConfirmation } from './use-record-transition';
 
 const popupEscapes = new WeakSet<KeyboardEvent>();
 const serverSnapshot = () => 0;
@@ -64,6 +66,8 @@ export type PageDialogRecord = {
     onShare?: () => void;
     mainNavigation?: React.ReactNode;
     secondaryNavigation?: React.ReactNode;
+    /** Kartu berisi perubahan yang belum disimpan; menutup kartu meminta konfirmasi lebih dulu. */
+    dirty?: boolean;
 };
 type RecordStore = ReturnType<
     typeof createPageDialogRecordStore<PageDialogRecord>
@@ -94,7 +98,7 @@ type PageDialogContentProps = Omit<
     React.ComponentPropsWithRef<typeof DialogPrimitive.Content>,
     'title'
 > &
-    PageDialogRecord & {
+    Omit<PageDialogRecord, 'dirty'> & {
         title: React.ReactNode;
         titleHint?: React.ReactNode;
         description?: React.ReactNode;
@@ -108,10 +112,39 @@ type PageDialogContentProps = Omit<
     };
 
 /** Kartu/pemilih halaman memakai stack R&D; konfirmasi kecil tetap memakai Dialog. */
-function PageDialog(
-    props: Omit<React.ComponentProps<typeof DialogPrimitive.Root>, 'modal'>,
-) {
-    return <DialogPrimitive.Root {...props} modal={false} />;
+function PageDialog({
+    onOpenChange,
+    ...props
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Root>, 'modal'>) {
+    const [recordStore] = React.useState(() =>
+        createPageDialogRecordStore<PageDialogRecord>(),
+    );
+    const { confirm, confirmation } = useConfirmation();
+
+    return (
+        <PageDialogRecordContext.Provider value={recordStore}>
+            <DialogPrimitive.Root
+                {...props}
+                modal={false}
+                onOpenChange={(open) => {
+                    // Escape, Kembali, dan Tutup lewat sini. Kartu yang melaporkan perubahan belum disimpan baru
+                    // ditutup setelah pengguna memilih membuangnya, siapa pun pembukanya, termasuk Baru di lookup.
+                    if (open || !recordStore.getRecord()?.dirty) {
+                        onOpenChange?.(open);
+
+                        return;
+                    }
+
+                    void confirm(discardChangesConfirmation).then((discard) => {
+                        if (discard) {
+                            onOpenChange?.(false);
+                        }
+                    });
+                }}
+            />
+            {confirmation}
+        </PageDialogRecordContext.Provider>
+    );
 }
 
 function PageDialogContent({
@@ -195,9 +228,6 @@ function PageDialogSurface({
     setExpanded: (expanded: boolean) => void;
 }) {
     const [id] = React.useState(() => Symbol('page-dialog'));
-    const [recordStore] = React.useState(() =>
-        createPageDialogRecordStore<PageDialogRecord>(),
-    );
     const nodeRef = React.useRef<HTMLDivElement>(null);
     React.useSyncExternalStore(
         subscribePageDialogs,
@@ -242,114 +272,112 @@ function PageDialogSurface({
     }, [active, host]);
 
     return (
-        <PageDialogRecordContext.Provider value={recordStore}>
-            <PageDialogContext.Provider
-                value={{
-                    count,
-                    active,
-                    expanded,
-                    setExpanded,
-                    busy,
-                    focusContent: () =>
-                        nodeRef.current
-                            ?.querySelector<HTMLElement>(
-                                '[data-page-dialog-body], [data-slot="dialog-body"], main',
-                            )
-                            ?.scrollTo({ top: 0 }),
+        <PageDialogContext.Provider
+            value={{
+                count,
+                active,
+                expanded,
+                setExpanded,
+                busy,
+                focusContent: () =>
+                    nodeRef.current
+                        ?.querySelector<HTMLElement>(
+                            '[data-page-dialog-body], [data-slot="dialog-body"], main',
+                        )
+                        ?.scrollTo({ top: 0 }),
+            }}
+        >
+            {active && (
+                <div
+                    className="core-page-dialog-backdrop"
+                    data-shell={host !== document.body}
+                    aria-hidden="true"
+                />
+            )}
+            <DialogPrimitive.Content
+                {...props}
+                {...(!description && !props['aria-describedby']
+                    ? { 'aria-describedby': undefined }
+                    : {})}
+                ref={nodeRef}
+                className={cn('core-page-dialog', className)}
+                data-slot="page-dialog-content"
+                data-shell={host !== document.body}
+                data-active={active}
+                data-expanded={expanded}
+                aria-hidden={!active || undefined}
+                inert={!active || undefined}
+                style={{
+                    ...style,
+                    '--stack-depth': depth,
+                    zIndex: 31 + Math.max(index, 0),
+                }}
+                onInteractOutside={(event) => {
+                    onInteractOutside?.(event);
+                    event.preventDefault();
+                }}
+                onEscapeKeyDown={(event) => {
+                    onEscapeKeyDown?.(event);
+
+                    if (
+                        busy ||
+                        !active ||
+                        !(event.target instanceof Node) ||
+                        !nodeRef.current?.contains(event.target) ||
+                        popupEscapes.has(event) ||
+                        nodeRef.current.querySelector(
+                            '[role="combobox"][aria-expanded="true"]',
+                        )
+                    ) {
+                        event.preventDefault();
+                    }
+                }}
+                onCloseAutoFocus={(event) => {
+                    onCloseAutoFocus?.(event);
+                    event.preventDefault();
                 }}
             >
-                {active && (
+                <div
+                    ref={forwardedRef}
+                    className="core-page-dialog-contents"
+                    data-slot="page-dialog-contents"
+                >
+                    <PageDialogHeader
+                        title={title}
+                        titleHint={titleHint}
+                        description={description}
+                        defaults={{
+                            recordTitle,
+                            onEdit,
+                            onDelete,
+                            editing,
+                            recordUrl,
+                            onShare,
+                            mainNavigation,
+                            secondaryNavigation,
+                        }}
+                        actions={headerActions}
+                        onNew={onNew}
+                        navigation={navigation}
+                    />
+                    {children}
+                </div>
+                {active && navigation && (
+                    <RecordNavigationButtons
+                        navigation={navigation}
+                        busy={busy}
+                        edges
+                    />
+                )}
+                {!active && (
                     <div
-                        className="core-page-dialog-backdrop"
-                        data-shell={host !== document.body}
+                        className="core-page-dialog-inactive"
+                        data-slot="page-dialog-inactive"
                         aria-hidden="true"
                     />
                 )}
-                <DialogPrimitive.Content
-                    {...props}
-                    {...(!description && !props['aria-describedby']
-                        ? { 'aria-describedby': undefined }
-                        : {})}
-                    ref={nodeRef}
-                    className={cn('core-page-dialog', className)}
-                    data-slot="page-dialog-content"
-                    data-shell={host !== document.body}
-                    data-active={active}
-                    data-expanded={expanded}
-                    aria-hidden={!active || undefined}
-                    inert={!active || undefined}
-                    style={{
-                        ...style,
-                        '--stack-depth': depth,
-                        zIndex: 31 + Math.max(index, 0),
-                    }}
-                    onInteractOutside={(event) => {
-                        onInteractOutside?.(event);
-                        event.preventDefault();
-                    }}
-                    onEscapeKeyDown={(event) => {
-                        onEscapeKeyDown?.(event);
-
-                        if (
-                            busy ||
-                            !active ||
-                            !(event.target instanceof Node) ||
-                            !nodeRef.current?.contains(event.target) ||
-                            popupEscapes.has(event) ||
-                            nodeRef.current.querySelector(
-                                '[role="combobox"][aria-expanded="true"]',
-                            )
-                        ) {
-                            event.preventDefault();
-                        }
-                    }}
-                    onCloseAutoFocus={(event) => {
-                        onCloseAutoFocus?.(event);
-                        event.preventDefault();
-                    }}
-                >
-                    <div
-                        ref={forwardedRef}
-                        className="core-page-dialog-contents"
-                        data-slot="page-dialog-contents"
-                    >
-                        <PageDialogHeader
-                            title={title}
-                            titleHint={titleHint}
-                            description={description}
-                            defaults={{
-                                recordTitle,
-                                onEdit,
-                                onDelete,
-                                editing,
-                                recordUrl,
-                                onShare,
-                                mainNavigation,
-                                secondaryNavigation,
-                            }}
-                            actions={headerActions}
-                            onNew={onNew}
-                            navigation={navigation}
-                        />
-                        {children}
-                    </div>
-                    {active && navigation && (
-                        <RecordNavigationButtons
-                            navigation={navigation}
-                            busy={busy}
-                            edges
-                        />
-                    )}
-                    {!active && (
-                        <div
-                            className="core-page-dialog-inactive"
-                            data-slot="page-dialog-inactive"
-                            aria-hidden="true"
-                        />
-                    )}
-                </DialogPrimitive.Content>
-            </PageDialogContext.Provider>
-        </PageDialogRecordContext.Provider>
+            </DialogPrimitive.Content>
+        </PageDialogContext.Provider>
     );
 }
 

@@ -133,9 +133,11 @@ export function DrugCard({
         }),
     );
     const title = (value: Drug) => `${value.code} ${value.name}`;
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: drug ? title(drug) : 'Obat baru',
         editing,
+        dirty,
     });
     const unit = choices(
         metadata?.units ?? [],

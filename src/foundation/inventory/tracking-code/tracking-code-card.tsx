@@ -90,11 +90,13 @@ export function TrackingCodeCard({
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
     const { confirm, confirmation } = useConfirmation();
     const idPrefix = useId();
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Profil pelacakan baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

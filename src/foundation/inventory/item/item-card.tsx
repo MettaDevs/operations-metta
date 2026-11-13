@@ -142,6 +142,7 @@ export function ItemCard({
     usePageDialogRecord({
         recordTitle: record ? `${record.code} ${record.name}` : 'Barang baru',
         editing,
+        dirty,
         recordUrl: record
             ? `/sysadmin/inventory/items?item=${record.id}`
             : undefined,

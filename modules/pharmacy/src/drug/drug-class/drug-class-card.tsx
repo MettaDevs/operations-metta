@@ -43,11 +43,13 @@ export function DrugClassCard({
     const [message, setMessage] = useState<string | null>(null);
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Golongan obat baru',
         editing: canManage,
+        dirty,
     });
 
     const run = async (

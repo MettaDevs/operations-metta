@@ -63,7 +63,10 @@ parameter `size` milik Dialog biasa tidak dipakai. Tidak memerlukan provider.
 Di Shell, portal otomatis memakai outlet konten sehingga search/navbar tetap tersedia.
 Halaman bawah tetap mounted, menjadi inert dan meredup; draft, scroll, dan ukuran
 tersimpan ketika kembali. Escape menutup lapisan teratas, setelah popup field; fokus
-kembali ke pemanggil. Di layar sempit halaman memenuhi konten, sedangkan jumlah lapisan
+kembali ke pemanggil. Kartu yang memanggil `usePageDialogRecord({ dirty })` tidak
+ditutup Escape, Kembali, atau Tutup sebelum pengguna memilih membuang perubahannya,
+siapa pun pembukanya; pemanggil cukup menutup kartu di `onOpenChange` tanpa konfirmasi
+sendiri. Di layar sempit halaman memenuhi konten, sedangkan jumlah lapisan
 masih terlihat. Motion menghormati prefers-reduced-motion. Di luar Shell, portal
 mengikuti viewport. Dialog konfirmasi kecil, AlertDialog, tooltip dan FieldHint tetap
 memakai komponen masing-masing. Halaman penuh biasa tidak otomatis diubah menjadi modal.
