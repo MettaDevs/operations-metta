@@ -97,6 +97,8 @@ function RelationshipDialog({
     const [validTo, setValidTo] = useState(
         editing === 'new' ? '' : (editing.valid_to ?? ''),
     );
+    const values = JSON.stringify([choice, other?.id, validFrom, validTo]);
+    const [opened] = useState(values);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -162,6 +164,7 @@ function RelationshipDialog({
     return (
         <PageDialog
             open
+            dirty={values !== opened}
             onOpenChange={(open) => {
                 if (!open && !busy) onClose();
             }}

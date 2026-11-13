@@ -351,6 +351,10 @@ function CreateOrganizationDialog({
     return (
         <PageDialog
             open={open}
+            dirty={
+                JSON.stringify([data, details]) !==
+                JSON.stringify([blank, emptyPartyDraft])
+            }
             onOpenChange={(next) => {
                 if (processing) return;
                 if (!next) reset();

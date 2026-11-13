@@ -458,6 +458,7 @@ function PartyCardBody({
     usePageDialogRecord({
         recordTitle: editing ? form.name || 'Pihak baru' : party.name,
         editing,
+        dirty,
         onDelete: party && canManage ? () => void remove() : undefined,
         recordUrl: party
             ? `/sysadmin/address-book/parties?party=${party.id}`

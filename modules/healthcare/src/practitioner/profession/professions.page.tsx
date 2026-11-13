@@ -76,11 +76,13 @@ function ProfessionCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: profession
             ? `${profession.code} ${profession.name}`
             : 'Profesi baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

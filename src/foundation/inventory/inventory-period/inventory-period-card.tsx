@@ -72,14 +72,13 @@ export function InventoryPeriodCard({
     const [action, setAction] = useState<Action>('save');
     const { confirm, confirmation } = useConfirmation();
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record ? record.name : 'Periode persediaan baru',
         editing: can.manage,
+        dirty,
     });
     const dateLocked = record !== null && record.closed_stamp !== null;
-    const dirty =
-        record !== null &&
-        (form.endingDate !== record.ending_date || form.name !== record.name);
 
     const run = async (
         next: Action,

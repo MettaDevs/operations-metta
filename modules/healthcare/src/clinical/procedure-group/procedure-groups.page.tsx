@@ -80,11 +80,13 @@ function GroupCard({
     const { confirm, confirmation } = useConfirmation();
     const activeId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: group
             ? `${group.code} ${group.name}`
             : 'Kelompok tindakan baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

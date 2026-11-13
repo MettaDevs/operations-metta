@@ -79,9 +79,11 @@ function EntryCard({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: entry ? `${entry.code} ${entry.name}` : `${title} baru`,
         editing,
+        dirty,
     });
 
     const save = async () => {

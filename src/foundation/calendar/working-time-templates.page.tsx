@@ -80,11 +80,13 @@ function TemplateCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank());
     usePageDialogRecord({
         recordTitle: template
             ? `${template.code} · ${template.name}`
             : 'Template jam kerja baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

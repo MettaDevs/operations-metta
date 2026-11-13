@@ -74,9 +74,11 @@ function GuarantorCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: guarantor?.name ?? 'Penjamin baru',
         editing,
+        dirty,
     });
     const loader = useCallback<LookupLoader<PatientType>>(
         async ({ query, cursor, signal }) => {

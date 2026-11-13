@@ -325,6 +325,10 @@ function CreateDialog({
             {open && (
                 <PageDialog
                     open
+                    dirty={
+                        JSON.stringify([form, village]) !==
+                        JSON.stringify([formOf(null), initialVillage])
+                    }
                     onOpenChange={(next) => {
                         if (busy) return;
                         if (!next) reset();

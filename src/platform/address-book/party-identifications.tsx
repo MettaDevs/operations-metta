@@ -64,13 +64,14 @@ function IdentificationDialog({
             (editing !== 'new' && editing.type_code === type.code),
     );
     const contentRef = useRef<HTMLDivElement>(null);
-    const [typeCode, setTypeCode] = useState(
-        editing === 'new' ? (available[0]?.code ?? '') : editing.type_code,
-    );
-    // Nomor yang disamarkan tidak pernah dikirim balik: pengguna mengetik nomor lengkap untuk menggantinya.
-    const [number, setNumber] = useState(
-        editing === 'new' || editing.masked ? '' : editing.number,
-    );
+    const [initial] = useState(() => ({
+        typeCode:
+            editing === 'new' ? (available[0]?.code ?? '') : editing.type_code,
+        // Nomor yang disamarkan tidak pernah dikirim balik: pengguna mengetik nomor lengkap untuk menggantinya.
+        number: editing === 'new' || editing.masked ? '' : editing.number,
+    }));
+    const [typeCode, setTypeCode] = useState(initial.typeCode);
+    const [number, setNumber] = useState(initial.number);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -97,6 +98,7 @@ function IdentificationDialog({
     return (
         <PageDialog
             open
+            dirty={typeCode !== initial.typeCode || number !== initial.number}
             onOpenChange={(open) => {
                 if (!open && !busy) onClose();
             }}

@@ -778,6 +778,7 @@ function PatientCardBody({
             ? `${patient.nrm} · ${patient.name}`
             : form.name || 'Pasien baru',
         editing,
+        dirty,
         recordUrl: patient
             ? `/healthcare/patient/patients?patient=${patient.id}`
             : undefined,

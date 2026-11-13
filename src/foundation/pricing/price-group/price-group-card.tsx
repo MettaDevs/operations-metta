@@ -49,11 +49,13 @@ export function PriceGroupCard({
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
     const { confirm, confirmation } = useConfirmation();
     const activeId = useId();
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Kelompok harga baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

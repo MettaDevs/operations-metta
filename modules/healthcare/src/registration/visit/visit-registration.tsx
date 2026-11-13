@@ -1965,10 +1965,7 @@ export function VisitRegistration({
                 <PageDialog
                     open
                     onOpenChange={(open) => {
-                        if (!open && !patientBusy)
-                            patientTransition.request(() =>
-                                setCreatingPatient(false),
-                            );
+                        if (!open && !patientBusy) setCreatingPatient(false);
                     }}
                 >
                     <PageDialogContent

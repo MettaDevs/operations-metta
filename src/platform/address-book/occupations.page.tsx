@@ -90,6 +90,7 @@ function CreateOccupation({
             {open && (
                 <PageDialog
                     open
+                    dirty={name !== ''}
                     onOpenChange={(next) => {
                         if (!next && !busy) close();
                     }}

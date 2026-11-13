@@ -83,9 +83,11 @@ function RoomCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: room?.name ?? 'Ruangan baru',
         editing,
+        dirty,
     });
     const text = (
         id: 'code' | 'floor' | 'name' | 'display_name',

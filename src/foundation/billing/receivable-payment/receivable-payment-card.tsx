@@ -80,11 +80,15 @@ export function ReceivablePaymentCard({
             select: (response) => response.body,
         }),
     );
+    const dirty =
+        receivable !== null ||
+        JSON.stringify(form) !== JSON.stringify(emptyForm);
     usePageDialogRecord({
         recordTitle: record
             ? `${record.number} ${record.patient_name}`
             : 'Pembayaran hutang baru',
         editing,
+        dirty,
     });
     const money = (value: string) =>
         displayAmount(value, metadata?.amount_decimals ?? 0);

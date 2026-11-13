@@ -144,11 +144,13 @@ export function ProcedureCard({
             select: (response) => response.body,
         }),
     );
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: procedure
             ? `${procedure.code} ${procedure.name}`
             : 'Tindakan baru',
         editing,
+        dirty,
     });
     const groups = (metadata?.groups ?? []).filter(
         (group) => group.active || group.id === procedure?.group_id,

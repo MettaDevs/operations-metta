@@ -381,6 +381,7 @@ export function TransferOrderCard({
             ? `${order.number} ${order.to_location.name}`
             : 'Amprah baru',
         editing: editable || shipping || receiving,
+        dirty: !pristine || handled,
     });
 
     const error = (field: string) => errors[field]?.join(' ');

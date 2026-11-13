@@ -239,6 +239,7 @@ function AdjustmentForm({
             'Penyesuaian stok baru'
         ),
         editing,
+        dirty,
         recordUrl: document
             ? `/sysadmin/inventory/adjustments?document=${document.id}`
             : undefined,

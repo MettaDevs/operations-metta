@@ -123,9 +123,11 @@ function LifeCycleCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: lifeCycle?.name ?? 'Siklus hidup baru',
         editing,
+        dirty,
     });
 
     const months = (value: string, field: string, local: Errors) => {

@@ -76,9 +76,11 @@ export function MerchantCard({
     const { confirm, confirmation } = useConfirmation();
     const activeId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record ? `${record.code} ${record.name}` : 'Merchan baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

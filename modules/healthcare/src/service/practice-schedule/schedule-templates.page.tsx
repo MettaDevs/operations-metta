@@ -109,11 +109,13 @@ function TemplateCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: template
             ? `${template.practitioner_name} · ${dayNames[template.day] ?? ''}`
             : 'Template baru',
         editing,
+        dirty,
     });
     const loader = useCallback<LookupLoader<Practitioner>>(
         async ({ query, cursor, signal }) => {

@@ -125,9 +125,11 @@ function ScheduleCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const loader = usePractitionerLoader();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: `${schedule.practitioner_name} · ${displayDate(schedule.date)}`,
         editing,
+        dirty,
     });
 
     const save = async () => {
@@ -332,17 +334,22 @@ function ManualScheduleCard({
     onSaved: (schedule: Schedule) => void;
     onClose: () => void;
 }): ReactNode {
-    const [form, setForm] = useState<{
+    const blank: {
         date: string;
         practitioner: Practitioner | null;
         session_id: string | null;
         capacity: string;
-    }>({ date, practitioner: null, session_id: null, capacity: '' });
+    } = { date, practitioner: null, session_id: null, capacity: '' };
+    const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const loader = usePractitionerLoader();
-    usePageDialogRecord({ recordTitle: 'Jadwal tambahan', editing: true });
+    usePageDialogRecord({
+        recordTitle: 'Jadwal tambahan',
+        editing: true,
+        dirty: JSON.stringify(form) !== JSON.stringify(blank),
+    });
 
     const save = async () => {
         setBusy(true);
@@ -492,15 +499,20 @@ function GenerateCard({
     onDone: () => void;
     onClose: () => void;
 }): ReactNode {
-    const [form, setForm] = useState({
+    const blank = {
         from,
         to: addDays(from, 6),
         section: sectionId ?? ALL,
-    });
+    };
+    const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
-    usePageDialogRecord({ recordTitle: 'Generate jadwal', editing: true });
+    usePageDialogRecord({
+        recordTitle: 'Generate jadwal',
+        editing: true,
+        dirty: JSON.stringify(form) !== JSON.stringify(blank),
+    });
 
     const run = async () => {
         setBusy(true);

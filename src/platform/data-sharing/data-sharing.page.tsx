@@ -95,9 +95,11 @@ function DataSharingPolicyCard({
             select: (response) => response.body.data,
         }),
     );
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: policy?.name ?? 'Kebijakan data sharing baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

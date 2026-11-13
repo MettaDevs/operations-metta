@@ -249,6 +249,7 @@ export function StockCountCard({
             ? `${count.number} ${count.location.name}`
             : 'Opname baru',
         editing: editable,
+        dirty: !pristine,
     });
 
     const error = (field: string) => errors[field]?.join(' ');

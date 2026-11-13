@@ -88,11 +88,13 @@ function ItemUnitCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: entry
             ? `${entry.code} ${itemLabel(item)}`
             : `Satuan baru ${itemLabel(item)}`,
         editing,
+        dirty,
     });
     const loadUnits = useCallback<LookupLoader<Unit>>(
         async ({ query, cursor, signal }) => {

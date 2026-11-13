@@ -577,7 +577,7 @@ function PrescriptionsPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(next) => {
-                        if (!next) transition.request(closeCard);
+                        if (!next) closeCard();
                     }}
                 >
                     <PageDialogContent

@@ -72,9 +72,11 @@ export function DrugCard({
     const [creating, setCreating] = useState<'class' | 'grading' | null>(null);
     const gradingSwitchId = useId();
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(drug));
     usePageDialogRecord({
         recordTitle: `${drug.code} ${drug.name}`,
         editing: canManage,
+        dirty,
     });
 
     const save = async () => {

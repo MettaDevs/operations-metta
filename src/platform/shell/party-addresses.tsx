@@ -767,9 +767,10 @@ function LocationDialog({
     ) => void | Promise<void>;
 }) {
     const contentRef = useRef<HTMLDivElement>(null);
-    const [form, setFormState] = useState<LocationForm>(() =>
+    const [initial] = useState<LocationForm>(() =>
         editing === 'new' ? blankLocation('ID') : formOf(editing),
     );
+    const [form, setFormState] = useState(initial);
     const [chosen, setChosen] = useState<Sharable | null>(null);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -807,6 +808,10 @@ function LocationDialog({
     return (
         <PageDialog
             open
+            dirty={
+                chosen !== null ||
+                JSON.stringify(form) !== JSON.stringify(initial)
+            }
             onOpenChange={(open) => {
                 if (!open && !busy) onClose();
             }}
@@ -1541,7 +1546,7 @@ function ContactDialog({
     onSaved: (form: ContactForm) => void | Promise<void>;
 }) {
     const contentRef = useRef<HTMLDivElement>(null);
-    const [form, setForm] = useState<ContactForm>(() =>
+    const [initial] = useState<ContactForm>(() =>
         editing === 'new'
             ? {
                   type: 'phone',
@@ -1562,6 +1567,7 @@ function ContactDialog({
                   address_id: editing.address_id ?? '',
               },
     );
+    const [form, setForm] = useState(initial);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -1585,6 +1591,7 @@ function ContactDialog({
     return (
         <PageDialog
             open
+            dirty={JSON.stringify(form) !== JSON.stringify(initial)}
             onOpenChange={(open) => {
                 if (!open && !busy) onClose();
             }}

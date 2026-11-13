@@ -212,23 +212,25 @@ function ComposeCard({
     onClose: () => void;
 }): ReactNode {
     const range = monthRange(month);
-    const [form, setForm] = useState<{
+    const blank: {
         from: string;
         to: string;
         followBase: boolean;
         template: Reference | null;
-    }>({
+    } = {
         from: range.from,
         to: `${month.slice(0, 4)}-12-31`,
         followBase: false,
         template: null,
-    });
+    };
+    const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     usePageDialogRecord({
         recordTitle: `${calendar.code} · ${calendar.name}`,
         editing: true,
+        dirty: JSON.stringify(form) !== JSON.stringify(blank),
     });
     const compose = async () => {
         setBusy(true);
@@ -389,9 +391,11 @@ function DayCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank());
     usePageDialogRecord({
         recordTitle: `${weekdayNames[day.day_of_week] ?? ''}, ${displayDate(day.date)}`,
         editing,
+        dirty,
     });
     const controls: Control[] = calendar.base_calendar
         ? ['open', 'closed', 'base']
@@ -818,11 +822,13 @@ function CalendarCard({
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
     const loadCalendars = useCalendarLoader(calendar?.id ?? null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank());
     usePageDialogRecord({
         recordTitle: calendar
             ? `${calendar.code} · ${calendar.name}`
             : 'Kalender baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

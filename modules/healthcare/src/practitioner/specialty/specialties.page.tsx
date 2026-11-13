@@ -75,9 +75,11 @@ function SpecialtyCard({
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank());
     usePageDialogRecord({
         recordTitle: specialty?.name ?? 'Spesialis baru',
         editing,
+        dirty,
     });
     const setLine = (key: string, name: string) =>
         setForm({
