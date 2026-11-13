@@ -85,6 +85,7 @@ const clinicSchema = z.object({
     rooms: z.array(codeName),
     sections: z.array(
         z.object({
+            code: z.string(),
             name: z.string(),
             kind: z.string(),
             queue_prefix: z.string(),
@@ -1044,6 +1045,7 @@ async function seedClinic(
                 section.name,
                 {
                     operating_unit_id: unit,
+                    code: section.code,
                     name: section.name,
                     kind: section.kind,
                     queue_prefix: section.queue_prefix,

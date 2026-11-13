@@ -251,6 +251,7 @@ describe.skipIf(!process.env.DB_HOST)('examination diagnosis', () => {
             const section = (
                 await created(admin, `${api}/sections`, {
                     operating_unit_id: unit,
+                    code: `UMUM-${key.toUpperCase()}`,
                     name: `Poli Umum ${key.toUpperCase()}`,
                     kind: 'rawat_jalan',
                     room_ids: [room],

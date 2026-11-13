@@ -17,6 +17,7 @@ type Section = {
     operating_unit_name: string;
     name: string;
     kind: string;
+    code: string;
     document_code: string | null;
     bpjs_clinic_code: string | null;
     queue_mode: string;
@@ -38,7 +39,8 @@ type Metadata = {
 
 const api = '/api/modules/healthcare/v1/sections';
 
-// Master section: section per operating unit, nama unik per unit selama belum dihapus, Delete mengisi deleted_at,
+// Master section: section per operating unit, nama unik per unit dan kode unik per tenant selama belum dihapus, Delete
+// mengisi deleted_at,
 // tenant terpisah, dan setiap aksi dijaga permission-nya sendiri. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila
 // DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('section master', () => {
@@ -135,6 +137,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         });
         const section = await created({
             operating_unit_id: induk,
+            code: ' UMUM ',
             name: ' Poli Umum ',
             kind: 'rawat_jalan',
             document_code: 'PU',
@@ -143,6 +146,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             expect.objectContaining({
                 operating_unit_id: induk,
                 operating_unit_name: 'Puskesmas Induk',
+                code: 'UMUM',
                 name: 'Poli Umum',
                 kind: 'rawat_jalan',
                 document_code: 'PU',
@@ -153,6 +157,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const updated = await json<{ data: Section }>(
             await admin.patch(`${api}/${section.id}`, {
                 operating_unit_id: induk,
+                code: 'UMUM',
                 name: 'Poli Umum',
                 kind: 'rawat_jalan',
                 document_code: 'PU',
@@ -171,17 +176,19 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         expect(updated.data.version).toBe(section.version + 1);
         const stale = await admin.patch(`${api}/${section.id}`, {
             operating_unit_id: induk,
+            code: 'UMUM',
             name: 'Poli Umum',
             kind: 'rawat_jalan',
             version: section.version,
         });
         expect(stale.status).toBe(409);
         const [row] = await pool.unsafe<Record<string, unknown>[]>(
-            'select tenant_id, nama, jenis, kode_no_bukti, kode_poli_bpjs, aktif from sim_m_section where id = $1',
+            'select tenant_id, kode, nama, jenis, kode_no_bukti, kode_poli_bpjs, aktif from sim_m_section where id = $1',
             [section.id],
         );
         expect(row).toEqual({
             tenant_id: tenantId,
+            kode: 'UMUM',
             nama: 'Poli Umum',
             jenis: 'rawat_jalan',
             kode_no_bukti: 'PU',
@@ -190,7 +197,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         });
     }, 30_000);
 
-    test('the form refuses a missing name, a kind outside the catalog, and a legal entity as unit', async () => {
+    test('the form refuses a missing code and name, a kind outside the catalog, and a legal entity as unit', async () => {
         const response = await admin.post(api, {
             operating_unit_id: induk,
             name: '',
@@ -200,9 +207,15 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             response,
             422,
         );
-        expect(Object.keys(body.errors).sort()).toEqual(['kind', 'name']);
+        expect(Object.keys(body.errors).sort()).toEqual([
+            'code',
+            'kind',
+            'name',
+        ]);
+        expect(body.errors.code).toEqual(['Isi kode section.']);
         const notUnit = await admin.post(api, {
             operating_unit_id: company,
+            code: 'GIGI-LE',
             name: 'Poli Gigi',
             kind: 'rawat_jalan',
         });
@@ -217,11 +230,13 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
     test('a name is unique per operating unit until the section is deleted', async () => {
         const first = await created({
             operating_unit_id: induk,
+            code: 'GIGI',
             name: 'Poli Gigi',
             kind: 'rawat_jalan',
         });
         const twin = await admin.post(api, {
             operating_unit_id: induk,
+            code: 'GIGI-2',
             name: 'poli gigi',
             kind: 'rawat_jalan',
         });
@@ -231,6 +246,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         ).toBeDefined();
         await created({
             operating_unit_id: barat,
+            code: 'GIGI-BARAT',
             name: 'Poli Gigi',
             kind: 'rawat_jalan',
         });
@@ -253,6 +269,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             (
                 await admin.patch(`${api}/${first.id}`, {
                     operating_unit_id: induk,
+                    code: 'GIGI',
                     name: 'Poli Gigi',
                     kind: 'rawat_jalan',
                     version: first.version,
@@ -261,14 +278,78 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         ).toBe(404);
         await created({
             operating_unit_id: induk,
+            code: 'GIGI',
             name: 'Poli Gigi',
             kind: 'rawat_jalan',
         });
     }, 30_000);
 
+    test('a code is required, short, and unique per tenant regardless of case until the section is deleted', async () => {
+        const long = await admin.post(api, {
+            operating_unit_id: induk,
+            code: 'K'.repeat(21),
+            name: 'Poli KIA',
+            kind: 'rawat_jalan',
+        });
+        expect(
+            (await json<{ errors: Record<string, string[]> }>(long, 422))
+                .errors,
+        ).toEqual({ code: ['Paling panjang 20 karakter.'] });
+        const first = await created({
+            operating_unit_id: induk,
+            code: 'KIA',
+            name: 'Poli KIA',
+            kind: 'rawat_jalan',
+        });
+        // Alamat pemeriksaan tidak membawa unit, jadi kode juga tidak boleh dipakai section unit lain.
+        const twin = await admin.post(api, {
+            operating_unit_id: barat,
+            code: 'kia',
+            name: 'Poli KIA',
+            kind: 'rawat_jalan',
+        });
+        expect(
+            (await json<{ errors: Record<string, string[]> }>(twin, 422))
+                .errors,
+        ).toEqual({ code: ['Kode ini sudah dipakai section lain.'] });
+        const renamed = await admin.patch(`${api}/${first.id}`, {
+            operating_unit_id: induk,
+            code: 'Umum',
+            name: 'Poli KIA',
+            kind: 'rawat_jalan',
+            version: first.version,
+        });
+        expect(
+            (await json<{ errors: Record<string, string[]> }>(renamed, 422))
+                .errors,
+        ).toEqual({ code: ['Kode ini sudah dipakai section lain.'] });
+        expect(await names('q=kia')).toEqual(['Poli KIA']);
+        expect(
+            (
+                await admin.delete(`${api}/${first.id}`, {
+                    version: first.version,
+                })
+            ).status,
+        ).toBe(204);
+        const again = await created({
+            operating_unit_id: induk,
+            code: 'kia',
+            name: 'Poli KIA',
+            kind: 'rawat_jalan',
+        });
+        expect(again.code).toBe('kia');
+        const [codes] = await pool.unsafe<{ live: number; all: number }[]>(
+            `select count(*) filter (where deleted_at is null)::int as live, count(*)::int as all
+             from sim_m_section where tenant_id = $1 and lower(kode) = 'kia'`,
+            [tenantId],
+        );
+        expect(codes).toEqual({ live: 1, all: 2 });
+    }, 30_000);
+
     test('a new section shares one queue across its rooms unless told otherwise', async () => {
         const section = await created({
             operating_unit_id: induk,
+            code: 'LAB',
             name: 'Laboratorium',
             kind: 'penunjang',
         });
@@ -278,6 +359,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const scheduled = await json<{ data: Section }>(
             await admin.patch(`${api}/${section.id}`, {
                 operating_unit_id: induk,
+                code: 'LAB',
                 name: 'Laboratorium',
                 kind: 'penunjang',
                 queue_mode: 'per_jadwal',
@@ -290,6 +372,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         expect(scheduled.data.queue_prefix).toBe('L');
         const refused = await admin.patch(`${api}/${section.id}`, {
             operating_unit_id: induk,
+            code: 'LAB',
             name: 'Laboratorium',
             kind: 'penunjang',
             queue_mode: 'acak',
@@ -321,12 +404,14 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const r2 = await room(induk, 'L1R2');
         const morning = await created({
             operating_unit_id: induk,
+            code: 'PAGI',
             name: 'Poli Umum Pagi',
             kind: 'rawat_jalan',
             room_ids: [r1.id, r2.id],
         });
         const evening = await created({
             operating_unit_id: induk,
+            code: 'SORE',
             name: 'Poli Umum Sore',
             kind: 'rawat_jalan',
             room_ids: [r1.id],
@@ -346,6 +431,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const released = await json<{ data: Section }>(
             await admin.patch(`${api}/${morning.id}`, {
                 operating_unit_id: induk,
+                code: 'PAGI',
                 name: 'Poli Umum Pagi',
                 kind: 'rawat_jalan',
                 room_ids: [r2.id],
@@ -358,6 +444,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const untouched = await json<{ data: Section }>(
             await admin.patch(`${api}/${morning.id}`, {
                 operating_unit_id: induk,
+                code: 'PAGI',
                 name: 'Poli Umum Pagi',
                 kind: 'rawat_jalan',
                 version: released.data.version,
@@ -397,6 +484,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const own = await room(induk, 'I9');
         const refused = await admin.post(api, {
             operating_unit_id: induk,
+            code: 'MATA',
             name: 'Poli Mata',
             kind: 'rawat_jalan',
             room_ids: [own.id, west.id],
@@ -409,6 +497,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         ).toEqual(['room_ids']);
         const section = await created({
             operating_unit_id: induk,
+            code: 'MATA',
             name: 'Poli Mata',
             kind: 'rawat_jalan',
             room_ids: [own.id],
@@ -416,6 +505,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         // Pindah unit dengan ruangan unit lama ditolak, juga tanpa mengirim room_ids.
         const moved = await admin.patch(`${api}/${section.id}`, {
             operating_unit_id: barat,
+            code: 'MATA',
             name: 'Poli Mata',
             kind: 'rawat_jalan',
             version: section.version,
@@ -424,6 +514,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
         const movedWithRooms = await json<{ data: Section }>(
             await admin.patch(`${api}/${section.id}`, {
                 operating_unit_id: barat,
+                code: 'MATA',
                 name: 'Poli Mata',
                 kind: 'rawat_jalan',
                 room_ids: [west.id],
@@ -439,11 +530,13 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
     test('the list filters by unit, kind, and status, and searches by name', async () => {
         await created({
             operating_unit_id: barat,
+            code: 'IGD',
             name: 'IGD Barat',
             kind: 'gawat_darurat',
         });
         await created({
             operating_unit_id: barat,
+            code: 'FAR-1',
             name: 'Apotek Barat',
             kind: 'farmasi',
             is_active: false,
@@ -462,6 +555,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             ['IGD Barat', 'Poli Gigi', 'Poli Mata'],
         );
         expect(await names('q=apotek')).toEqual(['Apotek Barat']);
+        expect(await names('q=far-1')).toEqual(['Apotek Barat']);
     }, 30_000);
 
     test('another tenant cannot see or change these sections', async () => {
@@ -489,6 +583,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             (
                 await outsider.patch(`${api}/${section?.id}`, {
                     operating_unit_id: induk,
+                    code: 'DIAMBIL',
                     name: 'Diambil',
                     kind: 'kasir',
                     version: section?.version,
@@ -499,6 +594,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             (
                 await outsider.post(api, {
                     operating_unit_id: induk,
+                    code: 'ASING',
                     name: 'Poli Asing',
                     kind: 'rawat_jalan',
                 })
@@ -524,6 +620,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             (
                 await reader.post(api, {
                     operating_unit_id: induk,
+                    code: 'ANAK',
                     name: 'Poli Anak',
                     kind: 'rawat_jalan',
                 })
@@ -533,6 +630,7 @@ describe.skipIf(!process.env.DB_HOST)('section master', () => {
             (
                 await reader.patch(`${api}/${section.id}`, {
                     operating_unit_id: section.operating_unit_id,
+                    code: section.code,
                     name: section.name,
                     kind: section.kind,
                     version: section.version,

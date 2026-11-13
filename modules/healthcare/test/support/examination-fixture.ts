@@ -157,6 +157,7 @@ export async function createClinic(
         (
             await created(`${api}/sections`, {
                 operating_unit_id: unitId,
+                code: prefix,
                 name: sectionName,
                 kind: 'rawat_jalan',
                 queue_prefix: prefix,

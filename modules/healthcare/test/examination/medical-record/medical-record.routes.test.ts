@@ -244,6 +244,7 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         section = (
             await created(`${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'UMUM',
                 name: 'Poli Umum',
                 kind: 'rawat_jalan',
                 room_ids: [room],

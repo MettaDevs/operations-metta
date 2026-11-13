@@ -9,13 +9,20 @@ import {
 } from '@operations-metta/ui/card';
 import { displayDate } from '@operations-metta/ui/date-picker';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
+import { Select } from '@operations-metta/ui/select';
 import {
     useQuery,
     useQueryClient,
     useSuspenseQuery,
 } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { CheckCircle2, ListOrdered, Save } from 'lucide-react';
+import {
+    CheckCircle2,
+    ListOrdered,
+    Save,
+    Stethoscope,
+    Volume2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -42,14 +49,26 @@ import {
     DischargePanel,
     type ReferralRequest,
 } from '../discharge/discharge-panel.tsx';
-import { ageText, DestinationStatusText, timeText } from './queue-display.tsx';
+import {
+    ageText,
+    DestinationStatusText,
+    examinationNotFound,
+    Loading,
+    timeText,
+} from './queue-display.tsx';
+import { placeRoom, readPlace, rememberPlace } from './queue-place.ts';
+import { isDestinationStatus, nextStatus } from './queue.statuses.ts';
 
-// Pemeriksaan satu tujuan kunjungan: pasien dan kunjungannya, isi tab Rekam Medis poli sistem lama dengan satu Simpan
-// untuk seluruh tab, dan Selesai periksa. Isinya hanya bisa diubah sesudah Mulai periksa dan sebelum Selesai periksa.
+// Pemeriksaan satu tujuan kunjungan, di alamat NoReg lalu kode section seperti poly/outpatient/form/{NoReg}/{SectionID}
+// sistem lama, supaya nakes bisa mengirim tautannya. Isinya pasien dan kunjungannya, Panggil dan Mulai periksa seperti
+// panel Status Pasien sistem lama, isi tab Rekam Medis dengan satu Simpan untuk seluruh tab, dan Selesai periksa. Isinya
+// hanya bisa diubah sesudah Mulai periksa dan sebelum Selesai periksa.
 
-const route = getRouteApi('/_app/healthcare/examination/queue/$destinationId');
+const route = getRouteApi(
+    '/_app/healthcare/examination/queue/$registrationNumber/$sectionCode',
+);
 
-type Entry = ApiBody<'healthcareExaminationShow'>['data'];
+type Entry = ApiBody<'healthcareExaminationFind'>['data'];
 type Errors = Record<string, string[]>;
 
 const notStartedMessage =
@@ -70,58 +89,31 @@ function Fact({
     );
 }
 
-function Loading({
-    query,
-    notFound,
-    failed,
-    loading,
-}: {
-    query: { isError: boolean; error: unknown; refetch: () => unknown };
-    notFound: string;
-    failed: string;
-    loading: string;
-}): ReactNode {
-    return (
-        <div className="space-y-3 p-6">
-            <p
-                role={query.isError ? 'alert' : 'status'}
-                className={
-                    query.isError
-                        ? 'text-sm text-destructive'
-                        : 'text-sm text-muted-foreground'
-                }
-            >
-                {query.isError
-                    ? query.error instanceof ApiError &&
-                      query.error.status === 404
-                        ? notFound
-                        : errorText(query.error, failed)
-                    : loading}
-            </p>
-            {query.isError && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void query.refetch()}
-                >
-                    Coba lagi
-                </Button>
-            )}
-        </div>
+function ExaminationPage(): ReactNode {
+    const { registrationNumber, sectionCode } = route.useParams();
+    const entry = useQuery(
+        orpc.healthcareExaminationFind.queryOptions({
+            input: { params: { registrationNumber, sectionCode } },
+            select: (response) => response.body.data,
+        }),
     );
+    if (!entry.data)
+        return (
+            <Loading
+                query={entry}
+                notFound={examinationNotFound}
+                failed="Kunjungan belum dapat dimuat."
+                loading="Memuat kunjungan…"
+            />
+        );
+    return <Examination entry={entry.data} />;
 }
 
-function ExaminationPage(): ReactNode {
-    const { destinationId } = route.useParams();
+function Examination({ entry }: { entry: Entry }): ReactNode {
+    const destinationId = entry.id;
     const { data: metadata } = useSuspenseQuery(
         orpc.healthcareExaminationMetadata.queryOptions({
             select: (response) => response.body,
-        }),
-    );
-    const entry = useQuery(
-        orpc.healthcareExaminationShow.queryOptions({
-            input: { params: { id: destinationId } },
-            select: (response) => response.body.data,
         }),
     );
     const recordMetadata = useQuery(
@@ -142,22 +134,11 @@ function ExaminationPage(): ReactNode {
     // farmasi, Selesai periksa) tetap terlihat.
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
-    const notFound =
-        'Kunjungan tidak ditemukan di legal entity dan unit kerja aktif.';
-    if (!entry.data)
-        return (
-            <Loading
-                query={entry}
-                notFound={notFound}
-                failed="Kunjungan belum dapat dimuat."
-                loading="Memuat kunjungan…"
-            />
-        );
     if (!record.data || !recordMetadata.data)
         return (
             <Loading
                 query={record.isError ? record : recordMetadata}
-                notFound={notFound}
+                notFound={examinationNotFound}
                 failed="Rekam medis belum dapat dimuat."
                 loading="Memuat rekam medis…"
             />
@@ -165,9 +146,14 @@ function ExaminationPage(): ReactNode {
     return (
         <ExaminationRecord
             key={`${record.data.data.version ?? 'new'}-${record.data.context.status}`}
-            entry={entry.data}
+            entry={entry}
             shown={record.data}
             recordMetadata={recordMetadata.data}
+            rooms={
+                metadata.sections.find(
+                    (section) => section.id === entry.section_id,
+                )?.rooms ?? []
+            }
             canManage={metadata.permissions.manage}
             errors={errors}
             setErrors={setErrors}
@@ -183,6 +169,7 @@ function ExaminationRecord({
     entry,
     shown,
     recordMetadata,
+    rooms,
     canManage,
     errors,
     setErrors,
@@ -194,6 +181,7 @@ function ExaminationRecord({
     entry: Entry;
     shown: MedicalRecordShown;
     recordMetadata: MedicalRecordMetadata;
+    rooms: readonly { id: string; name: string }[];
     canManage: boolean;
     errors: Errors;
     setErrors: (errors: Errors) => void;
@@ -222,8 +210,9 @@ function ExaminationRecord({
     const leaveGuard = useUnsavedChangesGuard(dirty, () =>
         setDraft(shown.data),
     );
-    const showOptions = orpc.healthcareExaminationShow.queryOptions({
-        input: { params: { id: entry.id } },
+    const { registrationNumber, sectionCode } = route.useParams();
+    const entryOptions = orpc.healthcareExaminationFind.queryOptions({
+        input: { params: { registrationNumber, sectionCode } },
     });
     const recordOptions = orpc.healthcareMedicalRecordShow.queryOptions({
         input: { params: { id: entry.id } },
@@ -233,6 +222,105 @@ function ExaminationRecord({
             to: '/healthcare/examination/queue',
             search: { section: entry.section_id },
         });
+
+    const [place, setPlace] = useState(readPlace);
+    const roomId = placeRoom(place, entry.section_id, rooms);
+    const status = isDestinationStatus(entry.status) ? entry.status : null;
+    // Pasien yang belum terikat ruangan dipanggil atau diperiksa di ruangan pemanggil; yang lain memakai ruangannya.
+    const unplaced = status !== null && nextStatus('panggil', status) !== null;
+    const canCall =
+        canManage &&
+        status !== null &&
+        (unplaced || nextStatus('panggil_ulang', status) !== null);
+    const canStart =
+        canManage &&
+        status !== null &&
+        nextStatus('mulai_periksa', status) !== null;
+    const [refusal, setRefusal] = useState<string | null>(null);
+    const showEntry = (body: { data: Entry }) => {
+        queryClient.setQueryData(entryOptions.queryKey, {
+            status: 200,
+            headers: {},
+            body,
+        });
+        void queryClient.invalidateQueries({
+            queryKey: orpc.healthcareExaminationQueue.key(),
+        });
+    };
+
+    // Panggil dan Mulai periksa, seperti tombol di panel Status Pasien sistem lama. Penolakan tetap terlihat sampai
+    // tindakan berikutnya.
+    const perform = async (
+        request: () => Promise<{ body: { data: Entry } }>,
+        success: (row: Entry) => string,
+        fallback: string,
+    ): Promise<boolean> => {
+        setBusy(true);
+        try {
+            const { body } = await request();
+            setRefusal(null);
+            showEntry(body);
+            toast.success(success(body.data));
+            return true;
+        } catch (caught) {
+            setRefusal(errorText(caught, fallback));
+            return false;
+        } finally {
+            setBusy(false);
+        }
+    };
+    const call = () => {
+        if (unplaced && !roomId) {
+            setRefusal('Pilih ruangan tempat memanggil lebih dulu.');
+            return;
+        }
+        void perform(
+            () =>
+                unplaced && roomId
+                    ? api.healthcareExaminationCall({
+                          params: { id: entry.id },
+                          body: { room_id: roomId },
+                      })
+                    : api.healthcareExaminationRecall({
+                          params: { id: entry.id },
+                          body: {},
+                      }),
+            (row) =>
+                `${row.queue_code} ${row.patient_name} dipanggil ke ${row.room_name ?? 'ruangan'}.`,
+            'Pasien belum dipanggil.',
+        );
+    };
+    // Pesan berhasil sistem lama untuk Mulai dan Selesai (statuspasien_helper::update_statuspasien).
+    const start = async () => {
+        const room = roomId ?? entry.room_id;
+        if (unplaced && !room) {
+            setRefusal('Pilih ruangan pemeriksaan lebih dulu.');
+            return;
+        }
+        if (
+            await perform(
+                () =>
+                    api.healthcareExaminationStart({
+                        params: { id: entry.id },
+                        body: unplaced ? { room_id: room } : {},
+                    }),
+                () => 'Data berhasil diperbarui.',
+                'Pemeriksaan belum dimulai.',
+            )
+        )
+            await queryClient.invalidateQueries({
+                queryKey: recordOptions.queryKey,
+            });
+    };
+    const pickRoom = (value: string | null) => {
+        if (!value) return;
+        const next = {
+            ...place,
+            rooms: { ...place.rooms, [entry.section_id]: value },
+        };
+        setPlace(next);
+        rememberPlace(next);
+    };
 
     const fail = (caught: unknown, fallback: string) => {
         if (caught instanceof ApiError && Object.keys(caught.errors).length) {
@@ -361,18 +449,11 @@ function ExaminationRecord({
                 params: { id: entry.id },
                 body: {},
             });
-            queryClient.setQueryData(showOptions.queryKey, {
-                status: 200,
-                headers: {},
-                body,
-            });
-            void queryClient.invalidateQueries({
-                queryKey: orpc.healthcareExaminationQueue.key(),
-            });
+            showEntry(body);
             await queryClient.invalidateQueries({
                 queryKey: recordOptions.queryKey,
             });
-            toast.success(`Pemeriksaan ${body.data.queue_code} selesai.`);
+            toast.success('Data berhasil diperbarui.');
         } catch (caught) {
             fail(caught, 'Pemeriksaan belum diselesaikan.');
         } finally {
@@ -407,6 +488,29 @@ function ExaminationRecord({
                     <ListOrdered aria-hidden="true" />
                     Antrean poli
                 </Button>
+                {canCall && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="command"
+                        disabled={busy}
+                        onClick={call}
+                    >
+                        <Volume2 aria-hidden="true" />
+                        Panggil
+                    </Button>
+                )}
+                {canStart && (
+                    <Button
+                        type="button"
+                        size="command"
+                        disabled={busy}
+                        onClick={() => void start()}
+                    >
+                        <Stethoscope aria-hidden="true" />
+                        Mulai periksa
+                    </Button>
+                )}
                 {editable && (
                     <ActionButton
                         action="save"
@@ -436,10 +540,31 @@ function ExaminationRecord({
                         message={message}
                         operation="Rekam medis belum disimpan"
                     />
+                    {refusal && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{refusal}</AlertDescription>
+                        </Alert>
+                    )}
                     {notice && (
                         <Alert>
                             <AlertDescription>{notice}</AlertDescription>
                         </Alert>
+                    )}
+                    {canManage && unplaced && (
+                        <div className="w-56">
+                            <Select
+                                label="Ruangan saya"
+                                className="w-full"
+                                items={rooms.map((room) => ({
+                                    value: room.id,
+                                    label: room.name,
+                                }))}
+                                value={roomId ?? null}
+                                onValueChange={pickRoom}
+                                searchPlaceholder="Cari ruangan"
+                                emptyMessage="Poli ini belum punya ruangan."
+                            />
+                        </div>
                     )}
                     <div className="grid items-start gap-4 lg:grid-cols-12">
                         <div className="min-w-0 space-y-4 lg:col-span-4">
@@ -595,7 +720,7 @@ function ExaminationRecord({
 }
 
 export const page = definePage({
-    path: '/healthcare/examination/queue/$destinationId',
+    path: '/healthcare/examination/queue/$registrationNumber/$sectionCode',
     layout: 'app',
     title: 'Pemeriksaan',
     component: ExaminationPage,

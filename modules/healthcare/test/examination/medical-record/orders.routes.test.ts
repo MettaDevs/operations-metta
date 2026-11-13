@@ -376,6 +376,7 @@ describe.skipIf(!process.env.DB_HOST)(
             ).id;
             section = await created<Section>(admin, `${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'RESEP',
                 name: 'Poli Umum Resep',
                 kind: 'rawat_jalan',
                 room_ids: [room],
@@ -1408,6 +1409,7 @@ describe.skipIf(!process.env.DB_HOST)(
         test('a section without the panels neither shows nor accepts them', async () => {
             const plain = await created<Section>(admin, `${api}/sections`, {
                 operating_unit_id: unit,
+                code: 'TANPA-RESEP',
                 name: 'Poli Tanpa Resep',
                 kind: 'rawat_jalan',
                 room_ids: [room],

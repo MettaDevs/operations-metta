@@ -12,6 +12,9 @@ export const startInputSchema = z.object({
     room_id: z.string().nullable().optional(),
 });
 
+// Panggil satu pasien dari halaman pemeriksaan: ruangan pemanggil, seperti Panggil berikutnya.
+export const callInputSchema = z.object({ room_id: z.string() });
+
 export const queueListQuerySchema = listParametersSchema.extend({
     date: z.string().optional(),
     section_id: z.string().optional(),
@@ -27,6 +30,7 @@ export const queueEntrySchema = z.object({
     visit_id: z.string(),
     date: z.string(),
     section_id: z.string(),
+    section_code: z.string(),
     section_name: z.string(),
     queue_number: z.number(),
     queue_code: z.string(),

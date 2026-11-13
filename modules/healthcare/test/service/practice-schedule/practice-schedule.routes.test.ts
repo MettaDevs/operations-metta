@@ -109,6 +109,7 @@ describe.skipIf(!process.env.DB_HOST)('practice schedule', () => {
             await json<{ data: { id: string } }>(
                 await admin.post(`${api}/sections`, {
                     operating_unit_id: unit,
+                    code: name,
                     name,
                     kind: 'rawat_jalan',
                 }),

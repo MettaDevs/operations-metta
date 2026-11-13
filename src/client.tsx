@@ -23,6 +23,7 @@ import { page as modulesHealthcareSrcClinicalProcedureProceduresPage } from '../
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
 import { page as modulesHealthcareSrcDashboardDashboardPage } from '../modules/healthcare/src/dashboard/dashboard.page.tsx';
+import { page as modulesHealthcareSrcExaminationQueueExaminationRedirectPage } from '../modules/healthcare/src/examination/queue/examination-redirect.page.tsx';
 import { page as modulesHealthcareSrcExaminationQueueExaminationPage } from '../modules/healthcare/src/examination/queue/examination.page.tsx';
 import { page as modulesHealthcareSrcExaminationQueueQueuePage } from '../modules/healthcare/src/examination/queue/queue.page.tsx';
 import { page as modulesHealthcareSrcPatientPatientPatientsPage } from '../modules/healthcare/src/patient/patient/patients.page.tsx';
@@ -363,6 +364,17 @@ const modulesHealthcareSrcDashboardDashboardRoute = createRoute({
     component: modulesHealthcareSrcDashboardDashboardPage.component,
     staticData: { title: modulesHealthcareSrcDashboardDashboardPage.title },
 });
+
+const modulesHealthcareSrcExaminationQueueExaminationRedirectRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcExaminationQueueExaminationRedirectPage.path,
+        component:
+            modulesHealthcareSrcExaminationQueueExaminationRedirectPage.component,
+        staticData: {
+            title: modulesHealthcareSrcExaminationQueueExaminationRedirectPage.title,
+        },
+    });
 
 const modulesHealthcareSrcExaminationQueueExaminationRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -1035,6 +1047,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,
         modulesHealthcareSrcDashboardDashboardRoute,
+        modulesHealthcareSrcExaminationQueueExaminationRedirectRoute,
         modulesHealthcareSrcExaminationQueueExaminationRoute,
         modulesHealthcareSrcExaminationQueueQueueRoute,
         modulesHealthcareSrcPatientPatientPatientsRoute,

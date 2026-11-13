@@ -4255,6 +4255,30 @@
             }
         }
     },
+    "healthcareExaminationFind": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/examination/visits/{registrationNumber}/sections/{sectionCode}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "healthcareExaminationCall": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/call",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcareExaminationRecall": {
         "~orpc": {
             "errorMap": {},

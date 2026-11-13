@@ -26,7 +26,8 @@ import { defaultQueueMode, isQueueMode } from './section.queue-modes.ts';
 import { sectionInputSchema, sectionRowSchema } from './section.schema.ts';
 
 const rowSql = `select * from (
-                    select s.id, s.operating_unit_id, o.name as operating_unit_name, s.nama as name, s.jenis as kind,
+                    select s.id, s.operating_unit_id, o.name as operating_unit_name, s.kode as code, s.nama as name,
+                           s.jenis as kind,
                            s.kode_no_bukti as document_code, s.kode_poli_bpjs as bpjs_clinic_code,
                            s.mode_antrean as queue_mode, s.awalan_antrean as queue_prefix,
                            coalesce((select json_agg(json_build_object('id', r.id, 'code', r.kode, 'name', r.nama,
@@ -70,11 +71,14 @@ function checked(body: unknown) {
     const parsed = sectionInputSchema.safeParse(body);
     const errors: Record<string, string> = {};
     const data = parsed.success ? parsed.data : null;
+    const code = data?.code.trim() ?? '';
     const name = data?.name.trim() ?? '';
     const kind = data?.kind ?? '';
     const documentCode = optional(data?.document_code);
     const bpjsClinicCode = optional(data?.bpjs_clinic_code);
     const queuePrefix = optional(data?.queue_prefix);
+    if (!code) errors.code = 'Isi kode section.';
+    else if (code.length > 20) errors.code = 'Paling panjang 20 karakter.';
     if (!name) errors.name = 'Isi nama section.';
     else if (name.length > 100) errors.name = 'Paling panjang 100 karakter.';
     if (!isSectionKind(kind)) errors.kind = 'Pilih jenis section dari daftar.';
@@ -91,6 +95,7 @@ function checked(body: unknown) {
     if (Object.keys(errors).length || !data) validation(errors);
     return {
         operatingUnitId: data.operating_unit_id,
+        code,
         name,
         kind,
         documentCode,
@@ -108,12 +113,11 @@ function checked(body: unknown) {
     };
 }
 
-function nameTaken(error: unknown): void {
-    if (
-        sqlErrorCode(error) === '23505' &&
-        error instanceof Error &&
-        error.message.includes('sim_m_section_nama_unique')
-    )
+function duplicateTaken(error: unknown): void {
+    if (sqlErrorCode(error) !== '23505' || !(error instanceof Error)) return;
+    if (error.message.includes('sim_m_section_kode_unique'))
+        validation({ code: 'Kode ini sudah dipakai section lain.' });
+    if (error.message.includes('sim_m_section_nama_unique'))
         validation({
             name: 'Nama ini sudah dipakai section lain di unit yang sama.',
         });
@@ -201,11 +205,17 @@ export class Sections {
             bindings,
             parameters,
             columns: {
+                code: 'code',
                 name: 'name',
                 operating_unit_name: 'operating_unit_name',
                 kind: 'kind',
             },
-            searchColumns: ['name', 'operating_unit_name', 'document_code'],
+            searchColumns: [
+                'code',
+                'name',
+                'operating_unit_name',
+                'document_code',
+            ],
             numericColumns: [],
             defaultSort: 'name',
             defaultDirection: 'asc',
@@ -367,6 +377,7 @@ export class Sections {
                     id,
                     tenant_id: this.workspace.tenantId,
                     operating_unit_id: operatingUnitId,
+                    kode: data.code,
                     nama: data.name,
                     jenis: data.kind,
                     kode_no_bukti: data.documentCode,
@@ -383,7 +394,7 @@ export class Sections {
                     await this.savePanels(id, data.examinationPanels);
             });
         } catch (error) {
-            nameTaken(error);
+            duplicateTaken(error);
             throw error;
         }
         return { status: 201, headers: {}, body: { data: await this.row(id) } };
@@ -414,11 +425,13 @@ export class Sections {
         try {
             await this.db.transaction(async () => {
                 updated = await this.db.execute(
-                    `update sim_m_section set operating_unit_id = $1, nama = $2, jenis = $3, kode_no_bukti = $4,
-                            kode_poli_bpjs = $5, mode_antrean = $6, awalan_antrean = $7, aktif = $8, updated_at = $9
-                     where tenant_id = $10 and id = $11 and version = $12 and deleted_at is null`,
+                    `update sim_m_section set operating_unit_id = $1, kode = $2, nama = $3, jenis = $4,
+                            kode_no_bukti = $5, kode_poli_bpjs = $6, mode_antrean = $7, awalan_antrean = $8, aktif = $9,
+                            updated_at = $10
+                     where tenant_id = $11 and id = $12 and version = $13 and deleted_at is null`,
                     [
                         operatingUnitId,
+                        data.code,
                         data.name,
                         data.kind,
                         data.documentCode,
@@ -448,7 +461,7 @@ export class Sections {
                 }
             });
         } catch (error) {
-            nameTaken(error);
+            duplicateTaken(error);
             throw error;
         }
         if (!updated) coded(409, 'stale_version', staleMessage);

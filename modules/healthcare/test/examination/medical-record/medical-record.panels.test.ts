@@ -259,12 +259,14 @@ describe.skipIf(!process.env.DB_HOST)('examination panels per section', () => {
         ).id;
         general = await created<Section>(`${api}/sections`, {
             operating_unit_id: unit,
+            code: 'UMUM',
             name: 'Poli Umum',
             kind: 'rawat_jalan',
             room_ids: [room],
         });
         dentistry = await created<Section>(`${api}/sections`, {
             operating_unit_id: unit,
+            code: 'GIGI',
             name: 'Poli Gigi',
             kind: 'rawat_jalan',
             room_ids: [room],
