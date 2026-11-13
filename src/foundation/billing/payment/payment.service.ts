@@ -26,13 +26,14 @@ import {
 import { openClerk } from '../clerk/clerk.service.ts';
 import { invoiceTotals } from '../invoice/invoice.totals.ts';
 import { paymentInputSchema } from './payment.schema.ts';
+import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
+
+export const invoicePosted = 'billing.invoice.posted.v1' as const;
 
 // Kunjungan yang dibuka kembali poli (rujuk internal sesudah Selesai periksa) belum siap dibayar.
 export const reopenedMessage =
     'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.';
-import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 
-export const invoicePosted = 'billing.invoice.posted.v1' as const;
 const source = 'healthcare';
 const numberReference = 'core.payment-number';
 
