@@ -393,6 +393,24 @@ for (const file of browserCode) {
                 node,
                 'Form harus memakai noValidate dan menampilkan validasi di header serta field SDK.',
             );
+        // Tombol nonaktif menjelaskan alasannya lewat title, misalnya Posting yang menunggu Simpan. Tanpa pointer,
+        // title itu tidak pernah tampil saat tombol disorot.
+        if (
+            (isElement(node) &&
+                ['Button', 'ActionButton'].includes(node.tagName.getText()) &&
+                attribute(node, 'className')
+                    ?.getText()
+                    .includes('disabled:pointer-events-none')) ||
+            (ts.isVariableDeclaration(node) &&
+                node.name.getText() === 'buttonVariants' &&
+                node.initializer
+                    ?.getText()
+                    .includes('disabled:pointer-events-none'))
+        )
+            report(
+                node,
+                'Tombol nonaktif tetap menerima pointer supaya title berisi alasannya tampil saat disorot; jangan pakai disabled:pointer-events-none.',
+            );
         ts.forEachChild(node, visit);
     };
     visit(source);
