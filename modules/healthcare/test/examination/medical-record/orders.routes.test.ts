@@ -207,18 +207,21 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         }
 
+        const sendPath = (id: string) =>
+            `${api}/examination/destinations/${id}/prescriptions/send`;
+
+        // Kirim ke farmasi seperti layar: resep yang tampil beserta dokter dan perawat Anamnesa.
         async function send(as: Browser, id: string, version?: number | null) {
             const current = await show(as, id);
-            const draft = current.data.prescriptions?.find(
-                (row) => row.status === 'draf',
-            );
-            return as.post(
-                `${api}/examination/destinations/${id}/prescriptions/${draft?.id ?? Bun.randomUUIDv7()}/send`,
-                {
-                    version:
-                        version === undefined ? current.data.version : version,
-                },
-            );
+            const anamnesis = current.data.anamnesis as
+                | { doctor_id?: string | null; nurse_id?: string | null }
+                | undefined;
+            return as.post(sendPath(id), {
+                version: version === undefined ? current.data.version : version,
+                doctor_id: anamnesis?.doctor_id ?? null,
+                nurse_id: anamnesis?.nurse_id ?? null,
+                prescriptions: current.data.prescriptions,
+            });
         }
 
         async function procedure(code: string, name: string, as = admin) {
@@ -794,7 +797,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 200,
             );
             expect(await refused(await send(admin, id))).toEqual({
-                prescription: ['Resep tidak ditemukan.'],
+                prescription: ['Resep belum berisi obat.'],
             });
             const stale = (await show(admin, id)).data.version;
             await json(
@@ -823,12 +826,12 @@ describe.skipIf(!process.env.DB_HOST)(
                 status: 'dikirim',
                 doctor_name: 'Dokter Resep',
             });
-            const resend = await admin.post(
-                `${api}/examination/destinations/${id}/prescriptions/${sent!.id}/send`,
-                { version: sentShown.data.version },
-            );
+            const resend = await admin.post(sendPath(id), {
+                version: sentShown.data.version,
+                prescriptions: sentShown.data.prescriptions,
+            });
             expect(await refused(resend)).toEqual({
-                prescription: ['Resep ini sudah dikirim ke farmasi.'],
+                prescription: ['Resep belum berisi obat.'],
             });
             await json(
                 await save(admin, id, {
@@ -854,6 +857,57 @@ describe.skipIf(!process.env.DB_HOST)(
                     await json<Shown>(await send(admin, id), 200)
                 ).data.prescriptions!.map((row) => row.number),
             ).toEqual(['PR1-RSP-00000001', 'PR1-RSP-00000002']);
+        });
+
+        test('Kirim ke farmasi saves and sends the prescription alone, without saving or checking the rest of the record', async () => {
+            const id = await started();
+            const amoxicillin = await drug('Amoxicillin kirim sendiri');
+            const opened = await show(admin, id);
+            const prescription = draft([single(amoxicillin.id)]);
+            expect(
+                (
+                    await admin.put(path(id), {
+                        ...opened.data,
+                        prescriptions: [prescription],
+                    })
+                ).status,
+            ).toBe(422);
+
+            const withoutDrug = await refused(
+                await admin.post(sendPath(id), {
+                    version: opened.data.version,
+                    doctor_id: doctor,
+                    prescriptions: [
+                        draft([{ ...single(amoxicillin.id), drug_id: null }]),
+                    ],
+                }),
+            );
+            expect(Object.keys(withoutDrug).length).toBeGreaterThan(0);
+            expect(
+                Object.keys(withoutDrug).filter(
+                    (field) => !field.startsWith('prescriptions.0.'),
+                ),
+            ).toEqual([]);
+
+            const sent = await json<Shown>(
+                await admin.post(sendPath(id), {
+                    version: opened.data.version,
+                    doctor_id: doctor,
+                    nurse_id: nurse,
+                    prescriptions: [prescription],
+                }),
+                200,
+            );
+            expect(sent.data.prescriptions).toMatchObject([
+                { status: 'dikirim', doctor_name: 'Dokter Resep' },
+            ]);
+            expect(sent.data.version).not.toBe(opened.data.version);
+            const [unsaved] = await pool.unsafe<{ panels: number }[]>(
+                `select (select count(*) from sim_tr_pemeriksaan_fisik f where f.pemeriksaan_id = p.id)::int as panels
+                 from sim_tr_pemeriksaan p where p.id = $1 and p.keluhan_utama is null and p.dokter_id is null`,
+                [String(sent.data.id)],
+            );
+            expect(unsaved).toEqual({ panels: 0 });
         });
 
         test('procedures and prescriptions are locked before Mulai periksa and after Selesai periksa', async () => {
@@ -962,12 +1016,7 @@ describe.skipIf(!process.env.DB_HOST)(
             );
             expect(list.data).toEqual([]);
             expect(
-                (
-                    await outsider.post(
-                        `${api}/examination/destinations/${id}/prescriptions/${Bun.randomUUIDv7()}/send`,
-                        { version: 1 },
-                    )
-                ).status,
+                (await outsider.post(sendPath(id), { version: 1 })).status,
             ).toBe(404);
             expect(
                 (
@@ -1248,12 +1297,11 @@ describe.skipIf(!process.env.DB_HOST)(
             const before = (await outboxEnvelopes(pool, tenantId, issued))
                 .length;
             const shown = await show(admin, twice);
-            const pending = shown.data.prescriptions![0]!;
             const click = () =>
-                admin.post(
-                    `${api}/examination/destinations/${twice}/prescriptions/${pending.id}/send`,
-                    { version: shown.data.version },
-                );
+                admin.post(sendPath(twice), {
+                    version: shown.data.version,
+                    prescriptions: shown.data.prescriptions,
+                });
             const clicks = await Promise.all([click(), click()]);
             expect(clicks.map((response) => response.status).sort()).toEqual([
                 200, 409,

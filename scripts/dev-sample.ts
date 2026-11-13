@@ -664,6 +664,8 @@ async function seedClinic(
                         required(rooms, code, 'Ruangan'),
                     ),
                 },
+                section.name,
+                `${healthcareApi}/sections?operating_unit_id=${unit}`,
             ),
         );
     const practitioners = new Map<string, string>();
@@ -763,32 +765,22 @@ async function seedClinic(
                 )?.id,
                 notes: null,
             });
+        const doctor = required(practitioners, visit.doctor, 'Nakes');
         await api.call('PUT', record, {
             ...opened,
             physical: { ...opened.physical, ...visit.physical },
-            anamnesis: {
-                ...opened.anamnesis,
-                doctor_id: required(practitioners, visit.doctor, 'Nakes'),
-            },
-            prescriptions: [{ id: null, notes: null, lines }],
+            anamnesis: { ...opened.anamnesis, doctor_id: doctor },
         });
         const saved = await api.data(
-            z.object({
-                version: z.number(),
-                prescriptions: z.array(documentRow.omit({ version: true })),
-            }),
+            z.object({ version: z.number() }),
             'GET',
             record,
         );
-        const draft = saved.prescriptions.find((row) => row.status === 'draf');
-        if (!draft) throw new Error('Draf E-Resep contoh tidak tersimpan.');
-        await api.call(
-            'POST',
-            `${destination}/prescriptions/${draft.id}/send`,
-            {
-                version: saved.version,
-            },
-        );
+        await api.call('POST', `${destination}/prescriptions/send`, {
+            version: saved.version,
+            doctor_id: doctor,
+            prescriptions: [{ id: null, notes: null, lines }],
+        });
     }
 }
 

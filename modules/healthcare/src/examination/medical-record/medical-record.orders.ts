@@ -769,39 +769,28 @@ export class ExaminationOrders {
         }
     }
 
-    // Kirim ke farmasi: draf menjadi dikirim, diberi nomor resep dari number sequence unit kunjungan, dan tidak dapat
-    // diubah lagi. Dokter dan perawat diambil dari Anamnesa saat itu. Pemanggil sudah mengunci tujuan dan memastikan
-    // pemeriksaan sedang berjalan, jadi Kirim yang diulang menemukan resep yang sudah dikirim dan ditolak tanpa
+    // Kirim ke farmasi: draf yang baru disimpan menjadi dikirim, diberi nomor resep dari number sequence unit kunjungan,
+    // dan tidak dapat diubah lagi. Pemanggil sudah mengunci tujuan, memeriksa versi pemeriksaan, dan memastikan
+    // pemeriksaan sedang berjalan; Kirim menaikkan versi itu, jadi klik yang diulang dengan versi lama ditolak tanpa
     // menerbitkan event kedua. healthcare.prescription.issued.v1 terbit di transaksi yang sama: gagal sesudahnya
     // membatalkan keduanya.
     async send(
         recordId: string,
-        prescriptionId: string,
         visit: { operating_unit_id: string; date: string },
         stamp: string,
+        people: { doctorId: string | null; nurseId: string | null },
     ): Promise<void> {
-        const id = lookupId(prescriptionId);
-        const prescription = id
-            ? (await this.savedPrescriptions(recordId)).find(
-                  (row) => row.id === id,
-              )
-            : undefined;
-        if (!prescription || !id)
-            validation({ prescription: 'Resep tidak ditemukan.' });
-        if (prescription.status !== 'draf')
-            validation({
-                prescription: 'Resep ini sudah dikirim ke farmasi.',
-            });
-        if (!(await this.savedLines(id)).some((line) => line.drug_id))
-            validation({ prescription: 'Resep belum berisi obat.' });
-        const header = await this.db.one(
-            z.object({
-                doctor_id: z.string().nullable(),
-                nurse_id: z.string().nullable(),
-            }),
-            'select dokter_id as doctor_id, perawat_id as nurse_id from sim_tr_pemeriksaan where tenant_id = $1 and id = $2',
-            [this.tenantId, recordId],
+        const prescription = (await this.savedPrescriptions(recordId)).find(
+            (row) => row.status === 'draf',
         );
+        if (
+            !prescription ||
+            !(await this.savedLines(prescription.id)).some(
+                (line) => line.drug_id,
+            )
+        )
+            validation({ prescription: 'Resep belum berisi obat.' });
+        const id = prescription.id;
         const number = await new NumberIssuer(this.db, {
             tenantId: this.tenantId,
             moduleId,
@@ -815,8 +804,8 @@ export class ExaminationOrders {
             status: 'dikirim',
             nomor: number,
             dikirim_pada: stamp,
-            dokter_id: header?.doctor_id ?? null,
-            perawat_id: header?.nurse_id ?? null,
+            dokter_id: people.doctorId,
+            perawat_id: people.nurseId,
             updated_at: stamp,
         });
         await this.update('sim_tr_pemeriksaan', recordId, {

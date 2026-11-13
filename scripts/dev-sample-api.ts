@@ -91,15 +91,17 @@ export function sampleApi(
         );
         return rows.find(matches);
     }
-    // Master yang sudah ada dikenali dari kode atau namanya, jadi data contoh yang diulang tidak menggandakannya.
+    // Master yang sudah ada dikenali dari kode atau namanya, jadi data contoh yang diulang tidak menggandakannya. `list`
+    // menyaring daftar yang dicari, misalnya per unit, bila nama yang sama boleh ada di unit lain.
     async function ensure(
         path: string,
         key: 'code' | 'name',
         value: string,
         body: object,
         q = value,
+        list = path,
     ): Promise<string> {
-        const found = await find(keyRow, path, q, (row) => row[key] === value);
+        const found = await find(keyRow, list, q, (row) => row[key] === value);
         return found?.id ?? (await data(idRow, 'POST', path, body)).id;
     }
     async function ensureEach<T extends { code: string }>(

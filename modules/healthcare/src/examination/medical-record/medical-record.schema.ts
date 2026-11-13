@@ -246,6 +246,13 @@ export const medicalRecordInputSchema = z.object({
     prescriptions: z.array(z.unknown()).optional(),
     discharge: panel,
 });
+// Kirim ke farmasi: daftar resep layar (draf diambil darinya) beserta dokter dan perawat Anamnesa yang sedang diisi.
+export const prescriptionSendSchema = z.object({
+    version: z.number().nullable().optional(),
+    doctor_id: z.unknown().optional(),
+    nurse_id: z.unknown().optional(),
+    prescriptions: z.array(z.unknown()).optional(),
+});
 // Bentuk kiriman layar: angka boleh masih berupa teks isian.
 type Loose<T> = T extends number
     ? number | string
@@ -255,3 +262,10 @@ type Loose<T> = T extends number
         ? { [K in keyof T]: Loose<T[K]> }
         : T;
 export type MedicalRecordInput = Loose<MedicalRecord>;
+export type PrescriptionSendInput = Pick<
+    MedicalRecordInput,
+    'version' | 'prescriptions'
+> & {
+    doctor_id?: string | null;
+    nurse_id?: string | null;
+};
