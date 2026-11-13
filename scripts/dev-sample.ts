@@ -91,6 +91,20 @@ const clinicSchema = z.object({
             rooms: z.array(z.string()),
         }),
     ),
+    // Kelompok, kategori, dan tindakan (Setup Jasa sistem lama). Tindakan ditawarkan di section yang disebut namanya.
+    procedure_groups: z.array(codeName).default([]),
+    procedure_categories: z
+        .array(codeName.extend({ group: z.string() }))
+        .default([]),
+    procedures: z
+        .array(
+            codeName.extend({
+                group: z.string(),
+                category: z.string(),
+                sections: z.array(z.string()),
+            }),
+        )
+        .default([]),
     practitioners: z.array(
         z.object({
             name: z.string(),
@@ -252,6 +266,12 @@ export async function seedSample(
             await seedInventory(api, options.sample.inventory, today);
         if (options.sample.clinic)
             await seedClinic(
+                api,
+                options.sample.clinic,
+                options.sample.workspace.unit,
+            );
+        if (options.sample.clinic)
+            await seedProcedures(
                 api,
                 options.sample.clinic,
                 options.sample.workspace.unit,
@@ -709,6 +729,66 @@ async function seedInventory(
 // Kunjungan contoh diisi selama antrean farmasi masih kosong: ruangan, section, nakes, dan pasien dikenali dari kode,
 // nama, atau NIK-nya, lalu setiap kunjungan diperiksa dan E-Resep-nya dikirim ke farmasi lewat event, sama dengan
 // dokter di layar pemeriksaan.
+// Kelompok, kategori, dan tindakan dikenali dari kodenya. Seed klinik berhenti bila resep contoh sudah ada, jadi bagian
+// ini berjalan sendiri supaya lingkungan lama ikut mendapat tindakan contoh. Section dicari dari namanya di unit kerja.
+async function seedProcedures(
+    api: SampleApi,
+    clinic: z.infer<typeof clinicSchema>,
+    unitNumber: string,
+): Promise<void> {
+    const unit = await api.organization(unitNumber);
+    const sections = new Map<string, string>();
+    for (const section of clinic.sections) {
+        const found = await api.find(
+            keyRow,
+            `${healthcareApi}/sections?operating_unit_id=${unit}`,
+            section.name,
+            (row) => row.name === section.name,
+        );
+        if (found) sections.set(section.name, found.id);
+    }
+    const procedureGroups = await api.ensureEach(
+        `${healthcareApi}/diagnosis-references/procedure-groups`,
+        clinic.procedure_groups,
+    );
+    const procedureCategories = await api.ensureEach(
+        `${healthcareApi}/procedure-categories`,
+        clinic.procedure_categories,
+        (category) =>
+            Promise.resolve({
+                code: category.code,
+                name: category.name,
+                group_id: required(
+                    procedureGroups,
+                    category.group,
+                    'Kelompok tindakan',
+                ),
+            }),
+    );
+    await api.ensureEach(
+        `${healthcareApi}/procedures`,
+        clinic.procedures,
+        (procedure) =>
+            Promise.resolve({
+                code: procedure.code,
+                name: procedure.name,
+                group_id: required(
+                    procedureGroups,
+                    procedure.group,
+                    'Kelompok tindakan',
+                ),
+                category_id: required(
+                    procedureCategories,
+                    procedure.category,
+                    'Kategori tindakan',
+                ),
+                section_ids: procedure.sections.map((name) =>
+                    required(sections, name, 'Section'),
+                ),
+            }),
+    );
+}
+
 async function seedClinic(
     api: SampleApi,
     clinic: z.infer<typeof clinicSchema>,

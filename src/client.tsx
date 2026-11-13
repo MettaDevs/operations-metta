@@ -13,6 +13,7 @@ import { page as modulesHealthcareSrcClinicalDiagnosisReferenceUsageInstructions
 import { page as modulesHealthcareSrcClinicalDrugDrugsPage } from '../modules/healthcare/src/clinical/drug/drugs.page.tsx';
 import { page as modulesHealthcareSrcClinicalIcd10Icd10Page } from '../modules/healthcare/src/clinical/icd10/icd10.page.tsx';
 import { page as modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage } from '../modules/healthcare/src/clinical/life-cycle/life-cycles.page.tsx';
+import { page as modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesPage } from '../modules/healthcare/src/clinical/procedure-category/procedure-categories.page.tsx';
 import { page as modulesHealthcareSrcClinicalProcedureProceduresPage } from '../modules/healthcare/src/clinical/procedure/procedures.page.tsx';
 import { page as modulesHealthcareSrcCoverageGuarantorGuarantorsPage } from '../modules/healthcare/src/coverage/guarantor/guarantors.page.tsx';
 import { page as modulesHealthcareSrcCoveragePatientTypePatientTypesPage } from '../modules/healthcare/src/coverage/patient-type/patient-types.page.tsx';
@@ -226,6 +227,19 @@ const modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute = createRoute({
         title: modulesHealthcareSrcClinicalLifeCycleLifeCyclesPage.title,
     },
 });
+
+const modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesPage.path,
+        component:
+            modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesPage.component,
+        validateSearch:
+            modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesPage.validateSearch,
+        staticData: {
+            title: modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesPage.title,
+        },
+    });
 
 const modulesHealthcareSrcClinicalProcedureProceduresRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
@@ -827,6 +841,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcClinicalDrugDrugsRoute,
         modulesHealthcareSrcClinicalIcd10Icd10Route,
         modulesHealthcareSrcClinicalLifeCycleLifeCyclesRoute,
+        modulesHealthcareSrcClinicalProcedureCategoryProcedureCategoriesRoute,
         modulesHealthcareSrcClinicalProcedureProceduresRoute,
         modulesHealthcareSrcCoverageGuarantorGuarantorsRoute,
         modulesHealthcareSrcCoveragePatientTypePatientTypesRoute,

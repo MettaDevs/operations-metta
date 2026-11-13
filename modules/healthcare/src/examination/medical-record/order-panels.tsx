@@ -6,6 +6,7 @@ import {
 } from '@operations-metta/ui/collapsible-section';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
+import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
@@ -15,8 +16,9 @@ import {
     PageDialogContent,
 } from '@operations-metta/ui/page-dialog';
 import { Select } from '@operations-metta/ui/select';
+import { Switch } from '@operations-metta/ui/switch';
 import { FlaskConical, Send } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { api } from '@core/platform/shell/index.ts';
@@ -43,6 +45,8 @@ import type {
 type Draft = MedicalRecordDraft;
 type SetDraft = (update: (draft: Draft) => Draft) => void;
 type ProcedureRow = NonNullable<Draft['procedures']>[number];
+// Isian pilihan tindakan di baris: cukup yang ditampilkan lookup, jadi baris tersimpan bisa menjadi nilainya.
+type ProcedureChoice = Pick<Procedure, 'id' | 'code' | 'name' | 'group_name'>;
 type Prescription = NonNullable<Draft['prescriptions']>[number];
 type PrescriptionLine = Prescription['lines'][number];
 type DrugAllergy = NonNullable<Draft['drug_allergies']>[number];
@@ -291,21 +295,27 @@ export function DrugAllergyLines({
     );
 }
 
+// Pilihan tindakan hanya berisi tindakan section pemeriksaan, kecuali Tampil semua dinyalakan, seperti centang Tampil
+// semua di daftar Biaya Tindakan sistem lama (Services.php::datatable_charge_collection).
 function ProcedureLines({
     rows,
     setDraft,
     metadata,
+    sectionId,
     errors,
     disabled,
 }: {
     rows: ProcedureRow[];
     setDraft: SetDraft;
     metadata: MedicalRecordMetadata;
+    sectionId: string;
     errors: Errors;
     disabled: boolean;
 }): ReactNode {
     const [selected, setSelected] = useState<number[]>([]);
     const [creatingFor, setCreatingFor] = useState<number | null>(null);
+    const [showAll, setShowAll] = useState(false);
+    const showAllId = useId();
     const error = (field: string) => errors[field]?.join(' ');
     const field = (index: number, name: keyof ProcedureRow) =>
         `procedures.${index}.${name}`;
@@ -317,7 +327,7 @@ function ProcedureLines({
                 position === index ? { ...row, ...values } : row,
             ),
         }));
-    const pick = (index: number, procedure: Procedure) => {
+    const pick = (index: number, procedure: ProcedureChoice) => {
         if (
             rows.some(
                 (row, position) =>
@@ -333,13 +343,14 @@ function ProcedureLines({
             procedure_name: procedure.name,
         });
     };
-    const loadProcedures = useCallback<LookupLoader<Procedure>>(
+    const loadProcedures = useCallback<LookupLoader<ProcedureChoice>>(
         async ({ query, cursor, signal }) => {
             const { body } = await api.healthcareProcedureList(
                 {
                     query: {
                         q: query,
                         status: 'active',
+                        ...(showAll ? {} : { section: sectionId }),
                         ...(cursor ? { cursor } : {}),
                     },
                 },
@@ -347,13 +358,30 @@ function ProcedureLines({
             );
             return { items: body.data, nextCursor: body.next_cursor };
         },
-        [],
+        [showAll, sectionId],
     );
     const canCreate = metadata.permissions.create_procedure;
     return (
         <>
             <DocumentLines
                 title="Biaya Tindakan"
+                toolbar={
+                    disabled ? undefined : (
+                        <Field orientation="horizontal" className="w-auto">
+                            <Switch
+                                id={showAllId}
+                                checked={showAll}
+                                onCheckedChange={setShowAll}
+                            />
+                            <FieldLabel
+                                htmlFor={showAllId}
+                                className="font-normal"
+                            >
+                                Tampil semua
+                            </FieldLabel>
+                        </Field>
+                    )
+                }
                 data={lines}
                 getRowKey={(line) => line.index}
                 getRowLabel={(line) =>
@@ -411,17 +439,15 @@ function ProcedureLines({
                         content: 'control',
                         minWidth: 300,
                         cell: ({ index, row }) => {
-                            const current: Procedure | null = row.procedure_id
-                                ? {
-                                      id: row.procedure_id,
-                                      code: row.procedure_code ?? '',
-                                      name: row.procedure_name ?? '',
-                                      group_id: null,
-                                      group_name: null,
-                                      is_active: true,
-                                      version: 0,
-                                  }
-                                : null;
+                            const current: ProcedureChoice | null =
+                                row.procedure_id
+                                    ? {
+                                          id: row.procedure_id,
+                                          code: row.procedure_code ?? '',
+                                          name: row.procedure_name ?? '',
+                                          group_name: null,
+                                      }
+                                    : null;
                             return (
                                 <FormControl
                                     error={error(field(index, 'procedure_id'))}
@@ -561,6 +587,7 @@ function ProcedureLines({
                     <PageDialogContent title="Tindakan">
                         <ProcedureCard
                             procedure={null}
+                            defaultSectionIds={[sectionId]}
                             permissions={{
                                 create: true,
                                 update: false,
@@ -1199,6 +1226,7 @@ export function OrderPanels({
     draft,
     setDraft,
     metadata,
+    sectionId,
     errors,
     disabled,
     onSend,
@@ -1206,6 +1234,8 @@ export function OrderPanels({
     draft: Draft;
     setDraft: SetDraft;
     metadata: MedicalRecordMetadata;
+    // Section pemeriksaan, penyaring pilihan tindakan.
+    sectionId: string;
     errors: Errors;
     disabled: boolean;
     onSend: (position: number) => void;
@@ -1227,6 +1257,7 @@ export function OrderPanels({
                         rows={procedures}
                         setDraft={setDraft}
                         metadata={metadata}
+                        sectionId={sectionId}
                         errors={errors}
                         disabled={disabled}
                     />

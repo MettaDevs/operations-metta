@@ -564,6 +564,7 @@ function ExaminationRecord({
                                     draft={draft}
                                     setDraft={setDraft}
                                     metadata={recordMetadata}
+                                    sectionId={entry.section_id}
                                     errors={errors}
                                     disabled={!editable || busy}
                                     onSend={() => void send()}

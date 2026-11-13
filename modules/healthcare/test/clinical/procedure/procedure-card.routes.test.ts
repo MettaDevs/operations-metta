@@ -1,0 +1,217 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
+import {
+    api,
+    createClinic,
+    json,
+    refused,
+    type Clinic,
+} from '../../support/examination-fixture.ts';
+
+type Procedure = {
+    id: string;
+    code: string;
+    international_name: string | null;
+    category_id: string | null;
+    category_name: string | null;
+    hospital_cost_percent: string;
+    hospital_cost_amount: string;
+    posting_group: string;
+    incentive_source: string;
+    polyclinic: string;
+    varies_by_cito: boolean;
+    requires_doctor: boolean;
+    sections: { id: string; name: string }[];
+    version: number;
+};
+
+// Isian kartu Jasa sistem lama di tindakan: nama internasional, kategori milik kelompoknya, Cost RS, tiga pilihan tetap,
+// centang status, dan section yang menawarkan tindakan. Pilihan Biaya Tindakan pemeriksaan memakai `section` untuk
+// menampilkan tindakan section itu saja, dan tanpa `section` (Tampil semua) menampilkan semuanya.
+describe.skipIf(!process.env.DB_HOST)('procedure card fields', () => {
+    if (!process.env.DB_HOST) return;
+    const { pool, browser, close } = operationsTestApp();
+    afterAll(close);
+    let clinic: Clinic;
+    let groups: { medical: string; lab: string };
+    let categories: { action: string; hematology: string };
+
+    const created = async <T = { id: string }>(
+        path: string,
+        body: Record<string, unknown>,
+    ) =>
+        (await json<{ data: T }>(await clinic.admin.post(path, body), 201))
+            .data;
+    const codes = async (query: string) =>
+        (
+            await json<{ data: Procedure[] }>(
+                await clinic.admin.get(`${api}/procedures?${query}`),
+                200,
+            )
+        ).data
+            .map((row) => row.code)
+            .sort();
+
+    beforeAll(async () => {
+        clinic = await createClinic(pool, browser, 'Klinik Uji Kartu Jasa');
+        const group = async (code: string) =>
+            (
+                await created(`${api}/diagnosis-references/procedure-groups`, {
+                    code,
+                    name: code,
+                })
+            ).id;
+        groups = { medical: await group('TM'), lab: await group('LAB') };
+        categories = {
+            action: (
+                await created(`${api}/procedure-categories`, {
+                    group_id: groups.medical,
+                    code: 'KB046',
+                    name: 'Tindakan',
+                })
+            ).id,
+            hematology: (
+                await created(`${api}/procedure-categories`, {
+                    group_id: groups.lab,
+                    code: 'HEM',
+                    name: 'Hematologi',
+                })
+            ).id,
+        };
+    }, 120_000);
+
+    test('a procedure without the legacy header fields gets the values every Kuta service holds', async () => {
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'J-BAWAAN',
+            name: 'Bawaan',
+        });
+        expect(procedure).toMatchObject({
+            hospital_cost_percent: '0.00',
+            hospital_cost_amount: '0.00',
+            posting_group: 'GROUP JASA',
+            incentive_source: 'NONE',
+            polyclinic: 'NONE',
+            varies_by_cito: false,
+            requires_doctor: false,
+            sections: [],
+        });
+    });
+
+    test('the legacy header fields are saved as typed and read back', async () => {
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'J-LENGKAP',
+            name: 'Jahit luka',
+            international_name: 'Wound suturing',
+            group_id: groups.medical,
+            category_id: categories.action,
+            hospital_cost_percent: '12.5',
+            hospital_cost_amount: '25000',
+            posting_group: 'KOMPONEN',
+            incentive_source: 'DETAIL',
+            polyclinic: 'SPESIALIS',
+            varies_by_cito: true,
+            requires_doctor: true,
+        });
+        expect(procedure).toMatchObject({
+            international_name: 'Wound suturing',
+            category_name: 'Tindakan',
+            hospital_cost_percent: '12.50',
+            hospital_cost_amount: '25000.00',
+            posting_group: 'KOMPONEN',
+            incentive_source: 'DETAIL',
+            polyclinic: 'SPESIALIS',
+            varies_by_cito: true,
+            requires_doctor: true,
+        });
+        const [row] = await pool.unsafe<
+            { cyto: boolean; dokter: boolean; posting: string }[]
+        >(
+            'select variabel_cyto as cyto, harus_dengan_dokter as dokter, kelompok_posting as posting from sim_m_tindakan where id = $1',
+            [procedure.id],
+        );
+        expect(row).toEqual({ cyto: true, dokter: true, posting: 'KOMPONEN' });
+    });
+
+    test('a category of another group, an unknown option code, and a negative cost are refused per field', async () => {
+        const errors = await refused(
+            await clinic.admin.post(`${api}/procedures`, {
+                code: 'J-SALAH',
+                name: 'Salah',
+                group_id: groups.medical,
+                category_id: categories.hematology,
+                posting_group: 'GROUP',
+                hospital_cost_amount: '-1',
+            }),
+        );
+        expect(Object.keys(errors).sort()).toEqual([
+            'category_id',
+            'hospital_cost_amount',
+            'posting_group',
+        ]);
+    });
+
+    test('the examination lookup shows only the procedures of its section, and all of them when the section is left out', async () => {
+        const offered = await created<Procedure>(`${api}/procedures`, {
+            code: 'J-UMUM',
+            name: 'Konsultasi umum',
+            section_ids: [clinic.general],
+        });
+        await created(`${api}/procedures`, {
+            code: 'J-GIGI',
+            name: 'Cabut gigi',
+            section_ids: [clinic.dental],
+        });
+        expect(await codes(`section=${clinic.general}&q=J-`)).toEqual([
+            'J-UMUM',
+        ]);
+        expect(await codes(`section=${clinic.dental}&q=J-`)).toEqual([
+            'J-GIGI',
+        ]);
+        expect(await codes('q=J-')).toEqual([
+            'J-BAWAAN',
+            'J-GIGI',
+            'J-LENGKAP',
+            'J-UMUM',
+        ]);
+        await json(
+            await clinic.admin.patch(`${api}/procedures/${offered.id}`, {
+                code: 'J-UMUM',
+                name: 'Konsultasi umum',
+                section_ids: [clinic.dental],
+                version: offered.version,
+            }),
+            200,
+        );
+        expect(await codes(`section=${clinic.general}&q=J-`)).toEqual([]);
+        const links = await pool.unsafe<
+            { section_id: string; live: boolean }[]
+        >(
+            `select section_id, deleted_at is null as live from sim_m_tindakan_section
+             where tindakan_id = $1 order by created_at, live`,
+            [offered.id],
+        );
+        expect([...links]).toEqual([
+            { section_id: clinic.general, live: false },
+            { section_id: clinic.dental, live: true },
+        ]);
+    });
+
+    test('a section of another unit is offered, but an unknown section is refused', async () => {
+        const procedure = await created<Procedure>(`${api}/procedures`, {
+            code: 'J-PUSTU',
+            name: 'Tindakan pustu',
+            section_ids: [clinic.otherSection],
+        });
+        expect(procedure.sections.map((section) => section.id)).toEqual([
+            clinic.otherSection,
+        ]);
+        const errors = await refused(
+            await clinic.admin.post(`${api}/procedures`, {
+                code: 'J-ASING',
+                name: 'Asing',
+                section_ids: [Bun.randomUUIDv7()],
+            }),
+        );
+        expect(Object.keys(errors)).toEqual(['section_ids']);
+    });
+});
