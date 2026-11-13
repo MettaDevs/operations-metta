@@ -18,15 +18,21 @@ export const clerkRowSchema = z.object({
     version: z.number(),
 });
 
-// Satu jenis bayar yang dihitung saat Clerk End. Jumlah sistem dan selisih kosong selama clerk berjalan, karena kasir
-// mengisi jumlah fisik tanpa melihat jumlah sistem, seperti layar Clerk End sistem lama.
+// Satu jenis bayar yang dihitung saat Clerk End, dalam mata uang jenis bayar itu. Jumlah sistem dan selisih kosong
+// selama clerk berjalan, karena kasir mengisi jumlah fisik tanpa melihat jumlah sistem, seperti layar Clerk End sistem
+// lama. Untuk mata uang asing, rate adalah kurs hari Clerk End dan difference_local selisihnya dalam mata uang lokal.
 export const clerkLineSchema = z.object({
     payment_method_id: z.string(),
     code: z.string(),
     name: z.string(),
+    currency_code: z.string(),
+    // Banyak angka di belakang koma untuk isian jumlah fisik, presisi jumlah mata uang itu.
+    amount_decimals: z.number(),
     system_amount: z.string().nullable(),
     counted_amount: z.string().nullable(),
     difference: z.string().nullable(),
+    rate: z.string().nullable(),
+    difference_local: z.string().nullable(),
 });
 
 export const clerkListQuerySchema = listParametersSchema;

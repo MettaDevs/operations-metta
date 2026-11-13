@@ -160,14 +160,18 @@ function ClerkEnd({
             ];
         }),
     );
-    // Total tampilan dalam sen, supaya penjumlahan desimal tidak bergeser; angka yang tidak terbaca membuatnya kosong.
-    const cents = Object.values(amounts).reduce<number | null>(
-        (sum, value) =>
-            sum === null || !Number.isFinite(Number(value))
-                ? null
-                : sum + Math.round(Number(value) * 100),
-        0,
-    );
+    // Total tampilan dalam sen, hanya jenis bayar mata uang lokal, supaya penjumlahan desimal tidak bergeser dan valuta
+    // tidak tercampur; angka yang tidak terbaca membuatnya kosong.
+    const cents = clerk.lines
+        .filter((line) => line.currency_code === clerk.local_currency)
+        .map((line) => amounts[line.payment_method_id] ?? '0')
+        .reduce<number | null>(
+            (sum, value) =>
+                sum === null || !Number.isFinite(Number(value))
+                    ? null
+                    : sum + Math.round(Number(value) * 100),
+            0,
+        );
     const end = async () => {
         setBusy(true);
         setErrors({});
@@ -239,10 +243,20 @@ function ClerkEnd({
                                 <FormControl
                                     key={line.payment_method_id}
                                     error={errors[field]?.[0]}
-                                    hint="Jumlah fisik yang ada di laci atau di slip, bukan jumlah sistem."
+                                    hint={
+                                        line.currency_code ===
+                                        clerk.local_currency
+                                            ? 'Jumlah fisik yang ada di laci atau di slip, bukan jumlah sistem.'
+                                            : `Jumlah lembar ${line.currency_code} yang ada di laci, dalam ${line.currency_code}, bukan nilai rupiahnya.`
+                                    }
                                 >
                                     <Input
-                                        label={line.name}
+                                        label={
+                                            line.currency_code ===
+                                            clerk.local_currency
+                                                ? line.name
+                                                : `${line.name} (${line.currency_code})`
+                                        }
                                         inputMode="decimal"
                                         placeholder="0"
                                         data-error-field={field}
@@ -268,7 +282,7 @@ function ClerkEnd({
                             }
                         >
                             <Input
-                                label="Total"
+                                label={`Total ${clerk.local_currency}`}
                                 value={
                                     cents === null
                                         ? ''
