@@ -42,6 +42,14 @@ export class Decimal {
         return new Decimal(this.coefficient * BigInt(units), this.scale);
     }
 
+    // Perkalian tepat dua desimal, misalnya jumlah valuta kali kurs; skalanya jumlah kedua skala, belum dibulatkan.
+    multipliedBy(other: Decimal): Decimal {
+        return new Decimal(
+            this.coefficient * other.coefficient,
+            this.scale + other.scale,
+        );
+    }
+
     compare(other: Decimal): number {
         const value = this.minus(other).coefficient;
         return value < 0n ? -1 : value > 0n ? 1 : 0;

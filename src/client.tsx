@@ -54,6 +54,7 @@ import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foun
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationCurrencyCurrenciesPage } from './foundation/currency/currencies.page.tsx';
+import { page as foundationCurrencyExchangeRatesPage } from './foundation/currency/exchange-rates.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
@@ -659,6 +660,13 @@ const foundationCurrencyCurrenciesRoute = createRoute({
     staticData: { title: foundationCurrencyCurrenciesPage.title },
 });
 
+const foundationCurrencyExchangeRatesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCurrencyExchangeRatesPage.path,
+    component: foundationCurrencyExchangeRatesPage.component,
+    staticData: { title: foundationCurrencyExchangeRatesPage.title },
+});
+
 const foundationInventoryAdjustmentAdjustmentsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationInventoryAdjustmentAdjustmentsPage.path,
@@ -1044,6 +1052,7 @@ const routeTree = rootRoute.addChildren([
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationCurrencyCurrenciesRoute,
+        foundationCurrencyExchangeRatesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,
