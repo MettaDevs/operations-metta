@@ -11,6 +11,7 @@ test('record commands: canonical labels, one icon, inline appearance, native sub
     const labels: Record<ActionIntent, string> = {
         create: 'Baru',
         add: 'Tambah',
+        'add-many': 'Tambah banyak',
         edit: 'Ubah',
         archive: 'Delete',
         delete: 'Delete',

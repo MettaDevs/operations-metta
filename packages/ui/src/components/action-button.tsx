@@ -1,4 +1,5 @@
 import {
+    ListPlusIcon,
     LoaderCircleIcon,
     PencilIcon,
     PlusIcon,
@@ -22,6 +23,12 @@ const ACTION_INTENTS = {
     add: {
         icon: PlusIcon,
         label: 'Tambah',
+        pendingLabel: 'Menambahkan…',
+        destructive: false,
+    },
+    'add-many': {
+        icon: ListPlusIcon,
+        label: 'Tambah banyak',
         pendingLabel: 'Menambahkan…',
         destructive: false,
     },

@@ -8,6 +8,8 @@ import { Button } from './button';
 import { DataTable } from './data-table';
 import type { DataTableProps, DataTableSelection } from './data-table';
 import { PageDialog, PageDialogContent } from './page-dialog';
+import { SelectRecordsDialog } from './select-records-dialog';
+import type { SelectRecords } from './select-records-dialog';
 
 const subscribe = () => () => undefined;
 const clientSnapshot = () => true;
@@ -58,7 +60,7 @@ export function shouldAdvanceDocumentLine(
     );
 }
 
-export type DocumentLinesProps<T> = Omit<
+export type DocumentLinesProps<T, U = never> = Omit<
     DataTableProps<T>,
     | 'cellMode'
     | 'cellPortalContainer'
@@ -73,6 +75,8 @@ export type DocumentLinesProps<T> = Omit<
     feedback?: React.ReactNode;
     portalContainer?: DocumentLinePortal;
     onAddRow?: () => void;
+    /** Tambah banyak: memilih beberapa record sekaligus, satu baris baru per record. */
+    selectRecords?: SelectRecords<U>;
     onDeleteRows?: (rows: T[]) => void;
     disabled?: boolean;
     /** Blokir penambahan/penghapusan baris; pemanggil memakai sel teks untuk tampilan baca. Seleksi tetap tersedia. */
@@ -81,13 +85,14 @@ export type DocumentLinesProps<T> = Omit<
 };
 
 /** Editor tetap mounted saat host dipindahkan ke focus mode, sehingga lebar kolom dan draft kontrol tidak hilang. */
-export function DocumentLines<T>({
+export function DocumentLines<T, U = never>({
     title,
     toolbar,
     footer,
     feedback,
     portalContainer,
     onAddRow,
+    selectRecords,
     onDeleteRows,
     disabled = false,
     readOnly = false,
@@ -97,8 +102,10 @@ export function DocumentLines<T>({
     data,
     getRowKey,
     ...tableProps
-}: DocumentLinesProps<T>) {
+}: DocumentLinesProps<T, U>) {
     const [focused, setFocused] = React.useState(false);
+    const [selecting, setSelecting] = React.useState(false);
+    const addManyRef = React.useRef<HTMLButtonElement>(null);
     const [selectedKeys, setSelectedKeys] = React.useState<React.Key[]>([]);
     const [host] = React.useState(() => {
         if (typeof document === 'undefined') {
@@ -121,6 +128,8 @@ export function DocumentLines<T>({
     const pending = React.useRef<{
         columnId?: string;
         keys: Set<React.Key>;
+        // Baris dari Tambah banyak difokuskan sesudah dialog pemilih selesai dilepas.
+        afterDialog?: boolean;
     } | null>(null);
     const selection: DataTableSelection | undefined =
         providedSelection ??
@@ -161,6 +170,7 @@ export function DocumentLines<T>({
         }
 
         const row = data.find((item) => !request.keys.has(getRowKey(item)));
+        pending.current = null;
 
         if (!row) {
             return;
@@ -174,11 +184,17 @@ export function DocumentLines<T>({
                   `[data-column-id="${CSS.escape(request.columnId)}"]`,
               )
             : null;
-        (
-            cell?.querySelector<HTMLElement>(editable) ??
-            rowNode?.querySelector<HTMLElement>(editable)
-        )?.focus();
-        pending.current = null;
+        const focus = () =>
+            (
+                cell?.querySelector<HTMLElement>(editable) ??
+                rowNode?.querySelector<HTMLElement>(editable)
+            )?.focus();
+
+        if (request.afterDialog) {
+            requestAnimationFrame(focus);
+        } else {
+            focus();
+        }
     }, [data, getRowKey, host]);
 
     const add = (columnId?: string) => {
@@ -188,6 +204,21 @@ export function DocumentLines<T>({
 
         pending.current = { columnId, keys: new Set(data.map(getRowKey)) };
         onAddRow();
+    };
+    const addMany = (source: SelectRecords<U>, items: U[]) => {
+        setSelecting(false);
+
+        if (source.focusColumnId) {
+            pending.current = {
+                columnId: source.focusColumnId,
+                keys: new Set(data.map(getRowKey)),
+                afterDialog: true,
+            };
+        } else {
+            requestAnimationFrame(() => addManyRef.current?.focus());
+        }
+
+        source.onAdd(items);
     };
     const changeFocused = (next: boolean) => {
         setFocused(next);
@@ -263,6 +294,15 @@ export function DocumentLines<T>({
                         onClick={() => add()}
                     />
                 )}
+                {!readOnly && selectRecords && (
+                    <ActionButton
+                        ref={addManyRef}
+                        action="add-many"
+                        disabled={disabled}
+                        title={`Pilih beberapa ${selectRecords.noun} sekaligus dari daftar`}
+                        onClick={() => setSelecting(true)}
+                    />
+                )}
                 {!readOnly && onDeleteRows && (
                     <ActionButton
                         action="delete"
@@ -317,6 +357,17 @@ export function DocumentLines<T>({
                 >
                     {footer}
                 </div>
+            )}
+            {selecting && selectRecords && (
+                <SelectRecordsDialog
+                    noun={selectRecords.noun}
+                    loadItems={selectRecords.loadItems}
+                    columns={selectRecords.columns}
+                    getItemValue={selectRecords.getItemValue}
+                    getItemLabel={selectRecords.getItemLabel}
+                    onConfirm={(items) => addMany(selectRecords, items)}
+                    onClose={() => setSelecting(false)}
+                />
             )}
         </div>
     );
