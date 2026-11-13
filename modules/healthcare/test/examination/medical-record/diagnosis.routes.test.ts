@@ -575,7 +575,7 @@ describe.skipIf(!process.env.DB_HOST)('examination diagnosis', () => {
         ).toEqual(['Pilih kode ICD-10 dari daftar.']);
     });
 
-    test('the record is locked before Mulai periksa and after Selesai periksa', async () => {
+    test('diagnoses are locked before Mulai periksa and still change after Selesai periksa', async () => {
         const id = await visit();
         const pain = await icd10('R52', 'Pain');
         expect(
@@ -607,12 +607,8 @@ describe.skipIf(!process.env.DB_HOST)('examination diagnosis', () => {
             ),
             200,
         );
-        expect(
-            (await refused(await save(admin, id, { diagnoses: [] }))).status,
-        ).toEqual([
-            'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.',
-        ]);
-        expect((await show(admin, id)).data.diagnoses).toHaveLength(1);
+        await json(await save(admin, id, { diagnoses: [] }), 200);
+        expect((await show(admin, id)).data.diagnoses).toHaveLength(0);
     });
 
     test('riwayat diagnosa lists other visits of the patient that the user may see', async () => {

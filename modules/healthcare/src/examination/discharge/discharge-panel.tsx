@@ -40,7 +40,8 @@ import { DestinationStatusText } from '../queue/queue-display.tsx';
 
 // Panel Status Pasien sistem lama (form/statuspasien/index.php) di kolom kiri halaman pemeriksaan: pilihan status dari
 // data acuan tenant, lalu isian yang dibuka perilaku status itu. Status ikut Simpan rekam medis. Tambah Rujuk Internal
-// membuat tujuan baru saat itu juga, seperti form RujukInternalForm.php.
+// membuat tujuan baru saat itu juga, seperti form RujukInternalForm.php, dan hanya ada selama pemeriksaan berjalan
+// (`onRefer` null sesudahnya).
 
 type Discharge = NonNullable<MedicalRecordDraft['discharge']>;
 type ReferralInput = ApiBody<'healthcareInternalReferralOptions'>['data'];
@@ -255,9 +256,11 @@ export function DischargePanel({
     metadata: MedicalRecordMetadata;
     errors: Record<string, string[]>;
     disabled: boolean;
-    onRefer: (
-        request: ReferralRequest,
-    ) => Promise<Record<string, string[]> | null>;
+    onRefer:
+        | ((
+              request: ReferralRequest,
+          ) => Promise<Record<string, string[]> | null>)
+        | null;
 }): ReactNode {
     const [referring, setReferring] = useState(false);
     const error = (field: string) =>
@@ -276,7 +279,7 @@ export function DischargePanel({
         <Card>
             <CardHeader>
                 <CardTitle>Status Pasien</CardTitle>
-                {behavior === 'rujuk_internal' && !disabled && (
+                {behavior === 'rujuk_internal' && !disabled && onRefer && (
                     <CardAction>
                         <ActionButton
                             action="add"
@@ -430,7 +433,7 @@ export function DischargePanel({
                     ) : (
                         <p className="text-sm text-muted-foreground">
                             Belum ada rujuk internal.
-                            {disabled
+                            {disabled || !onRefer
                                 ? ''
                                 : ' Pilih Tambah untuk merujuk ke poli lain.'}
                         </p>
@@ -565,7 +568,7 @@ export function DischargePanel({
                     </div>
                 </dl>
             </CardContent>
-            {referring && (
+            {referring && onRefer && (
                 <ReferralDialog
                     destinationId={destinationId}
                     onRefer={onRefer}

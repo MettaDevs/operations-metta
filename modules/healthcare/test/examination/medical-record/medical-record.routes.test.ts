@@ -82,7 +82,7 @@ const vitals: Physical = {
 };
 
 // Isi tab Rekam Medis halaman pemeriksaan: simpan dan baca setiap panel, isian wajib periksa fisik di server dengan
-// pesan sistem lama, setelan isian wajib, alergi per pasien, batas ubah sebelum mulai dan sesudah selesai, penghapusan
+// pesan sistem lama, setelan isian wajib, alergi per pasien, batas ubah sebelum mulai, Update sesudah selesai, penghapusan
 // lunak, batas tenant, dan izin. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
     if (!process.env.DB_HOST) return;
@@ -733,14 +733,51 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
                 ),
                 200,
             );
+            // Sesudah Selesai periksa isinya tetap bisa diubah (Update sistem lama), dengan isian wajib dan dokter yang
+            // memeriksa tetap dituntut.
             const finished = await show(admin, id);
-            expect(finished.context.editable).toBe(false);
+            expect([
+                finished.context.status,
+                finished.context.editable,
+            ]).toEqual(['selesai', true]);
             expect(
-                (await refused(await save(admin, id, finished.data))).errors
-                    .status,
-            ).toEqual([
-                'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.',
-            ]);
+                (
+                    await refused(
+                        await save(admin, id, {
+                            ...finished.data,
+                            physical: {
+                                ...finished.data.physical,
+                                temperature: null,
+                            },
+                            anamnesis: {
+                                ...finished.data.anamnesis,
+                                doctor_id: null,
+                            },
+                        }),
+                    )
+                ).errors,
+            ).toEqual({
+                'anamnesis.doctor_id': [
+                    'Pilih dokter / tenaga medis yang memeriksa sebelum menyelesaikan pemeriksaan.',
+                ],
+                'physical.temperature': [
+                    'Field Suhu pada periksa fisik harus di isi',
+                ],
+            });
+            const updated = await json<Shown>(
+                await save(admin, id, {
+                    ...finished.data,
+                    anamnesis: {
+                        ...finished.data.anamnesis,
+                        chief_complaint: 'Demam sejak kemarin',
+                    },
+                }),
+                200,
+            );
+            expect(updated.data.anamnesis.chief_complaint).toBe(
+                'Demam sejak kemarin',
+            );
+            expect(updated.context.status).toBe('selesai');
         } finally {
             await pool.unsafe(
                 `update sim_m_pemeriksaan_wajib set deleted_at = null where tenant_id = $1 and isian = 'waist_circumference'`,

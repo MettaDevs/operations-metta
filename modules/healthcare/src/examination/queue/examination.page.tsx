@@ -57,12 +57,16 @@ import {
     timeText,
 } from './queue-display.tsx';
 import { placeRoom, readPlace, rememberPlace } from './queue-place.ts';
-import { isDestinationStatus, nextStatus } from './queue.statuses.ts';
+import {
+    isDestinationStatus,
+    nextStatus,
+    recordLockedMessage,
+} from './queue.statuses.ts';
 
 // Pemeriksaan satu tujuan kunjungan, di alamat NoReg lalu kode section seperti poly/outpatient/form/{NoReg}/{SectionID}
 // sistem lama, supaya nakes bisa mengirim tautannya. Isinya pasien dan kunjungannya, Panggil dan Mulai periksa seperti
 // panel Status Pasien sistem lama, isi tab Rekam Medis dengan satu Simpan untuk seluruh tab, dan Selesai periksa. Isinya
-// hanya bisa diubah sesudah Mulai periksa dan sebelum Selesai periksa.
+// bisa diubah sesudah Mulai periksa, dan sesudah Selesai periksa Simpan menjadi Update seperti sistem lama.
 
 const route = getRouteApi(
     '/_app/healthcare/examination/queue/$registrationNumber/$sectionCode',
@@ -70,9 +74,6 @@ const route = getRouteApi(
 
 type Entry = ApiBody<'healthcareExaminationFind'>['data'];
 type Errors = Record<string, string[]>;
-
-const notStartedMessage =
-    'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
 
 function Fact({
     label,
@@ -236,6 +237,11 @@ function ExaminationRecord({
         canManage &&
         status !== null &&
         nextStatus('mulai_periksa', status) !== null;
+    const canFinish =
+        editable &&
+        status !== null &&
+        nextStatus('selesai_periksa', status) !== null;
+    const finished = shown.context.status === 'selesai';
     const [refusal, setRefusal] = useState<string | null>(null);
     const showEntry = (body: { data: Entry }) => {
         queryClient.setQueryData(entryOptions.queryKey, {
@@ -467,13 +473,10 @@ function ExaminationRecord({
           )?.name ?? entry.gender)
         : null;
     const notice =
-        shown.context.status === 'selesai'
-            ? 'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.'
-            : shown.context.status === 'diperiksa'
-              ? canManage
-                  ? null
-                  : 'Anda dapat melihat pemeriksaan ini, tetapi belum diberi izin mengisinya.'
-              : notStartedMessage;
+        recordLockedMessage(shown.context.status) ??
+        (canManage
+            ? null
+            : 'Anda dapat melihat pemeriksaan ini, tetapi belum diberi izin mengisinya.');
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -511,7 +514,20 @@ function ExaminationRecord({
                         Mulai periksa
                     </Button>
                 )}
-                {editable && (
+                {editable && finished && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="command"
+                        data-action="save"
+                        disabled={busy}
+                        onClick={() => void save()}
+                    >
+                        <Save aria-hidden="true" />
+                        {busy ? 'Menyimpan…' : 'Update'}
+                    </Button>
+                )}
+                {editable && !finished && (
                     <ActionButton
                         action="save"
                         type="button"
@@ -520,7 +536,7 @@ function ExaminationRecord({
                         onClick={() => void save()}
                     />
                 )}
-                {editable && (
+                {canFinish && (
                     <Button
                         type="button"
                         variant="ghost"
@@ -586,7 +602,11 @@ function ExaminationRecord({
                                     metadata={recordMetadata}
                                     errors={errors}
                                     disabled={!editable || busy}
-                                    onRefer={refer}
+                                    onRefer={
+                                        shown.context.status === 'diperiksa'
+                                            ? refer
+                                            : null
+                                    }
                                 />
                             )}
                             <Card>
@@ -708,7 +728,11 @@ function ExaminationRecord({
                                     onClick={() => void save()}
                                 >
                                     <Save aria-hidden="true" />
-                                    {busy ? 'Menyimpan…' : 'Simpan'}
+                                    {busy
+                                        ? 'Menyimpan…'
+                                        : finished
+                                          ? 'Update'
+                                          : 'Simpan'}
                                 </Button>
                             )}
                         </div>

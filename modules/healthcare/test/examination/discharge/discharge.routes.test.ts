@@ -39,7 +39,7 @@ type Status = {
 };
 
 const finished =
-    'Pemeriksaan ini sudah selesai, jadi isinya tidak dapat diubah lagi.';
+    'Pemeriksaan ini sudah selesai, jadi tidak dapat menambah rujuk internal.';
 
 // Panel Status Pasien dan rujuk internal halaman pemeriksaan: data acuan dari sistem lama, setiap status tersimpan
 // beserta isiannya, rujuk internal membuat tujuan baru dengan antrean dan NoBukti, poli ganda ditolak, pemeriksaan

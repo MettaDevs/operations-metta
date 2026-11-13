@@ -53,6 +53,30 @@ export function nextStatus(
     return queueTransitions[action][from] ?? null;
 }
 
+export const notStartedMessage =
+    'Silahkan Klik Tombol Mulai Untuk Memulai Pemeriksaan !';
+
+// Rekam medis bisa diubah sesudah Mulai periksa, dan tetap bisa diubah sesudah Selesai periksa seperti sistem lama yang
+// mengganti Simpan menjadi Update (poly/views/form/statuspasien/index.php:282-294). Null berarti boleh; selain itu
+// alasan penolakannya.
+export function recordLockedMessage(status: DestinationStatus): string | null {
+    switch (status) {
+        case 'diperiksa':
+        case 'selesai':
+            return null;
+        case 'menunggu':
+        case 'dipanggil':
+        case 'tidak_datang':
+            return notStartedMessage;
+        case 'batal':
+            return refusedMessage(status);
+        default: {
+            const unknown: never = status;
+            return unknown;
+        }
+    }
+}
+
 // Alasan tindakan ditolak di status ini, dalam kalimat untuk petugas.
 export function refusedMessage(from: DestinationStatus): string {
     switch (from) {
