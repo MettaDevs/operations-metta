@@ -21,6 +21,11 @@ import {
     type ProcedureOption,
 } from './procedure.options.ts';
 import {
+    ProcedurePrices,
+    type CheckedPrice,
+    type ProcedurePrice,
+} from './procedure-price.service.ts';
+import {
     procedureInputSchema,
     procedureRowSchema,
 } from './procedure.schema.ts';
@@ -90,12 +95,16 @@ const choice = z.object({
     active: z.boolean(),
 });
 
-// Tindakan milik tenant, diisi lewat Setup atau dari baris Biaya Tindakan oleh yang boleh memeriksa. Tarif belum ada.
+// Tindakan milik tenant, diisi lewat Setup atau dari baris Biaya Tindakan oleh yang boleh memeriksa.
 export class Procedures {
+    private readonly prices: ProcedurePrices;
+
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
-    ) {}
+    ) {
+        this.prices = new ProcedurePrices(db, workspace.tenantId);
+    }
 
     // Pilihan nonaktif ikut, supaya tindakan yang sudah memegangnya tetap terbaca namanya.
     async metadata() {
@@ -151,6 +160,7 @@ export class Procedures {
                  where s.tenant_id = $1 and s.deleted_at is null order by o.name, s.nama`,
                 tenant,
             ),
+            ...(await this.prices.choices()),
         };
     }
 
@@ -201,6 +211,16 @@ export class Procedures {
         return row;
     }
 
+    private async record(id: string) {
+        const row = await this.row(id);
+        return { ...row, prices: await this.prices.list(row.id) };
+    }
+
+    async show(id: string) {
+        this.workspace.guard('procedure', 'read');
+        return { data: await this.record(id) };
+    }
+
     // Baris master yang masih ada. Yang nonaktif hanya boleh tetap dipakai tindakan yang sudah memegangnya.
     private async pickable(table: string, id: string, held: string | null) {
         return lookupId(id)
@@ -216,7 +236,11 @@ export class Procedures {
     // Kelompok, kategori, kategori plafon, alat, dan section nonaktif hanya boleh tetap dipakai tindakan yang sudah
     // memegangnya. Kategori harus milik kelompok tindakan, seperti pilihan kategori kartu Jasa sistem lama yang disaring
     // menurut kelompoknya.
-    private async checked(body: unknown, saved: Saved | null) {
+    private async checked(
+        body: unknown,
+        saved: Saved | null,
+        savedPrices: ProcedurePrice[],
+    ) {
         const parsed = procedureInputSchema.safeParse(body);
         const errors: Record<string, string> = {};
         const data = parsed.success ? parsed.data : null;
@@ -320,6 +344,10 @@ export class Procedures {
             )
                 errors.section_ids = 'Pilih section dari daftar.';
         }
+        const prices: CheckedPrice[] | null =
+            data?.prices === undefined
+                ? null
+                : await this.prices.checked(data.prices, savedPrices, errors);
         if (
             Object.keys(errors).length ||
             !data ||
@@ -348,6 +376,7 @@ export class Procedures {
                 ...flagValues,
             },
             sectionIds,
+            prices,
         };
     }
 
@@ -376,7 +405,7 @@ export class Procedures {
 
     async create(body: unknown) {
         this.workspace.guard('procedure', 'create');
-        const data = await this.checked(body, null);
+        const data = await this.checked(body, null, []);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -390,18 +419,25 @@ export class Procedures {
                 });
                 if (data.sectionIds)
                     await this.writeSections(id, data.sectionIds, stamp);
+                if (data.prices)
+                    await this.prices.write(id, data.prices, [], stamp);
             });
         } catch (error) {
             codeTaken(error);
             throw error;
         }
-        return { status: 201, headers: {}, body: { data: await this.row(id) } };
+        return {
+            status: 201,
+            headers: {},
+            body: { data: await this.record(id) },
+        };
     }
 
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('procedure', 'update');
         const current = await this.row(id);
-        const data = await this.checked(body, current);
+        const savedPrices = await this.prices.list(current.id);
+        const data = await this.checked(body, current, savedPrices);
         const stamp = nowSql();
         let updated = 0;
         try {
@@ -427,13 +463,24 @@ export class Procedures {
                         data.sectionIds,
                         stamp,
                     );
+                if (updated && data.prices)
+                    await this.prices.write(
+                        current.id,
+                        data.prices,
+                        savedPrices,
+                        stamp,
+                    );
             });
         } catch (error) {
             codeTaken(error);
             throw error;
         }
         if (!updated) coded(409, 'stale_version', staleMessage);
-        return { status: 200, headers: {}, body: { data: await this.row(id) } };
+        return {
+            status: 200,
+            headers: {},
+            body: { data: await this.record(id) },
+        };
     }
 
     // Tindakan yang sudah dipakai pemeriksaan tidak bisa dihapus; nonaktifkan supaya tidak dipilih lagi.
@@ -449,15 +496,20 @@ export class Procedures {
             validation({
                 id: 'Tindakan ini sudah dipakai di pemeriksaan. Nonaktifkan saja supaya tidak dipilih lagi.',
             });
-        const deleted = await this.db.execute(
-            'update sim_m_tindakan set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
-            [
-                nowSql(),
-                this.workspace.tenantId,
-                current.id,
-                expectedVersion(request, body),
-            ],
-        );
+        const stamp = nowSql();
+        let deleted = 0;
+        await this.db.transaction(async () => {
+            deleted = await this.db.execute(
+                'update sim_m_tindakan set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
+                [
+                    stamp,
+                    this.workspace.tenantId,
+                    current.id,
+                    expectedVersion(request, body),
+                ],
+            );
+            if (deleted) await this.prices.removeAll(current.id, stamp);
+        });
         if (!deleted) coded(409, 'stale_version', staleMessage);
         return { status: 204, headers: {}, body: undefined };
     }

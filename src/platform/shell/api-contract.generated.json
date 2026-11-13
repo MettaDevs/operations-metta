@@ -3583,6 +3583,18 @@
             }
         }
     },
+    "healthcareProcedureShow": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/procedures/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcareProcedureCreate": {
         "~orpc": {
             "errorMap": {},

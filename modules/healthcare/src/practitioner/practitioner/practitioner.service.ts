@@ -401,6 +401,15 @@ export class Practitioners {
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('practitioner', 'update');
         const current = await this.row(id);
+        const priced = await this.db.one(
+            z.object({ id: z.string() }),
+            'select id from sim_m_tindakan_harga where tenant_id = $1 and nakes_id = $2 and deleted_at is null limit 1',
+            [this.workspace.tenantId, current.id],
+        );
+        if (priced)
+            validation({
+                id: 'Tenaga kesehatan ini masih dipakai di harga tindakan. Nonaktifkan saja supaya tidak dipilih lagi.',
+            });
         const stamp = nowSql();
         const deleted = await this.db.execute(
             'update sim_m_nakes set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3 and version = $4 and deleted_at is null',
