@@ -645,6 +645,8 @@ export class ExaminationOrders {
                             ? null
                             : quantityOf(line.returned);
                     return {
+                        is_compound_header:
+                            line.drug_id === null && line.compound !== null,
                         drug_id: line.drug_id,
                         drug_code: line.drug_code,
                         drug_name: line.drug_name,
@@ -775,17 +777,15 @@ export class ExaminationOrders {
                 field('usage_instruction_id'),
                 errors,
             );
-            if (missing(row.drug_id)) {
-                if (compound === null) {
-                    add(errors, field('drug_id'), missingDrugMessage);
-                    continue;
-                }
+            if (row.is_compound_header === true) {
                 // Kepala racikan "Racikan N".
-                if (compounds.has(compound)) {
+                if (compound === null || compounds.has(compound)) {
                     add(errors, field('compound'), invalidCompoundMessage);
                     continue;
                 }
                 compounds.add(compound);
+                if (!missing(row.drug_id))
+                    add(errors, field('drug_id'), 'Isian ini tidak sah.');
                 if (!missing(row.quantity))
                     add(errors, field('quantity'), 'Isian ini tidak sah.');
                 const before = saved.find(
@@ -820,6 +820,10 @@ export class ExaminationOrders {
                     ),
                     notes,
                 });
+                continue;
+            }
+            if (missing(row.drug_id)) {
+                add(errors, field('drug_id'), missingDrugMessage);
                 continue;
             }
             const id =

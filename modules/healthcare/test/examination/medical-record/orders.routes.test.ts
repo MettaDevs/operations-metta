@@ -26,6 +26,7 @@ type ProcedureLine = {
     added_at?: string | null;
 };
 type Line = {
+    is_compound_header?: boolean;
     drug_id: string | null;
     unit_id?: string | null;
     unit_code?: string | null;
@@ -678,6 +679,7 @@ describe.skipIf(!process.env.DB_HOST)(
             const compounded: Line[] = [
                 single(paracetamol.id, '10'),
                 {
+                    is_compound_header: true,
                     drug_id: null,
                     compound: 1,
                     quantity: null,
@@ -690,6 +692,23 @@ describe.skipIf(!process.env.DB_HOST)(
                 { drug_id: amoxicillin.id, compound: 1, quantity: 0.5 },
                 { drug_id: ctm.id, compound: 1, quantity: 1 },
             ];
+            // Komponen yang baru diberi nomor racikan belum punya obat; ia bukan kepala racikan kedua.
+            expect(
+                await refused(
+                    await save(admin, id, {
+                        prescriptions: [
+                            draft([
+                                ...compounded.slice(0, 2),
+                                { drug_id: null, compound: 1, quantity: 1 },
+                            ]),
+                        ],
+                    }),
+                ),
+            ).toEqual({
+                'prescriptions.0.lines.2.drug_id': [
+                    'Pilih Obat Sebelum ditambahkan kedalam resep',
+                ],
+            });
             expect(
                 await refused(
                     await save(admin, id, {
@@ -734,6 +753,7 @@ describe.skipIf(!process.env.DB_HOST)(
                     quantity: 10,
                 },
                 {
+                    is_compound_header: true,
                     drug_id: null,
                     compound: 1,
                     requested_quantity: 10,
@@ -799,6 +819,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 duration_days: null,
             };
             const header: Line = {
+                is_compound_header: true,
                 drug_id: null,
                 compound: 1,
                 quantity: null,
@@ -1064,6 +1085,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 { code: 'KAPSUL', name: 'Kapsul' },
             );
             const header = (compound: number): Line => ({
+                is_compound_header: true,
                 drug_id: null,
                 compound,
                 quantity: null,
@@ -1389,6 +1411,7 @@ describe.skipIf(!process.env.DB_HOST)(
                         prescriptions: [
                             draft([
                                 {
+                                    is_compound_header: true,
                                     drug_id: null,
                                     compound: 1,
                                     quantity: null,
@@ -1866,6 +1889,7 @@ describe.skipIf(!process.env.DB_HOST)(
                             [
                                 single(amoxicillin.id, '15'),
                                 {
+                                    is_compound_header: true,
                                     drug_id: null,
                                     compound: 1,
                                     quantity: null,
