@@ -11,7 +11,6 @@ import { drugClassRoutes } from './drug/drug-class/drug-class.routes.ts';
 import { drugPriceRoutes } from './drug/drug-price/drug-price.routes.ts';
 import { drugRoutes } from './drug/drug/drug.routes.ts';
 import { gradingGroupRoutes } from './drug/grading-group/grading-group.routes.ts';
-import { pharmacySetupRoutes } from './drug/setup/pharmacy-setup.routes.ts';
 import { moduleId } from './module.ts';
 
 export function pharmacyRoutes() {
@@ -24,7 +23,6 @@ export function pharmacyRoutes() {
         ...drugRoutes(),
         ...gradingGroupRoutes(),
         ...drugPriceRoutes(),
-        ...pharmacySetupRoutes(),
     };
 }
 

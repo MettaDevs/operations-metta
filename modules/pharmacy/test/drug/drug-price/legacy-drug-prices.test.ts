@@ -5,9 +5,9 @@ import {
     quantityScale,
     toNumeric,
 } from '../../../../../src/foundation/inventory/index.ts';
+import { unitAmountDecimalOptions as unitPriceDecimalOptions } from '../../../../../src/foundation/currency/index.ts';
 import {
     drugPrice,
-    unitPriceDecimalOptions,
     type PriceGrading,
 } from '../../../src/drug/drug-price/drug-price.calculation.ts';
 import fixture from './legacy-drug-prices.json';

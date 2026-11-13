@@ -19,7 +19,10 @@ import {
     quantityScale,
     toNumeric,
 } from '@core/foundation/inventory/index.ts';
-import { pharmacySetup } from '../setup/pharmacy-setup.service.ts';
+import {
+    Currency,
+    localCurrencyCode,
+} from '@core/foundation/currency/index.ts';
 import {
     drugPrice,
     type DrugPrice,
@@ -140,10 +143,10 @@ export async function priceDrugLines<
                   ),
                   effectiveFrom: row.effective_from,
               }));
-    const { unit_price_decimals: unitPriceDecimals } = await pharmacySetup(
+    const { unit_amount_decimals: unitPriceDecimals } = await new Currency(
         db,
-        scope,
-    );
+        scope.tenantId,
+    ).precision(localCurrencyCode);
     return lines.map((line) => {
         const item = items.get(line.itemId);
         if (!item) throw new Error(`Item ${line.itemId} was not found.`);

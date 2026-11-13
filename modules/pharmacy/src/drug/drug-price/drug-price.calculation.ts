@@ -1,4 +1,5 @@
 import { quantityScale } from '@core/foundation/inventory/index.ts';
+import { divideRounded } from '@core/platform/money/index.ts';
 
 // Harga obat, makna GetHargaObatNew_WithStok sistem lama (Seroja, Penta, Kuta 1). Angka uang dan persen adalah bigint
 // berskala empat angka di belakang koma, sama dengan kolom numeric(18,4) dan numeric(7,4); tanggal teks YYYY-MM-DD.
@@ -20,12 +21,6 @@ export type PriceGrading = {
     effectiveFrom: string;
 };
 
-// Banyak angka di belakang koma harga satuan obat, setelan farmasi per legal entity (far_m_parameter), padanan
-// Unit-Amount Rounding Precision BC. Sistem lama: Kuta 1 dan Penta 0 (round(@HargaObat, 0)), Seroja 4 (money tanpa
-// round).
-export const unitPriceDecimalOptions = [0, 1, 2, 3, 4] as const;
-export type UnitPriceDecimals = (typeof unitPriceDecimalOptions)[number];
-
 // basePrice per satuan dasar barang; quantityPerUnit isi satuan baris dalam satuan dasar. priceGroupId kosong berarti
 // pembeli tanpa kelompok harga. ktpPatient dari kunjungan resep.
 export type DrugPriceInput = {
@@ -35,7 +30,10 @@ export type DrugPriceInput = {
     ktpPatient: boolean;
     date: string;
     quantityPerUnit: bigint;
-    unitPriceDecimals: UnitPriceDecimals;
+    // Presisi harga satuan mata uang lokal tenant (Unit-Amount Decimal Places BC, currency_precisions). Sistem lama:
+    // Kuta 1 dan Penta 0 (round(@HargaObat, 0)), Seroja 4 (money tanpa round). Kolom harga satuan obat berskala empat,
+    // jadi presisi di atas empat dibulatkan ke empat.
+    unitPriceDecimals: number;
 };
 
 // unitPrice per satuan baris, sudah dibulatkan ke unitPriceDecimals. Diskon tidak mengurangi unitPrice; ia disimpan
@@ -93,12 +91,16 @@ export function drugPrice(
         input.basePrice *
         (hundredPercent + markupPercent) *
         input.quantityPerUnit;
-    const step = 10n ** BigInt(quantityScale - input.unitPriceDecimals);
+    const step =
+        10n **
+        BigInt(
+            quantityScale - Math.min(input.unitPriceDecimals, quantityScale),
+        );
     const divisor = hundredPercent * one * step;
     return {
         gradingId: grading?.id ?? null,
         markupPercent,
-        unitPrice: ((exact + divisor / 2n) / divisor) * step,
+        unitPrice: divideRounded(exact, divisor) * step,
         discountPercent: grading?.discountPercent ?? 0n,
     };
 }

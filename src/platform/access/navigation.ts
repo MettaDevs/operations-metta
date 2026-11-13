@@ -342,6 +342,19 @@ export const sysAdminArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'currency',
+            label: 'Mata uang',
+            icon: 'wallet',
+            items: [
+                {
+                    id: 'currencies',
+                    label: 'Mata uang',
+                    href: '/sysadmin/currency/currencies',
+                    permission: 'core.reference-data.read',
+                },
+            ],
+        },
+        {
             id: 'calendar',
             label: 'Kalender',
             icon: 'calendar',

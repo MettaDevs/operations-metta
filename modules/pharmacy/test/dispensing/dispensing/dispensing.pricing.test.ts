@@ -87,14 +87,40 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             )
         ).data;
 
+    // Presisi harga satuan rupiah di Sys Admin › Mata uang. Tenant uji mulai seperti Kuta 1 dan Penta (rupiah utuh);
+    // presisi jumlah tidak boleh lebih halus dari harga satuan.
+    let currency: { id: string; version: number } | null = null;
+    async function setting(unit_amount_decimals: number) {
+        const body = {
+            currency_code: 'IDR',
+            amount_decimals: Math.min(2, unit_amount_decimals),
+            unit_amount_decimals,
+            invoice_rounding_precision: '1',
+            invoice_rounding_type: 'nearest',
+        };
+        currency = (
+            await json<{ data: { id: string; version: number } }>(
+                currency
+                    ? await pharmacy.admin.patch(
+                          `/api/v1/currencies/${currency.id}`,
+                          { ...body, version: currency.version },
+                      )
+                    : await pharmacy.admin.post('/api/v1/currencies', body),
+                currency ? 200 : 201,
+            )
+        ).data;
+    }
+
     beforeAll(async () => {
         pharmacy = await createPharmacy(pool, browser, 'Farmasi Uji Harga', {
             duties: [
                 ...pharmacyDuties,
                 'pharmacy.dispensing.manage',
                 'core.pricing-setup.manage',
+                'core.reference-data.manage',
             ],
         });
+        await setting(0);
         farmasi = await pharmacy.location('FARMASI');
         await pharmacy.created(`${api}/service-locations`, {
             operating_unit_id: pharmacy.unitId,
@@ -280,17 +306,6 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             }),
             200,
         );
-        const setting = async (
-            unit_price_decimals: number,
-            version: number | null,
-        ) =>
-            json<{ data: { version: number } }>(
-                await pharmacy.admin.put(`${api}/setup`, {
-                    unit_price_decimals,
-                    version,
-                }),
-                200,
-            );
         const columns = async (billId: string) => [
             ...(await pool.unsafe<{ harga_satuan: string }[]>(
                 'select harga_satuan::text as harga_satuan from bill_farmasi_detail where bill_farmasi_id = $1',
@@ -298,7 +313,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             )),
         ];
 
-        const saved = await setting(4, null);
+        await setting(4);
         const exact = await prepare(await prescribe(null));
         const exactBill = exact.dispensing?.id ?? '';
         expect(await columns(exactBill)).toEqual([
@@ -309,7 +324,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
         ]);
         expect(exact.dispensing?.total_amount).toBe('1687.63');
 
-        await setting(0, saved.data.version);
+        await setting(0);
         expect(await columns(exactBill)).toEqual([
             { harga_satuan: '843.8170' },
         ]);

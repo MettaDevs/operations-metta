@@ -2769,6 +2769,42 @@
             }
         }
     },
+    "currencyList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/currencies",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "currencyCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/currencies",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "currencyUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/v1/currencies/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "receiptList": {
         "~orpc": {
             "errorMap": {},
@@ -4766,30 +4802,6 @@
             "route": {
                 "method": "DELETE",
                 "path": "/api/modules/pharmacy/v1/drug-prices/{id}",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "pharmacySetupShow": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "GET",
-                "path": "/api/modules/pharmacy/v1/setup",
-                "inputStructure": "detailed",
-                "outputStructure": "detailed"
-            }
-        }
-    },
-    "pharmacySetupUpdate": {
-        "~orpc": {
-            "errorMap": {},
-            "meta": {},
-            "route": {
-                "method": "PUT",
-                "path": "/api/modules/pharmacy/v1/setup",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }

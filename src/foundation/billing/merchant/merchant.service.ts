@@ -14,8 +14,8 @@ import {
     staleMessage,
     validation,
 } from '../../../platform/http/index.ts';
+import { percentHint, percentInput } from '../../../platform/money/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
-import { decimalText } from '../billing.service.ts';
 import { merchantInputSchema, merchantRowSchema } from './merchant.schema.ts';
 
 const rowSql = `select * from (
@@ -48,10 +48,8 @@ function checked(body: unknown) {
         errors.name = 'Nama merchan paling banyak 100 karakter.';
     const percents: Record<string, string> = {};
     for (const { field, column } of percentFields) {
-        const value = decimalText(data?.[field] ?? 0, 2, '0', '100');
-        if (value === null)
-            errors[field] =
-                'Isi persen 0 sampai 100, paling banyak dua angka di belakang koma.';
+        const value = percentInput(data?.[field] ?? 0);
+        if (value === null) errors[field] = percentHint();
         else percents[column] = value;
     }
     if (Object.keys(errors).length || !data) validation(errors);

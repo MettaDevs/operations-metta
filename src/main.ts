@@ -48,6 +48,7 @@ import {
     billingRoutes,
     registerBillingEventHandlers,
 } from './foundation/billing/index.ts';
+import { currencyRoutes } from './foundation/currency/index.ts';
 import { inventoryRoutes } from './foundation/inventory/index.ts';
 import { pricingRoutes } from './foundation/pricing/index.ts';
 import { purchasingRoutes } from './foundation/purchasing/index.ts';
@@ -147,6 +148,7 @@ export const router = {
     ...purchasingRoutes(),
     ...pricingRoutes(),
     ...billingRoutes(),
+    ...currencyRoutes(),
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
     ...pharmacyRoutes(),

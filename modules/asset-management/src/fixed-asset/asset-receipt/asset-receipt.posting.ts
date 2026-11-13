@@ -40,7 +40,7 @@ export class AcquisitionPosting {
         const blockers: Record<string, string> = {};
         const precision = await this.currency.precision(receipt.currency_code);
         if (precision.amount_decimals > 2)
-            blockers.currency_code = `Presisi nilai ${receipt.currency_code} (${precision.amount_decimals} desimal) lebih halus dari yang dapat dicatat register aset (2 desimal). Ubah presisinya di Data referensi › Mata uang.`;
+            blockers.currency_code = `Presisi nilai ${receipt.currency_code} (${precision.amount_decimals} desimal) lebih halus dari yang dapat dicatat register aset (2 desimal). Ubah presisinya di Sys Admin › Mata uang.`;
         if (
             !['pembelian', 'hibah', 'saldo_awal'].includes(
                 receipt.cara_perolehan,

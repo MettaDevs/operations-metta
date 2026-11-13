@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
+import type { Precision } from '../../../../src/foundation/currency/index.ts';
 import { invoiceTotals } from '../../../../src/foundation/billing/invoice/invoice.totals.ts';
 import fixture from './legacy-invoice-totals.json';
+
+// Presisi rupiah tanpa baris setelan: jumlah dua angka di belakang koma, tagihan dibulatkan ke rupiah terdekat.
+const rupiah: Precision = {
+    amount_decimals: 2,
+    unit_amount_decimals: 3,
+    invoice_rounding_precision: '1',
+    invoice_rounding_type: 'nearest',
+};
 
 const lines = (rows: string[][]) =>
     rows.map(([, group, quantity, value, discount, extra, original]) => ({
@@ -24,7 +33,7 @@ const nonZero = (
 // sistem lama kadang tidak menulis kelompok obat bernilai 0, bergantung kapan obat direalisasi.
 test('the invoice value and the value per service group match the legacy Kuta payments', () => {
     for (const legacy of fixture.cases) {
-        const totals = invoiceTotals(lines(legacy.lines));
+        const totals = invoiceTotals(lines(legacy.lines), rupiah);
         expect({ case: legacy.case, value: totals.value }).toEqual({
             case: legacy.case,
             value: legacy.value,
@@ -46,21 +55,38 @@ test('the original value matches the legacy payments without drug lines', () => 
     for (const legacy of compared)
         expect({
             case: legacy.case,
-            value: invoiceTotals(lines(legacy.lines)).originalValue,
+            value: invoiceTotals(lines(legacy.lines), rupiah).originalValue,
         }).toEqual({ case: legacy.case, value: legacy.original_value });
 });
 
+const line = {
+    serviceGroupId: 'A',
+    quantity: '3',
+    value: '10001',
+    discountPercent: '12.5',
+    extra: '0.25',
+    originalPrice: '10001',
+};
+
 test('a discount percent and a per-line extra round half away from zero to the rupiah', () => {
+    expect(invoiceTotals([line], rupiah).value).toBe('26253');
+});
+
+test('the invoice follows the currency rounding: amount decimals, then the rounding multiple and type', () => {
+    const totals = (precision: Partial<Precision>) =>
+        invoiceTotals([line], { ...rupiah, ...precision }).value;
+    expect(totals({ invoice_rounding_precision: '0' })).toBe('26252.88');
+    expect(totals({ invoice_rounding_precision: '100' })).toBe('26300');
     expect(
-        invoiceTotals([
-            {
-                serviceGroupId: 'A',
-                quantity: '3',
-                value: '10001',
-                discountPercent: '12.5',
-                extra: '0.25',
-                originalPrice: '10001',
-            },
-        ]).value,
-    ).toBe('26253');
+        totals({
+            invoice_rounding_precision: '100',
+            invoice_rounding_type: 'down',
+        }),
+    ).toBe('26200');
+    expect(
+        totals({
+            invoice_rounding_precision: '1000',
+            invoice_rounding_type: 'up',
+        }),
+    ).toBe('27000');
 });

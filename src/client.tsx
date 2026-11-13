@@ -44,7 +44,6 @@ import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modul
 import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../modules/pharmacy/src/drug/drug-price/drug-prices.page.tsx';
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
-import { page as modulesPharmacySrcDrugSetupPharmacySetupPage } from '../modules/pharmacy/src/drug/setup/pharmacy-setup.page.tsx';
 import { page as foundationBillingClerkClerkPage } from './foundation/billing/clerk/clerk.page.tsx';
 import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
@@ -54,6 +53,7 @@ import { page as foundationBillingMerchantMerchantsPage } from './foundation/bil
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
+import { page as foundationCurrencyCurrenciesPage } from './foundation/currency/currencies.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
 import { page as foundationInventoryCodeListFundingSourcesPage } from './foundation/inventory/code-list/funding-sources.page.tsx';
 import { page as foundationInventoryCodeListProcurementProgramsPage } from './foundation/inventory/code-list/procurement-programs.page.tsx';
@@ -580,13 +580,6 @@ const modulesPharmacySrcDrugGradingGroupGradingGroupsRoute = createRoute({
     },
 });
 
-const modulesPharmacySrcDrugSetupPharmacySetupRoute = createRoute({
-    getParentRoute: () => appLayoutRoute,
-    path: modulesPharmacySrcDrugSetupPharmacySetupPage.path,
-    component: modulesPharmacySrcDrugSetupPharmacySetupPage.component,
-    staticData: { title: modulesPharmacySrcDrugSetupPharmacySetupPage.title },
-});
-
 const foundationBillingClerkClerkRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationBillingClerkClerkPage.path,
@@ -657,6 +650,13 @@ const foundationCalendarWorkingTimeTemplatesRoute = createRoute({
     component: foundationCalendarWorkingTimeTemplatesPage.component,
     validateSearch: foundationCalendarWorkingTimeTemplatesPage.validateSearch,
     staticData: { title: foundationCalendarWorkingTimeTemplatesPage.title },
+});
+
+const foundationCurrencyCurrenciesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationCurrencyCurrenciesPage.path,
+    component: foundationCurrencyCurrenciesPage.component,
+    staticData: { title: foundationCurrencyCurrenciesPage.title },
 });
 
 const foundationInventoryAdjustmentAdjustmentsRoute = createRoute({
@@ -1034,7 +1034,6 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDrugDrugPriceDrugPricesRoute,
         modulesPharmacySrcDrugDrugDrugsRoute,
         modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
-        modulesPharmacySrcDrugSetupPharmacySetupRoute,
         foundationBillingClerkClerkRoute,
         foundationBillingClerkClerksRoute,
         foundationBillingDashboardDashboardRoute,
@@ -1044,6 +1043,7 @@ const routeTree = rootRoute.addChildren([
         foundationBillingPaymentMethodPaymentMethodsRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
+        foundationCurrencyCurrenciesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,
         foundationInventoryCodeListFundingSourcesRoute,
         foundationInventoryCodeListProcurementProgramsRoute,

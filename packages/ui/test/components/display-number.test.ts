@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    displayAmount,
     displayNumber,
     parseDisplayNumber,
 } from '../../src/components/display-number.ts';
@@ -51,4 +52,12 @@ describe('numbers on screen', () => {
         for (const value of ['12500', '1.5', '1234567.8901', '-2500.25', '0'])
             expect(parseDisplayNumber(displayNumber(value))).toBe(value);
     });
+});
+
+test('money is shown at the precision of its currency, rounded half away from zero', () => {
+    expect(displayAmount('1234.5', 2)).toBe('1.234,50');
+    expect(displayAmount('1234.555', 2)).toBe('1.234,56');
+    expect(displayAmount('843.817', 0)).toBe('844');
+    expect(displayAmount('-12.345', 2)).toBe('-12,35');
+    expect(displayAmount('-0.004', 2)).toBe('0,00');
 });
