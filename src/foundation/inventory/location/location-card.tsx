@@ -63,9 +63,11 @@ export function LocationCard({
     const { confirm, confirmation } = useConfirmation();
     // Popup pilihan dipasang di dalam kartu, karena pemanggil tidak selalu memberi ref isi dialognya.
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(formOf(record));
     usePageDialogRecord({
         recordTitle: record ? `${record.code} ${record.name}` : 'Lokasi baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

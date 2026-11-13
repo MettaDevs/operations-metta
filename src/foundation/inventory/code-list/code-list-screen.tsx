@@ -88,11 +88,13 @@ export function CodeEntryCard({
     const [message, setMessage] = useState<string | null>(null);
     const [operation, setOperation] = useState('belum disimpan');
     const { confirm, confirmation } = useConfirmation();
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: entry
             ? `${entry.code} ${entry.name}`
             : `${source.title} baru`,
         editing,
+        dirty,
     });
 
     const save = async () => {

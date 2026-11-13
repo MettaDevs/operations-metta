@@ -68,11 +68,14 @@ export function ItemCategoryCard({
     const idPrefix = useId();
     // Popup pilihan dipasang di dalam kartu, karena pemanggil tidak selalu memberi ref isi dialognya.
     const portalContainer = useRef<HTMLDivElement>(null);
+    const dirty =
+        JSON.stringify(form) !== JSON.stringify(formOf(record, parent));
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
             : 'Kategori barang baru',
         editing,
+        dirty,
     });
 
     const save = async () => {

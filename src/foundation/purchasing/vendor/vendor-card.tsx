@@ -52,9 +52,11 @@ export function VendorCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
+    const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
         recordTitle: vendor ? `${vendor.number} ${vendor.name}` : 'Vendor baru',
         editing,
+        dirty,
     });
 
     const save = async () => {
