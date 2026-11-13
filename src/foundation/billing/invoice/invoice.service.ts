@@ -19,6 +19,7 @@ import {
     visitRowSchema,
 } from './invoice.schema.ts';
 import { invoiceTotals } from './invoice.totals.ts';
+import { creditMemoPreview } from '../credit-memo/credit-memo.service.ts';
 import { patientTypeMessage } from '../payment/payment.service.ts';
 
 // Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
@@ -247,6 +248,8 @@ export class Invoices {
                 version: z.number(),
                 number: z.string(),
                 automatic: z.boolean(),
+                // Clerk pembayaran ini sudah Clerk End: koreksinya nota kredit, bukan Batal.
+                clerk_ended: z.boolean(),
                 discount: z.string(),
                 discounts: z.array(
                     z.object({
@@ -275,6 +278,8 @@ export class Invoices {
             // valuta melebihi uang yang diterima. Layar menampilkannya seperti saat kasir mengisi: uang diterima di bawah
             // label jenis bayar tunai, lalu Kembalian, jadi barisnya tidak ikut daftar jenis bayar lain.
             `select k.id, k.version, k.no_bukti as number, k.otomatis as automatic,
+                    coalesce((select c.status <> 'start' from clerk c
+                              where c.tenant_id = k.tenant_id and c.id = k.clerk_id), false) as clerk_ended,
                     trim_scale(k.nilai_discount)::text as discount,
                     coalesce((select json_agg(json_build_object('name', m.nama, 'doctor_name', x.dokter_nama,
                                                                 'procedure_name', x.jenis_biaya_nama,
@@ -312,6 +317,15 @@ export class Invoices {
                 localCurrencyCode,
             ],
         );
+        // Pembayaran kunjungan ini yang sudah dikoreksi nota kredit, ditampilkan baca-saja di atas pembayaran barunya.
+        const creditMemos = await this.db.rows(
+            z.object({ number: z.string(), payment_number: z.string() }),
+            `select n.no_bukti as number, k.no_bukti as payment_number
+             from nota_kredit n join kasir k on k.tenant_id = n.tenant_id and k.id = n.kasir_id
+             where n.tenant_id = $1 and n.legal_entity_id = $2 and k.kunjungan_id = $3
+             order by n.jam, n.id`,
+            [this.scope.tenantId, this.scope.legalEntityId, visitId],
+        );
         return {
             data: {
                 visit,
@@ -323,7 +337,18 @@ export class Invoices {
                 payment_methods: paymentMethods,
                 merchants,
                 discounts,
-                payment: payment ?? null,
+                payment: payment
+                    ? {
+                          ...payment,
+                          credit_memo: payment.clerk_ended
+                              ? await creditMemoPreview(this.db, {
+                                    tenantId: this.scope.tenantId,
+                                    paymentId: payment.id,
+                                })
+                              : null,
+                      }
+                    : null,
+                credit_memos: creditMemos,
                 can_pay: this.workspace.permissions.has('core.payment.update'),
                 can_change_rate: this.workspace.permissions.has(
                     'core.payment-rate.update',

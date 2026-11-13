@@ -12,6 +12,7 @@ import {
     visitReopened,
 } from './charge/charge.events.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
+import { creditMemoRoutes } from './credit-memo/credit-memo.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';
 import { paymentRoutes } from './payment/payment.routes.ts';
 import { discountRoutes } from './discount/discount.routes.ts';
@@ -32,6 +33,10 @@ export {
     lockChargeForChange,
     patientTypeMessage,
 } from './payment/payment.service.ts';
+export {
+    automaticPaymentMessage,
+    openClerkPaymentMessage,
+} from './credit-memo/credit-memo.service.ts';
 export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
 
 let registered = false;
@@ -56,6 +61,7 @@ export function billingRoutes() {
         ...clerkRoutes(),
         ...invoiceRoutes(),
         ...paymentRoutes(),
+        ...creditMemoRoutes(),
         ...receivablePaymentRoutes(),
     };
 }

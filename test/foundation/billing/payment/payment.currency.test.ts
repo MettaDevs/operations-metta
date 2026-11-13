@@ -322,6 +322,8 @@ describe.skipIf(!process.env.DB_HOST)(
                 version: 1,
                 number: expect.any(String),
                 automatic: false,
+                clerk_ended: false,
+                credit_memo: null,
                 discount: '0',
                 discounts: [],
                 received: '0',

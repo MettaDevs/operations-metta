@@ -2853,6 +2853,18 @@
             }
         }
     },
+    "billingPaymentCreditMemo": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/billing/payments/{id}/credit-memo",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "billingReceivableList": {
         "~orpc": {
             "errorMap": {},

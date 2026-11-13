@@ -58,19 +58,83 @@ export const invoiceCancelled = 'billing.invoice.cancelled.v1' as const;
 const cancelPermission = 'core.payment.cancel';
 export const approvalMessage = 'Username atau Password Salah';
 export const closedClerkMessage =
-    'Pembayaran ini masuk clerk yang sudah Clerk End, jadi tidak bisa dibatalkan lagi.';
-const alreadyCancelledMessage = 'Pembayaran ini sudah dibatalkan.';
+    'Pembayaran ini masuk clerk yang sudah Clerk End, jadi tidak bisa dibatalkan. Koreksi lewat Nota Kredit.';
+
+// Status kasir: `batal` lewat Batal selama clerk-nya berjalan, `dikreditkan` lewat nota kredit sesudah Clerk End.
+export const paymentStatusSchema = z.enum([
+    'diposting',
+    'batal',
+    'dikreditkan',
+]);
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
+
+// Batal dan nota kredit hanya berlaku untuk pembayaran yang masih diposting.
+export function refuseUnlessPosted(status: PaymentStatus): void {
+    switch (status) {
+        case 'diposting':
+            return;
+        case 'batal':
+            return coded(
+                409,
+                'payment_cancelled',
+                'Pembayaran ini sudah dibatalkan.',
+            );
+        case 'dikreditkan':
+            return coded(
+                409,
+                'payment_credited',
+                'Pembayaran ini sudah dikoreksi dengan nota kredit.',
+            );
+        default: {
+            const unknown: never = status;
+            throw new Error(`Status pembayaran tidak dikenal: ${unknown}`);
+        }
+    }
+}
+
 const cancelledPaymentSchema = z.object({
     id: z.string(),
-    status: z.string(),
+    status: paymentStatusSchema,
     // Kosong untuk pembayaran otomatis, yang tidak masuk clerk mana pun.
     clerk_status: z.string().nullable(),
 });
 
-// Penyetuju batal pembayaran: email dan kata sandinya diperiksa sesi, hasilnya id pengguna atau null.
+// Penyetuju batal pembayaran dan nota kredit: email dan kata sandinya diperiksa sesi, hasilnya id pengguna atau null.
 export type ApproverCheck = {
     verify: (email: string, password: string) => Promise<string | null>;
 };
+
+// Isian persetujuan Batal dan nota kredit (modal Batal Pembayaran sistem lama): username dan password penyetuju yang
+// memegang izin batal pembayaran, lalu alasan. Penyetuju yang salah atau tidak berhak ditolak dengan pesan lama yang sama.
+export async function approval(
+    db: Database,
+    tenantId: string,
+    input: z.infer<typeof paymentCancelInputSchema>,
+    approver: ApproverCheck,
+    reasonName: string,
+): Promise<{ approverId: string; reason: string }> {
+    const reason = input.reason?.trim() ?? '';
+    const email = input.approver_email?.trim() ?? '';
+    const password = input.approver_password ?? '';
+    const errors: Record<string, string> = {};
+    if (!email) errors.approver_email = 'Isi username penyetuju.';
+    if (!password) errors.approver_password = 'Isi password penyetuju.';
+    if (!reason) errors.reason = `Isi alasan ${reasonName}.`;
+    else if (reason.length > 200)
+        errors.reason = `Alasan ${reasonName} paling banyak 200 karakter.`;
+    if (Object.keys(errors).length) validation(errors);
+    const approverId = await approver.verify(email, password);
+    if (
+        !approverId ||
+        !(
+            await Workspace.memberHolds(db, { tenantId, userId: approverId }, [
+                cancelPermission,
+            ])
+        ).has(cancelPermission)
+    )
+        validation({ approver_password: approvalMessage });
+    return { approverId, reason };
+}
 
 // Kunjungan yang dibuka kembali poli (rujuk internal sesudah Selesai periksa) belum siap dibayar.
 export const reopenedMessage =
@@ -119,7 +183,7 @@ const chargeSchema = z.object({
 
 // Kunci kunjungan untuk Simpan pembayaran dan perubahan biaya sumbernya, supaya keduanya tidak berjalan bersamaan:
 // yang kedua menunggu yang pertama selesai, lalu melihat hasilnya.
-async function lockVisit(
+export async function lockVisit(
     db: Database,
     tenantId: string,
     visitId: string,
@@ -127,6 +191,19 @@ async function lockVisit(
     await db.execute(
         "select pg_advisory_xact_lock(hashtextextended($1 || ':' || $2 || ':' || $3, 0))",
         [tenantId, source, visitId],
+    );
+}
+
+// Baris biaya yang ditagih pembayaran itu kembali terbuka, jadi kunjungannya kembali belum dibayar dan biayanya boleh
+// diubah lagi.
+export async function reopenCharges(
+    db: Database,
+    payment: { tenantId: string; paymentId: string; stamp: string },
+): Promise<void> {
+    await db.execute(
+        `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
+         where tenant_id = $2 and kasir_id = $3`,
+        [payment.stamp, payment.tenantId, payment.paymentId],
     );
 }
 
@@ -147,16 +224,8 @@ async function reopenCancelled(
         reason: string;
     },
 ): Promise<void> {
-    await cancelReceivables(db, {
-        tenantId: cancelled.tenantId,
-        paymentId: cancelled.paymentId,
-        stamp: cancelled.stamp,
-    });
-    await db.execute(
-        `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
-         where tenant_id = $2 and kasir_id = $3`,
-        [cancelled.stamp, cancelled.tenantId, cancelled.paymentId],
-    );
+    await cancelReceivables(db, cancelled);
+    await reopenCharges(db, cancelled);
     const lines = await db.rows(
         z.object({
             payment_method_id: z.string(),
@@ -250,7 +319,10 @@ export async function lockChargeForChange(
 
 type Scope = { tenantId: string; legalEntityId: string };
 
-async function legalEntityToday(db: Database, scope: Scope): Promise<string> {
+export async function legalEntityToday(
+    db: Database,
+    scope: Scope,
+): Promise<string> {
     const today = await db.one(
         z.object({ date: z.string() }),
         `select (now() at time zone l.timezone)::date::text as date
@@ -1023,37 +1095,20 @@ export class Payments {
               )
             : undefined;
         if (!payment) abort(404, 'Not Found');
-        if (payment.status !== 'diposting')
-            coded(409, 'payment_cancelled', alreadyCancelledMessage);
+        refuseUnlessPosted(payment.status);
         if (payment.clerk_status !== null && payment.clerk_status !== 'start')
             validation({ _form: closedClerkMessage });
         await refuseWhenPaidOff(this.db, {
             tenantId: scope.tenantId,
             paymentId: payment.id,
         });
-        const input = parsed.data;
-        const reason = input.reason?.trim() ?? '';
-        const email = input.approver_email?.trim() ?? '';
-        const password = input.approver_password ?? '';
-        const errors: Record<string, string> = {};
-        if (!email) errors.approver_email = 'Isi username penyetuju.';
-        if (!password) errors.approver_password = 'Isi password penyetuju.';
-        if (!reason) errors.reason = 'Isi alasan batal.';
-        else if (reason.length > 200)
-            errors.reason = 'Alasan batal paling banyak 200 karakter.';
-        if (Object.keys(errors).length) validation(errors);
-        const approverId = await approver.verify(email, password);
-        if (
-            !approverId ||
-            !(
-                await Workspace.memberHolds(
-                    this.db,
-                    { tenantId: scope.tenantId, userId: approverId },
-                    [cancelPermission],
-                )
-            ).has(cancelPermission)
-        )
-            validation({ approver_password: approvalMessage });
+        const { approverId, reason } = await approval(
+            this.db,
+            scope.tenantId,
+            parsed.data,
+            approver,
+            'batal',
+        );
         await this.db.transaction(async () => {
             const stamp = nowSql();
             const header = await this.db.one(

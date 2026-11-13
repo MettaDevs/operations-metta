@@ -14,16 +14,18 @@ import { Input } from '@operations-metta/ui/input';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { Undo2 } from 'lucide-react';
+import { ReceiptText, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { definePage, orpc } from '../../../platform/shell/index.ts';
+import { CreditMemoDialog } from '../credit-memo/credit-memo-dialog.tsx';
 import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
 import { PaymentForm } from '../payment/payment-form.tsx';
 
 // Form Pembayaran Kuta 1: panel Pasien, Rincian Biaya, dan Detail Pembayaran. Nilai dihitung server dengan rumus
 // kasir Kuta (invoice.totals.ts); kunjungan yang sudah dibayar menampilkan pembayarannya. Rincian menampilkan nilai baris apa adanya; sistem lama
-// membulatkan tampilan baris ke atas per 1.000, padahal yang ditagih nilai tepatnya.
+// membulatkan tampilan baris ke atas per 1.000, padahal yang ditagih nilai tepatnya. Pembayaran yang clerk-nya masih
+// berjalan dikoreksi dengan Batal Pembayaran; sesudah Clerk End, dengan Nota Kredit.
 
 const route = getRouteApi('/_app/billing/payments/$visitId');
 
@@ -36,7 +38,7 @@ function PaymentPage(): ReactNode {
         }),
     );
     const { visit, charges, totals, payment } = data;
-    const [cancelling, setCancelling] = useState(false);
+    const [correcting, setCorrecting] = useState(false);
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const groupCount = new Set(
         charges.map(
@@ -51,23 +53,46 @@ function PaymentPage(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="command"
-                        onClick={() => setCancelling(true)}
+                        onClick={() => setCorrecting(true)}
                     >
-                        <Undo2 aria-hidden="true" />
-                        Batal Pembayaran
+                        {payment.clerk_ended ? (
+                            <>
+                                <ReceiptText aria-hidden="true" />
+                                Nota Kredit
+                            </>
+                        ) : (
+                            <>
+                                <Undo2 aria-hidden="true" />
+                                Batal Pembayaran
+                            </>
+                        )}
                     </Button>
                 )}
             </RecordActionBar>
-            {payment && cancelling && (
-                <PaymentCancelDialog
-                    payment={payment}
-                    onClose={() => setCancelling(false)}
-                    onCancelled={async () => {
-                        setCancelling(false);
-                        await refetch();
-                    }}
-                />
-            )}
+            {payment &&
+                correcting &&
+                (payment.credit_memo ? (
+                    <CreditMemoDialog
+                        payment={payment}
+                        preview={payment.credit_memo}
+                        amountDecimals={data.amount_decimals}
+                        localCurrency={data.local_currency}
+                        onClose={() => setCorrecting(false)}
+                        onPosted={async () => {
+                            setCorrecting(false);
+                            await refetch();
+                        }}
+                    />
+                ) : (
+                    <PaymentCancelDialog
+                        payment={payment}
+                        onClose={() => setCorrecting(false)}
+                        onCancelled={async () => {
+                            setCorrecting(false);
+                            await refetch();
+                        }}
+                    />
+                ))}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <CollapsibleSectionGroup
                     defaultValue={['patient', 'charges', 'cashier']}
@@ -229,6 +254,19 @@ function PaymentPage(): ReactNode {
                         }
                         summary={`Nilai ${displayAmount(totals.value, data.amount_decimals)}`}
                     >
+                        {data.credit_memos.length > 0 && (
+                            <FormGrid className="mb-4">
+                                {data.credit_memos.map((memo) => (
+                                    <FormControl key={memo.number}>
+                                        <Input
+                                            label={`Pembayaran ${memo.payment_number}`}
+                                            value={`Dikoreksi dengan nota kredit ${memo.number}`}
+                                            readOnly
+                                        />
+                                    </FormControl>
+                                ))}
+                            </FormGrid>
+                        )}
                         {payment ? (
                             <FormGrid>
                                 <FormControl
