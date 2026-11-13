@@ -10,6 +10,9 @@ import { dischargeRoutes } from './examination/discharge/discharge.routes.ts';
 import {
     prescriptionDispensed,
     receiveDispensing,
+    receiveReturn,
+    returnPosted,
+    returnReversed,
 } from './examination/medical-record/dispensing.events.ts';
 import { medicalRecordRoutes } from './examination/medical-record/medical-record.routes.ts';
 import { examinationQueueRoutes } from './examination/queue/queue.routes.ts';
@@ -50,9 +53,12 @@ export function healthcareRoutes() {
 
 let registered = false;
 
-// Dipanggil src/main.ts dan src/worker.ts. Proses yang tidak memanggilnya tidak mengantar penyerahan obat ke E-Resep.
+// Dipanggil src/main.ts dan src/worker.ts. Proses yang tidak memanggilnya tidak mengantar penyerahan dan retur obat ke
+// E-Resep.
 export function registerHealthcareEventHandlers(): void {
     if (registered) return;
     registered = true;
     onEvent(prescriptionDispensed, moduleId, receiveDispensing);
+    onEvent(returnPosted, moduleId, receiveReturn);
+    onEvent(returnReversed, moduleId, receiveReturn);
 }
