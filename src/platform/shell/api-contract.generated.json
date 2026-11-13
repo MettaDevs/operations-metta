@@ -4063,6 +4063,18 @@
             }
         }
     },
+    "healthcareProcedureTariff": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/healthcare/v1/examination/destinations/{id}/procedure-tariff",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "healthcareMedicalRecordSave": {
         "~orpc": {
             "errorMap": {},

@@ -14,6 +14,11 @@ import {
     type Database,
 } from '@core/platform/database/index.ts';
 import { isRecord, lookupId, validation } from '@core/platform/http/index.ts';
+import { Decimal } from '@core/platform/money/index.ts';
+import {
+    ProcedurePrices,
+    type ProcedurePriceLookup,
+} from '../../clinical/procedure/procedure-price.service.ts';
 import { moduleId } from '../../module.ts';
 import {
     drugAllergyMessage,
@@ -147,6 +152,7 @@ const savedProcedureSchema = z.object({
     procedure_name: z.string(),
     quantity: z.number(),
     doctor_id: z.string().nullable(),
+    tariff: z.string(),
     added_by: z.string().nullable(),
     added_at: z.string().nullable(),
 });
@@ -184,6 +190,10 @@ const savedLineSchema = z.object({
     returned: z.string().nullable(),
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
+
+// Tanpa tarif berarti 0: Tarif kosong dari layar sistem lama tersimpan 0 di SIMtrRJTransaksi.Tarif yang NOT NULL.
+const tariffOf = (charge: ProcedurePriceLookup) =>
+    Decimal.of(charge.price?.price ?? '0').normalized();
 
 // Kunci baris resep: obatnya, atau nomor racikan untuk kepala racikan.
 const lineKey = (line: { drug_id: string | null; compound: number | null }) =>
@@ -299,7 +309,7 @@ export class ExaminationOrders {
             savedProcedureSchema,
             `select t.id, t.urutan, t.tindakan_id as procedure_id, m.kode as procedure_code,
                     m.nama as procedure_name, t.jumlah as quantity, t.dokter_id as doctor_id,
-                    u.name as added_by, ${isoSql('t.created_at')} as added_at
+                    trim_scale(t.tarif)::text as tariff, u.name as added_by, ${isoSql('t.created_at')} as added_at
              from sim_tr_pemeriksaan_tindakan t
              join sim_m_tindakan m on m.tenant_id = t.tenant_id and m.id = t.tindakan_id
              left join users u on u.id = t.created_by_user_id
@@ -391,21 +401,107 @@ export class ExaminationOrders {
         return rows;
     }
 
-    // Baris dikenali dari tindakannya: yang masih dikirim diubah di tempat, yang baru disisipkan, dan yang tidak dikirim
-    // lagi diberi deleted_at. Sistem lama menghapus fisik lalu menyisipkan ulang semuanya.
+    // Pencarian tarif Biaya Tindakan poli sistem lama (lookup/services.php): tipe pasien kunjungan, lokasi RJ, cyto 0, dan
+    // kategori operasi ALL. Dokter, kelas, dan KTP tidak pernah sampai ke controller, karena #form_poly, #KdKelas, dan
+    // #PasienKTP tidak ada di halaman poli; controller lalu memakai dokter 'xx', kelas 'XX', dan tanpa saringan KTP.
+    // null bila tindakan tidak ada.
+    private async procedureCharge(
+        visitId: string,
+        procedureId: string,
+    ): Promise<ProcedurePriceLookup | null> {
+        const visit = await this.db.one(
+            z.object({ patient_type_id: z.string() }),
+            `select tipe_pasien_id as patient_type_id from sim_tr_registrasi where tenant_id = $1 and id = $2`,
+            [this.tenantId, visitId],
+        );
+        if (!visit) return null;
+        return new ProcedurePrices(this.db, this.tenantId).lookup({
+            procedureId,
+            patientTypeId: visit.patient_type_id,
+            practitionerId: null,
+            careClassId: null,
+            ktpPatient: false,
+            location: 'RJ',
+        });
+    }
+
+    // Tarif yang akan disimpan baris baru, untuk kolom Tarif begitu tindakan dipilih.
+    async procedureTariff(
+        visitId: string,
+        procedureId: string,
+    ): Promise<string | null> {
+        const charge = await this.procedureCharge(visitId, procedureId);
+        return charge ? tariffOf(charge) : null;
+    }
+
+    // Tarif dihitung sekali, saat baris pertama kali disimpan, lalu dibekukan bersama komponennya seperti sistem lama
+    // yang menyimpan Tarif hasil lookup dan tidak menghitungnya ulang.
+    private async insertProcedure(
+        recordId: string,
+        visitId: string,
+        row: ProcedureLine,
+        values: Record<string, Bind>,
+        stamp: string,
+    ): Promise<void> {
+        const charge = await this.procedureCharge(visitId, row.procedure_id);
+        if (!charge)
+            throw new Error(
+                `Tarif tindakan ${row.procedure_id} tidak dapat dicari.`,
+            );
+        const id = Bun.randomUUIDv7();
+        await this.db.insert('sim_tr_pemeriksaan_tindakan', {
+            id,
+            tenant_id: this.tenantId,
+            pemeriksaan_id: recordId,
+            tindakan_id: row.procedure_id,
+            ...values,
+            tarif: tariffOf(charge),
+            jenis_tarif: charge.tariff,
+            kelompok_harga_id: charge.priceGroupId,
+            tindakan_harga_id: charge.price?.priceRowId ?? null,
+            created_at: stamp,
+            updated_at: stamp,
+        });
+        for (const component of charge.price?.components ?? [])
+            await this.db.insert('sim_tr_pemeriksaan_tindakan_komponen', {
+                id: Bun.randomUUIDv7(),
+                tenant_id: this.tenantId,
+                pemeriksaan_tindakan_id: id,
+                komponen_biaya_id: component.chargeComponentId,
+                qty: component.quantity,
+                harga_awal: component.initialPrice,
+                persen_pajak_titipan: component.taxDepositPercent,
+                persen_insentif: component.incentivePercent,
+                include_insentif: component.includesIncentive,
+                harga: component.price,
+                created_at: stamp,
+                updated_at: stamp,
+            });
+    }
+
+    // Baris dikenali dari tindakannya: yang masih dikirim diubah di tempat tanpa menyentuh tarifnya, yang baru disisipkan
+    // dengan tarifnya, dan yang tidak dikirim lagi diberi deleted_at bersama komponen tarifnya. Sistem lama menghapus
+    // fisik lalu menyisipkan ulang semuanya dengan Tarif dari layar.
     async writeProcedures(
         recordId: string,
+        visitId: string,
         rows: ProcedureLine[],
         stamp: string,
     ): Promise<void> {
         const existing = await this.savedProcedures(recordId);
         for (const item of existing)
-            if (!rows.some((row) => row.procedure_id === item.procedure_id))
+            if (!rows.some((row) => row.procedure_id === item.procedure_id)) {
+                await this.db.execute(
+                    `update sim_tr_pemeriksaan_tindakan_komponen set deleted_at = $1, updated_at = $1
+                     where tenant_id = $2 and pemeriksaan_tindakan_id = $3 and deleted_at is null`,
+                    [stamp, this.tenantId, item.id],
+                );
                 await this.retire(
                     'sim_tr_pemeriksaan_tindakan',
                     item.id,
                     stamp,
                 );
+            }
         for (const [index, row] of rows.entries()) {
             const values = {
                 urutan: index + 1,
@@ -416,15 +512,13 @@ export class ExaminationOrders {
                 (item) => item.procedure_id === row.procedure_id,
             );
             if (!match)
-                await this.db.insert('sim_tr_pemeriksaan_tindakan', {
-                    id: Bun.randomUUIDv7(),
-                    tenant_id: this.tenantId,
-                    pemeriksaan_id: recordId,
-                    tindakan_id: row.procedure_id,
-                    ...values,
-                    created_at: stamp,
-                    updated_at: stamp,
-                });
+                await this.insertProcedure(
+                    recordId,
+                    visitId,
+                    row,
+                    values,
+                    stamp,
+                );
             else if (
                 match.urutan !== values.urutan ||
                 match.quantity !== values.jumlah ||

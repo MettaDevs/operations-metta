@@ -564,6 +564,7 @@ function ExaminationRecord({
                                     draft={draft}
                                     setDraft={setDraft}
                                     metadata={recordMetadata}
+                                    destinationId={entry.id}
                                     sectionId={entry.section_id}
                                     errors={errors}
                                     disabled={!editable || busy}

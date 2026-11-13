@@ -61,6 +61,27 @@ export function medicalRecordRoutes() {
                     ),
                 ),
             ),
+        healthcareProcedureTariff: route(
+            'GET',
+            '/destinations/{id}/procedure-tariff',
+        )
+            .input(
+                recordInput.extend({
+                    query: z.custom<{ procedure_id: string }>(),
+                }),
+            )
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await records(context)
+                    ).procedureTariff(
+                        input.params.id,
+                        new URL(context.request.url).searchParams.get(
+                            'procedure_id',
+                        ) ?? '',
+                    ),
+                ),
+            ),
         healthcareMedicalRecordSave: route(
             'PUT',
             '/destinations/{id}/medical-record',

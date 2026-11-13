@@ -25,6 +25,7 @@ describe.skipIf(!process.env.DB_HOST)('procedure price lookup', () => {
     let clinic: Clinic;
     let procedureId: string;
     let rows: { wildcard: string; surgery: string };
+    let groups: { general: string; foreign: string };
     let types: Record<
         'general' | 'bpjs' | 'none' | 'foreignOwn' | 'foreign',
         string
@@ -79,6 +80,7 @@ describe.skipIf(!process.env.DB_HOST)('procedure price lookup', () => {
             { code: 'WNA', name: 'WNA' },
             pricer,
         );
+        groups = { general: general.id, foreign: foreign.id };
         const facility = await created(
             `${pricing}/charge-components`,
             { code: 'SARANA', name: 'Sarana', sort_order: 0 },
@@ -215,6 +217,10 @@ describe.skipIf(!process.env.DB_HOST)('procedure price lookup', () => {
 
     test('a BPJS patient type searches the general rows through its tariff price group and gets BPJS prices', async () => {
         const found = await lookup(types.bpjs);
+        expect(found).toMatchObject({
+            tariff: 'bpjs',
+            priceGroupId: groups.general,
+        });
         expect(found?.price).toMatchObject({
             kind: 'bpjs',
             priceRowId: rows.wildcard,
@@ -236,11 +242,18 @@ describe.skipIf(!process.env.DB_HOST)('procedure price lookup', () => {
     });
 
     test('a patient type without tariff gets no price', async () => {
-        expect(await lookup(types.none)).toEqual({ step: null, price: null });
+        expect(await lookup(types.none)).toEqual({
+            tariff: 'none',
+            priceGroupId: null,
+            step: null,
+            price: null,
+        });
     });
 
     test('a price group without rows borrows another group only when the tariff allows it', async () => {
         expect(await lookup(types.foreignOwn)).toEqual({
+            tariff: 'general_own_group',
+            priceGroupId: groups.foreign,
             step: 'price_group',
             price: null,
         });

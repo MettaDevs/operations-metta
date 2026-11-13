@@ -285,8 +285,9 @@ describe.skipIf(!process.env.DB_HOST)('procedures', () => {
         await pool.begin(async (sql) => {
             await sql.unsafe('set local session_replication_role = replica');
             await sql.unsafe(
-                `insert into sim_tr_pemeriksaan_tindakan (id, tenant_id, pemeriksaan_id, urutan, tindakan_id, jumlah)
-                 values ($1, $2, $3, 1, $4, 1)`,
+                `insert into sim_tr_pemeriksaan_tindakan (id, tenant_id, pemeriksaan_id, urutan, tindakan_id, jumlah,
+                                                          tarif, jenis_tarif)
+                 values ($1, $2, $3, 1, $4, 1, 0, 'none')`,
                 [Bun.randomUUIDv7(), tenantId, Bun.randomUUIDv7(), used.id],
             );
         });

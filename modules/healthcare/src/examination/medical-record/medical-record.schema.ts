@@ -152,14 +152,15 @@ export const drugAllergySchema = z.object({
     drug_name: z.string(),
 });
 
-// Baris Biaya Tindakan (SIMtrRJTransaksi) tanpa tarif. Satu tindakan sekali per pemeriksaan, jadi baris dikenali dari
-// tindakannya. Kode, nama, pengisi, dan jamnya hanya dibaca.
+// Baris Biaya Tindakan (SIMtrRJTransaksi). Satu tindakan sekali per pemeriksaan, jadi baris dikenali dari tindakannya.
+// Kode, nama, tarif, pengisi, dan jamnya hanya dibaca; tarif dihitung server saat baris pertama kali disimpan.
 export const procedureSchema = z.object({
     procedure_id: text,
     procedure_code: text,
     procedure_name: text,
     quantity: number,
     doctor_id: text,
+    tariff: text,
     added_by: text,
     added_at: text,
 });

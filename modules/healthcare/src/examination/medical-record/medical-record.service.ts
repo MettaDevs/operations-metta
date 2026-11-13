@@ -534,6 +534,21 @@ export class MedicalRecords {
         return this.present(destination);
     }
 
+    // Tarif yang didapat tindakan bila ditambahkan ke Biaya Tindakan pemeriksaan ini, sama dengan yang disimpan Simpan,
+    // seperti Harga_Baru baris lookup jasa sistem lama yang mengisi kolom Tarif.
+    async procedureTariff(destinationId: string, procedureId: string) {
+        this.workspace.guard('examination', 'read');
+        const destination = await this.destination(destinationId, false);
+        const tariff = lookupId(procedureId)
+            ? await this.orders.procedureTariff(
+                  destination.visit_id,
+                  procedureId,
+              )
+            : null;
+        if (tariff === null) abort(404, 'Not Found');
+        return { data: { tariff } };
+    }
+
     // Riwayat diagnosa: diagnosa kunjungan lain pasien ini, terbaru dulu. Hanya kunjungan yang terlihat bagi pengguna,
     // dengan batas legal entity dan unit kerja yang sama dengan antrean pemeriksaan.
     async diagnosisHistory(destinationId: string, parameters: URLSearchParams) {
@@ -806,7 +821,12 @@ export class MedicalRecords {
                     stamp,
                 );
             if (procedures)
-                await this.orders.writeProcedures(recordId, procedures, stamp);
+                await this.orders.writeProcedures(
+                    recordId,
+                    destination.visit_id,
+                    procedures,
+                    stamp,
+                );
             if (prescriptions)
                 await this.orders.writePrescriptions(
                     recordId,
