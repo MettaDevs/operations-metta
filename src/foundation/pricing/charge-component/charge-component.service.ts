@@ -15,13 +15,20 @@ import {
 } from '../../../platform/http/index.ts';
 import { refuseWhileReferenced } from '../pricing.service.ts';
 import {
+    chargeComponentOptionFields,
+    isChargeComponentOptionCode,
+} from './charge-component.options.ts';
+import {
     chargeComponentInputSchema,
     chargeComponentRowSchema,
 } from './charge-component.schema.ts';
 
 const rowSql = `select * from (
-                    select k.id, k.kode as code, k.nama as name, k.urutan as sort_order, k.aktif as is_active,
-                           k.version
+                    select k.id, k.kode as code, k.nama as name, k.urutan as sort_order,
+                           k.kelompok_rekening as account_group, k.posting_ke as posting_to,
+                           k.hutang_ke as payable_to, k.kelompok_jasa as service_group,
+                           k.include_insentif as includes_incentive, k.exclude_cost_rs as excludes_hospital_cost,
+                           k.aktif as is_active, k.version
                     from komponen_biaya k where k.tenant_id = $1 and k.deleted_at is null) components
                 where true`;
 
@@ -43,8 +50,23 @@ function checked(body: unknown) {
         raw === undefined ? 0 : String(raw).trim() ? Number(raw) : Number.NaN;
     if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 999)
         errors.sort_order = 'Isi bilangan bulat 0 sampai 999.';
+    const options: Record<string, string> = {};
+    for (const { option, column, fallback } of chargeComponentOptionFields) {
+        const value = data?.[option] ?? fallback;
+        if (!isChargeComponentOptionCode(option, value))
+            errors[option] = 'Pilih dari daftar.';
+        options[column] = value;
+    }
     if (Object.keys(errors).length || !data) validation(errors);
-    return { code, name, sortOrder, isActive: data.is_active ?? true };
+    return {
+        kode: code,
+        nama: name,
+        urutan: sortOrder,
+        ...options,
+        include_insentif: data.includes_incentive ?? false,
+        exclude_cost_rs: data.excludes_hospital_cost ?? false,
+        aktif: data.is_active ?? true,
+    };
 }
 
 function codeTaken(error: unknown): void {
@@ -110,10 +132,7 @@ export class ChargeComponents {
             await this.db.insert('komponen_biaya', {
                 id,
                 tenant_id: this.workspace.tenantId,
-                kode: data.code,
-                nama: data.name,
-                urutan: data.sortOrder,
-                aktif: data.isActive,
+                ...data,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -130,14 +149,15 @@ export class ChargeComponents {
         const data = checked(body);
         let updated = 0;
         try {
+            const columns = Object.entries(data);
             updated = await this.db.execute(
-                `update komponen_biaya set kode = $1, nama = $2, urutan = $3, aktif = $4, updated_at = $5
-                 where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
+                `update komponen_biaya
+                 set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
+                     updated_at = $${columns.length + 1}
+                 where tenant_id = $${columns.length + 2} and id = $${columns.length + 3}
+                   and version = $${columns.length + 4} and deleted_at is null`,
                 [
-                    data.code,
-                    data.name,
-                    data.sortOrder,
-                    data.isActive,
+                    ...columns.map(([, value]) => value),
                     nowSql(),
                     this.workspace.tenantId,
                     current.id,

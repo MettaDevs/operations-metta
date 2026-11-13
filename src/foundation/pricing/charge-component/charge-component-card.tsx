@@ -2,6 +2,7 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
+import { Select } from '@operations-metta/ui/select';
 import {
     PageDialogBody,
     PageDialogToolbar,
@@ -9,7 +10,7 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
@@ -19,16 +20,33 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import {
+    chargeComponentOptionFields,
+    chargeComponentOptions,
+    type ChargeComponentOption,
+} from './charge-component.options.ts';
 
 export type ChargeComponent =
     ApiBody<'pricingChargeComponentList'>['data'][number];
 
-// Kartu komponen biaya (SIMmKomponenBiaya sistem lama).
+// Kartu komponen biaya, isian form Komponen jasa sistem lama (SIMmKomponenBiaya).
+
+const optionItems = (option: ChargeComponentOption) =>
+    Object.entries(chargeComponentOptions[option]).map(([value, label]) => ({
+        value,
+        label,
+    }));
 
 const formOf = (component: ChargeComponent | null) => ({
     code: component?.code ?? '',
     name: component?.name ?? '',
     sort_order: String(component?.sort_order ?? 0),
+    account_group: component?.account_group ?? 'Pendapatan',
+    posting_to: component?.posting_to ?? 'GL',
+    payable_to: component?.payable_to ?? 'None',
+    service_group: component?.service_group ?? 'Jasa Pelayanan',
+    includes_incentive: component?.includes_incentive ?? false,
+    excludes_hospital_cost: component?.excludes_hospital_cost ?? false,
     is_active: component?.is_active ?? true,
 });
 
@@ -51,6 +69,8 @@ export function ChargeComponentCard({
     const [lastAction, setLastAction] = useState<'save' | 'delete'>('save');
     const { confirm, confirmation } = useConfirmation();
     const activeId = useId();
+    const flagId = useId();
+    const portalContainer = useRef<HTMLFormElement>(null);
     usePageDialogRecord({
         recordTitle: record
             ? `${record.code} ${record.name}`
@@ -118,6 +138,7 @@ export function ChargeComponentCard({
 
     return (
         <form
+            ref={portalContainer}
             noValidate
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => {
@@ -216,6 +237,80 @@ export function ChargeComponentCard({
                             }
                         />
                     </FormControl>
+                    {chargeComponentOptionFields.map(({ option, label }) => (
+                        <FormControl
+                            key={option}
+                            error={errors[option]?.[0]}
+                            data-error-field={option}
+                        >
+                            {editing ? (
+                                <Select
+                                    label={label}
+                                    required
+                                    items={optionItems(option)}
+                                    value={form[option]}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            [option]: value ?? form[option],
+                                        })
+                                    }
+                                    searchPlaceholder={`Cari ${label.toLowerCase()}`}
+                                    emptyMessage="Pilihan tidak ditemukan."
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label={label}
+                                    value={
+                                        optionItems(option).find(
+                                            (item) =>
+                                                item.value === form[option],
+                                        )?.label ?? form[option]
+                                    }
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                    ))}
+                    <Field orientation="horizontal" className="w-auto">
+                        <Switch
+                            id={`${flagId}-incentive`}
+                            checked={form.includes_incentive}
+                            disabled={!editing}
+                            onCheckedChange={(checked) =>
+                                setForm({
+                                    ...form,
+                                    includes_incentive: checked,
+                                })
+                            }
+                        />
+                        <FieldLabel
+                            htmlFor={`${flagId}-incentive`}
+                            className="font-normal"
+                        >
+                            Include Insentif
+                        </FieldLabel>
+                    </Field>
+                    <Field orientation="horizontal" className="w-auto">
+                        <Switch
+                            id={`${flagId}-cost`}
+                            checked={form.excludes_hospital_cost}
+                            disabled={!editing}
+                            onCheckedChange={(checked) =>
+                                setForm({
+                                    ...form,
+                                    excludes_hospital_cost: checked,
+                                })
+                            }
+                        />
+                        <FieldLabel
+                            htmlFor={`${flagId}-cost`}
+                            className="font-normal"
+                        >
+                            Exclude Cost RS
+                        </FieldLabel>
+                    </Field>
                     <FormControl hint="Komponen nonaktif tidak tampil di kartu tarif. Tarif yang sudah memakainya tetap tersimpan.">
                         <Field orientation="horizontal" className="w-auto">
                             <Switch

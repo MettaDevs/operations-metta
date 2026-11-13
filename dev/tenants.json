@@ -93,7 +93,14 @@
                     { "code": "ASR", "name": "Asuransi" }
                 ],
                 "charge_components": [
-                    { "code": "SARANA", "name": "Sarana", "sort_order": 0 }
+                    {
+                        "code": "SARANA",
+                        "name": "Sarana",
+                        "sort_order": 0,
+                        "account_group": "Biaya",
+                        "posting_to": "Hutang",
+                        "service_group": "Jasa Sarana"
+                    }
                 ]
             },
             "healthcare": {
