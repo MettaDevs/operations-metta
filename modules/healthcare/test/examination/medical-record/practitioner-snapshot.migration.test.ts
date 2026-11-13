@@ -37,20 +37,17 @@ describe.skipIf(!process.env.DB_HOST)('practitioner snapshot migration', () => {
     }, 120_000);
 
     const healthcare = source.modules.get('healthcare') ?? [];
-    const before: MigrationSource = {
+    const snapshot = healthcare.findIndex((migration) =>
+        migration.name.endsWith('_practitioner_snapshot.sql'),
+    );
+    const upTo = (end: number): MigrationSource => ({
         core: source.core,
-        modules: new Map([
-            [
-                'healthcare',
-                healthcare.slice(
-                    0,
-                    healthcare.findIndex((migration) =>
-                        migration.name.endsWith('_practitioner_snapshot.sql'),
-                    ),
-                ),
-            ],
-        ]),
-    };
+        modules: new Map([['healthcare', healthcare.slice(0, end)]]),
+    });
+    // Sesudah 0050 satu akun tidak bisa tertaut ke dua nakes aktif, jadi data uji akun ganda hanya bisa dibawa sampai
+    // migration ini.
+    const before = upTo(snapshot);
+    const through = upTo(snapshot + 1);
 
     const id = () => Bun.randomUUIDv7();
     const clinic = id();
@@ -133,7 +130,7 @@ describe.skipIf(!process.env.DB_HOST)('practitioner snapshot migration', () => {
                 );
             });
 
-            await migrate(sql, source, { modules: ['healthcare'] });
+            await migrate(sql, through, { modules: ['healthcare'] });
 
             const measured = await sql.unsafe<
                 { id: string; nakes: string | null }[]

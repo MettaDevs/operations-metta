@@ -1247,12 +1247,18 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
              from role_assignments where membership_id = $3`,
             [Bun.randomUUIDv7(), tenantId, staff.membershipId],
         );
-        const link = (...practitioners: string[]) =>
-            pool.unsafe(
-                `update sim_m_nakes set user_id = case when id = any($2::uuid[]) then $1::uuid end
-                 where tenant_id = $3 and (user_id = $1 or id = any($2::uuid[]))`,
-                [staff.userId, practitioners, tenantId],
+        // Tautan lama dilepas lebih dulu: satu akun paling banyak tertaut ke satu nakes aktif.
+        const link = async (practitioner?: string) => {
+            await pool.unsafe(
+                'update sim_m_nakes set user_id = null where tenant_id = $1 and user_id = $2',
+                [tenantId, staff.userId],
             );
+            if (practitioner)
+                await pool.unsafe(
+                    'update sim_m_nakes set user_id = $1 where id = $2',
+                    [staff.userId, practitioner],
+                );
+        };
         const user = browser();
         await user.login(staff.email, staff.password);
         await link(nurse);
@@ -1314,8 +1320,8 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
         );
         expect(await recorded()).toEqual({ measured: nurse, allergy: nurse });
 
-        // Pengukuran baru memakai tautan saat itu, dan akun yang tertaut ke dua nakes aktif tidak punya nakes yang pasti.
-        const remeasured = await json<Shown>(
+        // Pengukuran baru memakai tautan saat itu.
+        await json<Shown>(
             await save(user, id, {
                 ...edited.data,
                 physical: { ...edited.data.physical, pulse_rate: 91 },
@@ -1323,15 +1329,6 @@ describe.skipIf(!process.env.DB_HOST)('examination medical record', () => {
             200,
         );
         expect((await recorded()).measured).toBe(doctor);
-        await link(doctor, nurse);
-        await json(
-            await save(user, id, {
-                ...remeasured.data,
-                physical: { ...remeasured.data.physical, pulse_rate: 92 },
-            }),
-            200,
-        );
-        expect((await recorded()).measured).toBeNull();
         await link();
     });
 
