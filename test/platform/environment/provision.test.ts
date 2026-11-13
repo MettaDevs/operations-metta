@@ -93,12 +93,19 @@ describe.skipIf(!process.env.DB_HOST)('provisionEnvironment', () => {
         expect(role?.duties).toBe(role?.core_duties);
         expect(role?.duties).toBeGreaterThan(0);
         // Presisi rupiah tertulis sebagai data sejak tenant lahir: rupiah utuh, tanpa pembulatan tagihan lagi.
-        expect([
-            ...(await runtime.unsafe(
-                'select currency_code, amount_decimals, unit_amount_decimals, trim_scale(invoice_rounding_precision)::text as invoice_rounding_precision, invoice_rounding_type from currency_precisions where tenant_id = $1',
-                [provision.tenant.id],
-            )),
-        ]).toEqual([
+        const currencies = await runtime.unsafe<
+            {
+                currency_code: string;
+                amount_decimals: number;
+                unit_amount_decimals: number;
+                invoice_rounding_precision: string;
+                invoice_rounding_type: string;
+            }[]
+        >(
+            'select currency_code, amount_decimals, unit_amount_decimals, trim_scale(invoice_rounding_precision)::text as invoice_rounding_precision, invoice_rounding_type from currency_precisions where tenant_id = $1',
+            [provision.tenant.id],
+        );
+        expect(currencies.map((row) => ({ ...row }))).toEqual([
             {
                 currency_code: 'IDR',
                 amount_decimals: 0,
