@@ -28,8 +28,8 @@ type StoredLine = {
     persen_diskon: string;
 };
 
-// Harga obat di penyerahan: dihitung saat Siapkan dari harga dasar barang, kelompok harga pembeli di resep (dari event
-// resep), kelompok grading obat, dan grading harga obat, lalu disalin ke bill_farmasi_detail dan tidak berubah saat
+// Harga obat di penyerahan: dihitung saat Siapkan dari harga dasar barang, kelompok harga dan Patient KTP pembeli di
+// resep (dari event resep), kelompok grading obat, dan grading harga obat, lalu disalin ke bill_farmasi_detail dan tidak berubah saat
 // grading diubah sesudahnya. Batal siapkan lalu Siapkan lagi menghitung ulang. Harga satuan dibulatkan menurut setelan
 // farmasi saat disiapkan. Isi baris dibaca lewat SQL. Butuh PostgreSQL yang sudah dimigrasi; dilewati bila DB_HOST
 // kosong.
@@ -44,6 +44,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
     let oral: Reference;
     let groupRow: { id: string; version: number };
     let reasonId: string;
+    let farmasi: Reference;
 
     const path = (prescriptionId: string, action = '') =>
         `${api}/prescriptions/${prescriptionId}/dispensing${action}`;
@@ -94,7 +95,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
                 'core.pricing-setup.manage',
             ],
         });
-        const farmasi = await pharmacy.location('FARMASI');
+        farmasi = await pharmacy.location('FARMASI');
         await pharmacy.created(`${api}/service-locations`, {
             operating_unit_id: pharmacy.unitId,
             section_id: null,
@@ -319,5 +320,130 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
         expect(whole.lines.map((line) => line.price)).toEqual([
             { unit_price: '844', discount_percent: '0', amount: '1688' },
         ]);
+    });
+
+    test('Siapkan prices by the Patient KTP of the prescription, and a prescription never takes a row of the other KTP: without a row of its own it takes the all-items row of its KTP, else the base price', async () => {
+        const group = await pharmacy.created(`${api}/grading-groups`, {
+            name: 'UJI KTP',
+        });
+        const drug = await pharmacy.item('HRG-KTP', { base_price: '1000' });
+        await json(
+            await pharmacy.admin.put(`${api}/drugs/${drug.id}`, {
+                drug_class_id: null,
+                grading_group_id: group.id,
+                is_generic: false,
+                is_formulary: false,
+                version: 0,
+            }),
+            200,
+        );
+        const draft = await pharmacy.created<{ id: string; version: number }>(
+            `${inventoryApi}/adjustments`,
+            {
+                direction: 'masuk',
+                location_id: farmasi.id,
+                posting_date: '2026-11-01',
+                reason_id: reasonId,
+                lines: [{ item_id: drug.id, quantity: 100, unit_cost: 500 }],
+            },
+        );
+        await json(
+            await pharmacy.admin.post(
+                `${inventoryApi}/adjustments/${draft.id}/post`,
+                { version: draft.version },
+            ),
+            200,
+        );
+        const gradingRow = (body: Record<string, unknown>) =>
+            pharmacy.created<{ id: string; version: number }>(
+                `${api}/drug-prices`,
+                {
+                    price_group_id: umum.id,
+                    price_from: 0,
+                    price_to: 1000000000,
+                    effective_from: '2026-01-01',
+                    ...body,
+                },
+            );
+        const withKtpRow = await gradingRow({
+            grading_group_id: group.id,
+            markup_percent: 20,
+        });
+        const withoutKtpRow = await gradingRow({
+            grading_group_id: group.id,
+            markup_percent: 10,
+            ktp_patient: false,
+        });
+        const prescribed = async (ktp: boolean) => {
+            const { prescriptionId } = await pharmacy.issue(
+                [{ item: drug, quantity: '2' }],
+                {
+                    data: {
+                        price_group: {
+                            id: umum.id,
+                            code: umum.code,
+                            name: umum.name,
+                        },
+                        patient: {
+                            id: Bun.randomUUIDv7(),
+                            medical_record_number: '00.00.99',
+                            name: 'Pasien KTP',
+                            birth_date: '1990-05-01',
+                            ktp,
+                        },
+                    },
+                },
+            );
+            const [row] = await pharmacy.queued(prescriptionId);
+            if (!row) throw new Error('Resep tidak masuk antrean.');
+            const [queued] = await pool.unsafe<{ pasien_ktp: boolean }[]>(
+                'select pasien_ktp from far_tr_resep where id = $1',
+                [row.id],
+            );
+            expect(queued?.pasien_ktp).toBe(ktp);
+            const [line] = await stored(
+                (await prepare(row.id)).dispensing?.id ?? '',
+            );
+            return line;
+        };
+
+        expect(await prescribed(true)).toMatchObject({
+            grading_harga_id: withKtpRow.id,
+            persen_naik: '20',
+            harga_satuan: '1200',
+        });
+        expect(await prescribed(false)).toMatchObject({
+            grading_harga_id: withoutKtpRow.id,
+            persen_naik: '10',
+            harga_satuan: '1100',
+        });
+
+        expect(
+            (
+                await pharmacy.admin.delete(
+                    `${api}/drug-prices/${withoutKtpRow.id}`,
+                    { version: withoutKtpRow.version },
+                )
+            ).status,
+        ).toBe(204);
+        expect(await prescribed(false)).toMatchObject({
+            grading_harga_id: null,
+            persen_naik: '0',
+            harga_satuan: '1000',
+        });
+        const allItemsWithoutKtp = await gradingRow({
+            grading_group_id: null,
+            markup_percent: 15,
+            ktp_patient: false,
+        });
+        expect(await prescribed(false)).toMatchObject({
+            grading_harga_id: allItemsWithoutKtp.id,
+            persen_naik: '15',
+            harga_satuan: '1150',
+        });
+        expect(await prescribed(true)).toMatchObject({
+            grading_harga_id: withKtpRow.id,
+            harga_satuan: '1200',
+        });
     });
 });

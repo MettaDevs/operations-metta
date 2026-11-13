@@ -20,6 +20,8 @@ info:
     - `price_group` ditambahkan sesudah versi ini terbit, jadi opsional: farmasi menghitung harga obat dengan kelompok
       harga itu saat resep disiapkan. Pesan tanpa `price_group` diperlakukan sama dengan `price_group` kosong, yaitu
       obat dihargai harga dasar barang tanpa kenaikan.
+    - `patient.ktp` ditambahkan sesudah versi ini terbit, jadi opsional: farmasi memakai baris grading harga obat untuk
+      nilai KTP itu saat resep disiapkan. Pesan tanpa `patient.ktp` diperlakukan sebagai `true`, bawaan sistem lama.
     - Belum ada event pembatalan resep: layar tidak menawarkan membatalkan resep yang sudah dikirim, dan kunjungan hanya
       bisa dibatalkan sebelum diperiksa, jadi status `dibatalkan` belum pernah ditulis.
 channels:
@@ -110,6 +112,13 @@ components:
             birth_date:
               type: [string, 'null']
               format: date
+            ktp:
+              type: boolean
+              description: |
+                Patient KTP kunjungan: `true` bila pasien memegang KTP setempat (PasienKTP sistem lama), disalin dari
+                pasien saat kunjungan didaftarkan, jadi perubahan pasien sesudahnya tidak mengubahnya. Penerbit selalu
+                mengisinya; opsional karena ditambahkan sesudah versi ini terbit, dan pesan tanpa field ini berarti
+                `true`.
         doctor:
           description: Dokter dari Anamnesa saat resep dikirim; kosong bila belum diisi.
           oneOf:

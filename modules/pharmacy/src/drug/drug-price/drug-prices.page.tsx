@@ -121,6 +121,13 @@ function DrugPricesPage(): ReactNode {
                                 text(row.grading_group?.name ?? 'Semua barang'),
                         },
                         {
+                            id: 'ktp_patient',
+                            header: 'Patient KTP',
+                            width: 110,
+                            cell: (row) =>
+                                text(row.ktp_patient ? 'Ya' : 'Tidak'),
+                        },
+                        {
                             id: 'price_from',
                             header: 'Harga dasar',
                             width: 240,

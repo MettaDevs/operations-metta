@@ -223,9 +223,11 @@ function Row({
     );
 }
 
+// ktpPatient: nilai kunjungan tersimpan, atau nilai pasien sekarang untuk kunjungan baru yang akan menyalinnya.
 function patientRows(
     patient: Patient | null,
     patientMetadata: PatientMetadata | undefined,
+    ktpPatient: boolean | null,
 ): [string, string | null][] {
     const reference = (category: string, code: string | null) =>
         code === null
@@ -266,6 +268,10 @@ function patientRows(
         ['E-mail', patient?.email ?? null],
         ['No. identitas', patient?.nik.number ?? null],
         ['No. KK', patient?.family_card_number.number ?? null],
+        [
+            'Patient KTP',
+            ktpPatient === null ? null : ktpPatient ? 'Ya' : 'Tidak',
+        ],
         ['Tempat / tanggal lahir', birth || null],
         [
             'Umur',
@@ -387,6 +393,7 @@ function PatientLookup({
 function PatientPanel({
     patient,
     patientNrm,
+    ktpPatient,
     loading,
     loadError,
     patientMetadata,
@@ -397,6 +404,7 @@ function PatientPanel({
 }: {
     patient: Patient | null;
     patientNrm: string | null;
+    ktpPatient: boolean | null;
     loading: boolean;
     loadError: string | null;
     patientMetadata: PatientMetadata | undefined;
@@ -436,21 +444,23 @@ function PatientPanel({
                     {loadError ?? 'Memuat data pasien…'}
                 </p>
             )}
-            {patientRows(patient, patientMetadata).map(([label, value]) => (
-                <Row key={label} label={label}>
-                    <span
-                        className={cn(
-                            'block break-words',
-                            label === 'Nama pasien' &&
-                                value !== null &&
-                                'font-semibold',
-                            value === null && 'text-muted-foreground',
-                        )}
-                    >
-                        {value ?? '—'}
-                    </span>
-                </Row>
-            ))}
+            {patientRows(patient, patientMetadata, ktpPatient).map(
+                ([label, value]) => (
+                    <Row key={label} label={label}>
+                        <span
+                            className={cn(
+                                'block break-words',
+                                label === 'Nama pasien' &&
+                                    value !== null &&
+                                    'font-semibold',
+                                value === null && 'text-muted-foreground',
+                            )}
+                        >
+                            {value ?? '—'}
+                        </span>
+                    </Row>
+                ),
+            )}
         </div>
     );
 }
@@ -1802,6 +1812,11 @@ export function VisitRegistration({
                                         patientNrm={
                                             visit?.patient_nrm ??
                                             patient?.nrm ??
+                                            null
+                                        }
+                                        ktpPatient={
+                                            visit?.ktp_patient ??
+                                            patient?.ktp_patient ??
                                             null
                                         }
                                         loading={patientQuery.isLoading}

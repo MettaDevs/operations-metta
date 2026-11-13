@@ -11,7 +11,7 @@ import {
 
 const amount = (text: string) => fromNumeric(text, quantityScale);
 
-// Baris grading dengan nilai master sistem lama (Seroja dan Penta, KTP 1, TipePelayanan STANDARD). Kelompok harga dan
+// Baris grading dengan nilai master sistem lama (Seroja dan Penta, KTP 1 kecuali disebut lain, TipePelayanan STANDARD). Kelompok harga dan
 // kelompok grading memakai namanya sebagai id.
 const row = (
     id: string,
@@ -23,11 +23,13 @@ const row = (
         to?: string;
         discount?: string;
         effectiveFrom?: string;
+        ktp?: boolean;
     } = {},
 ): PriceGrading => ({
     id,
     priceGroupId: priceGroup,
     gradingGroupId: gradingGroup,
+    ktpPatient: extra.ktp ?? true,
     priceFrom: amount(extra.from ?? '1'),
     priceTo: amount(extra.to ?? '1000000000'),
     markupPercent: amount(markup),
@@ -60,12 +62,14 @@ const priced = (
         quantityPerUnit?: string;
         date?: string;
         decimals?: UnitPriceDecimals;
+        ktp?: boolean;
     } = {},
 ) =>
     drugPrice(gradings, {
         basePrice: amount(base),
         priceGroupId: priceGroup,
         gradingGroupId: gradingGroup,
+        ktpPatient: options.ktp ?? true,
         date: options.date ?? '2026-11-13',
         quantityPerUnit: amount(options.quantityPerUnit ?? '1'),
         unitPriceDecimals: options.decimals ?? 0,
@@ -235,6 +239,64 @@ describe('drug price', () => {
             unitPrice: amount('1200'),
             gradingId: 'umum-all',
         });
+    });
+
+    test('a row applies only to buyers of its own KTP: without a row of their KTP they fall back to the all-items row of that KTP, then 0 %, never to a row of the other KTP', () => {
+        const gradings = [
+            row('foreign-xx', 'FOREIGN', 'XX', '80', { to: '100000000' }),
+            row('foreign-xx-0', 'FOREIGN', 'XX', '60', {
+                to: '100000000',
+                ktp: false,
+            }),
+            row('foreign-injeksi-0', 'FOREIGN', 'INJEKSI', '400', {
+                to: '100000000',
+                ktp: false,
+            }),
+            row('umum-all', 'UMUM', null, '20'),
+            row('umum-all-0', 'UMUM', null, '10', { ktp: false }),
+            row('umum-oral', 'UMUM', 'OBAT ORAL', '30'),
+        ];
+        const at = (
+            priceGroup: string,
+            gradingGroup: string,
+            base: string,
+            ktp: boolean,
+        ) => priced(gradings, priceGroup, gradingGroup, base, { ktp });
+        expect(at('FOREIGN', 'XX', '300', true)).toMatchObject({
+            unitPrice: amount('540'),
+            gradingId: 'foreign-xx',
+        });
+        expect(at('FOREIGN', 'XX', '300', false)).toMatchObject({
+            unitPrice: amount('480'),
+            gradingId: 'foreign-xx-0',
+        });
+        expect(at('FOREIGN', 'INJEKSI', '2220', false)).toMatchObject({
+            unitPrice: amount('11100'),
+            gradingId: 'foreign-injeksi-0',
+        });
+        expect(at('FOREIGN', 'INJEKSI', '2220', true)).toMatchObject({
+            unitPrice: amount('2220'),
+            gradingId: null,
+        });
+        expect(at('UMUM', 'OBAT ORAL', '1000', true)).toMatchObject({
+            unitPrice: amount('1300'),
+            gradingId: 'umum-oral',
+        });
+        expect(at('UMUM', 'OBAT ORAL', '1000', false)).toMatchObject({
+            unitPrice: amount('1100'),
+            gradingId: 'umum-all-0',
+        });
+        expect(
+            priced(
+                [row('umum-all', 'UMUM', null, '20')],
+                'UMUM',
+                'G1',
+                '1000',
+                {
+                    ktp: false,
+                },
+            ),
+        ).toMatchObject({ unitPrice: amount('1000'), gradingId: null });
     });
 
     test('the latest effective row on the date wins, and a row effective later is ignored', () => {

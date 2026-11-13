@@ -1399,6 +1399,7 @@ describe.skipIf(!process.env.DB_HOST)(
                         medical_record_number: visit!.nrm,
                         name: 'Pasien Resep',
                         birth_date: '1985-02-03',
+                        ktp: true,
                     },
                     doctor: { id: doctor, name: 'Dokter Resep' },
                     section: { id: section.id, name: 'Poli Umum Resep' },
@@ -1588,6 +1589,55 @@ describe.skipIf(!process.env.DB_HOST)(
                 });
             } finally {
                 await assign(null);
+            }
+        });
+
+        test('Kirim carries the Patient KTP of the visit, not the value the patient has when the prescription is sent', async () => {
+            const setKtp = async (ktp: boolean) => {
+                const current = await json<{ data: { version: number } }>(
+                    await admin.get(`${api}/patients/${patientId}`),
+                    200,
+                );
+                await json(
+                    await admin.patch(`${api}/patients/${patientId}`, {
+                        version: current.data.version,
+                        name: 'Pasien Resep',
+                        nationality_country_code: 'AU',
+                        gender: 'female',
+                        phone: '081200000031',
+                        domicile_address: { street: 'Jl. Resep No. 1' },
+                        payment_methods: [{ patient_type_id: umum }],
+                        ktp_patient: ktp,
+                    }),
+                    200,
+                );
+            };
+            await setKtp(false);
+            try {
+                const id = await visit();
+                await setKtp(true);
+                await start(id);
+                const zinc = await drug('Zinc tablet KTP');
+                await json(
+                    await save(admin, id, {
+                        prescriptions: [draft([single(zinc.id)])],
+                    }),
+                    200,
+                );
+                const before = await outboxEnvelopes(pool, tenantId, issued);
+                await json(await send(admin, id), 200);
+                const [event] = (
+                    await outboxEnvelopes(pool, tenantId, issued)
+                ).filter((row) => !before.some((old) => old.id === row.id));
+                expect(
+                    (await eventContract(issued)).safeParse(event).error,
+                ).toBeUndefined();
+                expect(event?.data.patient).toMatchObject({
+                    id: patientId,
+                    ktp: false,
+                });
+            } finally {
+                await setKtp(true);
             }
         });
     },

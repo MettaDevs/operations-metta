@@ -57,6 +57,8 @@ export const patientInputSchema = z.object({
     father_name: text,
     mother_name: text,
     mother_nik: text,
+    // Patient KTP (PasienKTP sistem lama): pasien memegang KTP setempat. Pasien baru tanpa isian ini bernilai true.
+    ktp_patient: z.boolean().optional(),
     payment_methods: z.array(paymentMethodInputSchema).optional(),
 });
 export type PatientInput = z.infer<typeof patientInputSchema>;

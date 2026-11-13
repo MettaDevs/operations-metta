@@ -24,6 +24,7 @@ type DrugPrice = {
     id: string;
     price_group: Reference;
     grading_group: { id: string; name: string } | null;
+    ktp_patient: boolean;
     price_from: string;
     price_to: string;
     markup_percent: string;
@@ -33,7 +34,7 @@ type DrugPrice = {
 };
 
 // Kelompok grading dan grading harga obat: nama kelompok unik per legal entity, rentang yang bertumpuk pada kelompok
-// harga, kelompok grading, dan tanggal berlaku yang sama ditolak, kelompok harga Core dan kelompok grading tidak bisa
+// harga, kelompok grading, Patient KTP, dan tanggal berlaku yang sama ditolak, kelompok harga Core dan kelompok grading tidak bisa
 // dihapus selama dipakai, dan data obat farmasi memegang kelompok gradingnya. Butuh PostgreSQL yang sudah dimigrasi;
 // dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('grading groups and drug prices', () => {
@@ -175,6 +176,74 @@ describe.skipIf(!process.env.DB_HOST)('grading groups and drug prices', () => {
             [pharmacy.tenantId],
         );
         expect(count?.count).toBe(3);
+    });
+
+    test('Patient KTP is part of the key: a row is for KTP patients by default, the same range is allowed once per KTP value, and a change that does not send it keeps it', async () => {
+        const range = {
+            price_from: 1000,
+            price_to: 5000,
+            effective_from: '2026-05-01',
+        };
+        const ktp = await created(range);
+        expect(ktp.ktp_patient).toBe(true);
+        const withoutKtp = await created({
+            ...range,
+            ktp_patient: false,
+            markup_percent: 60,
+        });
+        expect(withoutKtp.ktp_patient).toBe(false);
+        expect(
+            Object.keys(
+                await refused(
+                    await grading({
+                        ...range,
+                        price_from: 2000,
+                        price_to: 3000,
+                        ktp_patient: false,
+                    }),
+                ),
+            ),
+        ).toEqual(['price_from']);
+        const changed = await json<{ data: DrugPrice }>(
+            await pharmacy.admin.patch(`${api}/drug-prices/${withoutKtp.id}`, {
+                price_group_id: umum.id,
+                grading_group_id: injeksi.id,
+                ...range,
+                markup_percent: 65,
+                version: withoutKtp.version,
+            }),
+            200,
+        );
+        expect(changed.data).toMatchObject({
+            ktp_patient: false,
+            markup_percent: '65',
+        });
+        expect(
+            Object.keys(
+                await refused(
+                    await pharmacy.admin.patch(
+                        `${api}/drug-prices/${withoutKtp.id}`,
+                        {
+                            price_group_id: umum.id,
+                            grading_group_id: injeksi.id,
+                            ...range,
+                            markup_percent: 65,
+                            ktp_patient: true,
+                            version: changed.data.version,
+                        },
+                    ),
+                ),
+            ),
+        ).toEqual(['price_from']);
+        const stored = await pool.unsafe<{ id: string; pasien_ktp: boolean }[]>(
+            `select id, pasien_ktp from far_m_grading_harga
+             where tenant_id = $1 and berlaku_mulai = '2026-05-01' and deleted_at is null order by pasien_ktp`,
+            [pharmacy.tenantId],
+        );
+        expect([...stored]).toEqual([
+            { id: withoutKtp.id, pasien_ktp: false },
+            { id: ktp.id, pasien_ktp: true },
+        ]);
     });
 
     test('a reversed range, a negative markup, or a discount above 100 is refused field by field', async () => {

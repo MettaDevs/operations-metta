@@ -108,6 +108,7 @@ const patientSchema = z.object({
     father_name: z.string().nullable(),
     mother_name: z.string().nullable(),
     mother_nik: z.string().nullable(),
+    ktp_patient: z.boolean(),
     name: z.string(),
     nationality_country_code: z.string().nullable(),
     gender: z.string().nullable(),
@@ -425,7 +426,7 @@ export class Patients {
                     k.aktif as is_active, k.no_dokumen_rm as document_number, k.nrm_lama as old_number,
                     k.golongan_darah as blood_type, k.status_keluarga as family_status, k.instansi as institution,
                     k.nama_ayah as father_name, k.nama_ibu as mother_name, k.nik_ibu as mother_nik,
-                    p.name, p.nationality_country_code, p.gender, p.birth_date::text as birth_date, p.birth_place,
+                    k.pasien_ktp as ktp_patient, p.name, p.nationality_country_code, p.gender, p.birth_date::text as birth_date, p.birth_place,
                     p.religion, p.education, p.marital_status, p.anniversary_date::text as anniversary_date,
                     p.occupation_id, occupation.name as occupation_name
              from sim_m_pasien k
@@ -849,6 +850,7 @@ export class Patients {
             nama_ayah: ['father_name', trimmed(input.father_name)],
             nama_ibu: ['mother_name', trimmed(input.mother_name)],
             nik_ibu: ['mother_nik', trimmed(input.mother_nik)],
+            pasien_ktp: ['ktp_patient', input.ktp_patient ?? true],
         };
         return Object.fromEntries(
             Object.entries(columns)

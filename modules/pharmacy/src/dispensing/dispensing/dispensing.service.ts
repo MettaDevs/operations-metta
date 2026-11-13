@@ -88,6 +88,7 @@ const lockedSchema = z.object({
     location_id: z.string().nullable(),
     issued_at: z.string(),
     price_group_id: z.string().nullable(),
+    ktp_patient: z.boolean(),
 });
 
 const itemLineSchema = z.object({
@@ -335,7 +336,7 @@ export class Dispensings {
                   lockedSchema,
                   `select r.id, r.operating_unit_id, u.name as operating_unit_name,
                           ${servingLocationSql('r')} as location_id, r.diterbitkan_pada::text as issued_at,
-                          r.kelompok_harga_id as price_group_id
+                          r.kelompok_harga_id as price_group_id, r.pasien_ktp as ktp_patient
                    from far_tr_resep r
                    join organizations u on u.tenant_id = r.tenant_id and u.id = r.operating_unit_id
                    where r.tenant_id = $1 and r.legal_entity_id = $2 and r.id = $3 and r.deleted_at is null
@@ -708,13 +709,14 @@ export class Dispensings {
                 validation({
                     [`${inexact.field}.quantity`]: inexactBaseMessage,
                 });
-            // Harga obat dihitung sekali di sini dan disalin ke baris, dengan kelompok harga pembeli dari resep dan
-            // tanggal penyerahan; kasir dan perubahan grading sesudahnya tidak mengubahnya (keputusan 8.3 A).
+            // Harga obat dihitung sekali di sini dan disalin ke baris, dengan kelompok harga dan KTP pembeli dari resep
+            // dan tanggal penyerahan; kasir dan perubahan grading sesudahnya tidak mengubahnya (keputusan 8.3 A).
             for (const { line, price } of await priceDrugLines(
                 this.db,
                 this.scope,
                 {
                     priceGroupId: locked.price_group_id,
+                    ktpPatient: locked.ktp_patient,
                     date: claimed.posting_date,
                 },
                 lines.map((line) => ({

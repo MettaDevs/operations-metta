@@ -7,10 +7,12 @@ const one = 10n ** BigInt(quantityScale);
 const hundredPercent = 100n * one;
 
 // Satu baris grading harga obat (far_m_grading_harga). gradingGroupId kosong berarti semua barang ('ALL' sistem lama).
+// ktpPatient adalah KTP sistem lama: baris untuk pasien yang memegang KTP setempat atau yang tidak.
 export type PriceGrading = {
     id: string;
     priceGroupId: string;
     gradingGroupId: string | null;
+    ktpPatient: boolean;
     priceFrom: bigint;
     priceTo: bigint;
     markupPercent: bigint;
@@ -25,11 +27,12 @@ export const unitPriceDecimalOptions = [0, 1, 2, 3, 4] as const;
 export type UnitPriceDecimals = (typeof unitPriceDecimalOptions)[number];
 
 // basePrice per satuan dasar barang; quantityPerUnit isi satuan baris dalam satuan dasar. priceGroupId kosong berarti
-// pembeli tanpa kelompok harga.
+// pembeli tanpa kelompok harga. ktpPatient dari kunjungan resep.
 export type DrugPriceInput = {
     basePrice: bigint;
     priceGroupId: string | null;
     gradingGroupId: string | null;
+    ktpPatient: boolean;
     date: string;
     quantityPerUnit: bigint;
     unitPriceDecimals: UnitPriceDecimals;
@@ -45,14 +48,15 @@ export type DrugPrice = {
 };
 
 // Urutan sistem lama: baris kelompok grading obat itu lebih dulu, lalu baris semua barang, lalu tidak ada (0 %). Baris
-// cocok bila kelompok harganya kelompok pembeli, sudah berlaku pada tanggal itu, dan harga dasar ada di rentangnya
-// (kedua batas termasuk); di antara yang cocok, berlaku_mulai terakhir. Layanan grading menolak rentang yang bertumpuk
-// pada kunci yang sama, jadi pilihan itu tunggal.
+// cocok bila kelompok harganya kelompok pembeli, KTP-nya sama persis dengan KTP pembeli (KTP=@KTP sistem lama, tanpa
+// jatuh ke baris KTP lain), sudah berlaku pada tanggal itu, dan harga dasar ada di rentangnya (kedua batas termasuk);
+// di antara yang cocok, berlaku_mulai terakhir. Layanan grading menolak rentang yang bertumpuk pada kunci yang sama,
+// jadi pilihan itu tunggal.
 export function applicableGrading(
     gradings: readonly PriceGrading[],
     input: Omit<DrugPriceInput, 'quantityPerUnit' | 'unitPriceDecimals'>,
 ): PriceGrading | null {
-    const { priceGroupId, basePrice, date } = input;
+    const { priceGroupId, ktpPatient, basePrice, date } = input;
     if (priceGroupId === null) return null;
     const latest = (gradingGroupId: string | null) => {
         let found: PriceGrading | null = null;
@@ -60,6 +64,7 @@ export function applicableGrading(
             if (
                 grading.priceGroupId === priceGroupId &&
                 grading.gradingGroupId === gradingGroupId &&
+                grading.ktpPatient === ktpPatient &&
                 grading.effectiveFrom <= date &&
                 grading.priceFrom <= basePrice &&
                 basePrice <= grading.priceTo &&

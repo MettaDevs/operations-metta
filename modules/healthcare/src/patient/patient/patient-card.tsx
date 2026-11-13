@@ -80,6 +80,7 @@ type Form = {
     father_name: string;
     mother_name: string;
     mother_nik: Masked;
+    ktp_patient: boolean;
     // Cara bayar bawaan pasien: tipe pasien, perusahaan, dan nomor asuransi form lama. Cara bayar lain yang mungkin
     // tersimpan lewat API tidak tampil di master pasien, dan dikirim balik apa adanya.
     payment: Payment;
@@ -218,6 +219,7 @@ function formOf(patient: Patient | null, fallback: DefaultPayment): Form {
                 ? { value: '', masked: patient.mother_nik }
                 : { value: text(patient.mother_nik), masked: null }
             : { value: '', masked: null },
+        ktp_patient: patient?.ktp_patient ?? true,
         ...paymentsOf(patient, fallback),
     };
 }
@@ -305,6 +307,7 @@ function patientBody(form: Form) {
         father_name: nullable(form.father_name),
         mother_name: nullable(form.mother_name),
         ...(motherNik === undefined ? {} : { mother_nik: motherNik }),
+        ktp_patient: form.ktp_patient,
         payment_methods: [form.payment, ...form.otherPayments].flatMap(
             (payment) =>
                 payment.patient_type
@@ -1176,6 +1179,24 @@ function PatientCardBody({
                                           maxLength: 20,
                                       })}
                                 {numberInput('family_card_number', 'No. KK')}
+                                <FormControl hint="Nyalakan bila pasien memegang KTP setempat. Klinik boleh membedakan harga obat dan tarif tindakan untuk pasien dengan dan tanpa KTP setempat; isian ini menentukan harga mana yang dipakai pada kunjungan yang didaftarkan sesudahnya.">
+                                    <Field
+                                        orientation="horizontal"
+                                        className="w-auto"
+                                    >
+                                        <Switch
+                                            id="patient-ktp"
+                                            checked={form.ktp_patient}
+                                            disabled={!editing}
+                                            onCheckedChange={(checked) =>
+                                                set('ktp_patient', checked)
+                                            }
+                                        />
+                                        <FieldLabel htmlFor="patient-ktp">
+                                            Patient KTP
+                                        </FieldLabel>
+                                    </Field>
+                                </FormControl>
                                 {editing ? (
                                     <PatientTypeLookup
                                         value={form.payment.patient_type}

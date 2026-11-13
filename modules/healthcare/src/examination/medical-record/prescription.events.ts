@@ -4,8 +4,8 @@ import { publishEvent } from '@core/platform/events/index.ts';
 import { moduleId } from '../../module.ts';
 
 // Resep yang dikirim ke farmasi, sebagai event untuk module farmasi. Farmasi tidak membaca tabel module ini, jadi isinya
-// potret lengkap saat resep dikirim: nomor, kunjungan, pasien, dokter, section asal, kelompok harga pembeli, dan baris
-// beserta barang Core-nya.
+// potret lengkap saat resep dikirim: nomor, kunjungan, pasien beserta Patient KTP kunjungan, dokter, section asal,
+// kelompok harga pembeli, dan baris beserta barang Core-nya.
 // Legal entity dan unit kunjungan ada di envelope. Kontraknya ditulis tangan di
 // contracts/events/healthcare.prescription.issued.v1.yaml; mengubah isinya berarti versi baru.
 export const prescriptionIssued = `${moduleId}.prescription.issued.v1` as const;
@@ -20,6 +20,7 @@ const headerSchema = z.object({
     medical_record_number: z.string(),
     patient_name: z.string(),
     birth_date: z.string().nullable(),
+    ktp_patient: z.boolean(),
     doctor_id: z.string().nullable(),
     doctor_name: z.string().nullable(),
     section_id: z.string(),
@@ -68,7 +69,8 @@ export async function publishPrescriptionIssued(
         headerSchema,
         `select r.nomor as number, r.catatan as notes, g.no_reg as registration_number, g.legal_entity_id,
                 g.operating_unit_id, k.id as patient_id, k.nrm as medical_record_number, pp.name as patient_name,
-                pp.birth_date::text as birth_date, r.dokter_id as doctor_id, dp.name as doctor_name,
+                pp.birth_date::text as birth_date, g.pasien_ktp as ktp_patient, r.dokter_id as doctor_id,
+                dp.name as doctor_name,
                 t.section_id, s.nama as section_name, kh.id as price_group_id, kh.kode as price_group_code,
                 kh.nama as price_group_name
          from sim_tr_resep r
@@ -120,6 +122,8 @@ export async function publishPrescriptionIssued(
                 medical_record_number: header.medical_record_number,
                 name: header.patient_name,
                 birth_date: header.birth_date,
+                // Nilai kunjungan, bukan nilai pasien sekarang; farmasi memilih baris grading harga obat dengannya.
+                ktp: header.ktp_patient,
             },
             doctor:
                 header.doctor_id === null
