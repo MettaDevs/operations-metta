@@ -44,6 +44,7 @@ import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modul
 import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../modules/pharmacy/src/drug/drug-price/drug-prices.page.tsx';
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
+import { page as modulesPharmacySrcDrugSetupPharmacySetupPage } from '../modules/pharmacy/src/drug/setup/pharmacy-setup.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationInventoryAdjustmentAdjustmentsPage } from './foundation/inventory/adjustment/adjustments.page.tsx';
@@ -572,6 +573,13 @@ const modulesPharmacySrcDrugGradingGroupGradingGroupsRoute = createRoute({
     },
 });
 
+const modulesPharmacySrcDrugSetupPharmacySetupRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDrugSetupPharmacySetupPage.path,
+    component: modulesPharmacySrcDrugSetupPharmacySetupPage.component,
+    staticData: { title: modulesPharmacySrcDrugSetupPharmacySetupPage.title },
+});
+
 const foundationCalendarCalendarsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationCalendarCalendarsPage.path,
@@ -963,6 +971,7 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDrugDrugPriceDrugPricesRoute,
         modulesPharmacySrcDrugDrugDrugsRoute,
         modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
+        modulesPharmacySrcDrugSetupPharmacySetupRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationInventoryAdjustmentAdjustmentsRoute,

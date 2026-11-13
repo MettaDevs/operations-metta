@@ -731,7 +731,7 @@ export class Dispensings {
                         toNumeric(price.basePrice, quantityScale),
                         price.gradingId,
                         toNumeric(price.markupPercent, quantityScale),
-                        String(price.unitPrice),
+                        toNumeric(price.unitPrice, quantityScale),
                         toNumeric(price.discountPercent, quantityScale),
                         stamp,
                         this.scope.tenantId,

@@ -3,9 +3,11 @@ import { z } from 'zod';
 import {
     fromNumeric,
     quantityScale,
+    toNumeric,
 } from '../../../../../src/foundation/inventory/index.ts';
 import {
     drugPrice,
+    unitPriceDecimalOptions,
     type PriceGrading,
 } from '../../../src/drug/drug-price/drug-price.calculation.ts';
 import fixture from './legacy-drug-prices.json';
@@ -28,6 +30,7 @@ const fixtureSchema = z.object({
     sources: z.record(
         z.string(),
         z.object({
+            unit_price_decimals: z.literal(unitPriceDecimalOptions),
             gradings: z.array(
                 z.object({
                     price_group: z.string(),
@@ -56,10 +59,17 @@ const fixtureSchema = z.object({
         our_price: decimal,
         legacy_style_price: decimal,
     }),
+    seroja_unit_conversion: caseKey.extend({
+        quantity_per_unit: decimal,
+        our_price: decimal,
+        legacy_style_price: decimal,
+    }),
 });
 
 const golden = fixtureSchema.parse(fixture);
 const amount = (text: string) => fromNumeric(text, quantityScale);
+// Teks desimal dengan skala tetap, supaya 899.1 dan 899.10 sama dan 899 berbeda dari 899.1.
+const fixed = (text: string) => toNumeric(amount(text), quantityScale);
 const key = (entry: z.infer<typeof caseKey>) =>
     [
         entry.source,
@@ -85,23 +95,27 @@ const ours = (
     entry: z.infer<typeof caseKey>,
     quantityPerUnit = '1',
 ): { price: string; discount: string } => {
+    const source = golden.sources[entry.source];
+    if (!source) throw new Error(`Unknown source ${entry.source}.`);
     const price = drugPrice(gradingsOf(entry.source), {
         basePrice: amount(entry.base_price),
         priceGroupId: entry.price_group,
         gradingGroupId: entry.grading_group,
         date: '2026-11-13',
         quantityPerUnit: amount(quantityPerUnit),
+        unitPriceDecimals: source.unit_price_decimals,
     });
     return {
-        price: String(price.unitPrice),
+        price: toNumeric(price.unitPrice, quantityScale),
         discount: String(price.discountPercent / 10n ** BigInt(quantityScale)),
     };
 };
 
 // Golden test harga obat terhadap fungsi SQL sistem lama GetHargaObatNew_WithStok. Fixture-nya keluaran oracle
 // legacy-drug-prices.sql yang dijalankan read-only di Kuta 1, Seroja, dan Penta; CI tidak punya SQL Server. Setiap kasus
-// wajib sama dengan harga sistem lama, kecuali yang tercatat di expected_differences beserta harga kita dan alasannya.
-// Kasus yang berbeda tanpa tercatat, atau yang tercatat tetapi ternyata sama, membuat test gagal.
+// dihitung dengan setelan farmasi sumbernya (unit_price_decimals) dan wajib sama dengan harga sistem lama, kecuali yang
+// tercatat di expected_differences beserta harga kita dan alasannya. Kasus yang berbeda tanpa tercatat, atau yang
+// tercatat tetapi ternyata sama, membuat test gagal.
 describe('legacy drug prices', () => {
     const differences = new Map(
         golden.expected_differences.map((entry) => [key(entry), entry]),
@@ -128,9 +142,9 @@ describe('legacy drug prices', () => {
             if (difference) {
                 expect(difference.legacy_price).toBe(entry.legacy);
                 expect(golden.reasons[difference.reason]).toBeString();
-                expect(result.price).not.toBe(entry.legacy);
-                expect(result.price).toBe(difference.our_price);
-            } else expect(result.price).toBe(entry.legacy);
+                expect(result.price).not.toBe(fixed(entry.legacy));
+                expect(result.price).toBe(fixed(difference.our_price));
+            } else expect(result.price).toBe(fixed(entry.legacy));
         },
     );
 
@@ -144,16 +158,29 @@ describe('legacy drug prices', () => {
         expect(differences.size).toBe(golden.expected_differences.length);
     });
 
+    // Harga per satuan dasar dikali isi satuan, cara sistem lama bila ia menjual dalam satuan lain.
+    const legacyStyle = (example: typeof golden.unit_conversion) =>
+        toNumeric(
+            (amount(ours(example).price) * amount(example.quantity_per_unit)) /
+                10n ** BigInt(quantityScale),
+            quantityScale,
+        );
+
     test('a non-base unit is rounded once after the unit content, unlike rounding the base unit price first', () => {
         const example = golden.unit_conversion;
         expect(ours(example, example.quantity_per_unit).price).toBe(
-            example.our_price,
+            fixed(example.our_price),
         );
-        expect(
-            String(
-                BigInt(ours(example).price) * BigInt(example.quantity_per_unit),
-            ),
-        ).toBe(example.legacy_style_price);
+        expect(legacyStyle(example)).toBe(fixed(example.legacy_style_price));
         expect(example.our_price).not.toBe(example.legacy_style_price);
+    });
+
+    test("with Seroja's four decimals a STRIP of 10 is exactly ten times the tablet price", () => {
+        const example = golden.seroja_unit_conversion;
+        expect(ours(example, example.quantity_per_unit).price).toBe(
+            fixed(example.our_price),
+        );
+        expect(legacyStyle(example)).toBe(fixed(example.legacy_style_price));
+        expect(example.our_price).toBe(example.legacy_style_price);
     });
 });

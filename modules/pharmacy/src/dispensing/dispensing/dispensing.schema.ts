@@ -46,7 +46,8 @@ const reference = z.object({
     name: z.string(),
 });
 
-// Harga baris yang disalin saat disiapkan: harga per satuan baris dalam rupiah utuh, % diskon, dan nilai baris.
+// Harga baris yang disalin saat disiapkan: harga per satuan baris dengan angka di belakang koma menurut setelan farmasi,
+// % diskon, dan nilai baris.
 export const dispensingPriceSchema = z.object({
     unit_price: z.string(),
     discount_percent: z.string(),

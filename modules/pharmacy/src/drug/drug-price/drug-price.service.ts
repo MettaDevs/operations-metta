@@ -19,6 +19,7 @@ import {
     quantityScale,
     toNumeric,
 } from '@core/foundation/inventory/index.ts';
+import { pharmacySetup } from '../setup/pharmacy-setup.service.ts';
 import {
     drugPrice,
     type DrugPrice,
@@ -73,8 +74,9 @@ const messages = {
 };
 
 // Harga obat untuk baris penyerahan yang disiapkan: harga dasar barang Core per satuan dasar, kelompok grading dari
-// data obat farmasi, dan baris grading kelompok harga pembeli yang sudah berlaku pada tanggal penyerahan. Barang yang
-// tidak punya data obat farmasi tidak berkelompok grading.
+// data obat farmasi, baris grading kelompok harga pembeli yang sudah berlaku pada tanggal penyerahan, dan pembulatan
+// harga satuan dari setelan farmasi legal entity itu. Barang yang tidak punya data obat farmasi tidak berkelompok
+// grading.
 export async function priceDrugLines<
     Line extends { itemId: string; quantityPerUnit: bigint },
 >(
@@ -134,6 +136,10 @@ export async function priceDrugLines<
                   ),
                   effectiveFrom: row.effective_from,
               }));
+    const { unit_price_decimals: unitPriceDecimals } = await pharmacySetup(
+        db,
+        scope,
+    );
     return lines.map((line) => {
         const item = items.get(line.itemId);
         if (!item) throw new Error(`Item ${line.itemId} was not found.`);
@@ -148,6 +154,7 @@ export async function priceDrugLines<
                     gradingGroupId: item.grading_group_id,
                     date: buyer.date,
                     quantityPerUnit: line.quantityPerUnit,
+                    unitPriceDecimals,
                 }),
             },
         };

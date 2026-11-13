@@ -6,6 +6,7 @@ import {
 import {
     drugPrice,
     type PriceGrading,
+    type UnitPriceDecimals,
 } from '../../../src/drug/drug-price/drug-price.calculation.ts';
 
 const amount = (text: string) => fromNumeric(text, quantityScale);
@@ -55,7 +56,11 @@ const priced = (
     priceGroup: string | null,
     gradingGroup: string | null,
     base: string,
-    options: { quantityPerUnit?: string; date?: string } = {},
+    options: {
+        quantityPerUnit?: string;
+        date?: string;
+        decimals?: UnitPriceDecimals;
+    } = {},
 ) =>
     drugPrice(gradings, {
         basePrice: amount(base),
@@ -63,11 +68,12 @@ const priced = (
         gradingGroupId: gradingGroup,
         date: options.date ?? '2026-11-13',
         quantityPerUnit: amount(options.quantityPerUnit ?? '1'),
+        unitPriceDecimals: options.decimals ?? 0,
     });
 
 // Harga obat GetHargaObatNew_WithStok: % naik dari baris kelompok grading obat untuk kelompok harga pembeli dan rentang
-// harga dasarnya, lalu baris semua barang, lalu 0 %; harga per satuan baris dibulatkan ke rupiah sesudah dikali isi
-// satuan. Harapan dihitung tangan dari master sistem lama.
+// harga dasarnya, lalu baris semua barang, lalu 0 %; harga per satuan baris dibulatkan sesudah dikali isi satuan, ke
+// rupiah utuh kecuali disebut lain. Harapan dihitung tangan dari master sistem lama.
 describe('drug price', () => {
     test.each([
         [
@@ -76,7 +82,7 @@ describe('drug price', () => {
             'LOCAL',
             'XX',
             '300',
-            390n,
+            '390',
             'local-xx',
         ],
         [
@@ -85,7 +91,7 @@ describe('drug price', () => {
             'LOCAL',
             'INJEKSI',
             '2220',
-            3330n,
+            '3330',
             'local-injeksi',
         ],
         [
@@ -94,7 +100,7 @@ describe('drug price', () => {
             'EXPART',
             'XX',
             '500',
-            500n,
+            '500',
             null,
         ],
         [
@@ -103,7 +109,7 @@ describe('drug price', () => {
             'EXPART',
             'XX',
             '1000',
-            1600n,
+            '1600',
             'expart-xx',
         ],
         [
@@ -112,7 +118,7 @@ describe('drug price', () => {
             'EXPART',
             'XX',
             '10000000',
-            16000000n,
+            '16000000',
             'expart-xx',
         ],
         [
@@ -121,7 +127,7 @@ describe('drug price', () => {
             'EXPART',
             'XX',
             '10000000.0001',
-            10000000n,
+            '10000000',
             null,
         ],
         [
@@ -130,7 +136,7 @@ describe('drug price', () => {
             'FOREIGN',
             'XX',
             '13500',
-            24300n,
+            '24300',
             'foreign-xx',
         ],
         [
@@ -139,7 +145,7 @@ describe('drug price', () => {
             'IKS',
             'INJEKSI',
             '2220',
-            2220n,
+            '2220',
             null,
         ],
         [
@@ -148,7 +154,7 @@ describe('drug price', () => {
             'UMUM',
             'G3',
             '1776000',
-            2759904n,
+            '2759904',
             'umum-G3',
         ],
         [
@@ -157,17 +163,25 @@ describe('drug price', () => {
             'UMUM',
             'G6',
             '20349',
-            31622n,
+            '31622',
             'umum-G6',
         ],
-        ['Penta BPJS G4 11 %', penta, 'BPJS', 'G4', '28482', 31615n, 'bpjs-g4'],
+        [
+            'Penta BPJS G4 11 %',
+            penta,
+            'BPJS',
+            'G4',
+            '28482',
+            '31615',
+            'bpjs-g4',
+        ],
         [
             'Penta BPJS G1 22,1 %',
             penta,
             'BPJS',
             'G1',
             '23330',
-            28486n,
+            '28486',
             'bpjs-g1',
         ],
         [
@@ -176,7 +190,7 @@ describe('drug price', () => {
             'APOTEK',
             'G3',
             '13963.04',
-            19374n,
+            '19374',
             'apotek-g3',
         ],
         [
@@ -185,7 +199,7 @@ describe('drug price', () => {
             'TOURIST INSURANCE',
             'G4',
             '125',
-            555n,
+            '555',
             'tourist-g4',
         ],
     ] as const)(
@@ -193,15 +207,15 @@ describe('drug price', () => {
         (_, gradings, priceGroup, gradingGroup, base, price, gradingId) => {
             expect(
                 priced([...gradings], priceGroup, gradingGroup, base),
-            ).toMatchObject({ unitPrice: price, gradingId });
+            ).toMatchObject({ unitPrice: amount(price), gradingId });
         },
     );
 
     test('half a rupiah rounds away from zero, as T-SQL round(money, 0) does', () => {
         const kuta = [row('iks-xx', 'IKS', 'XX', '10')];
-        expect(priced(kuta, 'IKS', 'XX', '495').unitPrice).toBe(545n);
-        expect(priced(kuta, 'IKS', 'XX', '0.545').unitPrice).toBe(1n);
-        expect(priced(kuta, 'IKS', 'XX', '0.4').unitPrice).toBe(0n);
+        expect(priced(kuta, 'IKS', 'XX', '495').unitPrice).toBe(amount('545'));
+        expect(priced(kuta, 'IKS', 'XX', '0.545').unitPrice).toBe(amount('1'));
+        expect(priced(kuta, 'IKS', 'XX', '0.4').unitPrice).toBe(amount('0'));
     });
 
     test("the item's group row wins over the all-items row, and an item without a group or without a group row takes the all-items row", () => {
@@ -210,15 +224,15 @@ describe('drug price', () => {
             row('umum-all', 'UMUM', null, '20'),
         ];
         expect(priced(gradings, 'UMUM', 'G1', '1000')).toMatchObject({
-            unitPrice: 1100n,
+            unitPrice: amount('1100'),
             gradingId: 'umum-g1',
         });
         expect(priced(gradings, 'UMUM', 'G2', '1000')).toMatchObject({
-            unitPrice: 1200n,
+            unitPrice: amount('1200'),
             gradingId: 'umum-all',
         });
         expect(priced(gradings, 'UMUM', null, '1000')).toMatchObject({
-            unitPrice: 1200n,
+            unitPrice: amount('1200'),
             gradingId: 'umum-all',
         });
     });
@@ -230,25 +244,27 @@ describe('drug price', () => {
             row('nanti', 'UMUM', 'G1', '50', { effectiveFrom: '2027-01-01' }),
         ];
         expect(priced(gradings, 'UMUM', 'G1', '1000')).toMatchObject({
-            unitPrice: 1150n,
+            unitPrice: amount('1150'),
             gradingId: 'baru',
         });
         expect(
             priced(gradings, 'UMUM', 'G1', '1000', { date: '2026-03-01' }),
-        ).toMatchObject({ unitPrice: 1100n, gradingId: 'lama' });
+        ).toMatchObject({ unitPrice: amount('1100'), gradingId: 'lama' });
         expect(
             priced(gradings, 'UMUM', 'G1', '1000', { date: '2025-12-31' }),
-        ).toMatchObject({ unitPrice: 1000n, gradingId: null });
+        ).toMatchObject({ unitPrice: amount('1000'), gradingId: null });
     });
 
     test('a buyer without a price group pays the base price, and another price group never applies', () => {
         expect(priced(seroja, null, 'XX', '300')).toEqual({
             gradingId: null,
             markupPercent: 0n,
-            unitPrice: 300n,
+            unitPrice: amount('300'),
             discountPercent: 0n,
         });
-        expect(priced(seroja, 'BPJS', 'XX', '300').unitPrice).toBe(300n);
+        expect(priced(seroja, 'BPJS', 'XX', '300').unitPrice).toBe(
+            amount('300'),
+        );
     });
 
     test('a STRIP of 10 is rounded once after the unit content, not ten times the rounded tablet price', () => {
@@ -256,8 +272,31 @@ describe('drug price', () => {
             quantityPerUnit: '10',
         });
         const tablet = priced(seroja, 'LOCAL', 'XX', '84.38');
-        expect(strip.unitPrice).toBe(1097n);
-        expect(tablet.unitPrice * 10n).toBe(1100n);
+        expect(strip.unitPrice).toBe(amount('1097'));
+        expect(tablet.unitPrice * 10n).toBe(amount('1100'));
+    });
+
+    test('each precision from 0 to 4 rounds half away from zero at its last decimal', () => {
+        const kuta = [row('iks-xx', 'IKS', 'XX', '10', { from: '0' })];
+        const at = (decimals: UnitPriceDecimals) =>
+            priced(kuta, 'IKS', 'XX', '0.515', { decimals }).unitPrice;
+        expect([at(0), at(1), at(2), at(3), at(4)]).toEqual(
+            ['1', '0.6', '0.57', '0.567', '0.5665'].map(amount),
+        );
+        const half = [row('iks-xx', 'IKS', 'XX', '50', { from: '0' })];
+        expect(
+            priced(half, 'IKS', 'XX', '0.0001', { decimals: 4 }).unitPrice,
+        ).toBe(amount('0.0002'));
+    });
+
+    test("with Seroja's four decimals a STRIP of 10 is ten times the tablet price, unrounded to rupiah", () => {
+        const strip = priced(seroja, 'LOCAL', 'XX', '84.38', {
+            quantityPerUnit: '10',
+            decimals: 4,
+        });
+        const tablet = priced(seroja, 'LOCAL', 'XX', '84.38', { decimals: 4 });
+        expect(tablet.unitPrice).toBe(amount('109.694'));
+        expect(strip.unitPrice).toBe(amount('1096.94'));
     });
 
     test('the discount is returned beside the price and does not lower it', () => {
@@ -265,7 +304,7 @@ describe('drug price', () => {
         expect(priced(gradings, 'ASR', 'G1', '1000')).toEqual({
             gradingId: 'diskon',
             markupPercent: amount('10'),
-            unitPrice: 1100n,
+            unitPrice: amount('1100'),
             discountPercent: amount('5'),
         });
     });

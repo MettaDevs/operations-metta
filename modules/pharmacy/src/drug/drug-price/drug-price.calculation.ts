@@ -18,6 +18,12 @@ export type PriceGrading = {
     effectiveFrom: string;
 };
 
+// Banyak angka di belakang koma harga satuan obat, setelan farmasi per legal entity (far_m_parameter), padanan
+// Unit-Amount Rounding Precision BC. Sistem lama: Kuta 1 dan Penta 0 (round(@HargaObat, 0)), Seroja 4 (money tanpa
+// round).
+export const unitPriceDecimalOptions = [0, 1, 2, 3, 4] as const;
+export type UnitPriceDecimals = (typeof unitPriceDecimalOptions)[number];
+
 // basePrice per satuan dasar barang; quantityPerUnit isi satuan baris dalam satuan dasar. priceGroupId kosong berarti
 // pembeli tanpa kelompok harga.
 export type DrugPriceInput = {
@@ -26,9 +32,11 @@ export type DrugPriceInput = {
     gradingGroupId: string | null;
     date: string;
     quantityPerUnit: bigint;
+    unitPriceDecimals: UnitPriceDecimals;
 };
 
-// unitPrice dalam rupiah utuh per satuan baris. Diskon tidak mengurangi unitPrice; ia disimpan terpisah di baris.
+// unitPrice per satuan baris, sudah dibulatkan ke unitPriceDecimals. Diskon tidak mengurangi unitPrice; ia disimpan
+// terpisah di baris.
 export type DrugPrice = {
     gradingId: string | null;
     markupPercent: bigint;
@@ -42,7 +50,7 @@ export type DrugPrice = {
 // pada kunci yang sama, jadi pilihan itu tunggal.
 export function applicableGrading(
     gradings: readonly PriceGrading[],
-    input: Omit<DrugPriceInput, 'quantityPerUnit'>,
+    input: Omit<DrugPriceInput, 'quantityPerUnit' | 'unitPriceDecimals'>,
 ): PriceGrading | null {
     const { priceGroupId, basePrice, date } = input;
     if (priceGroupId === null) return null;
@@ -66,9 +74,10 @@ export function applicableGrading(
     );
 }
 
-// Harga per satuan baris = harga dasar x (1 + % naik / 100) x isi satuan, dibulatkan ke rupiah utuh setengah menjauhi
-// nol (round(money, 0) T-SQL) sesudah dikali isi satuan, urutan ConvertAmountByUnitOfMeasure BC. Sistem lama membulatkan
-// per satuan stok, tetapi tidak pernah menjual dalam satuan lain; strip berisi 10 di sini satu pembulatan, bukan sepuluh.
+// Harga per satuan baris = harga dasar x (1 + % naik / 100) x isi satuan, dibulatkan ke unitPriceDecimals angka di
+// belakang koma setengah menjauhi nol (round(money, 0) T-SQL untuk 0) sesudah dikali isi satuan, urutan
+// ConvertAmountByUnitOfMeasure BC. Sistem lama membulatkan per satuan stok, tetapi tidak pernah menjual dalam satuan
+// lain; strip berisi 10 di sini satu pembulatan, bukan sepuluh.
 export function drugPrice(
     gradings: readonly PriceGrading[],
     input: DrugPriceInput,
@@ -79,11 +88,12 @@ export function drugPrice(
         input.basePrice *
         (hundredPercent + markupPercent) *
         input.quantityPerUnit;
-    const divisor = one * hundredPercent * one;
+    const step = 10n ** BigInt(quantityScale - input.unitPriceDecimals);
+    const divisor = hundredPercent * one * step;
     return {
         gradingId: grading?.id ?? null,
         markupPercent,
-        unitPrice: (exact + divisor / 2n) / divisor,
+        unitPrice: ((exact + divisor / 2n) / divisor) * step,
         discountPercent: grading?.discountPercent ?? 0n,
     };
 }

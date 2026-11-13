@@ -1,7 +1,7 @@
 {
     "about": [
         "Output of the legacy SQL function dbo.GetHargaObatNew_WithStok, run read-only on 13 November 2026 with (price group, 'xx', KTP 1, item, CustomerKerjasamaID 0, '', 0) by legacy-drug-prices.sql. Master values and prices only, no patient data. Gradings are the SIMmGradingHargaObat rows for KTP 1 and TipePelayanan STANDARD; grading_group null would mean the legacy ALL rows (none in these sources).",
-        "Every case is fed to the pure price rule with conversion 1. A case must give legacy_price unless it is listed in expected_differences, which states the price our rule gives and why."
+        "Every case is fed to the pure price rule with conversion 1 and the unit_price_decimals of its source, the pharmacy setting desimal_harga_satuan: Kuta 1 and Penta 0 (their copies return round(@HargaObat, 0)), Seroja 4 (its copy returns @HargaObat as money without round, which keeps four decimals). A case must give legacy_price unless it is listed in expected_differences, which states the price our rule gives and why."
     ],
     "case_columns": [
         "grading_group",
@@ -13,7 +13,7 @@
     "sources": {
         "kuta": {
             "database": "Puskesmas Kuta 1 (dev copy)",
-            "legacy_rounds_price": true,
+            "unit_price_decimals": 0,
             "gradings": [
                 {
                     "price_group": "IKS",
@@ -58,7 +58,7 @@
         },
         "penta": {
             "database": "Klinik Penta (demo copy)",
-            "legacy_rounds_price": true,
+            "unit_price_decimals": 0,
             "gradings": [
                 {
                     "price_group": "IKS",
@@ -841,7 +841,7 @@
         },
         "seroja": {
             "database": "Klinik Seroja (copy on the Penta dev server)",
-            "legacy_rounds_price": false,
+            "unit_price_decimals": 4,
             "gradings": [
                 {
                     "price_group": "IKS",
@@ -1031,442 +1031,9 @@
         }
     },
     "reasons": {
-        "seroja-no-rounding": "The Seroja copy of the function inserts @HargaObat without round(), so its prices keep the fraction of base x (1 + markup / 100). Kuta 1 and Penta round to whole rupiah; ours rounds to whole rupiah half away from zero, like them.",
-        "seroja-item-class": "The Seroja copy also requires SIMmGradingHargaObat.KelasBarangID = mBarang.Kelas_ID. Grading groups and item classes align one to one except this XX item of class 7, which the legacy function therefore prices at 0 %. Ours has no item class and applies the XX rows."
+        "seroja-item-class": "The Seroja copy also requires SIMmGradingHargaObat.KelasBarangID = mBarang.Kelas_ID. In Seroja's data every grading group equals the item's class name (ANTIBIOTIK ORAL, BHP, INJEKSI, OBAT ORAL, TOPIKAL; XX is class NONE, 700 items) except this one item of class ALKES placed in group XX; the legacy class key gives it 0 % because the XX rows are for class NONE only. This is a data inconsistency of that item, not a rule: when Seroja's data is ported, the item gets the grading group of its class (ALKES), and our rule then gives 0 % like legacy."
     },
     "expected_differences": [
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "IKS",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "LOCAL",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "BPJS",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "DOMESTIC",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "EXPART",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "ANTIBIOTIK ORAL",
-            "base_price": "899.1",
-            "price_group": "FOREIGN",
-            "legacy_price": "899.1",
-            "our_price": "899",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "INJEKSI",
-            "base_price": "11475",
-            "price_group": "LOCAL",
-            "legacy_price": "17212.5",
-            "our_price": "17213",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "IKS",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "LOCAL",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "BPJS",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "DOMESTIC",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "EXPART",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "87.52",
-            "price_group": "FOREIGN",
-            "legacy_price": "87.52",
-            "our_price": "88",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "IKS",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "LOCAL",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "BPJS",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "DOMESTIC",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "EXPART",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "783.82",
-            "price_group": "FOREIGN",
-            "legacy_price": "783.82",
-            "our_price": "784",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "IKS",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "LOCAL",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "BPJS",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "DOMESTIC",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "EXPART",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "OBAT ORAL",
-            "base_price": "109840.05",
-            "price_group": "FOREIGN",
-            "legacy_price": "109840.05",
-            "our_price": "109840",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "IKS",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "LOCAL",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "BPJS",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "DOMESTIC",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "EXPART",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "TOPIKAL",
-            "base_price": "21367.5",
-            "price_group": "FOREIGN",
-            "legacy_price": "21367.5",
-            "our_price": "21368",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "IKS",
-            "legacy_price": "122.351",
-            "our_price": "122",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "LOCAL",
-            "legacy_price": "109.694",
-            "our_price": "110",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "BPJS",
-            "legacy_price": "84.38",
-            "our_price": "84",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "DOMESTIC",
-            "legacy_price": "84.38",
-            "our_price": "84",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "EXPART",
-            "legacy_price": "84.38",
-            "our_price": "84",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "84.38",
-            "price_group": "FOREIGN",
-            "legacy_price": "151.884",
-            "our_price": "152",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "IKS",
-            "legacy_price": "141.7665",
-            "our_price": "142",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "LOCAL",
-            "legacy_price": "127.101",
-            "our_price": "127",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "BPJS",
-            "legacy_price": "97.77",
-            "our_price": "98",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "DOMESTIC",
-            "legacy_price": "97.77",
-            "our_price": "98",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "EXPART",
-            "legacy_price": "97.77",
-            "our_price": "98",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "97.77",
-            "price_group": "FOREIGN",
-            "legacy_price": "175.986",
-            "our_price": "176",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "3663",
-            "price_group": "IKS",
-            "legacy_price": "5311.35",
-            "our_price": "5311",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "3663",
-            "price_group": "LOCAL",
-            "legacy_price": "4761.9",
-            "our_price": "4762",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "3663",
-            "price_group": "EXPART",
-            "legacy_price": "5860.8",
-            "our_price": "5861",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "3663",
-            "price_group": "FOREIGN",
-            "legacy_price": "6593.4",
-            "our_price": "6593",
-            "reason": "seroja-no-rounding"
-        },
-        {
-            "source": "seroja",
-            "grading_group": "XX",
-            "base_price": "38250",
-            "price_group": "IKS",
-            "legacy_price": "55462.5",
-            "our_price": "55463",
-            "reason": "seroja-no-rounding"
-        },
         {
             "source": "seroja",
             "grading_group": "XX",
@@ -1531,13 +1098,23 @@
         }
     ],
     "unit_conversion": {
-        "about": "Legacy never sold in a unit other than the stock unit. Ours rounds once after multiplying by the unit content (BC ConvertAmountByUnitOfMeasure), so a STRIP of 10 is not 10 x the rounded tablet price.",
+        "about": "Legacy never sold in a unit other than the stock unit. With whole-rupiah rounding, ours rounds once after multiplying by the unit content (BC ConvertAmountByUnitOfMeasure), so a STRIP of 10 is not 10 x the rounded tablet price: 495 x 1.1 = 544.5 per tablet.",
+        "source": "kuta",
+        "grading_group": "XX",
+        "base_price": "495",
+        "price_group": "IKS",
+        "quantity_per_unit": "10",
+        "our_price": "5445",
+        "legacy_style_price": "5450"
+    },
+    "seroja_unit_conversion": {
+        "about": "With Seroja's four decimals nothing is rounded away: 84.38 x 1.3 = 109.694 per tablet, and a STRIP of 10 is exactly 10 x the tablet price.",
         "source": "seroja",
         "grading_group": "XX",
         "base_price": "84.38",
         "price_group": "LOCAL",
         "quantity_per_unit": "10",
-        "our_price": "1097",
-        "legacy_style_price": "1100"
+        "our_price": "1096.94",
+        "legacy_style_price": "1096.94"
     }
 }
