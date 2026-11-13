@@ -384,6 +384,19 @@ export const billingArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'payment',
+            label: 'Pembayaran',
+            icon: 'receipt',
+            items: [
+                {
+                    id: 'payments',
+                    label: 'Pembayaran',
+                    href: '/billing/payments',
+                    permission: 'core.payment.read',
+                },
+            ],
+        },
+        {
             id: 'clerk',
             label: 'Clerk',
             icon: 'wallet',

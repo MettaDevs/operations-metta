@@ -48,6 +48,8 @@ import { page as modulesPharmacySrcDrugSetupPharmacySetupPage } from '../modules
 import { page as foundationBillingClerkClerkPage } from './foundation/billing/clerk/clerk.page.tsx';
 import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
+import { page as foundationBillingInvoicePaymentPage } from './foundation/billing/invoice/payment.page.tsx';
+import { page as foundationBillingInvoicePaymentsPage } from './foundation/billing/invoice/payments.page.tsx';
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
@@ -607,6 +609,21 @@ const foundationBillingDashboardDashboardRoute = createRoute({
     staticData: { title: foundationBillingDashboardDashboardPage.title },
 });
 
+const foundationBillingInvoicePaymentRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingInvoicePaymentPage.path,
+    component: foundationBillingInvoicePaymentPage.component,
+    staticData: { title: foundationBillingInvoicePaymentPage.title },
+});
+
+const foundationBillingInvoicePaymentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingInvoicePaymentsPage.path,
+    component: foundationBillingInvoicePaymentsPage.component,
+    validateSearch: foundationBillingInvoicePaymentsPage.validateSearch,
+    staticData: { title: foundationBillingInvoicePaymentsPage.title },
+});
+
 const foundationBillingMerchantMerchantsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationBillingMerchantMerchantsPage.path,
@@ -1021,6 +1038,8 @@ const routeTree = rootRoute.addChildren([
         foundationBillingClerkClerkRoute,
         foundationBillingClerkClerksRoute,
         foundationBillingDashboardDashboardRoute,
+        foundationBillingInvoicePaymentRoute,
+        foundationBillingInvoicePaymentsRoute,
         foundationBillingMerchantMerchantsRoute,
         foundationBillingPaymentMethodPaymentMethodsRoute,
         foundationCalendarCalendarsRoute,

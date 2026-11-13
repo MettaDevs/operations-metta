@@ -8,6 +8,7 @@ import {
     visitCompleted,
 } from './charge/charge.events.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
+import { invoiceRoutes } from './invoice/invoice.routes.ts';
 import { merchantRoutes } from './merchant/merchant.routes.ts';
 import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
 
@@ -30,5 +31,10 @@ export function registerBillingEventHandlers(): void {
 }
 
 export function billingRoutes() {
-    return { ...paymentMethodRoutes(), ...merchantRoutes(), ...clerkRoutes() };
+    return {
+        ...paymentMethodRoutes(),
+        ...merchantRoutes(),
+        ...clerkRoutes(),
+        ...invoiceRoutes(),
+    };
 }
