@@ -37,7 +37,19 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
         onnotice: () => {},
     });
     const databases: string[] = [];
+    // Alamat yang ditulis berkas ini dihapus lagi, supaya putaran berikutnya di database test yang sama tidak
+    // menemukan alamat aktif peninggalan putaran ini.
+    const slugs: string[] = [];
+    const newSlug = (prefix: string) => {
+        const slug = `${prefix}-${crypto.randomUUID().slice(-12)}`;
+        slugs.push(slug);
+        return slug;
+    };
     afterAll(async () => {
+        await runtime.unsafe(
+            'delete from environment_routes where tenant_slug = any($1)',
+            [slugs],
+        );
         for (const database of databases)
             await runtime.unsafe(
                 `drop database if exists "${database}" with (force)`,
@@ -51,6 +63,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
         const id = Bun.randomUUIDv7();
         const database = `${settings.DB_DATABASE.slice(0, 40)}_wk_${id.slice(-8)}`;
         databases.push(database);
+        const slug = newSlug('worker');
         if (fromTemplate)
             await createMigratedEnvironmentDatabase(settings, source, database);
         return {
@@ -59,12 +72,12 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             client: {
                 id: Bun.randomUUIDv7(),
                 legal_name: 'PT Uji Worker',
-                slug: `worker-${id.slice(-12)}`,
+                slug,
             },
             tenant: {
                 id,
                 name: 'Klinik Uji Worker',
-                slug: `worker-${id.slice(-12)}`,
+                slug,
             },
             admin: {
                 id: Bun.randomUUIDv7(),
@@ -350,7 +363,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     }, 120_000);
 
     test('convert tidak menimpa alamat produksi milik database lain dan menolak parameter yang tidak sah', async () => {
-        const slug = `convert-${crypto.randomUUID().slice(-12)}`;
+        const slug = newSlug('convert');
         await runtime.unsafe(
             "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'demo', $2, 'Demo', 'env_demo_a'), ($1, 'production', $2, 'Produksi', 'env_production_b')",
             [slug, Bun.randomUUIDv7()],
@@ -459,7 +472,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     }, 120_000);
 
     test('expire tidak menonaktifkan alamat demo milik database lain dan menolak parameter yang tidak sah', async () => {
-        const slug = `expire-${crypto.randomUUID().slice(-12)}`;
+        const slug = newSlug('expire');
         await runtime.unsafe(
             "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'demo', $2, 'Demo', 'env_demo_lain')",
             [slug, Bun.randomUUIDv7()],
@@ -559,7 +572,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
     }, 120_000);
 
     test('restore menolak alamat yang tidak tercatat atau menunjuk database lain', async () => {
-        const slug = `restore-${crypto.randomUUID().slice(-12)}`;
+        const slug = newSlug('restore');
         await runtime.unsafe(
             "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name, disabled_at) values ($1, 'demo', $2, 'Demo', 'env_demo_lain', now())",
             [slug, Bun.randomUUIDv7()],
@@ -711,10 +724,10 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
             'runtime or a system database',
         );
 
-        const slug = `purge-${crypto.randomUUID().slice(-12)}`;
+        const slug = newSlug('purge');
         await runtime.unsafe(
-            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'production', $2, 'Produksi', 'env_dipakai_produksi')",
-            [slug, Bun.randomUUIDv7()],
+            "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'production', $2, 'Produksi', $3)",
+            [slug, Bun.randomUUIDv7(), `env_dipakai_${slug.slice(-12)}`],
         );
         const shared = recorder();
         expect(
@@ -725,7 +738,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
                 claimed('purge', {
                     tenant_slug: `other-${crypto.randomUUID().slice(-8)}`,
                     kind: 'demo',
-                    database: 'env_dipakai_produksi',
+                    database: `env_dipakai_${slug.slice(-12)}`,
                 }),
             ),
         ).toBe('failed');
@@ -765,7 +778,7 @@ describe.skipIf(!process.env.DB_HOST)('worker menjalankan operasi', () => {
                 }),
             ),
         ).toBe('succeeded');
-        const missingSlug = `lapor-${crypto.randomUUID().slice(-12)}`;
+        const missingSlug = newSlug('lapor');
         await runtime.unsafe(
             "insert into environment_routes (tenant_slug, kind, tenant_id, name, database_name) values ($1, 'production', $2, 'Produksi', $3)",
             [
