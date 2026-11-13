@@ -436,6 +436,7 @@ function ProcedureLines({
                                 procedure_name: null,
                                 quantity: 1,
                                 doctor_id: current.anamnesis?.doctor_id ?? null,
+                                tariff: null,
                                 added_by: null,
                                 added_at: null,
                             },

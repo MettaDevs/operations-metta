@@ -15,6 +15,7 @@ import {
     priceSumFields,
     type PriceLocation,
     type PriceNumberKind,
+    type ProcedureTariff,
 } from './procedure-price.options.ts';
 import {
     procedurePriceInputSchema,
@@ -208,9 +209,12 @@ const lookupComponent = z.object({
 });
 export type LookupComponent = z.infer<typeof lookupComponent>;
 
-// Tarif jasa yang didapat tindakan untuk pasien. step: langkah pencarian yang terpilih (null untuk tipe tanpa tarif);
-// price null berarti tanpa tarif, juga bila saringan sesudah langkah mengosongkan hasilnya.
+// Tarif jasa yang didapat tindakan untuk pasien. tariff: kode tarif jasa tipe pasien saat dicari. priceGroupId:
+// kelompok harga yang dicari tarifnya, null untuk tarif none. step: langkah pencarian yang terpilih (null untuk tarif
+// none); price null berarti tanpa tarif, juga bila saringan sesudah langkah mengosongkan hasilnya.
 export type ProcedurePriceLookup = {
+    tariff: ProcedureTariff;
+    priceGroupId: string | null;
     step: TariffStep | null;
     price: (ChosenPrice & { components: LookupComponent[] }) | null;
 };
@@ -618,13 +622,19 @@ export class ProcedurePrices {
                 location: input.location,
             },
         );
-        if (!result.price) return { step: result.step, price: null };
+        const searched = {
+            tariff: patientType.tariff,
+            priceGroupId:
+                result.step === null ? null : patientType.priceGroupId,
+            step: result.step,
+        };
+        if (!result.price) return { ...searched, price: null };
         const components = await this.db.rows(lookupComponent, componentsSql, [
             this.tenantId,
             result.price.priceRowId,
             result.price.kind === 'bpjs',
         ]);
-        return { step: result.step, price: { ...result.price, components } };
+        return { ...searched, price: { ...result.price, components } };
     }
 
     // Tindakan yang dihapus membawa harganya, supaya master yang hanya dipakai harga itu bisa dihapus.
