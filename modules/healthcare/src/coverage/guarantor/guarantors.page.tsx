@@ -243,6 +243,11 @@ function GuarantorCard({
                                               max_visits_per_section_per_day: 0,
                                               price_group_id: null,
                                               price_group_name: null,
+                                              procedure_tariff: 'general',
+                                              procedure_tariff_price_group_id:
+                                                  null,
+                                              procedure_tariff_price_group_name:
+                                                  null,
                                               version: 0,
                                           }
                                         : null

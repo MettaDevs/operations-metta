@@ -128,6 +128,7 @@ Tipe pasien adalah master per tenant dengan id tetap, diisi dan diubah admin di 
 - **Tipe bawaan:** centang "Bawaan pasien baru" menandai paling banyak satu tipe per tenant (`sim_m_tipe_pasien_bawaan_unique`). Menandai tipe lain memindahkan tandanya. Penjamin punya tanda serupa, paling banyak satu per tipe pasien. Kartu pasien baru terisi tipe bawaan beserta penjamin bawaannya, dan pendaftaran lewat API tanpa cara bayar memakainya. Hanya tipe dan penjamin yang aktif yang dipakai. Tidak ada id yang ditulis di kode.
 - **Batas kunjungan per poli per hari** (`sim_m_tipe_pasien.maks_kunjungan_per_poli_per_hari`, API `max_visits_per_section_per_day`): berapa kali pasien bertipe ini boleh didaftarkan ke poli yang sama dalam satu hari, aturan puskesmas (misalnya BPJS 1, Umum tanpa batas). 0 berarti tanpa batas dan menjadi nilai tipe yang sudah ada; tenant sendiri yang mengisi 1 untuk tipe BPJS-nya. Sistem lama tidak punya kolom ini. Pendaftaran kunjungan menolak pendaftaran yang melewati batas (lihat [Pendaftaran kunjungan](#pendaftaran-kunjungan)).
 - **Kelompok harga** (`sim_m_tipe_pasien.kelompok_harga_id`, API `price_group_id`): kunci harga tipe ini, menunjuk master Core `kelompok_harga` (Sys Admin → Harga → Kelompok harga, padanan Customer Price Group di BC). Di sistem lama tipe pasien (`SIMmJenisKerjasama`) sekaligus kunci harga dan cara bayar; data Seroja menunjukkan tipe yang berbeda hanya harganya (LOCAL, DOMESTIC, EXPART, FOREIGN), jadi kunci harga dipisah dan beberapa tipe boleh berbagi satu kelompok. Boleh kosong; di kartu dibuka lewat saklar "Pakai kelompok harga". Kelompok nonaktif hanya tetap dipakai tipe yang sudah memegangnya, dan pilihannya dibaca dari `GET /patient-types/metadata`. Kelompok harga yang masih dipakai tipe pasien tidak bisa dihapus.
+- **Tarif jasa** (`sim_m_tipe_pasien.tarif_jasa`, API `procedure_tariff`) dan **Kelompok harga tarif jasa** (`kelompok_harga_tarif_id`, API `procedure_tariff_price_group_id`, `0035_patient_type_service_tariff.sql`): cara pasien bertipe ini mendapat tarif tindakan dan kelompok harga yang baris tarifnya dicari. Keduanya pengganti `JenisKerjasamaID` dan remap yang ditulis mati di sistem lama; aturannya di [Pencarian tarif](#pencarian-tarif). Tarif jasa memakai kode `procedureTariffs` (`procedure-price.options.ts`) dan bawaannya `general` (Tarif umum) untuk tipe lama dan baru. Kelompok harga tarif jasa kosong berarti kelompok harga tipe itu sendiri; di kartu pilihannya "Sama dengan kelompok harga" dan isian itu tersembunyi bila Tarif jasa "Tanpa tarif jasa". Kelompok nonaktif hanya tetap dipakai tipe yang sudah memegangnya, dan kelompok yang dipakai sebagai kelompok harga tarif jasa juga tidak bisa dihapus. Remap disimpan per tipe pasien, bukan dengan mengarahkan beberapa tipe ke satu kelompok harga, karena harga obat (grading) membaca kelompok harga tipe pasien dengan remap-nya sendiri.
 
 ## Layar
 
@@ -493,7 +494,7 @@ Setiap kunjungan mencatat klaster Integrasi Layanan Primer, siklus hidup, dan st
 
 ## Detail Harga tindakan
 
-Tab Detail Harga kartu Jasa sistem lama (`admin/service/views/services/price/`, tabel `SIMdListHarga` dan `SIMdListHargaDetail`) dipindah 1:1 ke FastTab **Detail Harga** kartu tindakan, di antara Umum dan Section seperti urutan tab sistem lama (`0034_procedure_price.sql`). Pencarian tarif (`GetTarifBiayaNonKerjasama` dan fungsi sejenisnya) dan penyalinan harga ke Biaya Tindakan menyusul.
+Tab Detail Harga kartu Jasa sistem lama (`admin/service/views/services/price/`, tabel `SIMdListHarga` dan `SIMdListHargaDetail`) dipindah 1:1 ke FastTab **Detail Harga** kartu tindakan, di antara Umum dan Section seperti urutan tab sistem lama (`0034_procedure_price.sql`). Pencarian tarif ada di [Pencarian tarif](#pencarian-tarif); penyalinan harga ke Biaya Tindakan menyusul.
 
 | Sistem lama                                                    | Di sini                                                                     |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -519,6 +520,64 @@ Tab Detail Harga kartu Jasa sistem lama (`admin/service/views/services/price/`, 
     - Qty wajib diisi sesuai tanda bintangnya; sistem lama menyimpan Qty kosong sebagai 0.
     - Mengubah baris harga di sistem lama membuat baris baru dan menghapus yang lama (`ListHargaID: 0` di `form.php`); di sini baris diubah di tempat.
 
+## Pencarian tarif
+
+Tarif yang didapat sebuah tindakan untuk pasien, pengganti `GetTarifBiayaNonKerjasama` (beserta `GetTarifBiayaNonKerjasama_BUFF`), `GetTarifBiayaJKN_BUFF`, dan saringan `Services::datatable_charge_collection` yang mengisi pilihan Biaya Tindakan poli. Aturannya fungsi murni `lookupProcedurePrice` (`procedure-price.lookup.ts`); pemuatnya `ProcedurePrices.lookup` (`procedure-price.service.ts`), yang membaca tipe pasien, spesialis nakes, dan baris harga hidup tindakan, lalu mengembalikan baris terpilih beserta komponennya seperti `GetDetailKomponenTarifNonKerjasama` dan `GetDetailKomponenTarifJKN`. Belum ada endpoint; Biaya Tindakan yang memanggilnya.
+
+**Masukan dari poli**, sama dengan panggilan sistem lama: tindakan, tipe pasien kunjungan, dokter pemeriksa atau kosong (`'xx'`), kelas atau kosong (`'XX'`), cyto 0, kategori operasi ALL, KTP pasien, dan lokasi `RJ`.
+
+**Langkah.** Langkah pertama yang punya baris dipakai seluruhnya, tanpa memilih harga terendah. Kelompok harga = Kelompok harga tarif jasa tipe pasien, atau kelompok harganya sendiri bila kosong. Spesialis cocok bila baris berspesialis ALL atau sama dengan spesialis nakes; dokter tanpa spesialis hanya cocok dengan ALL.
+
+| Langkah (`TariffStep`)   | Kelompok harga | Kelas   | Dokter  | Spesialis   | Tarif umum | Tanpa kelompok lain | BPJS | BPJS tanpa lain |
+| ------------------------ | -------------- | ------- | ------- | ----------- | ---------- | ------------------- | ---- | --------------- |
+| `class_doctor_specialty` | tipe pasien    | diminta | diminta | nakes / ALL | 1          | 1                   | 1    | 1               |
+| `class_specialty`        | tipe pasien    | diminta | XX      | nakes / ALL | 2          | 2                   | 2    | 2               |
+| `specialty`              | tipe pasien    | XX      | XX      | nakes / ALL | 3          | 3                   | 3    | 3               |
+| `care_class`             | tipe pasien    | diminta | XX      | apa pun     | 4          | 4                   | 4    | 4               |
+| `wildcard`               | tipe pasien    | XX      | XX      | apa pun     | 5          | 5                   |      | 5               |
+| `care_class_any_doctor`  | tipe pasien    | diminta | apa pun | apa pun     | 6          | 6                   |      |                 |
+| `price_group`            | tipe pasien    | apa pun | apa pun | apa pun     | 7          | 7                   | 5    |                 |
+| `any_price_group`        | apa pun        | apa pun | apa pun | apa pun     | 8          |                     | 6    |                 |
+
+Kolom kanan adalah urutan langkah tiap kode Tarif jasa: `general` (Tarif umum, fungsi Kuta 1 dan Penta), `general_own_group` (Seroja), `bpjs` (JKN Kuta 1 dan Penta), dan `bpjs_matching_only` (JKN Seroja). `none` tidak mencari apa pun. Langkah terakhir sistem lama tidak memeriksa IF EXISTS, jadi hasilnya boleh kosong. Cabang keempat `_BUFF` sama persis dengan cabang kedua, dan cabang keempat sampai keenam JKN mengulang cabang kedua dan ketiga; ketiganya tidak pernah berjalan dan tidak ditulis.
+
+**Saringan sesudah langkah dipilih.** Hasil yang kosong tidak pindah ke langkah berikutnya, sama dengan sistem lama:
+
+- Tarif umum: cyto sama dengan yang diminta bila tindakan bertanda Variabel Cyto, kategori operasi sama atau ALL bila tindakan bertanda Variabel Kategori Operasi (wrapper `GetTarifBiayaNonKerjasama`), lalu baris KTP saja bila pasien KTP (`where KTP` di PHP). Tarif BPJS tidak melewati saringan itu, karena PHP memanggil `GetTarifBiayaJKN_BUFF` langsung.
+- Lokasi yang diminta atau `XX`, lalu urut kode lokasi (`ORDER BY Lokasi`); baris pertama yang dipakai. Seri diputus urutan baris dibuat (id uuidv7), padanan `ListHargaID`.
+- Harga yang dipakai: Tarif umum Harga Baru, Harga Lama, dan Tanggal Harga Baru; tarif BPJS Harga Baru BPJS, Harga Lama BPJS, dan Tanggal Harga Baru BPJS. Komponen tarif BPJS memakai Harga Lama/Baru BPJS dan Insentif HC (%), seperti `GetDetailKomponenTarifJKN`.
+
+**Setelan tipe pasien per pemasangan sistem lama**, pemetaan yang dipakai golden test:
+
+| Sistem lama | Tipe (JenisKerjasamaID)                     | Tarif jasa           | Kelompok harga tarif jasa |
+| ----------- | ------------------------------------------- | -------------------- | ------------------------- |
+| Kuta 1      | 2 IKS                                       | `general`            | UMUM (3)                  |
+| Kuta 1      | 3 UMUM, 4 WNA                               | `general`            | sendiri                   |
+| Kuta 1      | 9 BPJS                                      | `bpjs`               | UMUM (3)                  |
+| Kuta 1      | 10 PEMDA                                    | `none`               | -                         |
+| Seroja      | 2 IKS                                       | `general_own_group`  | LOCAL (3)                 |
+| Seroja      | 3 LOCAL, 10 DOMESTIC, 11 EXPART, 12 FOREIGN | `general_own_group`  | sendiri                   |
+| Seroja      | 9 BPJS                                      | `bpjs_matching_only` | LOCAL (3)                 |
+| Penta       | 4 WNA                                       | `general`            | sendiri                   |
+| Penta       | 2, 3, 10, 11, 12, 13                        | `general`            | UMUM (3)                  |
+| Penta       | 9 BPJS                                      | `bpjs`               | UMUM (3)                  |
+
+Penta tidak punya source PHP; pemetaannya mengikuti fungsi Penta (sama dengan Kuta 1) dengan anggapan PHP-nya seperti Kuta 1, dan tipe 9 diuji dengan kedua fungsi.
+
+**Golden test** (`test/clinical/procedure/legacy-procedure-prices.*`): fixture-nya keluaran oracle read-only 13 November 2026, CI hanya membaca JSON-nya.
+
+- Data asli (`legacy-procedure-prices.sql`): Kuta 1 85 kasus (17 jasa × 5 tipe dari 1.478 jasa, 6 pola), Seroja 42 kasus (7 jasa × 6 tipe dari 398 jasa, 3 pola), Penta 459 kasus (51 jasa × 9 panggilan dari 1.241 jasa, 23 pola). Sampelnya jasa pertama, tengah, dan terakhir setiap pola tipe pasien yang punya tarif, termasuk jasa tanpa tarif. `VW_ListHarga` tidak membuang satu baris pun di ketiga database (1.593, 1.577, 2.893 baris). Ketiga database hanya memakai kunci wildcard dan tidak punya jasa bertanda Variabel Cyto atau Variabel Kategori Operasi.
+- Sintetis (`legacy-procedure-prices.synthetic.sql`): 15 jasa dan 4 dokter di database scratch yang sudah dibuang, view dan fungsi disalin dari sistem lama, 4 pemanggil × 216 sel masukan (dokter, kelas, cyto dan kategori operasi, KTP, lokasi), sekali dengan fungsi Kuta 1 dan sekali dengan fungsi Seroja: 25.920 sel. Setiap langkah setiap kode tercapai, dan setiap kode punya kasus yang kosong karena saringan sesudah langkah.
+- Semua kasus sama dengan sistem lama: ListHargaID, harga, harga lama, dan tanggalnya. Tidak ada beda yang dicatat. Tanggal Harga Baru BPJS `1900-01-01` (Kuta 1) dan NULL (Penta) sama dengan tanggal kosong di sini.
+
+**Tidak dibawa atau berbeda**, karena tidak tercapai dari data sistem lama atau master di sini berbeda:
+
+- `Vw_Dokter` membuang vendor berkategori V-001 dan V-011, sehingga dokter seperti itu dianggap tanpa spesialis. Nakes di sini tidak punya kategori vendor, dan tidak ada dokter berkategori itu di ketiga database.
+- `VW_ListHarga` memakai INNER JOIN ke kategori jasa. Kategori tindakan di sini boleh kosong, dan tindakan tanpa kategori tetap dicari tarifnya; di ketiga database semua jasa berkategori.
+- Var_Cito atau Var_KategoriOperasi NULL membuat wrapper sistem lama tidak mengembalikan apa pun; di sini kedua tanda selalu terisi.
+- Harga HC yang dikembalikan fungsi sistem lama (Harga Lama/Baru dikurangi Diskon HC) tidak dibawa, karena poli tidak memakainya.
+- Mengubah baris harga di sistem lama membuat `ListHargaID` baru, sehingga baris yang diubah pindah ke urutan terakhir saat seri lokasi; di sini baris diubah di tempat dan urutannya tetap.
+
 ## Dicatat untuk nanti
 
 - **Ambil data PCare dari NIK** untuk pasien BPJS kelak menjadi perilaku di katalog tipe pasien, dijalankan module BPJS. Belum dibangun.
@@ -531,7 +590,11 @@ Arahan pemilik produk 13 November 2026: sistem lama dipindah 1:1 lebih dulu, per
 - `SIMtrRJTransaksiDetail` hanya mendapat satu baris berisi komponen pertama dengan nilai seluruh tarif, jadi pembagian Sarana dan Pelayanan hilang di transaksi rawat jalan (`poly/controllers/RekamMedis/Services.php:54-60`).
 - Harga berjangka (tanggal mulai berlaku) menggantikan pasangan `Harga_Lama`/`Harga_Baru`: `TglHargaBaru` hanya catatan dan harga baru berlaku begitu disimpan (`GetTarifBiayaNonKerjasama_BUFF`).
 - Langkah terakhir `GetTarifBiayaNonKerjasama_BUFF` dan `GetTarifBiayaJKN_BUFF` ("jasa saja, tipe apa pun") diam-diam memakai harga tipe pasien lain bila tipe itu tidak punya baris.
-- Langkah keempat `GetTarifBiayaNonKerjasama_BUFF` sama persis dengan langkah kedua, jadi tidak pernah berjalan.
+- Langkah keempat `GetTarifBiayaNonKerjasama_BUFF` sama persis dengan langkah kedua, jadi tidak pernah berjalan. Di `GetTarifBiayaJKN_BUFF` cabang keempat sampai keenam mengulang cabang kedua dan ketiga.
+- Saringan cyto, kategori operasi, KTP, dan lokasi berjalan sesudah langkah tarif dipilih, jadi tindakan bisa tampil tanpa harga padahal langkah berikutnya punya tarif yang cocok (`GetTarifBiayaNonKerjasama`, `Services::datatable_charge_collection`).
+- `GetTarifBiayaNonKerjasama` mengganti tipe 2 menjadi 3 di awal, jadi baris akhirnya yang menyamakan Harga Baru dengan Harga Lama untuk tipe 2 (IKS) tidak pernah berjalan.
+- Spesialis dokter dicocokkan dengan baris tarif lewat nama (`Vw_Dokter.SpesialisName`), dan `Vw_Dokter` membuang vendor V-001 dan V-011, sehingga tarif spesialis bergantung pada nama dan kategori vendor, bukan id spesialis.
+- Seri lokasi diputus urutan `ListHargaID` tanpa ORDER BY yang menyebutnya, dan Kuta 1 serta Penta memakai fungsi yang berbeda dengan Seroja; aturan pemilihan tarif sebaiknya satu dan ditulis lengkap.
 - `VW_ListHarga` memakai INNER JOIN ke kelas, dokter, spesialis, dan kategori, sehingga baris tarif yang kodenya tidak ada di master hilang dari pencarian tanpa pesan.
 - Kartu dokter memberi tanda bintang pada Spesialis dan Sub Spesialis, tetapi modelnya tidak mewajibkan keduanya (`admin/vendor/views/vendor/form.php:93-110`); tandanya menyesatkan.
 - `SIMdListHarga` tidak punya kunci unik atas kombinasi kunci tarif (hanya `ListHargaID`), jadi dua baris dengan kunci sama membuat pencarian tarif mengembalikan keduanya. Data Kuta belum punya kembaran.
@@ -543,4 +606,4 @@ Arahan pemilik produk 13 November 2026: sistem lama dipindah 1:1 lebih dulu, per
 
 ## Belum dibuat
 
-Sesuai keputusan pemilik produk: NRM per poli (`mPasienNRM`), isi klinis pemeriksaan, layar TV antrean, cetak general consent, riwayat pemeriksaan, dokumen pasien, merge NRM, serta pencarian tarif dan tagihan. Uji beban dan kebenaran module ini juga belum dijalankan.
+Sesuai keputusan pemilik produk: NRM per poli (`mPasienNRM`), isi klinis pemeriksaan, layar TV antrean, cetak general consent, riwayat pemeriksaan, dokumen pasien, merge NRM, serta penyalinan tarif ke Biaya Tindakan dan tagihan. Uji beban dan kebenaran module ini juga belum dijalankan.

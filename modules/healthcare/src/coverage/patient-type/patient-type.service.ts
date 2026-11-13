@@ -18,6 +18,7 @@ import {
     patientTypeInputSchema,
     patientTypeRowSchema,
 } from './patient-type.schema.ts';
+import { isProcedureTariff } from '../../clinical/procedure/procedure-price.options.ts';
 import {
     isPatientTypeBehavior,
     type PatientTypeBehavior,
@@ -29,9 +30,13 @@ const rowSql = `select * from (
                         '[]'::json) as behaviors,
                            t.aktif as is_active, t.bawaan as is_default,
                            t.maks_kunjungan_per_poli_per_hari as max_visits_per_section_per_day,
-                           t.kelompok_harga_id as price_group_id, g.nama as price_group_name, t.version
+                           t.kelompok_harga_id as price_group_id, g.nama as price_group_name,
+                           t.tarif_jasa as procedure_tariff,
+                           t.kelompok_harga_tarif_id as procedure_tariff_price_group_id,
+                           tg.nama as procedure_tariff_price_group_name, t.version
                     from sim_m_tipe_pasien t
                     left join kelompok_harga g on g.tenant_id = t.tenant_id and g.id = t.kelompok_harga_id
+                    left join kelompok_harga tg on tg.tenant_id = t.tenant_id and tg.id = t.kelompok_harga_tarif_id
                     where t.tenant_id = $1 and t.deleted_at is null) patient_types
                 where true`;
 
@@ -59,7 +64,13 @@ function checked(body: unknown) {
     if (!Number.isInteger(visitLimit) || visitLimit < 0 || visitLimit > 999)
         errors.max_visits_per_section_per_day =
             'Isi bilangan bulat 0 sampai 999. Isi 0 bila tidak dibatasi.';
-    if (Object.keys(errors).length || !data) validation(errors);
+    // Tanpa isian berarti tarif umum, bawaan tipe pasien sejak 0035.
+    const rawTariff = data?.procedure_tariff ?? 'general';
+    const procedureTariff = isProcedureTariff(rawTariff) ? rawTariff : null;
+    if (procedureTariff === null)
+        errors.procedure_tariff = 'Pilih tarif jasa dari daftar.';
+    if (Object.keys(errors).length || !data || procedureTariff === null)
+        validation(errors);
     return {
         code,
         name,
@@ -68,6 +79,9 @@ function checked(body: unknown) {
         is_default: data.is_default ?? false,
         max_visits_per_section_per_day: visitLimit,
         price_group_id: data.price_group_id?.trim() ?? null,
+        procedure_tariff: procedureTariff,
+        procedure_tariff_price_group_id:
+            data.procedure_tariff_price_group_id?.trim() || null,
     };
 }
 
@@ -116,24 +130,50 @@ export class PatientTypes {
         };
     }
 
-    // Kelompok harga nonaktif hanya boleh tetap dipakai tipe yang sudah memegangnya.
-    private async checkedPriceGroup(
+    // Kelompok harga dan kelompok harga tarif jasa. Kelompok nonaktif hanya boleh tetap dipakai tipe yang sudah
+    // memegangnya di isian yang sama.
+    private async checkedPriceGroups(
+        data: {
+            price_group_id: string | null;
+            procedure_tariff_price_group_id: string | null;
+        },
+        saved: z.infer<typeof patientTypeRowSchema> | null,
+    ): Promise<void> {
+        const errors: Record<string, string> = {};
+        // Teks kosong berarti saklar kelompok harga dinyalakan tanpa memilih kelompok.
+        if (data.price_group_id === '')
+            errors.price_group_id = 'Pilih kelompok harga.';
+        else if (
+            !(await this.choosable(
+                data.price_group_id,
+                saved?.price_group_id ?? null,
+            ))
+        )
+            errors.price_group_id = 'Pilih dari daftar.';
+        if (
+            !(await this.choosable(
+                data.procedure_tariff_price_group_id,
+                saved?.procedure_tariff_price_group_id ?? null,
+            ))
+        )
+            errors.procedure_tariff_price_group_id = 'Pilih dari daftar.';
+        if (Object.keys(errors).length) validation(errors);
+    }
+
+    private async choosable(
         priceGroupId: string | null,
         savedPriceGroupId: string | null,
-    ): Promise<void> {
-        if (priceGroupId === null) return;
-        // Teks kosong berarti saklar kelompok harga dinyalakan tanpa memilih kelompok.
-        if (!priceGroupId)
-            validation({ price_group_id: 'Pilih kelompok harga.' });
-        const found = lookupId(priceGroupId)
-            ? await this.db.one(
-                  z.object({ id: z.string() }),
-                  `select id from kelompok_harga
-                   where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
-                  [this.workspace.tenantId, priceGroupId, savedPriceGroupId],
-              )
-            : undefined;
-        if (!found) validation({ price_group_id: 'Pilih dari daftar.' });
+    ): Promise<boolean> {
+        if (priceGroupId === null) return true;
+        return (
+            lookupId(priceGroupId) !== null &&
+            (await this.db.one(
+                z.object({ id: z.string() }),
+                `select id from kelompok_harga
+                 where tenant_id = $1 and id = $2 and deleted_at is null and (aktif or id = $3)`,
+                [this.workspace.tenantId, priceGroupId, savedPriceGroupId],
+            )) !== undefined
+        );
     }
 
     // Daftar bertahap, dipakai juga pilihan tipe pasien di form pasien, jadi pemegang izin lihat pasien ikut boleh
@@ -178,7 +218,7 @@ export class PatientTypes {
     async create(body: unknown) {
         this.workspace.guard('patient-type', 'update');
         const data = checked(body);
-        await this.checkedPriceGroup(data.price_group_id, null);
+        await this.checkedPriceGroups(data, null);
         const id = Bun.randomUUIDv7();
         const stamp = nowSql();
         try {
@@ -196,6 +236,9 @@ export class PatientTypes {
                     maks_kunjungan_per_poli_per_hari:
                         data.max_visits_per_section_per_day,
                     kelompok_harga_id: data.price_group_id,
+                    tarif_jasa: data.procedure_tariff,
+                    kelompok_harga_tarif_id:
+                        data.procedure_tariff_price_group_id,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -212,10 +255,7 @@ export class PatientTypes {
         this.workspace.guard('patient-type', 'update');
         const current = await this.row(id);
         const data = checked(body);
-        await this.checkedPriceGroup(
-            data.price_group_id,
-            current.price_group_id,
-        );
+        await this.checkedPriceGroups(data, current);
         const version = expectedVersion(request, body);
         let updated = 0;
         try {
@@ -223,7 +263,8 @@ export class PatientTypes {
                 if (data.is_default) await this.clearDefault(current.id);
                 updated = await this.db.execute(
                     `update sim_m_tipe_pasien set kode = $1, nama = $2, memakai_penjamin = $3, aktif = $4, bawaan = $9,
-                     maks_kunjungan_per_poli_per_hari = $10, kelompok_harga_id = $11, updated_at = $5
+                     maks_kunjungan_per_poli_per_hari = $10, kelompok_harga_id = $11, tarif_jasa = $12,
+                     kelompok_harga_tarif_id = $13, updated_at = $5
                  where tenant_id = $6 and id = $7 and version = $8 and deleted_at is null`,
                     [
                         data.code,
@@ -237,6 +278,8 @@ export class PatientTypes {
                         data.is_default,
                         data.max_visits_per_section_per_day,
                         data.price_group_id,
+                        data.procedure_tariff,
+                        data.procedure_tariff_price_group_id,
                     ],
                 );
                 if (updated)

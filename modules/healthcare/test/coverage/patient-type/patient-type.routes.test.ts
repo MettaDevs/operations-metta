@@ -315,3 +315,176 @@ describe.skipIf(!process.env.DB_HOST)('patient type price group', () => {
         ).toBe(204);
     });
 });
+
+type TariffPatientType = PricedPatientType & {
+    procedure_tariff: string;
+    procedure_tariff_price_group_id: string | null;
+    procedure_tariff_price_group_name: string | null;
+};
+
+// Cara tipe pasien mendapat tarif jasa dan kelompok harga yang tarif jasanya dicari, pengganti JenisKerjasamaID dan
+// remap yang ditulis mati di sistem lama.
+describe.skipIf(!process.env.DB_HOST)('patient type procedure tariff', () => {
+    if (!process.env.DB_HOST) return;
+    const { pool, browser, close } = operationsTestApp();
+    afterAll(close);
+    let admin: Browser;
+
+    async function json<T>(response: Response, status: number): Promise<T> {
+        const text = await response.text();
+        if (response.status !== status)
+            throw new Error(
+                `Expected ${status}, got ${response.status}: ${text}`,
+            );
+        return JSON.parse(text) as T;
+    }
+
+    const priceGroup = async (code: string) =>
+        (
+            await json<{ data: PriceGroup }>(
+                await admin.post(priceGroupApi, { code, name: code }),
+                201,
+            )
+        ).data;
+    const deactivate = (group: PriceGroup, code: string) =>
+        admin.patch(`${priceGroupApi}/${group.id}`, {
+            code,
+            name: code,
+            is_active: false,
+            version: group.version,
+        });
+
+    beforeAll(async () => {
+        const tenantId = await createTenant(pool, 'Klinik Uji Tarif Jasa Tipe');
+        await entitle(pool, tenantId, 'healthcare');
+        await recordInstallation(pool, tenantId, 'healthcare');
+        const owner = await createMember(pool, tenantId, [
+            'healthcare.payment-setup.manage',
+            'core.pricing-setup.manage',
+        ]);
+        admin = browser();
+        await admin.login(owner.email, owner.password);
+    });
+
+    test('a patient type saved without the fields gets the general tariff in its own price group', async () => {
+        const created = await json<{ data: TariffPatientType }>(
+            await admin.post(api, { code: 'UMUM', name: 'Umum' }),
+            201,
+        );
+        expect(created.data.procedure_tariff).toBe('general');
+        expect(created.data.procedure_tariff_price_group_id).toBeNull();
+    });
+
+    test('the tariff and its price group are saved and read back with the group name', async () => {
+        const general = await priceGroup('TRF-UMUM');
+        const own = await priceGroup('TRF-BPJS');
+        const created = await json<{ data: TariffPatientType }>(
+            await admin.post(api, {
+                code: 'BPJS',
+                name: 'BPJS',
+                price_group_id: own.id,
+                procedure_tariff: 'bpjs',
+                procedure_tariff_price_group_id: general.id,
+            }),
+            201,
+        );
+        expect(created.data.procedure_tariff).toBe('bpjs');
+        expect(created.data.procedure_tariff_price_group_name).toBe('TRF-UMUM');
+        const [stored] = await pool.unsafe<{ tariff: string; group: string }[]>(
+            'select tarif_jasa as tariff, kelompok_harga_tarif_id::text as group from sim_m_tipe_pasien where id = $1',
+            [created.data.id],
+        );
+        expect(stored).toEqual({ tariff: 'bpjs', group: general.id });
+        const updated = await json<{ data: TariffPatientType }>(
+            await admin.patch(`${api}/${created.data.id}`, {
+                code: 'BPJS',
+                name: 'BPJS',
+                price_group_id: own.id,
+                procedure_tariff: 'none',
+                procedure_tariff_price_group_id: null,
+                version: created.data.version,
+            }),
+            200,
+        );
+        expect(updated.data.procedure_tariff).toBe('none');
+        expect(updated.data.procedure_tariff_price_group_id).toBeNull();
+    });
+
+    test('an unknown tariff and a bad tariff price group are reported on their own fields', async () => {
+        const unknownTariff = await json<{ errors: Record<string, string[]> }>(
+            await admin.post(api, {
+                code: 'SALAH',
+                name: 'Salah',
+                procedure_tariff: 'iks',
+            }),
+            422,
+        );
+        expect(Object.keys(unknownTariff.errors)).toEqual(['procedure_tariff']);
+        const both = await json<{ errors: Record<string, string[]> }>(
+            await admin.post(api, {
+                code: 'SALAH',
+                name: 'Salah',
+                price_group_id: Bun.randomUUIDv7(),
+                procedure_tariff_price_group_id: Bun.randomUUIDv7(),
+            }),
+            422,
+        );
+        expect(Object.keys(both.errors).sort()).toEqual([
+            'price_group_id',
+            'procedure_tariff_price_group_id',
+        ]);
+    });
+
+    test('an inactive tariff price group stays only with the type that holds it', async () => {
+        const group = await priceGroup('TRF-LAMA');
+        const holder = await json<{ data: TariffPatientType }>(
+            await admin.post(api, {
+                code: 'IKS',
+                name: 'IKS',
+                procedure_tariff_price_group_id: group.id,
+            }),
+            201,
+        );
+        await json(await deactivate(group, 'TRF-LAMA'), 200);
+        const refused = await json<{ errors: Record<string, string[]> }>(
+            await admin.post(api, {
+                code: 'IKS2',
+                name: 'IKS 2',
+                procedure_tariff_price_group_id: group.id,
+            }),
+            422,
+        );
+        expect(Object.keys(refused.errors)).toEqual([
+            'procedure_tariff_price_group_id',
+        ]);
+        const kept = await json<{ data: TariffPatientType }>(
+            await admin.patch(`${api}/${holder.data.id}`, {
+                code: 'IKS',
+                name: 'IKS',
+                procedure_tariff_price_group_id: group.id,
+                version: holder.data.version,
+            }),
+            200,
+        );
+        expect(kept.data.procedure_tariff_price_group_id).toBe(group.id);
+    });
+
+    test('a price group used only as a tariff price group cannot be deleted', async () => {
+        const group = await priceGroup('TRF-PAKAI');
+        await json(
+            await admin.post(api, {
+                code: 'PEMDA',
+                name: 'PEMDA',
+                procedure_tariff_price_group_id: group.id,
+            }),
+            201,
+        );
+        const refused = await json<{ errors: Record<string, string[]> }>(
+            await admin.delete(`${priceGroupApi}/${group.id}`, {
+                version: group.version,
+            }),
+            422,
+        );
+        expect(Object.keys(refused.errors)).toEqual(['_form']);
+    });
+});

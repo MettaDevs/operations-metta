@@ -119,6 +119,13 @@
                             "requires_guarantor",
                             "requires_card_number"
                         ]
+                    },
+                    {
+                        "code": "BPJS",
+                        "name": "BPJS",
+                        "behaviors": ["requires_card_number"],
+                        "procedure_tariff": "bpjs",
+                        "procedure_tariff_price_group": "UMUM"
                     }
                 ],
                 "guarantors": [
@@ -476,11 +483,13 @@
                                 "components": [
                                     {
                                         "component": "SARANA",
-                                        "new_price": "15000"
+                                        "new_price": "15000",
+                                        "new_bpjs_price": "10000"
                                     },
                                     {
                                         "component": "PELAYANAN",
-                                        "new_price": "35000"
+                                        "new_price": "35000",
+                                        "new_bpjs_price": "25000"
                                     }
                                 ]
                             },

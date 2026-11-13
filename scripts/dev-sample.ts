@@ -127,6 +127,7 @@ const clinicSchema = z.object({
                                     component: z.string(),
                                     initial_price: z.string().optional(),
                                     new_price: z.string(),
+                                    new_bpjs_price: z.string().optional(),
                                 }),
                             ),
                         }),
@@ -265,6 +266,9 @@ export const sampleSchema = z.object({
                     behaviors: z.array(z.string()).default([]),
                     default: z.boolean().default(false),
                     price_group: z.string().optional(),
+                    // Tarif jasa (kode procedureTariffs) dan kode kelompok harga yang tarif jasanya dicari.
+                    procedure_tariff: z.string().optional(),
+                    procedure_tariff_price_group: z.string().optional(),
                 }),
             ),
             guarantors: z.array(
@@ -494,6 +498,15 @@ async function seedOrganizations(
                     behaviors: type.behaviors,
                     is_default: type.default,
                     price_group_id: priceGroupId,
+                    procedure_tariff: type.procedure_tariff,
+                    procedure_tariff_price_group_id:
+                        type.procedure_tariff_price_group
+                            ? required(
+                                  priceGroups,
+                                  type.procedure_tariff_price_group,
+                                  'Kelompok harga',
+                              )
+                            : null,
                 },
             );
             types.set(type.code, id);
@@ -532,6 +545,8 @@ async function assignPriceGroup(
             is_default: z.boolean(),
             max_visits_per_section_per_day: z.number(),
             price_group_id: z.string().nullable(),
+            procedure_tariff: z.string(),
+            procedure_tariff_price_group_id: z.string().nullable(),
             version: z.number(),
         }),
         `${healthcareApi}/patient-types`,
@@ -918,6 +933,7 @@ async function seedProcedurePrices(
                     quantity: '1',
                     initial_price: component.initial_price ?? '0',
                     new_price: component.new_price,
+                    new_bpjs_price: component.new_bpjs_price ?? '0',
                 });
             prices.push({
                 price_group_id: await api.codeId(
