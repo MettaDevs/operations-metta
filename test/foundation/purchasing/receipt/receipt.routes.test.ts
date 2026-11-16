@@ -20,8 +20,15 @@ type Receipt = {
     number: string;
     status: string;
     amount: string;
+    vat_amount: string;
+    prices_including_vat: boolean;
     version: number;
-    lines: { id: string; amount: string; quantity_per_unit: string }[];
+    lines: {
+        id: string;
+        amount: string;
+        quantity_per_unit: string;
+        vat_percent: string;
+    }[];
 };
 type Line = Record<string, unknown>;
 
@@ -736,6 +743,81 @@ describe.skipIf(!process.env.DB_HOST)('purchase receipts', () => {
         expect(await basePrice()).toBe('99.5');
         await posted([line(10000)]);
         expect(await basePrice()).toBe('100');
+    });
+
+    // Angka dari rantai Kuta 1 di legacy-receipt-base-prices.json: 1005 dengan PPN 11% menawarkan 1115,55; penerimaan
+    // berikutnya 882 dengan PPN 11% menawarkan 979,02 dan harga dasar tetap 1115,55.
+    test('posting raises the base price to the purchase price with the line VAT, while the ledger and the flag leave VAT out', async () => {
+        const item = await business.item<{ id: string }>('PPN-11');
+        const basePrice = async () =>
+            (
+                await pool.unsafe<{ price: string }[]>(
+                    'select trim_scale(harga_dasar)::text as price from gd_m_barang where id = $1',
+                    [item.id],
+                )
+            )[0]?.price;
+        const line = (unitCost: number, vat: number | string | null): Line => ({
+            item_id: item.id,
+            unit_id: business.uom.id,
+            quantity: 2,
+            unit_cost: unitCost,
+            vat_percent: vat,
+        });
+
+        const created = await draft([line(1005, 12)]);
+        expect(created).toMatchObject({
+            prices_including_vat: false,
+            vat_amount: '241.2',
+        });
+        const first = (
+            await json<{ data: Receipt }>(
+                await business.admin.patch(`${path}/${created.id}`, {
+                    vendor_id: vendor.id,
+                    location_id: location.id,
+                    posting_date: '2026-11-10',
+                    prices_including_vat: true,
+                    lines: [{ ...line(1005, 11), id: created.lines[0]?.id }],
+                    version: created.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(first).toMatchObject({
+            prices_including_vat: true,
+            amount: '2010',
+            vat_amount: '221.1',
+            lines: [{ vat_percent: '11', amount: '2010' }],
+        });
+        await json(await post(first), 200);
+        expect(await basePrice()).toBe('1115.55');
+        expect(
+            (await ledger(first.id)).map((row) => [row.unit_cost, row.amount]),
+        ).toEqual([['1005', '2010']]);
+
+        await posted([line(882, 11)]);
+        expect(await basePrice()).toBe('1115.55');
+
+        const untaxed = await posted([line(1100, null)]);
+        expect(untaxed).toMatchObject({
+            prices_including_vat: false,
+            vat_amount: '0',
+            lines: [{ vat_percent: '0' }],
+        });
+        expect(await basePrice()).toBe('1115.55');
+
+        const errors = await refused(
+            await business.admin.post(path, {
+                vendor_id: vendor.id,
+                location_id: location.id,
+                posting_date: '2026-11-10',
+                lines: [line(1, 100.5), line(1, -1), line(1, '11,5x')],
+            }),
+        );
+        expect(Object.keys(errors).sort()).toEqual([
+            'lines.0.vat_percent',
+            'lines.1.vat_percent',
+            'lines.2.vat_percent',
+        ]);
     });
 
     test('a receipt dated in a closed inventory period is refused at posting and at reversal until the period is reopened', async () => {

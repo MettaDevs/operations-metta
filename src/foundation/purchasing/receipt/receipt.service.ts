@@ -21,6 +21,7 @@ import {
     decimalInput,
     defaultUnit,
     exists,
+    fromNumeric,
     parseInput,
     postItemLines,
     quantityHint,
@@ -31,7 +32,11 @@ import {
     unitConversion,
     unitCostInput,
 } from '../../inventory/index.ts';
-import { decimalsHint } from '../../../platform/money/index.ts';
+import {
+    decimalsHint,
+    percentHint,
+    percentInput,
+} from '../../../platform/money/index.ts';
 import {
     Currency,
     localCurrencyCode,
@@ -77,6 +82,7 @@ type LineDraft = {
     quantity: bigint;
     unitCost: bigint;
     discountPercent: bigint;
+    vatPercent: bigint;
     batchNumber: string | null;
     expiry: string | null;
     fundingSourceId: string | null;
@@ -84,27 +90,31 @@ type LineDraft = {
     budgetYear: number | null;
 };
 
-// Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke rupiah sen.
-// Nilai baris dibulatkan ke presisi jumlah mata uang lokal; amountDecimals bilangan bulat 0 sampai 4 dari setelan
-// mata uang, bukan isian pengguna.
+// Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke presisi jumlah mata uang lokal;
+// amountDecimals bilangan bulat 0 sampai 4 dari setelan mata uang, bukan isian pengguna. PPN dokumen = jumlah nilai
+// baris x tarif PPN / 100, dibulatkan sekali, seperti Pajak = subtotal x persen PPN / 100 di layar lama.
 const lineAmountSql = (alias: string, amountDecimals: number) =>
     `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
 
 const rowSql = (amountDecimals: number) => `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
                            h.no_dokumen_vendor as vendor_document_number, h.keterangan as description,
-                           p.name as vendor_name, l.kode as location_code,
+                           p.name as vendor_name, l.kode as location_code, h.termasuk_ppn as prices_including_vat,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
-                           coalesce((select trim_scale(sum(${lineAmountSql('d', amountDecimals)}))::text
-                                     from bl_tr_penerimaan_detail d
-                                     where d.tenant_id = h.tenant_id and d.penerimaan_id = h.id
-                                       and d.deleted_at is null), '0') as amount,
+                           coalesce(trim_scale(t.amount)::text, '0') as amount,
+                           coalesce(trim_scale(round(t.vat, ${amountDecimals}))::text, '0') as vat_amount,
                            ${isoSql('h.diposting_pada')} as posted_at, ${isoSql('h.dibatalkan_pada')} as reversed_at
                     from bl_tr_penerimaan h
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
+                    left join lateral (
+                        select sum(line.amount) as amount, sum(line.amount * line.tarif_ppn / 100) as vat
+                        from (select ${lineAmountSql('d', amountDecimals)} as amount, d.tarif_ppn
+                              from bl_tr_penerimaan_detail d
+                              where d.tenant_id = h.tenant_id and d.penerimaan_id = h.id
+                                and d.deleted_at is null) line) t on true
                     where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null) receipts
                 where true`;
 
@@ -119,6 +129,7 @@ const storedLineSchema = z.object({
     quantity: z.string(),
     unit_cost: z.string(),
     discount_percent: z.string(),
+    vat_percent: z.string(),
     batch_number: z.string().nullable(),
     expiry: z.string().nullable(),
     funding_source_id: z.string().nullable(),
@@ -257,6 +268,7 @@ export class Receipts {
                     trim_scale(d.konversi)::text as quantity_per_unit, trim_scale(d.jumlah)::text as quantity,
                     trim_scale(d.harga_satuan)::text as unit_cost,
                     trim_scale(d.diskon_persen)::text as discount_percent,
+                    trim_scale(d.tarif_ppn)::text as vat_percent,
                     trim_scale(${lineAmountSql('d', await this.amountDecimals())})::text as amount,
                     d.no_batch as batch_number, d.kedaluwarsa::text as expiry_date,
                     ${reference('f')} as funding_source, ${reference('g')} as procurement_program,
@@ -392,6 +404,8 @@ export class Receipts {
                     : decimalInput(line.discount_percent);
             if (discount === null || discount < 0n || discount > hundredPercent)
                 fail('discount_percent', messages.discount_percent);
+            const vat = percentInput(line.vat_percent || 0);
+            if (vat === null) fail('vat_percent', percentHint());
             const batchNumber = line.batch_number?.trim().toUpperCase() || null;
             if (batchNumber && batchNumber.length > 50)
                 fail('batch_number', 'Nomor batch paling banyak 50 karakter.');
@@ -441,6 +455,7 @@ export class Receipts {
                 quantity: quantity ?? 0n,
                 unitCost: unitCost ?? 0n,
                 discountPercent: discount ?? 0n,
+                vatPercent: vat === null ? 0n : fromNumeric(vat, quantityScale),
                 batchNumber,
                 expiry,
                 fundingSourceId,
@@ -455,6 +470,7 @@ export class Receipts {
             postingDate: data.posting_date,
             vendorDocument,
             description,
+            pricesIncludingVat: data.prices_including_vat ?? false,
             lines,
         };
     }
@@ -481,6 +497,7 @@ export class Receipts {
                 jumlah: toNumeric(line.quantity, quantityScale),
                 harga_satuan: toNumeric(line.unitCost, quantityScale),
                 diskon_persen: toNumeric(line.discountPercent, quantityScale),
+                tarif_ppn: toNumeric(line.vatPercent, quantityScale),
                 no_batch: line.batchNumber,
                 kedaluwarsa: line.expiry,
                 sumber_dana_id: line.fundingSourceId,
@@ -504,9 +521,10 @@ export class Receipts {
             kept.add(line.id);
             await this.db.execute(
                 `update bl_tr_penerimaan_detail set urutan = $1, barang_id = $2, satuan_id = $3, konversi = $4,
-                        jumlah = $5, harga_satuan = $6, diskon_persen = $7, no_batch = $8, kedaluwarsa = $9,
-                        sumber_dana_id = $10, program_pengadaan_id = $11, tahun_anggaran = $12, updated_at = $13
-                 where tenant_id = $14 and id = $15`,
+                        jumlah = $5, harga_satuan = $6, diskon_persen = $7, tarif_ppn = $8, no_batch = $9,
+                        kedaluwarsa = $10, sumber_dana_id = $11, program_pengadaan_id = $12, tahun_anggaran = $13,
+                        updated_at = $14
+                 where tenant_id = $15 and id = $16`,
                 [
                     values.urutan,
                     values.barang_id,
@@ -515,6 +533,7 @@ export class Receipts {
                     values.jumlah,
                     values.harga_satuan,
                     values.diskon_persen,
+                    values.tarif_ppn,
                     values.no_batch,
                     values.kedaluwarsa,
                     values.sumber_dana_id,
@@ -560,6 +579,7 @@ export class Receipts {
                 tanggal: data.postingDate,
                 no_dokumen_vendor: data.vendorDocument,
                 keterangan: data.description,
+                termasuk_ppn: data.pricesIncludingVat,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -588,8 +608,8 @@ export class Receipts {
                 coded(409, 'stale_version', staleMessage);
             await this.db.execute(
                 `update bl_tr_penerimaan set operating_unit_id = $1, lokasi_id = $2, vendor_id = $3, tanggal = $4,
-                        no_dokumen_vendor = $5, keterangan = $6, updated_at = $7
-                 where tenant_id = $8 and id = $9`,
+                        no_dokumen_vendor = $5, keterangan = $6, termasuk_ppn = $7, updated_at = $8
+                 where tenant_id = $9 and id = $10`,
                 [
                     data.location.operating_unit_id,
                     data.location.id,
@@ -597,6 +617,7 @@ export class Receipts {
                     data.postingDate,
                     data.vendorDocument,
                     data.description,
+                    data.pricesIncludingVat,
                     nowSql(),
                     this.scope.tenantId,
                     current.id,
@@ -718,8 +739,9 @@ export class Receipts {
                 storedLineSchema,
                 `select id, barang_id as item_id, konversi::text as conversion, jumlah::text as quantity,
                         harga_satuan::text as unit_cost, diskon_persen::text as discount_percent,
-                        no_batch as batch_number, kedaluwarsa::text as expiry, sumber_dana_id as funding_source_id,
-                        program_pengadaan_id as procurement_program_id, tahun_anggaran as budget_year
+                        tarif_ppn::text as vat_percent, no_batch as batch_number, kedaluwarsa::text as expiry,
+                        sumber_dana_id as funding_source_id, program_pengadaan_id as procurement_program_id,
+                        tahun_anggaran as budget_year
                  from bl_tr_penerimaan_detail
                  where tenant_id = $1 and penerimaan_id = $2 and deleted_at is null
                  order by urutan, id`,

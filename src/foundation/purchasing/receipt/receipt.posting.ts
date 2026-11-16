@@ -11,20 +11,52 @@ const hundredPercent = 100n * scale;
 
 export const sourceType = 'penerimaan';
 
-// Harga per satuan dasar sesudah diskon baris, dibulatkan sekali ke `decimals` angka di belakang koma (presisi harga
-// satuan mata uang tenant, setengah menjauhi nol), seperti Unit Cost (LCY) di baris pembelian BC.
-export function baseUnitCost(
+// Harga satuan baris x persen / 100 per satuan dasar, dibulatkan sekali ke `decimals` angka di belakang koma (presisi
+// harga satuan mata uang tenant, setengah menjauhi nol).
+function perBaseUnit(
     unitCost: bigint,
-    discountPercent: bigint,
+    percent: bigint,
     conversion: bigint,
     decimals: number,
 ): bigint {
     const step = 10n ** BigInt(quantityScale - decimals);
     return (
         divideRounded(
-            unitCost * (hundredPercent - discountPercent) * scale,
+            unitCost * percent * scale,
             hundredPercent * conversion * step,
         ) * step
+    );
+}
+
+// Harga per satuan dasar sesudah diskon baris dan tanpa PPN, seperti Unit Cost (LCY) di baris pembelian BC. Kartu gudang
+// sistem lama juga tanpa PPN (Harga_Beli / Konversi).
+export function baseUnitCost(
+    unitCost: bigint,
+    discountPercent: bigint,
+    conversion: bigint,
+    decimals: number,
+): bigint {
+    return perBaseUnit(
+        unitCost,
+        hundredPercent - discountPercent,
+        conversion,
+        decimals,
+    );
+}
+
+// Harga dasar yang ditawarkan satu baris: (Harga_Beli + Harga_Beli x Rate_Pajak / 100) / Konversi di Goods_receipt.php,
+// termasuk PPN dan sebelum diskon.
+export function receiptBasePrice(
+    unitCost: bigint,
+    vatPercent: bigint,
+    conversion: bigint,
+    decimals: number,
+): bigint {
+    return perBaseUnit(
+        unitCost,
+        hundredPercent + vatPercent,
+        conversion,
+        decimals,
     );
 }
 
@@ -35,6 +67,7 @@ export type StoredReceiptLine = {
     quantity: string;
     unit_cost: string;
     discount_percent: string;
+    vat_percent: string;
     batch_number: string | null;
     expiry: string | null;
     funding_source_id: string | null;
@@ -42,18 +75,17 @@ export type StoredReceiptLine = {
     budget_year: number | null;
 };
 
-// Harga beli per satuan dasar setiap barang di penerimaan, sebelum diskon, untuk harga dasar barang (Harga_Jual sistem
-// lama, yang dihitung Goods_receipt.php sebelum diskon). Penerimaan belum mencatat tarif pajak, jadi "termasuk pajak"
-// sistem lama sama dengan harga baris. Barang di beberapa baris memakai harga tertinggi.
+// Harga dasar yang ditawarkan setiap barang di penerimaan (Harga_Jual sistem lama). Barang di beberapa baris memakai
+// harga tertinggi.
 export function receiptBasePrices(
     lines: readonly StoredReceiptLine[],
     decimals: number,
 ): Map<string, bigint> {
     const prices = new Map<string, bigint>();
     for (const line of lines) {
-        const price = baseUnitCost(
+        const price = receiptBasePrice(
             fromNumeric(line.unit_cost, quantityScale),
-            0n,
+            fromNumeric(line.vat_percent, quantityScale),
             fromNumeric(line.conversion, quantityScale),
             decimals,
         );
