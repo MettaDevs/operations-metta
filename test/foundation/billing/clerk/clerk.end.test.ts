@@ -17,7 +17,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Ended = { data: { transactions: number; system_total: string } };
 
@@ -49,12 +48,7 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         return { id: created.data.id, version: row?.version ?? 0 };
     }
     async function startClerk() {
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
         return (
             await json<{ data: { id: string; version: number } }>(
                 await cashier.get('/api/v1/billing/clerks/current'),
@@ -67,7 +61,6 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         counted: string,
     ) =>
         cashier.post(`/api/v1/billing/clerks/${clerk.id}/end`, {
-            password: testPassword,
             counts: { [cash]: counted },
             version: clerk.version,
         });

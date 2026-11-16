@@ -8,7 +8,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../../../test/support/tenant-fixtures.ts';
 import {
     api,
@@ -260,9 +259,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 [buyerPartyId, pharmacy.tenantId],
             );
             await json(
-                await pharmacy.admin.post('/api/v1/billing/clerks/start', {
-                    password: testPassword,
-                }),
+                await pharmacy.admin.post('/api/v1/billing/clerks/start', {}),
                 201,
             );
         });

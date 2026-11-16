@@ -17,7 +17,6 @@ import {
 import {
     environmentDatabase,
     evidenceDir,
-    passwordFor,
     psql,
     root,
     sampleTenant,
@@ -581,11 +580,6 @@ export async function runOutpatientJourney(
                     await Bun.sleep(250);
                 }
                 if (!started) {
-                    await fill(
-                        page,
-                        { role: 'textbox', name: 'Password', exact: true },
-                        passwordFor(sampleTenant().admin.email),
-                    );
                     await click(page, {
                         role: 'button',
                         name: 'Clerk Start',

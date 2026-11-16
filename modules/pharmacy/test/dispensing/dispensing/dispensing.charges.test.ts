@@ -19,7 +19,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../../../test/support/tenant-fixtures.ts';
 import {
     api,
@@ -491,9 +490,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 201,
             );
             await billingJson(
-                await cashier.post('/api/v1/billing/clerks/start', {
-                    password: testPassword,
-                }),
+                await cashier.post('/api/v1/billing/clerks/start', {}),
                 201,
             );
             return cashier;

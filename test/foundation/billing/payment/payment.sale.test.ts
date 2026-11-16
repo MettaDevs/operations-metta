@@ -23,7 +23,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 // Tagihan penjualan tanpa kunjungan yang ditulis module penjual (replaceSaleBill) lalu dibayar dengan mesin kasir yang
 // sama dengan tagihan kunjungan: rumus, kembalian, piutang, batal, kunci perubahan, event, dan Clerk End. Module memakai
@@ -152,12 +151,7 @@ describe.skipIf(!process.env.DB_HOST)('billing sale bills', () => {
             `insert into parties (id, tenant_id, type, name, search_name) values ($1, $2, 'person', $3, $3)`,
             [buyerPartyId, tenantId, 'Budi Santoso'],
         );
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a cash sale bills its lines once and pays them with change, and finance hears of the sale document', async () => {

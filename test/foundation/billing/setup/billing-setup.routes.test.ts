@@ -19,7 +19,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
 type Setup = {
@@ -225,9 +224,7 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
 
     test('a cashier who starts a clerk anyway records payments there, and Clerk End counts only those', async () => {
         const started = await json<{ data: { id: string } }>(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
+            await cashier.post('/api/v1/billing/clerks/start', {}),
             201,
         );
         const paymentId = await paid(await visit('30000'), {
@@ -240,7 +237,6 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
             await cashier.post(
                 `/api/v1/billing/clerks/${started.data.id}/end`,
                 {
-                    password: testPassword,
                     counts: { [methods.TUN!]: '30000' },
                     version: await version('clerk', started.data.id),
                 },

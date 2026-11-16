@@ -44,15 +44,7 @@ import {
 export const clerkNotStartedMessage =
     'Tidak dapat melanjutkan proses, Karena User belum melakukan Start Clerk!';
 // Pesan sistem lama (KK clerk_lang.php).
-const wrongPasswordMessage =
-    'Password Anda Salah... Proses tidak dapat dilanjutkan.';
 const startedMessage = 'Proses Clerk Start sudah dilakukan';
-
-// Kata sandi pengguna yang sedang masuk. Pengguna yang hanya masuk lewat SSO tidak punya kata sandi untuk diketik ulang.
-export type PasswordCheck = {
-    exists: boolean;
-    confirm: (password: string) => Promise<boolean>;
-};
 
 type Scope = { tenantId: string; legalEntityId: string; userId: string };
 
@@ -95,16 +87,6 @@ function clerkCode(localDate: string): string {
         () => codeCharacters[randomInt(codeCharacters.length)],
     ).join('');
     return `C-${localDate}-${suffix}`;
-}
-
-async function checkedPassword(
-    password: string | undefined,
-    check: PasswordCheck,
-): Promise<void> {
-    if (!check.exists) return;
-    if (!password) validation({ password: 'Isi kata sandi.' });
-    if (!(await check.confirm(password)))
-        validation({ password: wrongPasswordMessage });
 }
 
 const violates = (error: unknown, constraint: string) =>
@@ -257,7 +239,7 @@ export class Clerks {
     }
 
     // Clerk yang sedang berjalan milik pengguna ini, atau null bila ia belum Clerk Start.
-    async current(password: PasswordCheck) {
+    async current() {
         this.workspace.guard('clerk', 'read');
         const found = await this.db.one(
             z.object({ id: z.string() }),
@@ -274,7 +256,6 @@ export class Clerks {
             opening_methods: found ? [] : await this.openingMethods(),
             local_currency: localCurrencyCode,
             can_operate: this.workspace.permissions.has('core.clerk.update'),
-            password_required: password.exists,
         };
     }
 
@@ -336,12 +317,11 @@ export class Clerks {
         return openings;
     }
 
-    async start(body: unknown, password: PasswordCheck) {
+    async start(body: unknown) {
         this.workspace.guard('clerk', 'update');
         const input = clerkStartInputSchema.safeParse(body);
         if (!input.success)
             validation({ opening: 'Isi uang awal per jenis bayar tunai.' });
-        await checkedPassword(input.data.password, password);
         const openings = await this.openings(input.data.opening);
         const scope = this.scope;
         const today = await this.db.one(
@@ -399,12 +379,7 @@ export class Clerks {
         };
     }
 
-    async end(
-        request: Request,
-        id: string,
-        body: unknown,
-        password: PasswordCheck,
-    ) {
+    async end(request: Request, id: string, body: unknown) {
         this.workspace.guard('clerk', 'update');
         const clerk = await this.row(id);
         if (clerk.user_id !== this.workspace.userId)
@@ -414,7 +389,6 @@ export class Clerks {
         const parsed = clerkEndInputSchema.safeParse(body);
         if (!parsed.success)
             validation({ counts: 'Isi jumlah fisik per jenis bayar.' });
-        await checkedPassword(parsed.data.password, password);
         const scope = this.scope;
         const currency = new Currency(this.db, scope.tenantId);
         const precision = await currency.precision(localCurrencyCode);

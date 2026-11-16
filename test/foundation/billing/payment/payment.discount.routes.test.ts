@@ -15,7 +15,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 // Tab Diskon kasir lewat aplikasi sungguhan, diperiksa dengan SQL langsung. Kunjungan contoh mengulang satu-satunya
 // pembayaran berdiskon Seroja (hanya angka): Nilai 675.764, diskon 50.000 + 1.750 + 20.000, uang diterima 650.000,
@@ -152,12 +151,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment discounts', () => {
             kind: 'kelompok_jasa',
             service_group_id: ids.administrationGroup,
         });
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('the Seroja discounts settle 675.764 with 650.000 cash, change 45.986, and cash 604.014', async () => {

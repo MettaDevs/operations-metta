@@ -25,7 +25,6 @@ import {
     errorText,
     FormErrorHeader,
     orpc,
-    PasswordInput,
 } from '../../../platform/shell/index.ts';
 import { fromMinor, toMinor } from '../payment/payment.amounts.ts';
 import { ClerkResult, dateTime, type Clerk } from './clerk-result.tsx';
@@ -40,30 +39,6 @@ const endText =
 
 type Errors = Record<string, string[]>;
 
-function PasswordField({
-    value,
-    error,
-    onChange,
-}: {
-    value: string;
-    error: string | undefined;
-    onChange: (value: string) => void;
-}): ReactNode {
-    return (
-        <FormControl error={error}>
-            <PasswordInput
-                label="Password"
-                required
-                autoComplete="current-password"
-                placeholder="Masukan Password Anda disini..."
-                data-error-field="password"
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-            />
-        </FormControl>
-    );
-}
-
 type OpeningMethod = ApiBody<'billingClerkCurrent'>['opening_methods'][number];
 
 // Isian layar (titik ribuan, koma desimal) ke teks desimal API; isian yang tidak terbaca dikirim apa adanya supaya
@@ -74,18 +49,15 @@ const typedAmount = (text: string) =>
 function ClerkStart({
     openingMethods,
     localCurrency,
-    passwordRequired,
     canOperate,
     onStarted,
 }: {
     openingMethods: OpeningMethod[];
     localCurrency: string;
-    passwordRequired: boolean;
     canOperate: boolean;
     onStarted: () => Promise<unknown>;
 }): ReactNode {
     const [opening, setOpening] = useState<Record<string, string>>({});
-    const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -104,7 +76,6 @@ function ClerkStart({
                             ),
                         ]),
                     ),
-                    ...(passwordRequired ? { password } : {}),
                 },
             });
             toast.success(body.message);
@@ -184,13 +155,6 @@ function ClerkStart({
                             </FormGrid>
                         </>
                     )}
-                    {passwordRequired && (
-                        <PasswordField
-                            value={password}
-                            error={errors.password?.[0]}
-                            onChange={setPassword}
-                        />
-                    )}
                     <Button
                         type="submit"
                         data-action="save"
@@ -208,17 +172,14 @@ function ClerkStart({
 
 function ClerkEnd({
     clerk,
-    passwordRequired,
     canOperate,
     onEnded,
 }: {
     clerk: Clerk;
-    passwordRequired: boolean;
     canOperate: boolean;
     onEnded: (clerk: Clerk) => void;
 }): ReactNode {
     const [counts, setCounts] = useState<Record<string, string>>({});
-    const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -256,7 +217,6 @@ function ClerkEnd({
                 body: {
                     counts: amounts,
                     version: clerk.version,
-                    ...(passwordRequired ? { password } : {}),
                 },
             });
             toast.success(body.message);
@@ -374,13 +334,6 @@ function ClerkEnd({
                             />
                         </FormControl>
                     </FormGrid>
-                    {passwordRequired && (
-                        <PasswordField
-                            value={password}
-                            error={errors.password?.[0]}
-                            onChange={setPassword}
-                        />
-                    )}
                     <Button
                         type="submit"
                         data-action="save"
@@ -405,13 +358,7 @@ function ClerkPage(): ReactNode {
         }),
     );
     const [ended, setEnded] = useState<Clerk | null>(null);
-    const {
-        data,
-        opening_methods,
-        local_currency,
-        password_required,
-        can_operate,
-    } = current.data;
+    const { data, opening_methods, local_currency, can_operate } = current.data;
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
             <RecordActionBar
@@ -441,7 +388,6 @@ function ClerkPage(): ReactNode {
                     <ClerkEnd
                         key={`${data.id}:${data.version}`}
                         clerk={data}
-                        passwordRequired={password_required}
                         canOperate={can_operate}
                         onEnded={(clerk) => {
                             setEnded(clerk);
@@ -452,7 +398,6 @@ function ClerkPage(): ReactNode {
                     <ClerkStart
                         openingMethods={opening_methods}
                         localCurrency={local_currency}
-                        passwordRequired={password_required}
                         canOperate={can_operate}
                         onStarted={() => current.refetch()}
                     />

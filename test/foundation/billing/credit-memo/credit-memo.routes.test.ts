@@ -25,7 +25,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
 type Clerk = {
@@ -94,12 +93,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             ...withReason,
         });
     async function startClerk() {
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
         return (
             await json<Clerk>(
                 await cashier.get('/api/v1/billing/clerks/current'),
@@ -117,7 +111,6 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
                 await cashier.post(
                     `/api/v1/billing/clerks/${current.data.id}/end`,
                     {
-                        password: testPassword,
                         counts: {},
                         version: current.data.version,
                     },

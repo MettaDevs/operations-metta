@@ -54,13 +54,11 @@ export const clerkOpeningMethodSchema = z.object({
 });
 
 export const clerkStartInputSchema = z.object({
-    password: z.string().optional(),
     // Uang awal laci per id jenis bayar tunai, dalam mata uang jenis bayar itu. Yang tidak diisi berarti 0.
     opening: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
 });
 
 export const clerkEndInputSchema = z.object({
-    password: z.string().optional(),
     // Jumlah fisik per id jenis bayar, seperti f[JenisBayarID] sistem lama. Jenis bayar yang tidak diisi berarti 0.
     counts: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
     version: z.number().optional(),

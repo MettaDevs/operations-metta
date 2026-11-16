@@ -6,7 +6,6 @@ import {
     entitle,
     grantAllOrganizations,
     recordInstallation,
-    testPassword,
 } from '../../../../test/support/tenant-fixtures.ts';
 
 // Klinik sintetis untuk test halaman pemeriksaan: satu unit dengan Poli Umum (tanpa jadwal) dan Poli Gigi (jadwal
@@ -99,12 +98,7 @@ export async function openCashier(
         }),
         201,
     );
-    await json(
-        await cashier.post('/api/v1/billing/clerks/start', {
-            password: testPassword,
-        }),
-        201,
-    );
+    await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     return cashier;
 }
 
