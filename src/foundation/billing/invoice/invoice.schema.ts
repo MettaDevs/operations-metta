@@ -20,6 +20,11 @@ export const visitListQuerySchema = listParametersSchema.extend({
     status: z.enum(['unpaid', 'paid']).optional(),
 });
 
+export const visitHoldsQuerySchema = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+});
+
 // Baris Rincian Biaya. Angka ditulis sebagai teks desimal.
 export const chargeRowSchema = z.object({
     id: z.string(),

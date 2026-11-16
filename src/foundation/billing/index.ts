@@ -40,7 +40,9 @@ export {
 export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
 export {
     onBeforePayment,
+    onPaymentHolds,
     type PaymentCheck,
+    type PaymentHolds,
 } from './payment/payment.checks.ts';
 
 let registered = false;

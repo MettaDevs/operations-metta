@@ -1,4 +1,7 @@
-import { onBeforePayment } from '@core/foundation/billing/index.ts';
+import {
+    onBeforePayment,
+    onPaymentHolds,
+} from '@core/foundation/billing/index.ts';
 import { onEvent } from '@core/platform/events/index.ts';
 import {
     prescriptionIssued,
@@ -7,7 +10,10 @@ import {
 import { dispensingReturnRoutes } from './dispensing/dispensing-return/dispensing-return.routes.ts';
 import { dispensingRoutes } from './dispensing/dispensing/dispensing.routes.ts';
 import { prescriptionRoutes } from './dispensing/prescription/prescription.routes.ts';
-import { waitingPrescriptionRefusal } from './dispensing/prescription/prescription.service.ts';
+import {
+    waitingPrescriptionHolds,
+    waitingPrescriptionRefusal,
+} from './dispensing/prescription/prescription.service.ts';
 import { serviceLocationRoutes } from './dispensing/service-location/service-location.routes.ts';
 import { drugClassRoutes } from './drug/drug-class/drug-class.routes.ts';
 import { drugPriceRoutes } from './drug/drug-price/drug-price.routes.ts';
@@ -31,10 +37,11 @@ export function pharmacyRoutes() {
 let registered = false;
 
 // Dipanggil src/main.ts dan src/worker.ts. Proses yang tidak memanggilnya tidak mengantar resep ke farmasi, dan kasirnya
-// tidak menunggu resep yang belum disiapkan.
+// tidak menunggu atau menampilkan resep yang belum disiapkan.
 export function registerPharmacyEventHandlers(): void {
     if (registered) return;
     registered = true;
     onEvent(prescriptionIssued, moduleId, receivePrescription);
     onBeforePayment(moduleId, waitingPrescriptionRefusal);
+    onPaymentHolds(moduleId, waitingPrescriptionHolds);
 }

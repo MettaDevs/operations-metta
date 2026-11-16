@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { registerBillingEventHandlers } from '../../../../src/foundation/billing/index.ts';
+import {
+    onPaymentHolds,
+    registerBillingEventHandlers,
+} from '../../../../src/foundation/billing/index.ts';
 import { Database } from '../../../../src/platform/database/index.ts';
 import { publishEvent } from '../../../../src/platform/events/index.ts';
 import {
@@ -35,7 +38,11 @@ describe.skipIf(!process.env.DB_HOST)('billing visits', () => {
     let tenantId: string;
     let legalEntityId: string;
     let cashier: Browser;
-    const visits = { paid: Bun.randomUUIDv7(), cancelled: Bun.randomUUIDv7() };
+    const visits = {
+        paid: Bun.randomUUIDv7(),
+        cancelled: Bun.randomUUIDv7(),
+        earlier: Bun.randomUUIDv7(),
+    };
 
     async function publish(type: string, data: Record<string, unknown>) {
         const connection = await pool.reserve();
@@ -103,7 +110,7 @@ describe.skipIf(!process.env.DB_HOST)('billing visits', () => {
         cashier = business.admin;
         await completed(visits.paid, 'A', '2026-11-13');
         await completed(visits.cancelled, 'B', '2026-11-13');
-        await completed(Bun.randomUUIDv7(), 'C', '2026-11-12');
+        await completed(visits.earlier, 'C', '2026-11-12');
         await publish('healthcare.visit.cancelled.v1', {
             visit_id: visits.cancelled,
             registration_number: 'REG-B',
@@ -163,5 +170,47 @@ describe.skipIf(!process.env.DB_HOST)('billing visits', () => {
             (await cashier.get(`/api/v1/billing/visits/${visits.cancelled}`))
                 .status,
         ).toBe(404);
+    });
+
+    // Hal yang ditunggu kunjungan datang dari module yang mendaftarkannya lewat onPaymentHolds, dan hanya dibaca untuk
+    // module yang terpasang, karena tabel yang dibacanya hanya ada sesudah module terpasang.
+    test('the waiting status comes from installed modules only, with one call for every unpaid visit of the range', async () => {
+        const probe = `holds-probe-${Bun.randomUUIDv7()}`;
+        const asked: string[][] = [];
+        onPaymentHolds(probe, (_db, held) => {
+            asked.push(held.visitIds);
+            return Promise.resolve(
+                new Map(held.visitIds.map((id) => [id, 'menunggu uji'])),
+            );
+        });
+        const holds = async () =>
+            (
+                await json<{ data: { visit_id: string; holds: string[] }[] }>(
+                    await cashier.get(
+                        '/api/v1/billing/visits/holds?from=2026-11-12&to=2026-11-13',
+                    ),
+                    200,
+                )
+            ).data;
+        expect(await holds()).toEqual([]);
+        expect(asked).toEqual([]);
+        await pool.unsafe(
+            `insert into core_module_installations (tenant_id, module_id, version, status, installed_at, created_at, updated_at)
+             values ($1, $2, '1', 'installed', now(), now(), now())`,
+            [tenantId, probe],
+        );
+        expect(
+            (await holds()).sort((a, b) =>
+                a.visit_id.localeCompare(b.visit_id),
+            ),
+        ).toEqual(
+            [visits.paid, visits.earlier].sort().map((visitId) => ({
+                visit_id: visitId,
+                holds: ['menunggu uji'],
+            })),
+        );
+        expect(asked.map((ids) => ids.sort())).toEqual([
+            [visits.paid, visits.earlier].sort(),
+        ]);
     });
 });

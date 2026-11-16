@@ -2817,6 +2817,18 @@
             }
         }
     },
+    "billingVisitHolds": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/billing/visits/holds",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "billingVisitShow": {
         "~orpc": {
             "errorMap": {},

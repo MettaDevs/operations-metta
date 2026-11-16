@@ -82,6 +82,8 @@ Kasir menolak Simpan pembayaran selama kunjungan itu masih punya resep yang belu
 
 Pemeriksaannya milik module ini (`waitingPrescriptionRefusal`), karena hanya module ini yang membaca tabelnya. Ia didaftarkan ke kasir Core lewat `onBeforePayment`, padanan integration event `OnBeforePostSalesDoc` di BC, dari `registerPharmacyEventHandlers()`, dan kasir hanya menjalankannya untuk tenant yang memasang module ini.
 
+Sistem lama memperingatkan kasir saat form pembayaran dibuka bila masih ada resep di farmasi. Di sini tidak ada peringatan saat dibuka. Kasir melihat statusnya langsung: Daftar Pembayaran memberi kunjungan itu lencana "2 resep menunggu farmasi", header Form Pembayaran menampilkan lencana yang sama, dan saringan Siap Dibayar hanya menampilkan kunjungan belum bayar yang tidak menunggu apa pun. Statusnya dibaca dari module ini lewat `onPaymentHolds` (`waitingPrescriptionHolds`), dengan satu query untuk semua kunjungan belum bayar di rentang tanggal daftar, dan layar membacanya ulang setiap 15 detik dan setiap layar kembali difokus. Resep yang dihitung sama dengan pemeriksaan Simpan, karena keduanya memakai query yang sama. `0014_prescription_visit_index.sql` menambah index `(tenant_id, kunjungan_id)` untuk query itu.
+
 Pembayaran otomatis tipe pasien tidak menunggu, sama dengan sistem lama: Seroja melunasi pasien BPJS dari poli tanpa memeriksa resep, dan Kuta melunasi obat BPJS saat Siapkan. Di sini pembayaran otomatis dilunasi ulang begitu obatnya disiapkan.
 
 ## Harga obat

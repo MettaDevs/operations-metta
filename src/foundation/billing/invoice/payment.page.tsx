@@ -1,3 +1,4 @@
+import { Badge } from '@operations-metta/ui/badge';
 import { Button } from '@operations-metta/ui/button';
 import {
     CollapsibleSection,
@@ -14,18 +15,21 @@ import { Input } from '@operations-metta/ui/input';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { ReceiptText, Undo2 } from 'lucide-react';
-import { useState } from 'react';
+import { Hourglass, ReceiptText, Undo2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { definePage, orpc } from '../../../platform/shell/index.ts';
 import { CreditMemoDialog } from '../credit-memo/credit-memo-dialog.tsx';
 import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
 import { PaymentForm } from '../payment/payment-form.tsx';
+import { useVisitHolds } from './visit-holds.ts';
 
 // Form Pembayaran Kuta 1: panel Pasien, Rincian Biaya, dan Detail Pembayaran. Nilai dihitung server dengan rumus
 // kasir Kuta (invoice.totals.ts); kunjungan yang sudah dibayar menampilkan pembayarannya. Rincian menampilkan nilai baris apa adanya; sistem lama
 // membulatkan tampilan baris ke atas per 1.000, padahal yang ditagih nilai tepatnya. Pembayaran yang clerk-nya masih
-// berjalan dikoreksi dengan Batal Pembayaran; sesudah Clerk End, dengan Nota Kredit.
+// berjalan dikoreksi dengan Batal Pembayaran; sesudah Clerk End, dengan Nota Kredit. Header menampilkan hal yang masih
+// ditunggu kunjungan belum bayar, misalnya resep yang belum disiapkan farmasi, dan tagihan dibaca ulang begitu status
+// itu berubah, karena obat yang disiapkan farmasi masuk tagihan di transaksi yang sama.
 
 const route = getRouteApi('/_app/billing/payments/$visitId');
 
@@ -38,6 +42,19 @@ function PaymentPage(): ReactNode {
         }),
     );
     const { visit, charges, totals, payment } = data;
+    const holds = useVisitHolds({ from: visit.date, to: visit.date });
+    const waiting = payment ? [] : (holds?.get(visit.id) ?? []);
+    const waitingKey = holds === undefined ? null : waiting.join('|');
+    const shownWaiting = useRef(waitingKey);
+    useEffect(() => {
+        if (
+            waitingKey !== null &&
+            shownWaiting.current !== null &&
+            shownWaiting.current !== waitingKey
+        )
+            void refetch();
+        shownWaiting.current = waitingKey;
+    }, [waitingKey, refetch]);
     const [correcting, setCorrecting] = useState(false);
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const groupCount = new Set(
@@ -47,7 +64,18 @@ function PaymentPage(): ReactNode {
     ).size;
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-            <RecordActionBar title={`Pembayaran ${visit.registration_number}`}>
+            <RecordActionBar
+                title={`Pembayaran ${visit.registration_number}`}
+                trailing={
+                    waiting.length > 0 &&
+                    waiting.map((hold) => (
+                        <Badge key={hold} variant="outline">
+                            <Hourglass aria-hidden="true" />
+                            {hold}
+                        </Badge>
+                    ))
+                }
+            >
                 {payment && data.can_pay && (
                     <Button
                         type="button"
