@@ -6,12 +6,18 @@ import { Select } from '@operations-metta/ui/select';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
+import type { Drug } from '../../clinical/drug/drug-card.tsx';
 import { duplicateAllergyMessage } from './medical-record.messages.ts';
 import type {
     MedicalRecordDraft,
     MedicalRecordMetadata,
 } from './medical-record-panels.tsx';
-import { DrugLookup, timeOf } from './order-panels.tsx';
+import {
+    DrugLookup,
+    selectDrugs,
+    timeOf,
+    useDrugLoader,
+} from './order-panels.tsx';
 
 // Daftar alergi pasien di panel Riwayat penyakit dan alergi. Alergi milik pasien, jadi terbawa ke pemeriksaan
 // berikutnya. Jenis dan alergen baris yang sudah disimpan hanya dibaca; reaksi dan statusnya tetap bisa diubah.
@@ -149,6 +155,27 @@ export function AllergyLines({
         }
         change(index, values);
     };
+    // Tambah banyak di daftar alergi memilih obat tertentu; obat yang sudah ada di daftar dilewati dengan pesan yang
+    // sama seperti saat dipilih per baris.
+    const loadDrugs = useDrugLoader();
+    const addDrugAllergies = (drugs: Drug[]) => {
+        const fresh = drugs.filter((drug) => {
+            if (!rows.some((row) => keyOf(row) === `obat:${drug.id}`))
+                return true;
+            toast.error(duplicateAllergyMessage(drug.name));
+            return false;
+        });
+        setItems((items) => [
+            ...items,
+            ...fresh.map((drug): Allergy => ({
+                ...blankAllergy,
+                category: 'obat',
+                drug_id: drug.id,
+                drug_code: drug.code,
+                drug_name: drug.name,
+            })),
+        ]);
+    };
     const allergenChoices = (category: 'makanan' | 'udara' | 'obat') =>
         (category === 'makanan'
             ? metadata.allergies.food
@@ -284,6 +311,11 @@ export function AllergyLines({
                       }
             }
             onAddRow={() => setItems((items) => [...items, blankAllergy])}
+            selectRecords={
+                disabled
+                    ? undefined
+                    : selectDrugs(loadDrugs, addDrugAllergies, 'reaction')
+            }
             onDeleteRows={(removed) =>
                 setDraft((current) =>
                     current.allergy
@@ -300,7 +332,7 @@ export function AllergyLines({
             emptyMessage={
                 disabled
                     ? 'Belum ada alergi.'
-                    : 'Belum ada alergi. Pilih Tambah untuk menambahkan alergi.'
+                    : 'Belum ada alergi. Pilih Tambah untuk menambahkan alergi, atau Tambah banyak untuk beberapa alergi obat sekaligus.'
             }
             columns={[
                 {
