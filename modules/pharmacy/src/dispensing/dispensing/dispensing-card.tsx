@@ -599,7 +599,7 @@ function DispensingForm({
                                 disabled={busy || dirty}
                                 title={
                                     dirty
-                                        ? 'Simpan atau batalkan perubahan dulu.'
+                                        ? 'Perubahan yang belum disimpan perlu disimpan atau dibatalkan dulu.'
                                         : 'Keluarkan resep yang tidak diambil pasien dari antrean.'
                                 }
                                 onClick={() => setCancelling(true)}
