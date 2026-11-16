@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
     clerkNotStartedMessage,
-    openClerk,
+    paymentClerk,
 } from '../../../../src/foundation/billing/index.ts';
 import { Database } from '../../../../src/platform/database/index.ts';
 import { HttpFailure } from '../../../../src/platform/http/index.ts';
@@ -82,7 +82,7 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
     const guard = () =>
         withDatabase((db) =>
             db.transaction(() =>
-                openClerk(db, {
+                paymentClerk(db, {
                     tenantId,
                     legalEntityId,
                     userId: cashierUserId,
@@ -242,7 +242,7 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
                 })
             ).status,
         ).toBe(409);
-        expect((await guard()).id).toBe(started.data.id);
+        expect((await guard())?.id).toBe(started.data.id);
     });
 
     test('another cashier cannot end a session that is not theirs', async () => {

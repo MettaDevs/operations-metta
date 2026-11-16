@@ -9,7 +9,8 @@ info:
         sama, sesudah penyetuju yang berhak mengetik akunnya, pembayaran menjadi `dikreditkan`, piutangnya dibatalkan, dan
         baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).
 
-        Pengembalian adalah uang yang keluar dari laci clerk tempat nota kredit diposting: satu baris per baris pembayaran
+        Pengembalian adalah uang yang keluar dari laci clerk tempat nota kredit diposting, atau tanpa clerk bila legal
+        entity-nya tidak mewajibkan clerk dan kasirnya tidak sedang Clerk Start: satu baris per baris pembayaran
         yang jenis bayarnya berperilaku uang diterima (tunai dan non tunai), dengan jumlah, jumlah valuta, dan kurs yang sama
         persis dengan `billing.invoice.posted.v1` pembayaran itu. Baris piutang (bon, penjamin) tidak dikembalikan;
         piutangnya dibatalkan dan id-nya ada di `cancelled_receivable_ids`. Baris beban tidak dikembalikan.

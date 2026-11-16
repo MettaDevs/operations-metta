@@ -56,6 +56,7 @@ import { page as foundationBillingInvoicePaymentsPage } from './foundation/billi
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
 import { page as foundationBillingReceivablePaymentReceivablePaymentsPage } from './foundation/billing/receivable-payment/receivable-payments.page.tsx';
+import { page as foundationBillingSetupBillingSetupPage } from './foundation/billing/setup/billing-setup.page.tsx';
 import { page as foundationCalendarCalendarsPage } from './foundation/calendar/calendars.page.tsx';
 import { page as foundationCalendarWorkingTimeTemplatesPage } from './foundation/calendar/working-time-templates.page.tsx';
 import { page as foundationCurrencyCurrenciesPage } from './foundation/currency/currencies.page.tsx';
@@ -699,6 +700,13 @@ const foundationBillingReceivablePaymentReceivablePaymentsRoute = createRoute({
     },
 });
 
+const foundationBillingSetupBillingSetupRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBillingSetupBillingSetupPage.path,
+    component: foundationBillingSetupBillingSetupPage.component,
+    staticData: { title: foundationBillingSetupBillingSetupPage.title },
+});
+
 const foundationCalendarCalendarsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationCalendarCalendarsPage.path,
@@ -1116,6 +1124,7 @@ const routeTree = rootRoute.addChildren([
         foundationBillingMerchantMerchantsRoute,
         foundationBillingPaymentMethodPaymentMethodsRoute,
         foundationBillingReceivablePaymentReceivablePaymentsRoute,
+        foundationBillingSetupBillingSetupRoute,
         foundationCalendarCalendarsRoute,
         foundationCalendarWorkingTimeTemplatesRoute,
         foundationCurrencyCurrenciesRoute,

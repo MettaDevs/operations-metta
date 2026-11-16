@@ -24,7 +24,7 @@ import {
 } from '../../currency/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
-import { openClerk } from '../clerk/clerk.service.ts';
+import { paymentClerk } from '../clerk/clerk.service.ts';
 import {
     behaviorsSettledAs,
     isPaymentMethodParty,
@@ -395,7 +395,7 @@ export class ReceivablePayments {
             validation({ _form: 'Isian pembayaran hutang tidak sah.' });
         const input = parsed.data;
         const posted = await this.db.transaction(async () => {
-            const clerk = await openClerk(this.db, scope);
+            const clerk = await paymentClerk(this.db, scope);
             const precision = await new Currency(
                 this.db,
                 scope.tenantId,
@@ -495,7 +495,7 @@ export class ReceivablePayments {
                 tanggal: date,
                 jam: stamp,
                 piutang_id: receivable.id,
-                clerk_id: clerk.id,
+                clerk_id: clerk?.id ?? null,
                 user_id: scope.userId,
                 jenis_bayar_id: method.id,
                 nilai: amount,
@@ -537,7 +537,8 @@ export class ReceivablePayments {
         };
     }
 
-    // Batal pembayaran hutang: clerk-nya masih berjalan, dan belum ada pelunasan lebih baru atas piutang yang sama.
+    // Batal pembayaran hutang: clerk-nya masih berjalan atau ia tidak masuk clerk mana pun, dan belum ada pelunasan
+    // lebih baru atas piutang yang sama.
     // Piutang dikunci sebelum diperiksa, jadi pelunasan baru tidak bisa disimpan di tengahnya. Sisa piutang kembali
     // bertambah, dan piutangnya terbuka lagi.
     async cancel(request: Request, id: string, body: unknown) {
@@ -551,7 +552,7 @@ export class ReceivablePayments {
             const owner = lookupId(id)
                 ? await this.db.one(
                       z.object({
-                          clerk_id: z.string(),
+                          clerk_id: z.string().nullable(),
                           receivable_id: z.string(),
                       }),
                       `select clerk_id, piutang_id as receivable_id from pembayaran_outstanding
@@ -560,11 +561,13 @@ export class ReceivablePayments {
                   )
                 : undefined;
             if (!owner) abort(404, 'Not Found');
-            const clerk = await this.db.one(
-                z.object({ status: z.string() }),
-                'select status from clerk where tenant_id = $1 and id = $2 for share',
-                [scope.tenantId, owner.clerk_id],
-            );
+            const clerk = owner.clerk_id
+                ? await this.db.one(
+                      z.object({ status: z.string() }),
+                      'select status from clerk where tenant_id = $1 and id = $2 for share',
+                      [scope.tenantId, owner.clerk_id],
+                  )
+                : null;
             const receivable = await this.db.one(
                 z.object({ remaining: z.string() }),
                 'select sisa::text as remaining from piutang where tenant_id = $1 and id = $2 for update',
@@ -592,7 +595,7 @@ export class ReceivablePayments {
                     'receivable_payment_cancelled',
                     alreadyCancelledMessage,
                 );
-            if (clerk?.status !== 'start')
+            if (clerk && clerk.status !== 'start')
                 validation({ _form: closedClerkMessage });
             if (payment.newer) validation({ _form: newerPaymentMessage });
             const reason = parsed.data.reason?.trim() ?? '';

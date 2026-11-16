@@ -27,7 +27,7 @@ import {
     toLocalAmount,
     type Precision,
 } from '../../currency/index.ts';
-import { openClerk } from '../clerk/clerk.service.ts';
+import { paymentClerk } from '../clerk/clerk.service.ts';
 import {
     cancelReceivables,
     openReceivables,
@@ -96,7 +96,7 @@ export function refuseUnlessPosted(status: PaymentStatus): void {
 const cancelledPaymentSchema = z.object({
     id: z.string(),
     status: paymentStatusSchema,
-    // Kosong untuk pembayaran otomatis, yang tidak masuk clerk mana pun.
+    // Kosong untuk pembayaran tanpa clerk: bayar otomatis, atau legal entity yang tidak mewajibkan clerk.
     clerk_status: z.string().nullable(),
 });
 
@@ -819,7 +819,7 @@ export class Payments {
         const input = parsed.data;
         const version = expectedVersion(request, body);
         const posted = await this.db.transaction(async () => {
-            const clerk = await openClerk(this.db, scope);
+            const clerk = await paymentClerk(this.db, scope);
             const currency = new Currency(this.db, scope.tenantId);
             const precision = await currency.precision(localCurrencyCode);
             const amountHint = decimalsHint(precision.amount_decimals);
@@ -1044,7 +1044,7 @@ export class Payments {
                 visitId,
                 registrationNumber: invoice.visit.registration_number,
                 date,
-                clerkId: clerk.id,
+                clerkId: clerk?.id ?? null,
                 userId: scope.userId,
                 automatic: false,
                 charges,
