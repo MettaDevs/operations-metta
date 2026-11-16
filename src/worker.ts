@@ -9,6 +9,7 @@ import { registerOrganizationDefaults } from './foundation/number-sequence/index
 import { loadConfig } from './platform/config/index.ts';
 import { controlPlaneClient } from './platform/control-plane/index.ts';
 import {
+    applyHostRetention,
     gatherHostReport,
     readModuleCatalog,
     runOperation,
@@ -83,10 +84,43 @@ async function reportHost(): Promise<void> {
         reportError(error);
     }
 }
+// Retensi log berjalan saat mulai lalu sekali sehari di sela operasi, sama dengan jadwal harian retensi CoreERP.
+// Kegagalan satu tenant atau satu database dicatat tanpa menghentikan yang lain.
+const retentionIntervalMs = 24 * 60 * 60 * 1000;
+let nextRetentionAt = 0;
+async function applyRetentionDaily(): Promise<void> {
+    if (Date.now() < nextRetentionAt) return;
+    nextRetentionAt = Date.now() + retentionIntervalMs;
+    try {
+        for (const outcome of await applyHostRetention(config)) {
+            const errors = [
+                outcome.error,
+                ...outcome.results.map((result) => result.error),
+            ].filter((error) => error !== null);
+            log({
+                event: 'retention-applied',
+                database: outcome.database,
+                deleted: outcome.results.reduce(
+                    (total, result) => total + result.deleted,
+                    0,
+                ),
+                failed: errors.length,
+            });
+            for (const error of errors) reportError(error);
+        }
+    } catch (error) {
+        log({
+            event: 'retention-error',
+            message: error instanceof Error ? error.message : String(error),
+        });
+        reportError(error);
+    }
+}
 // Handler sinyal di atas yang mengubah stopping; TypeScript tidak melihat penulisan itu.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 while (!stopping) {
     await reportHost();
+    await applyRetentionDaily();
     try {
         const claimed = await client.claim();
         if (claimed) {
