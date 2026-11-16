@@ -19,12 +19,14 @@ import { discountRoutes } from './discount/discount.routes.ts';
 import { merchantRoutes } from './merchant/merchant.routes.ts';
 import { paymentMethodRoutes } from './payment-method/payment-method.routes.ts';
 import { receivablePaymentRoutes } from './receivable-payment/receivable-payment.routes.ts';
+import { billingSetupRoutes } from './setup/billing-setup.routes.ts';
 
 // Kasir Core: jenis bayar (mJenisBayar sistem lama) dengan perilaku dari katalog di kode, merchan (SIMmMerchan), dan
 // clerk (SIMtrClerk), sesi kas kasir dari Clerk Start sampai Clerk End. Layarnya membentuk aplikasi Kasir di katalog
-// aplikasi, terpisah dari Sys Admin (src/platform/access/navigation.ts). Pembayaran memanggil openClerk sebelum
-// menyimpan, sehingga kasir yang belum Clerk Start ditolak dengan pesan sistem lama.
-export { clerkNotStartedMessage, openClerk } from './clerk/clerk.service.ts';
+// aplikasi, terpisah dari Sys Admin (src/platform/access/navigation.ts). Pembayaran memanggil paymentClerk sebelum
+// menyimpan, sehingga kasir yang belum Clerk Start ditolak dengan pesan sistem lama, kecuali legal entity-nya tidak
+// mewajibkan clerk (Setelan kasir).
+export { clerkNotStartedMessage, paymentClerk } from './clerk/clerk.service.ts';
 export {
     approvalMessage,
     automaticCancelReason,
@@ -36,6 +38,7 @@ export {
 export {
     automaticPaymentMessage,
     openClerkPaymentMessage,
+    unclerkedPaymentMessage,
 } from './credit-memo/credit-memo.service.ts';
 export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
 export {
@@ -64,6 +67,7 @@ export function billingRoutes() {
         ...paymentMethodRoutes(),
         ...merchantRoutes(),
         ...discountRoutes(),
+        ...billingSetupRoutes(),
         ...clerkRoutes(),
         ...invoiceRoutes(),
         ...paymentRoutes(),

@@ -112,16 +112,17 @@ const violates = (error: unknown, constraint: string) =>
     error instanceof Error &&
     error.message.includes(constraint);
 
-// Clerk yang sedang berjalan milik kasir itu di legal entity itu. Pembayaran memanggilnya di dalam transaksi Simpan,
-// sebelum mengunci kunjungannya, dan ditolak dengan pesan sistem lama bila kasir belum Clerk Start. Baris clerk dikunci
-// bersama sampai pembayaran selesai, jadi Clerk End menunggu pembayaran yang sedang disimpan, dan pembayaran yang datang
-// sesudah Clerk End mengunci clerk menunggu lalu ditolak.
-export async function openClerk(
+// Clerk tempat pembayaran, pembayaran hutang, atau nota kredit masuk: clerk yang sedang berjalan milik kasir itu di legal
+// entity itu. Dipanggil di dalam transaksi Simpan, sebelum kunjungan atau piutangnya dikunci. Baris clerk dikunci
+// bersama sampai transaksinya selesai, jadi Clerk End menunggu pembayaran yang sedang disimpan, dan pembayaran yang
+// datang sesudah Clerk End mengunci clerk menunggu lalu tidak menemukannya lagi. Tanpa clerk berjalan, legal entity yang
+// mewajibkan clerk (parameter_kasir.wajib_clerk) menolak dengan pesan sistem lama; yang tidak, menyimpan tanpa clerk.
+export async function paymentClerk(
     db: Database,
     scope: Scope,
-): Promise<{ id: string; code: string }> {
+): Promise<{ id: string; code: string } | null> {
     if (!db.inTransaction)
-        throw new Error('openClerk wajib di dalam transaksi pembayaran.');
+        throw new Error('paymentClerk wajib di dalam transaksi pembayaran.');
     const found = await db.one(
         z.object({ id: z.string(), code: z.string() }),
         `select id, kode as code from clerk
@@ -129,8 +130,14 @@ export async function openClerk(
          for share`,
         [scope.tenantId, scope.legalEntityId, scope.userId],
     );
-    if (!found) validation({ _form: clerkNotStartedMessage });
-    return found;
+    if (found) return found;
+    const setup = await db.one(
+        z.object({ clerk_required: z.boolean() }),
+        `select wajib_clerk as clerk_required from parameter_kasir where tenant_id = $1 and legal_entity_id = $2`,
+        [scope.tenantId, scope.legalEntityId],
+    );
+    if (setup?.clerk_required === false) return null;
+    validation({ _form: clerkNotStartedMessage });
 }
 
 export class Clerks {

@@ -463,6 +463,12 @@ export const billingArea: NavigationAreaEntry = {
                     href: '/billing/discounts',
                     permission: 'core.discount.read',
                 },
+                {
+                    id: 'billing-setup',
+                    label: 'Setelan kasir',
+                    href: '/billing/setup',
+                    permission: 'core.billing-setup.read',
+                },
             ],
         },
     ],

@@ -12,7 +12,7 @@ import {
 } from '../../../platform/http/index.ts';
 import { activeLegalEntity } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
-import { openClerk } from '../clerk/clerk.service.ts';
+import { paymentClerk } from '../clerk/clerk.service.ts';
 import { behaviorsSettledAs } from '../payment-method/payment-method.behaviors.ts';
 import { paymentCancelInputSchema } from '../payment/payment.schema.ts';
 import {
@@ -40,6 +40,8 @@ export const openClerkPaymentMessage =
     'Pembayaran ini masih di clerk yang berjalan. Batalkan pembayarannya saja.';
 export const automaticPaymentMessage =
     'Pembayaran ini lunas otomatis tanpa clerk. Batalkan pembayarannya saja.';
+export const unclerkedPaymentMessage =
+    'Pembayaran ini tidak masuk clerk mana pun. Batalkan pembayarannya saja.';
 
 const numberReference = 'core.credit-memo-number';
 
@@ -147,6 +149,9 @@ export class CreditMemos {
         if (!payment) abort(404, 'Not Found');
         refuseUnlessPosted(payment.status);
         if (payment.automatic) validation({ _form: automaticPaymentMessage });
+        // Pembayaran tanpa clerk tidak pernah melewati Clerk End, jadi koreksinya selalu Batal.
+        if (payment.clerk_status === null)
+            validation({ _form: unclerkedPaymentMessage });
         // Clerk End tidak bisa diulang atau dibatalkan, jadi clerk yang sudah berakhir di sini tetap berakhir.
         if (payment.clerk_status === 'start')
             validation({ _form: openClerkPaymentMessage });
@@ -162,7 +167,7 @@ export class CreditMemos {
             'koreksi',
         );
         const posted = await this.db.transaction(async () => {
-            const clerk = await openClerk(this.db, scope);
+            const clerk = await paymentClerk(this.db, scope);
             const header = await this.db.one(
                 z.object({
                     visit_id: z.string(),
@@ -220,7 +225,7 @@ export class CreditMemos {
                 tanggal: date,
                 jam: stamp,
                 kasir_id: payment.id,
-                clerk_id: clerk.id,
+                clerk_id: clerk?.id ?? null,
                 user_id: scope.userId,
                 penyetuju_user_id: approverId,
                 alasan: reason,
