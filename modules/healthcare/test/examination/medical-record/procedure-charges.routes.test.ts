@@ -43,6 +43,12 @@ type StoredComponent = {
 const pricing = '/api/v1/pricing';
 const chargeLocked =
     'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.';
+// Pengguna test ini tidak memegang izin membaca pembayaran kasir, jadi penolakannya menyebut nomor pembayaran.
+const chargeLockedUnopened = expect.stringMatching(
+    new RegExp(
+        `^${RegExp.escape(chargeLocked)} Minta kasir membatalkan pembayaran [^ ]+[.]$`,
+    ),
+);
 
 // Tarif Biaya Tindakan: dihitung server dengan pencarian tarif sistem lama saat baris pertama kali disimpan, lalu
 // dibekukan bersama komponennya, dan sama dengan tarif yang ditampilkan saat tindakan dipilih. Biayanya sampai ke kasir,
@@ -638,7 +644,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                     procedures: [line(procedures.injection, 5)],
                 }),
             ),
-        ).toEqual({ _form: [chargeLocked] });
+        ).toEqual({ _form: [chargeLockedUnopened] });
         expect(await cashierLines(visitId)).toEqual([
             { kode: 'J-INJ', qty: '1', nilai: '50000', status: 'ditagih' },
             { kode: 'J-KOSONG', qty: '1', nilai: '0', status: 'ditagih' },
@@ -731,7 +737,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                         procedures: changed,
                     }),
                 ),
-            ).toEqual({ _form: [chargeLocked] });
+            ).toEqual({ _form: [chargeLockedUnopened] });
         }
         expect(await sent()).toBe(sentBefore);
 

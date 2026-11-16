@@ -44,6 +44,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    type ErrorAction,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
@@ -287,6 +288,9 @@ function DispensingForm({
     const [receiver, setReceiver] = useState({ byPatient: true, name: '' });
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     const [action, setAction] = useState<Action>('save');
     const [returning, setReturning] = useState(false);
@@ -334,14 +338,16 @@ function DispensingForm({
         setAction(next);
         setBusy(true);
         setErrors({});
+        setErrorActions([]);
         setMessage(null);
         try {
             onSaved(await request());
             return true;
         } catch (caught) {
-            if (caught instanceof ApiError && caught.status === 422)
+            if (caught instanceof ApiError && caught.status === 422) {
                 setErrors(caught.errors);
-            else setMessage(errorText(caught, `${failedOperations[next]}.`));
+                setErrorActions(caught.actions);
+            } else setMessage(errorText(caught, `${failedOperations[next]}.`));
             return false;
         } finally {
             setBusy(false);
@@ -529,6 +535,7 @@ function DispensingForm({
                                 onClick={() => {
                                     setDraft(draftOf(view.data));
                                     setErrors({});
+                                    setErrorActions([]);
                                     setMessage(null);
                                 }}
                             />
@@ -612,6 +619,7 @@ function DispensingForm({
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
+                    errorActions={errorActions}
                     message={message}
                     operation={failedOperations[action]}
                 />

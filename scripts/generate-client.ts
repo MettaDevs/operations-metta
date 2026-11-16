@@ -12,6 +12,8 @@ import { router } from '../src/main.ts';
 //   ada di akar src/ karena hanya berkas proses di sana yang boleh meng-import halaman module.
 // - `src/platform/shell/api-contract.generated.json`, bentuk route setiap procedure oRPC (method, path, struktur
 //   input dan output) yang dibutuhkan OpenAPILink di peramban, tanpa kode server.
+// - `src/platform/error-action/record-pages.generated.ts`, kunci setiap `export const record = defineRecordPage(...)`.
+//   Server memakainya sebagai tipe kunci halaman di aksi penolakan, jadi kunci yang tidak ada gagal typecheck.
 //
 // `bun run build` dan `bun run dev` menulis keduanya. `--check` hanya membandingkan, dan CI memakainya.
 
@@ -23,6 +25,13 @@ export const contractFile = join(
     'platform',
     'shell',
     'api-contract.generated.json',
+);
+export const recordPagesFile = join(
+    root,
+    'src',
+    'platform',
+    'error-action',
+    'record-pages.generated.ts',
 );
 const layouts = ['app', 'auth'] as const;
 type Layout = (typeof layouts)[number];
@@ -36,7 +45,11 @@ export type PageFile = {
     previousPaths: string[];
     layout: Layout;
     validatesSearch: boolean;
+    // Kunci `defineRecordPage` bila berkas ini juga meng-export `record`.
+    recordKey: string | null;
 };
+
+const recordKeyPattern = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
 
 const posix = (path: string) => path.split(sep).join('/');
 
@@ -66,6 +79,7 @@ export function readPage(file: string): PageFile {
         ts.ScriptKind.TSX,
     );
     const shown = posix(relative(root, file));
+    const recordKey = readRecordKey(source, shown);
     for (const statement of source.statements) {
         if (
             !ts.isVariableStatement(statement) ||
@@ -138,12 +152,60 @@ export function readPage(file: string): PageFile {
                 previousPaths,
                 layout,
                 validatesSearch,
+                recordKey,
             };
         }
     }
     throw new Error(
         `${shown}: berkas .page.tsx wajib meng-export \`page\` dari definePage.`,
     );
+}
+
+// `export const record = defineRecordPage({ key: '<app>.<resource>', ... })`, dengan kunci sebagai teks literal.
+function readRecordKey(source: ts.SourceFile, shown: string): string | null {
+    for (const statement of source.statements) {
+        if (
+            !ts.isVariableStatement(statement) ||
+            !statement.modifiers?.some(
+                (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+            )
+        )
+            continue;
+        for (const declaration of statement.declarationList.declarations) {
+            if (
+                !ts.isIdentifier(declaration.name) ||
+                declaration.name.text !== 'record'
+            )
+                continue;
+            const call = declaration.initializer;
+            const options =
+                call && ts.isCallExpression(call) && call.arguments[0];
+            const key =
+                options &&
+                ts.isObjectLiteralExpression(options) &&
+                options.properties.find(
+                    (item): item is ts.PropertyAssignment =>
+                        ts.isPropertyAssignment(item) &&
+                        item.name.getText(source) === 'key',
+                )?.initializer;
+            if (
+                !call ||
+                !ts.isCallExpression(call) ||
+                call.expression.getText(source) !== 'defineRecordPage' ||
+                !key ||
+                !ts.isStringLiteral(key)
+            )
+                throw new Error(
+                    `${shown}: \`record\` harus berupa defineRecordPage({ key: '<app>.<resource>', ... }) dengan key teks literal.`,
+                );
+            if (!recordKeyPattern.test(key.text))
+                throw new Error(
+                    `${shown}: key record ${key.text} harus berbentuk <app>.<resource>, sama dengan securable halamannya.`,
+                );
+            return key.text;
+        }
+    }
+    return null;
 }
 
 // Nama impor dari path berkas, jadi dua halaman bernama sama di folder berbeda tidak bertabrakan.
@@ -182,6 +244,7 @@ export function clientSource(pages: PageFile[]): string {
                 );
             seen.set(path, posix(relative(root, page.file)));
         }
+    const records = recordPages(pages);
     const parents = { app: 'appLayoutRoute', auth: 'authLayoutRoute' };
     // Setiap route satu konstanta sendiri. createRoute yang ditulis langsung di dalam addChildren([...]) kehilangan
     // tipenya di TypeScript, dan route tree yang tidak bertipe tidak memeriksa path maupun search params.
@@ -214,7 +277,7 @@ export function clientSource(pages: PageFile[]): string {
     return `// Dibuat \`bun scripts/generate-client.ts\` dari setiap berkas \`.page.tsx\`; jangan disunting tangan. \`bun run build\`
 // dan \`bun run dev\` menulis ulang berkas ini, dan CI menolak berkas yang tidak mutakhir.
 import { createRoute, createRouter } from '@tanstack/react-router';
-${pages.map((page) => `import { page as ${importName(page.file)} } from '${importPath(page.file)}';`).join('\n')}
+${pages.map((page) => `import { page as ${importName(page.file)}${page.recordKey ? `, record as ${recordName(page.file)}` : ''} } from '${importPath(page.file)}';`).join('\n')}
 import {
     appLayoutRoute,
     authLayoutRoute,
@@ -222,6 +285,7 @@ import {
     rootRoute,
     routerOptions,
     startClient,
+    type RecordPages,
 } from './platform/shell/index.ts';
 
 ${pages.map(route).join('\n\n')}
@@ -240,7 +304,39 @@ declare module '@tanstack/react-router' {
     }
 }
 
-startClient(router);
+const recordPages = {
+    ${records.map((page) => `'${page.recordKey}': ${recordName(page.file)}`).join(',\n    ')}
+} satisfies RecordPages;
+
+startClient(router, recordPages);
+`;
+}
+
+// Halaman yang meng-export record, urut kuncinya. Satu kunci hanya boleh dimiliki satu halaman.
+function recordPages(pages: PageFile[]): PageFile[] {
+    const owners = new Map<string, PageFile>();
+    for (const page of pages) {
+        if (!page.recordKey) continue;
+        const other = owners.get(page.recordKey);
+        if (other)
+            throw new Error(
+                `Dua halaman memakai key record ${page.recordKey}: ${posix(relative(root, other.file))} dan ${posix(relative(root, page.file))}.`,
+            );
+        owners.set(page.recordKey, page);
+    }
+    return [...owners.values()].sort((left, right) =>
+        (left.recordKey ?? '').localeCompare(right.recordKey ?? ''),
+    );
+}
+
+function recordName(file: string): string {
+    return importName(file).replace(/Page$/, 'Record');
+}
+
+export function recordPagesSource(pages: PageFile[]): string {
+    const keys = recordPages(pages).map((page) => `'${page.recordKey}'`);
+    return `// Dibuat \`bun scripts/generate-client.ts\` dari setiap \`defineRecordPage\` di berkas \`.page.tsx\`; jangan disunting tangan.
+export const recordPageKeys = [${keys.join(', ')}] as const;
 `;
 }
 
@@ -253,6 +349,10 @@ export async function generatedFiles(): Promise<Map<string, string>> {
     const pages = pageFiles().map(readPage);
     return new Map([
         [clientEntry, await format(clientSource(pages), clientEntry)],
+        [
+            recordPagesFile,
+            await format(recordPagesSource(pages), recordPagesFile),
+        ],
         [
             contractFile,
             await format(
@@ -294,6 +394,8 @@ if (import.meta.main) {
         console.log('Berkas hasil generate mutakhir.');
     } else {
         await writeGeneratedFiles();
-        console.log('src/client.tsx dan kontrak API ditulis ulang.');
+        console.log(
+            'src/client.tsx, kontrak API, dan kunci halaman record ditulis ulang.',
+        );
     }
 }

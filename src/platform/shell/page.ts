@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { z } from 'zod';
+import type { RecordPageKey } from '../error-action/index.ts';
 
 declare module '@tanstack/react-router' {
     // Menambah field ke tipe milik pustaka hanya bisa lewat `interface`; `type` akan menimpanya.
@@ -47,3 +48,32 @@ export function definePage<
 }) {
     return page;
 }
+
+/**
+ * Satu record yang dapat dibuka sebagai jendela di atas layar mana pun, misalnya dari tombol di kotak error
+ * (`ErrorAction` `open`). Ditulis di `.page.tsx` yang sama dengan halamannya, sebagai `export const record`:
+ *
+ * ```tsx
+ * export const record = defineRecordPage({ key: 'core.payment', title: 'Pembayaran', component: PaymentRecord });
+ * ```
+ *
+ * `key` adalah teks literal `<app>.<resource>`, sama dengan securable halamannya: membukanya butuh izin
+ * `<key>.read`, dan server hanya menyertakan tombolnya bagi yang memegangnya. scripts/generate-client.ts menuliskan
+ * semua kunci ke `src/platform/error-action/record-pages.generated.ts`, jadi kunci yang salah ketik di server gagal
+ * typecheck. `component` menerima id record dan tidak membaca params route, karena ia juga tampil di luar route-nya.
+ */
+export function defineRecordPage(record: {
+    key: RecordPageKey;
+    title: string;
+    component: RecordComponent;
+}) {
+    return record;
+}
+
+export type RecordComponent = (props: { id: string }) => ReactNode;
+
+// Dirakit src/client.tsx dari kunci yang sama dengan record-pages.generated.ts, jadi setiap kunci punya tepat satu record.
+export type RecordPages = Record<
+    RecordPageKey,
+    { title: string; component: RecordComponent }
+>;

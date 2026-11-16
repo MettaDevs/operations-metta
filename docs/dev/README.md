@@ -66,6 +66,7 @@ Nomor berkas dipertahankan dari CoreERP supaya mudah dicocokkan. Nomor yang tida
 | [20-load-and-concurrency-testing.md](20-load-and-concurrency-testing.md) | Gate beban dan kebenaran sebelum module dinyatakan selesai |
 | [25-standar-penjaga-dan-pengujian.md](25-standar-penjaga-dan-pengujian.md) | Syarat sebuah penjaga batas boleh dipercaya |
 | [28-pelaporan-kesalahan.md](28-pelaporan-kesalahan.md) | Pelaporan kesalahan ke Sentry |
+| [40-aksi-pada-penolakan.md](40-aksi-pada-penolakan.md) | Tombol yang membuka record penyebab penolakan, pola ErrorInfo BC |
 | [33-muatan-halaman-dan-paginasi.md](33-muatan-halaman-dan-paginasi.md) | Muatan halaman SPA: paginasi di server dan bentuk data yang dikirim |
 | [34-feed-posting-finance.md](34-feed-posting-finance.md) | Feed posting finance |
 

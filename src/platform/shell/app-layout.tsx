@@ -8,6 +8,7 @@ import { AppSidebar } from './app-sidebar.tsx';
 import { AppSidebarHeader } from './app-sidebar-header.tsx';
 import { areaOf, rememberArea } from './home.ts';
 import { useDocumentTitle } from './use-document-title.ts';
+import { RecordDialogs } from './record-dialogs.tsx';
 
 const sidebarStyle: CSSProperties & Record<`--${string}`, string> = {
     '--sidebar-width': '16rem',
@@ -71,7 +72,9 @@ export function AppLayout(): ReactNode {
                             }
                         >
                             <Fragment key={scope}>
-                                <Outlet />
+                                <RecordDialogs>
+                                    <Outlet />
+                                </RecordDialogs>
                             </Fragment>
                         </div>
                         <div

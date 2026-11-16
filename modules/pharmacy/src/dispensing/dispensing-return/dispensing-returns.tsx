@@ -26,6 +26,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    type ErrorAction,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 
@@ -105,6 +106,9 @@ export function ReturnCard({
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     usePageDialogRecord({
         recordTitle: 'Retur obat baru',
@@ -140,6 +144,7 @@ export function ReturnCard({
         }
         setBusy(true);
         setErrors({});
+        setErrorActions([]);
         try {
             const { body } = await targets[target.kind].create({
                 params: { id: target.id },
@@ -152,9 +157,10 @@ export function ReturnCard({
             );
             onDone(true);
         } catch (caught) {
-            if (caught instanceof ApiError && caught.status === 422)
+            if (caught instanceof ApiError && caught.status === 422) {
                 setErrors(caught.errors);
-            else setMessage(errorText(caught, 'Retur belum disimpan.'));
+                setErrorActions(caught.actions);
+            } else setMessage(errorText(caught, 'Retur belum disimpan.'));
         } finally {
             setBusy(false);
         }
@@ -186,6 +192,7 @@ export function ReturnCard({
             </PageDialogToolbar>
             <FormErrorHeader
                 errors={errors}
+                errorActions={errorActions}
                 message={message}
                 operation="Retur belum disimpan"
             />
@@ -352,6 +359,9 @@ export function ReturnsSection({
     const queryClient = useQueryClient();
     const stored = useReturns(target);
     const [message, setMessage] = useState<string | null>(null);
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const { confirm, confirmation } = useConfirmation();
     const returns = stored.data?.data.returns ?? [];
     const canReverse = stored.data?.permissions.reverse ?? false;
@@ -369,6 +379,7 @@ export function ReturnsSection({
         )
             return;
         setMessage(null);
+        setErrorActions([]);
         try {
             const { body } = await targets[target.kind].reverse({
                 params: { id: target.id, returnId: row.id },
@@ -383,16 +394,17 @@ export function ReturnsSection({
                     ? (Object.values(caught.errors).flat()[0] ?? caught.message)
                     : errorText(caught, 'Retur belum dibatalkan.'),
             );
+            if (caught instanceof ApiError) setErrorActions(caught.actions);
         }
     };
 
     return (
         <div className="space-y-3">
-            {message && (
-                <p role="alert" className="text-sm text-destructive">
-                    {message}
-                </p>
-            )}
+            <FormErrorHeader
+                message={message}
+                errorActions={errorActions}
+                operation="Retur belum dibatalkan"
+            />
             <DataTable
                 data={returns}
                 getRowKey={(row) => row.id}

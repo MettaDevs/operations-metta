@@ -47,6 +47,12 @@ type Status = {
 
 const paid =
     'Kunjungan ini sudah dibayar di kasir. Batalkan pembayarannya dulu untuk menambah rujuk internal.';
+// Pengguna test ini tidak memegang izin membaca pembayaran kasir, jadi penolakannya menyebut nomor pembayaran.
+const paidUnopened = expect.stringMatching(
+    new RegExp(
+        `^${RegExp.escape(paid)} Minta kasir membatalkan pembayaran [^ ]+[.]$`,
+    ),
+);
 
 // Panel Status Pasien dan rujuk internal halaman pemeriksaan: data acuan dari sistem lama, setiap status tersimpan
 // beserta isiannya, rujuk internal membuat tujuan baru dengan antrean dan NoBukti, poli ganda ditolak, pemeriksaan
@@ -563,7 +569,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
                     practice_schedule_id: clinic.dentalSchedule,
                 }),
             ),
-        ).toEqual({ status: [paid] });
+        ).toEqual({ status: [paidUnopened] });
         expect(await visit()).toEqual({ status: 'selesai', finished: true });
         expect(
             (await discharge(destinationId)).internal_referrals,

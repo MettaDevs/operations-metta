@@ -10,7 +10,8 @@ export {
 } from './api.ts';
 export { AreaDashboard } from './area-dashboard.tsx';
 export { FormErrorHeader } from './form-error-header.tsx';
-export { definePage } from './page.ts';
+export type { ErrorAction } from '../error-action/index.ts';
+export { definePage, defineRecordPage, type RecordPages } from './page.ts';
 export {
     AddressRegionFields,
     draftPayload,

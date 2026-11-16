@@ -202,6 +202,8 @@ Modules share the Shell's React tree, theme, and fonts; they do not create an if
 
 Saat menulis pesan kegagalan, tombol pemulihan, atau ringkasan error form, baca [pedoman pesan error](references/error-feedback.md). Bedakan penyebab yang diketahui, hasil penyimpanan yang pasti atau belum diketahui, dan tindakan yang benar-benar tersedia. Pola header form dan field telah disetujui pemilik produk; penerapan tiap halaman tetap harus dibuktikan. Salin detail bantuan cukup memberi status singkat tanpa popup. Pemulihan koneksi terputus berada di luar cakupan SDK.
 
+Penolakan yang jalan keluarnya ada di record lain membawa tombol yang membuka record itu di atas form. Contohnya "Buka pembayaran …" saat retur ditolak karena sudah dibayar. Cara menambahkannya di server, di halaman tujuan, dan di layar yang ditolak ada di skill [`actionable-errors`](../actionable-errors/SKILL.md).
+
 ## Checks
 
 For failed saves or processing actions, a 5xx must produce a visible message that remains until corrected or dismissed, using the action's everyday wording. A brief toast or a successfully captured error report alone does not satisfy user feedback. Preserve unsaved inputs and keep technical details in server reports. The behaviour CoreERP follows is in [`docs/dev/28-pelaporan-kesalahan.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/28-pelaporan-kesalahan.md), "Kegagalan yang terlihat oleh pengguna".

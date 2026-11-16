@@ -18,7 +18,11 @@ import { getRouteApi } from '@tanstack/react-router';
 import { Hourglass, ReceiptText, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { definePage, orpc } from '../../../platform/shell/index.ts';
+import {
+    definePage,
+    defineRecordPage,
+    orpc,
+} from '../../../platform/shell/index.ts';
 import { CreditMemoDialog } from '../credit-memo/credit-memo-dialog.tsx';
 import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
 import { PaymentForm } from '../payment/payment-form.tsx';
@@ -35,10 +39,15 @@ import { useVisitHolds } from './visit-holds.ts';
 const route = getRouteApi('/_app/billing/payments/$visitId');
 
 function PaymentPage(): ReactNode {
-    const { visitId } = route.useParams();
+    return <PaymentRecord id={route.useParams().visitId} />;
+}
+
+// Satu pembayaran, dibuka dari Daftar Pembayaran atau dari tombol di kotak error layar lain (record `core.payment`). id
+// adalah dokumen sumber tagihan: kunjungan atau penjualan.
+function PaymentRecord({ id }: { id: string }): ReactNode {
     const { data, refetch } = useSuspenseQuery(
         orpc.billingVisitShow.queryOptions({
-            input: { params: { id: visitId } },
+            input: { params: { id } },
             select: (response) => response.body.data,
         }),
     );
@@ -472,4 +481,10 @@ export const page = definePage({
     layout: 'app',
     title: 'Pembayaran',
     component: PaymentPage,
+});
+
+export const record = defineRecordPage({
+    key: 'core.payment',
+    title: 'Pembayaran',
+    component: PaymentRecord,
 });

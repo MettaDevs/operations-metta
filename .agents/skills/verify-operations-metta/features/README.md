@@ -45,7 +45,7 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 
 - [Pendaftaran kunjungan](./pendaftaran-kunjungan.md): memilih tempat kerja, mendaftarkan pasien lama ke poli, nomor antrean.
 - [Antrean dan pemeriksaan di poli](./pemeriksaan-poli.md): Mulai periksa, periksa fisik wajib, tindakan, Selesai periksa, dan rujuk internal.
-- [Resep ke farmasi](./resep-farmasi.md): e-resep, Kirim ke farmasi, Siapkan dan Serahkan di antrean resep, dan retur sesudah dibayar ditolak.
+- [Resep ke farmasi](./resep-farmasi.md): e-resep, Kirim ke farmasi, Siapkan dan Serahkan di antrean resep, retur sesudah dibayar ditolak, dan jalan keluarnya: buka pembayaran dari kotak error, Batal Pembayaran, lalu Simpan retur lagi.
 - [Kasir bayar dan batal pembayaran](./kasir-bayar.md): jenis bayar, Clerk Start, Bayar, dan Batal Pembayaran.
 - [Penjualan obat bebas](./penjualan-obat-bebas.md): lokasi penjualan, Simpan dan bayar di loket farmasi.
 

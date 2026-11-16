@@ -55,7 +55,10 @@ import { page as foundationBillingClerkClerkPage } from './foundation/billing/cl
 import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
 import { page as foundationBillingDiscountDiscountsPage } from './foundation/billing/discount/discounts.page.tsx';
-import { page as foundationBillingInvoicePaymentPage } from './foundation/billing/invoice/payment.page.tsx';
+import {
+    page as foundationBillingInvoicePaymentPage,
+    record as foundationBillingInvoicePaymentRecord,
+} from './foundation/billing/invoice/payment.page.tsx';
 import { page as foundationBillingInvoicePaymentsPage } from './foundation/billing/invoice/payments.page.tsx';
 import { page as foundationBillingMerchantMerchantsPage } from './foundation/billing/merchant/merchants.page.tsx';
 import { page as foundationBillingPaymentMethodPaymentMethodsPage } from './foundation/billing/payment-method/payment-methods.page.tsx';
@@ -110,6 +113,7 @@ import {
     rootRoute,
     routerOptions,
     startClient,
+    type RecordPages,
 } from './platform/shell/index.ts';
 
 const modulesHealthcareSrcClinicalClusterClustersRoute = createRoute({
@@ -1289,4 +1293,8 @@ declare module '@tanstack/react-router' {
     }
 }
 
-startClient(router);
+const recordPages = {
+    'core.payment': foundationBillingInvoicePaymentRecord,
+} satisfies RecordPages;
+
+startClient(router, recordPages);

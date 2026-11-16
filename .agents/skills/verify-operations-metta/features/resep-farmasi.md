@@ -9,6 +9,7 @@ Dokter menulis e-resep di halaman pemeriksaan dan mengirimnya ke farmasi. Resep 
 - `resep-siapkan` menyiapkan resep di farmasi dan menerbitkan bill farmasi.
 - `resep-serahkan` menyerahkan obat yang sudah disiapkan ke pasien.
 - `resep-retur-sesudah-bayar` (retur sesudah dibayar ditolak) menolak retur obat dari kunjungan yang sudah dibayar di kasir.
+- `resep-retur-buka-pembayaran` (jalan keluar dari penolakan) membuka pembayaran kasir dari tombol di kotak error retur, membatalkannya di jendela itu, lalu Simpan retur yang sama berhasil tanpa mengetik ulang.
 
 ## How to get to it (user POV)
 
@@ -35,6 +36,9 @@ Prasyarat:
 - **Retur sesudah dibayar ditolak.** Prasyaratnya kunjungan ini sudah dibayar di kasir ([kasir](./kasir-bayar.md), atau `journey outpatient --prepare-cashier`). Jalankan `bun scripts/verify.ts go pharmacy/dispensing/prescriptions`, `click button Disiapkan`, `click button "Tindakan untuk <nomor resep> " --prefix`, `click menuitem Buka --exact`, dan `click button Serahkan --exact --within "Penyerahan obat"`. Judul kartu berakhir `Diserahkan`. Lalu `click button Retur --exact --within "Penyerahan obat"`, `fill textbox "Alasan retur" "Pasien mengembalikan obat" --within "Retur obat"`, `fill textbox "Diretur sekarang, baris 1" 2 --within "Retur obat"`, dan `click button Simpan --exact --within "Retur obat"`. Ringkasan error di bawah toolbar menulis `Retur belum disimpan` dan `Data ini sudah melakukan Pembayaran diKasir!`, dan dialog tetap terbuka dengan isiannya.
 - **Bukti retur ditolak.** Jalankan `bun scripts/verify.ts shot retur-sesudah-bayar-ditolak`, `shot retur-sesudah-bayar-ditolak-ringkasan --alert` (close-up kotak `role=alert`), dan `sql "select count(*) from retur_farmasi" --save retur-sesudah-bayar-ditolak`. Tidak ada baris `retur_farmasi` baru. Server menjawab POST `.../prescriptions/<id>/returns` dengan 422 dan `errors._form` berisi pesan yang sama; ini terlihat di tab Network atau dengan membungkus `window.fetch` di halaman, karena `verify.ts` tidak merekam respons.
 
+- **Buka pembayaran dari kotak error (`resep-retur-buka-pembayaran`).** Lanjutkan dari retur yang ditolak di atas. Pengguna yang memegang izin baca pembayaran kasir (admin data contoh) melihat tombol `Buka pembayaran <no bukti>` di kotak error. Jalankan `bun scripts/verify.ts click button "Buka pembayaran <no bukti>"`. Form pembayaran kasir terbuka sebagai jendela di atas form retur, dan hitungan tumpukan di kanan atas naik satu. Lalu jalankan `click button "Batal Pembayaran"`, `fill textbox "Alasan Batal" "Pasien meretur obat"`, dan `click button Proses --within "Batal Pembayaran"`. Toast batal muncul dan form pembayaran kembali ke `Detail Pembayaran`. Jalankan `click button "Tutup halaman"`. Form retur tampil lagi dengan alasan dan Qty yang sama, dan tidak ada Simpan otomatis. Terakhir jalankan `click button Simpan --exact --within "Retur obat"`. Toast `Retur <nomor> tersimpan` muncul.
+- **Bukti buka pembayaran.** Ambil `shot` sesudah setiap langkah di atas. Lalu jalankan `sql "select no_bukti, status, alasan_batal from kasir where no_bukti = '<no bukti>'" --save kasir-batal` dan `sql "select nomor, status, alasan from retur_farmasi order by created_at desc limit 1" --save retur-tersimpan`. Kasir harus berstatus `batal` dengan alasannya, dan retur berstatus `diposting` dengan alasan yang diketik sebelum penolakan.
+
 ## Gotchas
 
 - `Qty, baris 1` ada di region Biaya Tindakan dan E-Resep. Selalu tambah `--within E-Resep`.
@@ -45,3 +49,4 @@ Prasyarat:
 - Tagihan obat lahir saat Siapkan, bukan saat resep dikirim. Kasir yang dibuka sebelum Siapkan hanya menampilkan tindakan.
 - Tombol `Retur` hanya muncul saat status penyerahan `Diserahkan`. Resep yang baru Disiapkan harus Serahkan dulu.
 - Antrean resep bawaannya saringan `Menunggu`. Resep yang sudah disiapkan ada di saringan `Disiapkan`.
+- Tombol `Buka pembayaran …` hanya tampil bagi pengguna yang memegang izin baca pembayaran kasir. Pengguna tanpa izin itu mendapat nomor pembayaran di pesannya ("Minta kasir membatalkan pembayaran …") tanpa tombol. Ada dua tombol `Tutup halaman`; yang diklik pertama menutup jendela teratas.

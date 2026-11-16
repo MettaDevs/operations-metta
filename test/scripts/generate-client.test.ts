@@ -7,6 +7,7 @@ import {
     clientSource,
     pageFiles,
     readPage,
+    recordPagesSource,
     staleFiles,
 } from '../../scripts/generate-client.ts';
 
@@ -56,6 +57,7 @@ test('a page must declare its path and layout as literals through definePage', a
         previousPaths: [],
         layout: 'app',
         validatesSearch: true,
+        recordKey: null,
     });
     await Bun.write(
         file,
@@ -132,5 +134,31 @@ test('two pages may not claim the same old URL', async () => {
     );
     expect(() => clientSource([readPage(first), readPage(second)])).toThrow(
         'Dua halaman memakai path /old',
+    );
+});
+
+test('a record page declares its key as a literal <app>.<resource>, and one key belongs to one page', async () => {
+    const file = join(scratch, 'record.page.tsx');
+    const page =
+        "export const page = definePage({ path: '/r', layout: 'app', title: 'R', component: R });\n";
+    const record = (key: string) =>
+        `${page}export const record = defineRecordPage({ key: ${key}, title: 'R', component: RecordR });\n`;
+    await Bun.write(file, record("'core.payment'"));
+    expect(readPage(file).recordKey).toBe('core.payment');
+    expect(recordPagesSource([readPage(file)])).toContain(
+        "export const recordPageKeys = ['core.payment'] as const;",
+    );
+    await Bun.write(file, `const key = 'core.payment';\n${record('key')}`);
+    expect(() => readPage(file)).toThrow('key teks literal');
+    await Bun.write(file, record("'payment'"));
+    expect(() => readPage(file)).toThrow('<app>.<resource>');
+    const other = join(scratch, 'record-other.page.tsx');
+    await Bun.write(file, record("'core.payment'"));
+    await Bun.write(
+        other,
+        record("'core.payment'").replace("path: '/r'", "path: '/s'"),
+    );
+    expect(() => clientSource([readPage(file), readPage(other)])).toThrow(
+        'Dua halaman memakai key record core.payment',
     );
 });

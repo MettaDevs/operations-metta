@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import type { Database } from '@core/platform/database/index.ts';
-import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 import { publishEvent } from '@core/platform/events/index.ts';
-import { HttpFailure, validation } from '@core/platform/http/index.ts';
 import {
     fromNumeric,
     issuedSlices,
@@ -338,22 +336,3 @@ export async function publishDispensingCharges(
 // Pesan sistem lama untuk retur dan batal penjualan farmasi yang obatnya sudah dibayar di kasir (BILLFarmasi
 // ClosePayment = 1).
 export const paidMessage = 'Data ini sudah melakukan Pembayaran diKasir!';
-
-// Kunci tagihan di kasir sebelum biaya obatnya berubah: tagihan yang sudah dibayar kasir ditolak, dan pembatalannya
-// urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis dibatalkan kasir sendiri lalu dilunasi ulang.
-// documentId adalah dokumen sumber tagihan: kunjungan resep, milik layanan kesehatan, atau penjualan obat bebas.
-export async function lockCharges(
-    db: Database,
-    scope: { tenantId: string; documentId: string; message?: string },
-): Promise<void> {
-    try {
-        await lockChargeForChange(db, {
-            tenantId: scope.tenantId,
-            documentId: scope.documentId,
-        });
-    } catch (error) {
-        if (scope.message && error instanceof HttpFailure)
-            validation({ _form: scope.message });
-        throw error;
-    }
-}

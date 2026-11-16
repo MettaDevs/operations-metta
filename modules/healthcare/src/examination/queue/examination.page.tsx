@@ -33,6 +33,7 @@ import {
     errorText,
     FormErrorHeader,
     orpc,
+    type ErrorAction,
     useUnsavedChangesGuard,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
@@ -134,6 +135,9 @@ function Examination({ entry }: { entry: Entry }): ReactNode {
     // Kesalahan hidup di luar form yang dipasang ulang setiap versi, supaya kegagalan sesudah Simpan berhasil (Kirim ke
     // farmasi, Selesai periksa) tetap terlihat.
     const [errors, setErrors] = useState<Errors>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     if (!record.data || !recordMetadata.data)
         return (
@@ -158,6 +162,8 @@ function Examination({ entry }: { entry: Entry }): ReactNode {
             canManage={metadata.permissions.manage}
             errors={errors}
             setErrors={setErrors}
+            errorActions={errorActions}
+            setErrorActions={setErrorActions}
             message={message}
             setMessage={setMessage}
             carried={carried}
@@ -174,6 +180,8 @@ function ExaminationRecord({
     canManage,
     errors,
     setErrors,
+    errorActions,
+    setErrorActions,
     message,
     setMessage,
     carried,
@@ -186,6 +194,8 @@ function ExaminationRecord({
     canManage: boolean;
     errors: Errors;
     setErrors: (errors: Errors) => void;
+    errorActions: readonly ErrorAction[];
+    setErrorActions: (actions: readonly ErrorAction[]) => void;
     message: string | null;
     setMessage: (message: string | null) => void;
     carried: MedicalRecordDraft | null;
@@ -329,6 +339,7 @@ function ExaminationRecord({
     };
 
     const fail = (caught: unknown, fallback: string) => {
+        setErrorActions(caught instanceof ApiError ? caught.actions : []);
         if (caught instanceof ApiError && Object.keys(caught.errors).length) {
             setErrors(caught.errors);
             setMessage(null);
@@ -353,6 +364,7 @@ function ExaminationRecord({
                 body: draft,
             });
             setErrors({});
+            setErrorActions([]);
             setMessage(null);
             toast.success('Data berhasil disimpan.');
             showRecord(body);
@@ -384,6 +396,7 @@ function ExaminationRecord({
                 },
             });
             setErrors({});
+            setErrorActions([]);
             setMessage(null);
             const before = new Set(
                 shown.data.prescriptions
@@ -426,6 +439,7 @@ function ExaminationRecord({
                 },
             });
             setErrors({});
+            setErrorActions([]);
             setMessage(null);
             showRecord(body);
             setDraft(body.data);
@@ -553,6 +567,7 @@ function ExaminationRecord({
                 <div className="space-y-4 p-3 lg:p-4">
                     <FormErrorHeader
                         errors={errors}
+                        errorActions={errorActions}
                         message={message}
                         operation="Rekam medis belum disimpan"
                     />

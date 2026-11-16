@@ -5,11 +5,13 @@ import type { RouterClient } from '@orpc/server';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';
 import { z } from 'zod';
 import type { Router } from '../../main.ts';
+import { errorActionSchema, type ErrorAction } from '../error-action/index.ts';
 import contract from './api-contract.generated.json';
 
 type ErrorBody = {
     message?: unknown;
     errors?: Record<string, string[]>;
+    actions?: unknown;
     error?: { code?: unknown; message?: unknown; field?: unknown };
 };
 
@@ -17,13 +19,18 @@ function errorBody(value: unknown): ErrorBody {
     return value !== null && typeof value === 'object' ? value : {};
 }
 
+// Aksi yang tidak dikenal peramban ini, misalnya kunci halaman dari server yang lebih baru, dibuang seluruhnya; pesannya
+// tetap tampil dan menyebut dokumennya.
+const errorActionsSchema = z.array(errorActionSchema).catch([]);
+
 /**
  * Kegagalan dari API, padanan `CoreApiError` CoreERP: pesan pertama dari validasi (422), atau pesan
- * `{ error: { code, message } }`, beserta status, error per field, dan kodenya.
+ * `{ error: { code, message } }`, beserta status, error per field, kodenya, dan aksi yang membuka record penyebabnya.
  */
 export class ApiError extends ORPCError<'API_ERROR', ErrorBody> {
     readonly errors: Record<string, string[]>;
     readonly errorCode: string | null;
+    readonly actions: readonly ErrorAction[];
 
     constructor(status: number, body: unknown) {
         const data = errorBody(body);
@@ -43,6 +50,7 @@ export class ApiError extends ORPCError<'API_ERROR', ErrorBody> {
                         : 'Permintaan belum berhasil.',
         });
         this.errors = data.errors ?? {};
+        this.actions = errorActionsSchema.parse(data.actions ?? []);
         this.errorCode =
             typeof data.error?.code === 'string' ? data.error.code : null;
     }

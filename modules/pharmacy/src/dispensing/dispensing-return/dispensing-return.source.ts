@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import type { Database } from '@core/platform/database/index.ts';
 import { abort, lookupId } from '@core/platform/http/index.ts';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
+import type { Viewer } from '@core/platform/access/index.ts';
 import {
-    lockCharges,
     paidMessage,
     publishDispensingCharges,
 } from '../dispensing/dispensing.events.ts';
@@ -30,7 +31,7 @@ export type ReturnSource = {
     dispensingId: string;
     operatingUnitId: string;
     locationId: string;
-    lock: () => Promise<void>;
+    lock: (viewer: Viewer) => Promise<void>;
     settle: (returnId: string, event: ReturnEvent) => Promise<void>;
 };
 
@@ -89,10 +90,9 @@ export const returnSources: Record<ReturnSourceKind, Definition> = {
                 locationId: row.location_id,
                 // Retur mengurangi Qty obat di tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
                 // Resep tanpa kunjungan belum punya tagihan.
-                lock: async () => {
+                lock: async (workspace) => {
                     if (row.visit_id)
-                        await lockCharges(db, {
-                            tenantId: scope.tenantId,
+                        await lockChargeForChange(db, workspace, {
                             documentId: row.visit_id,
                             message: paidMessage,
                         });
@@ -133,9 +133,8 @@ export const returnSources: Record<ReturnSourceKind, Definition> = {
                 operatingUnitId: sale.operating_unit_id,
                 locationId: sale.location_id,
                 // Penjualan itu sendiri dokumen sumber tagihan penjualannya di kasir.
-                lock: () =>
-                    lockCharges(db, {
-                        tenantId: scope.tenantId,
+                lock: (workspace) =>
+                    lockChargeForChange(db, workspace, {
                         documentId: sale.id,
                         message: paidMessage,
                     }),

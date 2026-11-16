@@ -23,6 +23,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 // Tagihan penjualan tanpa kunjungan yang ditulis module penjual (replaceSaleBill) lalu dibayar dengan mesin kasir yang
 // sama dengan tagihan kunjungan: rumus, kembalian, piutang, batal, kunci perubahan, event, dan Clerk End. Module memakai
@@ -269,7 +270,9 @@ describe.skipIf(!process.env.DB_HOST)('billing sale bills', () => {
         const paid = await sell(sale(documentId), { received: '24000' });
         const locked = await withDatabase((db) =>
             db.transaction(() =>
-                lockChargeForChange(db, { tenantId, documentId }),
+                lockChargeForChange(db, fullAccessViewer(tenantId), {
+                    documentId,
+                }),
             ),
         ).then(
             () => null,

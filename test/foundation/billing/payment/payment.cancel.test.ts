@@ -26,6 +26,7 @@ import {
     createMember,
     grantAllOrganizations,
 } from '../../../support/tenant-fixtures.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 type Payment = { id: string; version: number; number: string };
 
@@ -135,8 +136,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         withDatabase(async (db) => {
             try {
                 await db.transaction(() =>
-                    lockChargeForChange(db, {
-                        tenantId,
+                    lockChargeForChange(db, fullAccessViewer(tenantId), {
                         documentId: visitId,
                     }),
                 );
@@ -259,6 +259,14 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         expect(await lockRefusal(visits.local)).toEqual({
             message: chargeLockedMessage,
             errors: { _form: [chargeLockedMessage] },
+            actions: [
+                {
+                    kind: 'open',
+                    label: `Buka pembayaran ${payment.number}`,
+                    page: 'core.payment',
+                    recordId: visits.local,
+                },
+            ],
         });
         const result = await json<{ message: string }>(
             await cancel(payment, withReason),

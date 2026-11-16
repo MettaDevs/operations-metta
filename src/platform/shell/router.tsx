@@ -25,6 +25,8 @@ import './app.css';
 import { api, ApiError, errorText, shellQuery } from './api.ts';
 import { AppLayout } from './app-layout.tsx';
 import { AuthLayout } from './auth-layout.tsx';
+import type { RecordPages } from './page.ts';
+import { RecordPagesProvider } from './record-dialogs.tsx';
 import { initializeTheme } from './use-appearance.ts';
 
 let activeRouter: AnyRouter | null = null;
@@ -212,7 +214,7 @@ export const routerOptions = {
     defaultPendingComponent: PagePending,
 };
 
-export function startClient(router: AnyRouter): void {
+export function startClient(router: AnyRouter, recordPages: RecordPages): void {
     activeRouter = router;
     initializeTheme();
     const element = document.getElementById('app');
@@ -221,7 +223,9 @@ export function startClient(router: AnyRouter): void {
         <StrictMode>
             <TooltipProvider delayDuration={1000}>
                 <QueryClientProvider client={queryClient}>
-                    <RouterProvider router={router} />
+                    <RecordPagesProvider pages={recordPages}>
+                        <RouterProvider router={router} />
+                    </RecordPagesProvider>
                 </QueryClientProvider>
                 <Toaster />
             </TooltipProvider>

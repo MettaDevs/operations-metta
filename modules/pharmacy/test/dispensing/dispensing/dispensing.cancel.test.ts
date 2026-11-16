@@ -33,6 +33,12 @@ type Counts = { status: string; total: number }[];
 const cancelled = 'pharmacy.prescription.cancelled.v1';
 const chargesReplaced = 'pharmacy.dispensing.charges-replaced.v1';
 const paidMessage = 'Data ini sudah melakukan Pembayaran diKasir!';
+// Pengguna test ini tidak memegang izin membaca pembayaran kasir, jadi penolakannya menyebut nomor pembayaran.
+const paidMessageUnopened = expect.stringMatching(
+    new RegExp(
+        `^${RegExp.escape(paidMessage)} Minta kasir membatalkan pembayaran [^ ]+[.]$`,
+    ),
+);
 
 // Batal resep ("Tidak Diambil" di antrean sistem lama): resep keluar dari antrean, resep yang sudah disiapkan ikut
 // dibatalkan penyiapannya sehingga stok dan tagihan kasirnya kembali, obat yang sudah diserahkan ditolak, dan kunjungan
@@ -274,7 +280,7 @@ describe.skipIf(!process.env.DB_HOST)('prescription cancel', () => {
                     version: await version(id),
                 }),
             ),
-        ).toEqual({ _form: [paidMessage] });
+        ).toEqual({ _form: [paidMessageUnopened] });
         expect(await stock()).toBe(before);
         expect((await charges(visitId)).map((row) => row.status)).toEqual([
             'ditagih',
