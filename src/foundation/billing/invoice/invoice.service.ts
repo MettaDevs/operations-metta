@@ -25,10 +25,10 @@ import { patientTypeMessage } from '../payment/payment.service.ts';
 
 // Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
 const paidSql = `exists (select 1 from kasir p where p.tenant_id = k.tenant_id and p.sumber_module = k.sumber_module
-                                and p.kunjungan_id = k.kunjungan_id and p.status = 'diposting')`;
+                                and p.sumber_dokumen_id = k.sumber_dokumen_id and p.status = 'diposting')`;
 
 const visitSql = `select * from (
-                      select k.kunjungan_id as id, k.no_reg as registration_number, k.tanggal::text as date,
+                      select k.sumber_dokumen_id as id, k.sumber_nomor as registration_number, k.tanggal::text as date,
                              ${isoSql('k.didaftarkan_pada')} as registered_at,
                              k.pasien_nrm as patient_medical_record_number, k.pasien_nama as patient_name,
                              k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
@@ -165,7 +165,7 @@ export class Invoices {
                               where c.tenant_id = r.tenant_id and c.tagihan_kasir_detail_id = r.id
                                 and c.deleted_at is null), '[]'::json) as components
              from tagihan_kasir_detail r
-             where r.tenant_id = $1 and r.legal_entity_id = $2 and r.kunjungan_id = $3 and r.deleted_at is null
+             where r.tenant_id = $1 and r.legal_entity_id = $2 and r.tagihan_sumber_dokumen_id = $3 and r.deleted_at is null
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
             [this.scope.tenantId, this.scope.legalEntityId, visitId],
         );
@@ -333,7 +333,7 @@ export class Invoices {
                               where d.tenant_id = k.tenant_id and d.kasir_id = k.id
                                 and not (j.perilaku = 'tunai' and d.mata_uang = $4)), '[]'::json) as lines
              from kasir k
-             where k.tenant_id = $1 and k.legal_entity_id = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
+             where k.tenant_id = $1 and k.legal_entity_id = $2 and k.sumber_dokumen_id = $3 and k.status = 'diposting'`,
             [
                 this.scope.tenantId,
                 this.scope.legalEntityId,
@@ -346,7 +346,7 @@ export class Invoices {
             z.object({ number: z.string(), payment_number: z.string() }),
             `select n.no_bukti as number, k.no_bukti as payment_number
              from nota_kredit n join kasir k on k.tenant_id = n.tenant_id and k.id = n.kasir_id
-             where n.tenant_id = $1 and n.legal_entity_id = $2 and k.kunjungan_id = $3
+             where n.tenant_id = $1 and n.legal_entity_id = $2 and k.sumber_dokumen_id = $3
              order by n.jam, n.id`,
             [this.scope.tenantId, this.scope.legalEntityId, visitId],
         );

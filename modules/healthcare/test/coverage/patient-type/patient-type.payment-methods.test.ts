@@ -242,7 +242,7 @@ describe.skipIf(!process.env.DB_HOST)('patient type payment methods', () => {
         const payments = await pool.unsafe<
             { otomatis: boolean; status: string }[]
         >(
-            'select otomatis, status from kasir where tenant_id = $1 and kunjungan_id = $2',
+            'select otomatis, status from kasir where tenant_id = $1 and sumber_dokumen_id = $2',
             [clinic.tenantId, visitId],
         );
         expect([...payments]).toEqual([

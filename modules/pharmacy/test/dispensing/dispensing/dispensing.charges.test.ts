@@ -81,7 +81,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 `select sumber_dokumen_id, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai,
                     trim_scale(harga_orig)::text as harga_orig, status
              from tagihan_kasir_detail
-             where tenant_id = $1 and kunjungan_id = $2 and group_biaya = 'OBAT' and deleted_at is null
+             where tenant_id = $1 and tagihan_sumber_dokumen_id = $2 and group_biaya = 'OBAT' and deleted_at is null
              order by created_at, id`,
                 [pharmacy.tenantId, visitId],
             );
@@ -450,7 +450,7 @@ describe.skipIf(!process.env.DB_HOST)(
             const payments = () =>
                 pool.unsafe<{ value: string; status: string }[]>(
                     `select trim_scale(nilai)::text as value, status from kasir
-                     where tenant_id = $1 and kunjungan_id = $2 order by created_at, id`,
+                     where tenant_id = $1 and sumber_dokumen_id = $2 order by created_at, id`,
                     [pharmacy.tenantId, visitId],
                 );
             expect([...(await payments())]).toEqual([

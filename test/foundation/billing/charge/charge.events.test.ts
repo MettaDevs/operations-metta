@@ -90,7 +90,7 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
         });
     const visit = () =>
         pool.unsafe<{ status: string; pasien_nama: string }[]>(
-            'select status, pasien_nama from tagihan_kasir where tenant_id = $1 and kunjungan_id = $2',
+            'select status, pasien_nama from tagihan_kasir where tenant_id = $1 and sumber_dokumen_id = $2',
             [tenantId, visitId],
         );
 
@@ -101,7 +101,7 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
                         r.status, r.deleted_at is null as live,
                         coalesce((select array_agg(trim_scale(c.nilai)::text) from tagihan_kasir_detail_komponen c
                                   where c.tagihan_kasir_detail_id = r.id and c.deleted_at is null), '{}') as komponen
-                 from tagihan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
+                 from tagihan_kasir_detail r where r.tenant_id = $1 and r.tagihan_sumber_dokumen_id = $2
                  order by r.deleted_at nulls first, r.jenis_biaya_kode`,
                 [tenantId, visitId],
             )),

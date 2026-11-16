@@ -55,7 +55,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             }[]
         >(
             `select id, version, trim_scale(nilai)::text as nilai, status, otomatis, clerk_id
-             from kasir where tenant_id = $1 and kunjungan_id = $2 order by created_at, id`,
+             from kasir where tenant_id = $1 and sumber_dokumen_id = $2 order by created_at, id`,
             [tenantId, visitId],
         );
 
@@ -156,7 +156,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
         expect([...details]).toEqual([{ kode: 'BPJ', nilai: '175000' }]);
         const [billed] = await pool.unsafe<{ open: number }[]>(
             `select count(*) filter (where status = 'terbuka')::int as open
-             from tagihan_kasir_detail where kunjungan_id = $1 and deleted_at is null`,
+             from tagihan_kasir_detail where tagihan_sumber_dokumen_id = $1 and deleted_at is null`,
             [visitId],
         );
         expect(billed?.open).toBe(0);
@@ -239,7 +239,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             }[]
         >(
             `select trim_scale(nilai)::text as nilai, status, otomatis, alasan_batal as alasan
-             from kasir where tenant_id = $1 and kunjungan_id = $2 order by created_at, id`,
+             from kasir where tenant_id = $1 and sumber_dokumen_id = $2 order by created_at, id`,
             [tenantId, visitId],
         );
         expect([...payments]).toEqual([

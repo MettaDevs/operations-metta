@@ -183,7 +183,7 @@ async function replaceCharges(
                 sumber_module: document.module,
                 sumber_dokumen_id: document.documentId,
                 sumber_baris_id: line.lineId,
-                kunjungan_id: document.visitId,
+                tagihan_sumber_dokumen_id: document.visitId,
                 group_biaya: document.group,
                 ...line.values,
                 created_at: stamp,
@@ -203,7 +203,7 @@ async function replaceCharges(
     }
     await db.execute(
         `update tagihan_kasir set version = version + 1, updated_at = $1
-         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4`,
+         where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4`,
         [stamp, tenantId, source, document.visitId],
     );
     await settleAgain(db, {
@@ -222,7 +222,7 @@ async function settleAgain(
     const visit = await db.one(
         z.object({ method: z.string() }),
         `select jenis_bayar_otomatis_id as method from tagihan_kasir
-         where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'selesai'
+         where tenant_id = $1 and sumber_module = $2 and sumber_dokumen_id = $3 and status = 'selesai'
            and jenis_bayar_otomatis_id is not null`,
         [scope.tenantId, source, scope.visitId],
     );
@@ -337,7 +337,7 @@ export async function receiveVisitCompleted(
     const values = {
         legal_entity_id: envelope.legal_entity_id,
         operating_unit_id: envelope.org_unit_id ?? null,
-        no_reg: data.registration_number,
+        sumber_nomor: data.registration_number,
         tanggal: data.date,
         didaftarkan_pada: data.registered_at.slice(0, 19).replace('T', ' '),
         pasien_id: data.patient.id,
@@ -359,7 +359,7 @@ export async function receiveVisitCompleted(
          set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
              updated_at = $${columns.length + 1}
          where tenant_id = $${columns.length + 2} and sumber_module = $${columns.length + 3}
-           and kunjungan_id = $${columns.length + 4}`,
+           and sumber_dokumen_id = $${columns.length + 4}`,
         [
             ...columns.map(([, value]) => value),
             stamp,
@@ -373,7 +373,7 @@ export async function receiveVisitCompleted(
             id: Bun.randomUUIDv7(),
             tenant_id: envelope.tenant_id,
             sumber_module: source,
-            kunjungan_id: data.visit_id,
+            sumber_dokumen_id: data.visit_id,
             ...values,
             created_at: stamp,
             updated_at: stamp,
@@ -398,13 +398,13 @@ export async function receiveVisitCancelled(
     const stamp = nowSql();
     await db.execute(
         `update tagihan_kasir set status = 'batal', updated_at = $1
-         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4`,
+         where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4`,
         [stamp, envelope.tenant_id, source, data.visit_id],
     );
     const retired = await db.rows(
         z.object({ id: z.string() }),
         `update tagihan_kasir_detail set deleted_at = $1, updated_at = $1
-         where tenant_id = $2 and kunjungan_id = $3 and status = 'terbuka' and deleted_at is null
+         where tenant_id = $2 and tagihan_sumber_dokumen_id = $3 and status = 'terbuka' and deleted_at is null
          returning id`,
         [stamp, envelope.tenant_id, data.visit_id],
     );
@@ -423,7 +423,7 @@ export async function receiveVisitReopened(
     if (await alreadyProcessed(db, processedTable, envelope)) return;
     await db.execute(
         `update tagihan_kasir set status = 'dibuka', updated_at = $1
-         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4 and status = 'selesai'`,
+         where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4 and status = 'selesai'`,
         [nowSql(), envelope.tenant_id, source, data.visit_id],
     );
 }

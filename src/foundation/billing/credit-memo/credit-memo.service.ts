@@ -172,12 +172,12 @@ export class CreditMemos {
                     discount: z.string(),
                     registration_number: z.string(),
                 }),
-                `select k.kunjungan_id as visit_id, k.sumber_module as source_module, k.no_bukti as number,
+                `select k.sumber_dokumen_id as visit_id, k.sumber_module as source_module, k.no_bukti as number,
                         trim_scale(k.nilai)::text as value, trim_scale(k.nilai_discount)::text as discount,
-                        v.no_reg as registration_number
+                        v.sumber_nomor as registration_number
                  from kasir k
                  join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                       and v.kunjungan_id = k.kunjungan_id
+                                       and v.sumber_dokumen_id = k.sumber_dokumen_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],
             );

@@ -70,7 +70,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
             `select r.id, j.kode, r.pihak_jenis, r.pihak_id, r.pihak_nama, trim_scale(r.nilai)::text as nilai,
                     trim_scale(r.sisa)::text as sisa, r.status
              from piutang r join kasir k on k.id = r.kasir_id join jenis_bayar j on j.id = r.jenis_bayar_id
-             where r.tenant_id = $1 and k.kunjungan_id = $2 order by k.created_at, j.kode`,
+             where r.tenant_id = $1 and k.sumber_dokumen_id = $2 order by k.created_at, j.kode`,
             [tenantId, visitId],
         )),
     ];
