@@ -331,10 +331,10 @@
     display: none;
 }
 .core-page-dialog-previous {
-    left: -14px;
+    right: calc(100% + 4px);
 }
 .core-page-dialog-next {
-    right: -14px;
+    left: calc(100% + 4px);
 }
 @container shell-content (max-width: 1407px) {
     .core-page-dialog,

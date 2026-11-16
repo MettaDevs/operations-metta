@@ -14,7 +14,7 @@ Kartu record yang dibuka sebagai halaman bertumpuk di atas daftar yang tetap ter
 4. **Navigasi sekunder**: aksi milik bagian kartu.
 5. **Toolbar form**: Simpan lalu Batal di kiri atas, sebelum body, di dalam form yang sama. Ringkasan error di bawah toolbar, di luar area yang bergulir.
 6. **Body** yang bergulir.
-7. **Tombol tepi**: data sebelumnya/berikutnya sebagai tombol bulat `secondary` di tepi kiri dan kanan kartu pada layar lebar.
+7. **Tombol tepi**: data sebelumnya/berikutnya sebagai tombol bulat `secondary` di luar sisi kiri dan kanan kartu pada layar lebar, dengan celah 4px dari kartu.
 
 ## Tumpukan
 
