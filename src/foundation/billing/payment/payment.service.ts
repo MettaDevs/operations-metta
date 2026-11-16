@@ -204,7 +204,7 @@ export async function reopenCharges(
     payment: { tenantId: string; paymentId: string; stamp: string },
 ): Promise<void> {
     await db.execute(
-        `update kunjungan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
+        `update tagihan_kasir_detail set status = 'terbuka', kasir_id = null, updated_at = $1
          where tenant_id = $2 and kasir_id = $3`,
         [payment.stamp, payment.tenantId, payment.paymentId],
     );
@@ -291,7 +291,7 @@ export async function lockChargeForChange(
         `select k.id, k.otomatis as automatic, k.legal_entity_id, k.no_bukti as number, k.tanggal::text as date,
                 trim_scale(k.nilai)::text as value, v.no_reg as registration_number
          from kasir k
-         join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+         join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                and v.kunjungan_id = k.kunjungan_id
          where k.tenant_id = $1 and k.sumber_module = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
         [scope.tenantId, scope.sourceModule, scope.visitId],
@@ -338,8 +338,8 @@ export async function legalEntityToday(
 // Kunjungan yang ditagih beserta baris biaya terbukanya, dikunci untuk Simpan pembayaran: kunci kunjungan lebih dulu,
 // lalu baris biayanya, dengan Nilai tagihan rumus kasir Kuta. restricted adalah jenis bayar yang dikhususkan tipe
 // pasien lain, dari potret kunjungan selesai. version adalah versi tagihan: trigger bump_row_version menaikkannya di
-// setiap update kunjungan_kasir (potret kunjungan, dibuka, batal), dan replaceCharges menyentuh baris itu setiap kali
-// baris biayanya diganti (charge.events.ts). Pembayaran tidak mengubah kunjungan_kasir.
+// setiap update tagihan_kasir (potret kunjungan, dibuka, batal), dan replaceCharges menyentuh baris itu setiap kali
+// baris biayanya diganti (charge.events.ts). Pembayaran tidak mengubah tagihan_kasir.
 async function openInvoice(
     db: Database,
     scope: Scope,
@@ -355,7 +355,7 @@ async function openInvoice(
             version: z.number(),
         }),
         `select no_reg as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted, version
-         from kunjungan_kasir
+         from tagihan_kasir
          where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and kunjungan_id = $4
            and status in ('selesai', 'dibuka')`,
         [scope.tenantId, scope.legalEntityId, source, visitId],
@@ -371,7 +371,7 @@ async function openInvoice(
         chargeSchema,
         `select id, jenis_biaya_id, jenis_biaya_nama, dokter_id, dokter_nama, kelompok_jasa_id, kelompok_jasa_nama,
                 qty::text, nilai::text, harga_orig::text, disc::text, hext::text
-         from kunjungan_kasir_detail
+         from tagihan_kasir_detail
          where tenant_id = $1 and kunjungan_id = $2 and status = 'terbuka' and deleted_at is null
          order by id
          for update`,
@@ -466,9 +466,9 @@ async function checkedDiscounts(
     );
     const components = await db.rows(
         z.object({ charge_id: z.string(), id: z.string(), value: z.string() }),
-        `select kunjungan_kasir_detail_id as charge_id, komponen_biaya_id as id, nilai::text as value
-         from kunjungan_kasir_detail_komponen
-         where tenant_id = $1 and kunjungan_kasir_detail_id = any($2::uuid[]) and deleted_at is null`,
+        `select tagihan_kasir_detail_id as charge_id, komponen_biaya_id as id, nilai::text as value
+         from tagihan_kasir_detail_komponen
+         where tenant_id = $1 and tagihan_kasir_detail_id = any($2::uuid[]) and deleted_at is null`,
         [
             scope.tenantId,
             `{${input.charges.map((charge) => charge.id).join(',')}}`,
@@ -703,7 +703,7 @@ async function postPayment(
         });
     if (posting.charges.length)
         await db.execute(
-            `update kunjungan_kasir_detail set status = 'ditagih', kasir_id = $1, updated_at = $2
+            `update tagihan_kasir_detail set status = 'ditagih', kasir_id = $1, updated_at = $2
              where tenant_id = $3 and id = any($4::uuid[])`,
             [
                 id,
@@ -1139,7 +1139,7 @@ export class Payments {
                 `select k.clerk_id, k.kunjungan_id as visit_id, k.no_bukti as number,
                         k.tanggal::text as date, trim_scale(k.nilai)::text as value, v.no_reg as registration_number
                  from kasir k
-                 join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                        and v.kunjungan_id = k.kunjungan_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],

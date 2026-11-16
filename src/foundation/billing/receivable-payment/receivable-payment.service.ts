@@ -133,7 +133,7 @@ export async function openReceivables(
          from kasir_detail d
          join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
          join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
-         join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+         join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                and v.kunjungan_id = k.kunjungan_id
          left join parties p on p.tenant_id = d.tenant_id and p.id = d.pihak_id
          where d.tenant_id = $1 and d.kasir_id = $2 and d.nilai > 0 and j.perilaku = any($3::text[])
@@ -210,7 +210,7 @@ const receivableSql = `select * from (
                                   trim_scale(r.sisa)::text as remaining
                            from piutang r
                            join kasir k on k.tenant_id = r.tenant_id and k.id = r.kasir_id
-                           join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                           join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                                  and v.kunjungan_id = k.kunjungan_id
                            join jenis_bayar j on j.tenant_id = r.tenant_id and j.id = r.jenis_bayar_id
                            where r.tenant_id = $1 and r.legal_entity_id = $2 and r.status = 'terbuka') receivables
@@ -233,7 +233,7 @@ const paymentSql = `select * from (
                         from pembayaran_outstanding o
                         join piutang r on r.tenant_id = o.tenant_id and r.id = o.piutang_id
                         join kasir k on k.tenant_id = r.tenant_id and k.id = r.kasir_id
-                        join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                        join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                               and v.kunjungan_id = k.kunjungan_id
                         join jenis_bayar j on j.tenant_id = o.tenant_id and j.id = o.jenis_bayar_id
                         left join merchan m on m.tenant_id = o.tenant_id and m.id = o.merchan_id

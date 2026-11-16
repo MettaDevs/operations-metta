@@ -569,7 +569,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         const [cashier] = await pool.unsafe<
             { status: string; pasien_nrm: string }[]
         >(
-            'select status, pasien_nrm from kunjungan_kasir where tenant_id = $1 and kunjungan_id = $2',
+            'select status, pasien_nrm from tagihan_kasir where tenant_id = $1 and kunjungan_id = $2',
             [clinic.tenantId, visit!.id],
         );
         expect(cashier?.status).toBe('selesai');

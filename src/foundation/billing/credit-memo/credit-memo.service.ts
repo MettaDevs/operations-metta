@@ -176,7 +176,7 @@ export class CreditMemos {
                         trim_scale(k.nilai)::text as value, trim_scale(k.nilai_discount)::text as discount,
                         v.no_reg as registration_number
                  from kasir k
-                 join kunjungan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
+                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                        and v.kunjungan_id = k.kunjungan_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],

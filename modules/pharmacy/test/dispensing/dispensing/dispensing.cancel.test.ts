@@ -79,7 +79,7 @@ describe.skipIf(!process.env.DB_HOST)('prescription cancel', () => {
     }
     const charges = (visitId: string) =>
         pool.unsafe<{ qty: string; status: string }[]>(
-            `select trim_scale(qty)::text as qty, status from kunjungan_kasir_detail
+            `select trim_scale(qty)::text as qty, status from tagihan_kasir_detail
              where tenant_id = $1 and kunjungan_id = $2 and group_biaya = 'OBAT' and deleted_at is null`,
             [pharmacy.tenantId, visitId],
         );

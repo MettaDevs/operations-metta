@@ -16,7 +16,7 @@ info:
 
     Keadaan sebenarnya, 14 November 2026:
     - Event hanya diantar di dalam runtime. Penerima: kasir Core (`src/foundation/billing/charge/`), yang menyimpan
-      barisnya di `kunjungan_kasir_detail`. Belum ada pengirim ke luar runtime.
+      barisnya di `tagihan_kasir_detail`. Belum ada pengirim ke luar runtime.
     - Resep yang diterima farmasi sebelum `healthcare.prescription.issued.v1` membawa `visit_id` tidak menerbitkan
       event ini, karena kunjungannya tidak diketahui.
     - Sesudah kunjungan dibayar kasir, Siapkan, Batal siapkan, retur, batal retur, dan Batal resep ditolak di farmasi

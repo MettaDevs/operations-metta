@@ -122,9 +122,9 @@ type ChargeLine = {
 // Potret penuh baris biaya satu dokumen sumber (pemeriksaan atau penyerahan farmasi). Baris terbuka diubah di tempat,
 // baris baru ditambah, dan baris terbuka yang tidak ada lagi di potret dihapus lunak. Baris yang sudah ditagih tidak
 // disentuh: module menolak mengubahnya sebelum event ini terbit, kecuali tagihan yang lunas otomatis, yang dibatalkan
-// lebih dulu lalu dilunasi ulang di sini. Versi tagihan kunjungan (kunjungan_kasir.version) naik, sehingga Simpan dari
+// lebih dulu lalu dilunasi ulang di sini. Versi tagihan kunjungan (tagihan_kasir.version) naik, sehingga Simpan dari
 // Form Pembayaran yang dibuka sebelum perubahan ini ditolak. Kunjungan yang belum selesai belum punya baris
-// kunjungan_kasir; versinya mulai saat selesai.
+// tagihan_kasir; versinya mulai saat selesai.
 async function replaceCharges(
     db: Database,
     envelope: EventEnvelope & { legal_entity_id: string },
@@ -141,7 +141,7 @@ async function replaceCharges(
     const kept = document.lines.map((line) => line.lineId);
     const retired = await db.rows(
         z.object({ id: z.string() }),
-        `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
+        `update tagihan_kasir_detail set deleted_at = $1, updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4 and status = 'terbuka'
            and deleted_at is null and not (sumber_baris_id = any($5::uuid[]))
          returning id`,
@@ -158,7 +158,7 @@ async function replaceCharges(
     for (const line of document.lines) {
         const existing = await db.one(
             z.object({ id: z.string(), status: z.string() }),
-            `select id, status from kunjungan_kasir_detail
+            `select id, status from tagihan_kasir_detail
              where tenant_id = $1 and sumber_module = $2 and sumber_baris_id = $3 and deleted_at is null`,
             [tenantId, document.module, line.lineId],
         );
@@ -167,7 +167,7 @@ async function replaceCharges(
         if (id) {
             const columns = Object.entries(line.values);
             await db.execute(
-                `update kunjungan_kasir_detail
+                `update tagihan_kasir_detail
                  set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
                      updated_at = $${columns.length + 1}
                  where tenant_id = $${columns.length + 2} and id = $${columns.length + 3}`,
@@ -176,7 +176,7 @@ async function replaceCharges(
             await retireComponents(db, tenantId, id, stamp);
         } else {
             id = Bun.randomUUIDv7();
-            await db.insert('kunjungan_kasir_detail', {
+            await db.insert('tagihan_kasir_detail', {
                 id,
                 tenant_id: tenantId,
                 legal_entity_id: envelope.legal_entity_id,
@@ -191,10 +191,10 @@ async function replaceCharges(
             });
         }
         for (const component of line.components)
-            await db.insert('kunjungan_kasir_detail_komponen', {
+            await db.insert('tagihan_kasir_detail_komponen', {
                 id: Bun.randomUUIDv7(),
                 tenant_id: tenantId,
-                kunjungan_kasir_detail_id: id,
+                tagihan_kasir_detail_id: id,
                 komponen_biaya_id: component.charge_component_id,
                 nilai: component.value,
                 created_at: stamp,
@@ -202,7 +202,7 @@ async function replaceCharges(
             });
     }
     await db.execute(
-        `update kunjungan_kasir set version = version + 1, updated_at = $1
+        `update tagihan_kasir set version = version + 1, updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4`,
         [stamp, tenantId, source, document.visitId],
     );
@@ -221,7 +221,7 @@ async function settleAgain(
 ): Promise<void> {
     const visit = await db.one(
         z.object({ method: z.string() }),
-        `select jenis_bayar_otomatis_id as method from kunjungan_kasir
+        `select jenis_bayar_otomatis_id as method from tagihan_kasir
          where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3 and status = 'selesai'
            and jenis_bayar_otomatis_id is not null`,
         [scope.tenantId, source, scope.visitId],
@@ -318,8 +318,8 @@ async function retireComponents(
     stamp: string,
 ): Promise<void> {
     await db.execute(
-        `update kunjungan_kasir_detail_komponen set deleted_at = $1, updated_at = $1
-         where tenant_id = $2 and kunjungan_kasir_detail_id = $3 and deleted_at is null`,
+        `update tagihan_kasir_detail_komponen set deleted_at = $1, updated_at = $1
+         where tenant_id = $2 and tagihan_kasir_detail_id = $3 and deleted_at is null`,
         [stamp, tenantId, chargeId],
     );
 }
@@ -355,7 +355,7 @@ export async function receiveVisitCompleted(
     };
     const columns = Object.entries(values);
     const updated = await db.execute(
-        `update kunjungan_kasir
+        `update tagihan_kasir
          set ${columns.map(([column], index) => `${column} = $${index + 1}`).join(', ')},
              updated_at = $${columns.length + 1}
          where tenant_id = $${columns.length + 2} and sumber_module = $${columns.length + 3}
@@ -369,7 +369,7 @@ export async function receiveVisitCompleted(
         ],
     );
     if (!updated)
-        await db.insert('kunjungan_kasir', {
+        await db.insert('tagihan_kasir', {
             id: Bun.randomUUIDv7(),
             tenant_id: envelope.tenant_id,
             sumber_module: source,
@@ -397,13 +397,13 @@ export async function receiveVisitCancelled(
     if (await alreadyProcessed(db, processedTable, envelope)) return;
     const stamp = nowSql();
     await db.execute(
-        `update kunjungan_kasir set status = 'batal', updated_at = $1
+        `update tagihan_kasir set status = 'batal', updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4`,
         [stamp, envelope.tenant_id, source, data.visit_id],
     );
     const retired = await db.rows(
         z.object({ id: z.string() }),
-        `update kunjungan_kasir_detail set deleted_at = $1, updated_at = $1
+        `update tagihan_kasir_detail set deleted_at = $1, updated_at = $1
          where tenant_id = $2 and kunjungan_id = $3 and status = 'terbuka' and deleted_at is null
          returning id`,
         [stamp, envelope.tenant_id, data.visit_id],
@@ -422,7 +422,7 @@ export async function receiveVisitReopened(
     if (!data) return;
     if (await alreadyProcessed(db, processedTable, envelope)) return;
     await db.execute(
-        `update kunjungan_kasir set status = 'dibuka', updated_at = $1
+        `update tagihan_kasir set status = 'dibuka', updated_at = $1
          where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4 and status = 'selesai'`,
         [nowSql(), envelope.tenant_id, source, data.visit_id],
     );

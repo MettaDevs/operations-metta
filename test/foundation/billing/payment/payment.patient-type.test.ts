@@ -156,7 +156,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
         expect([...details]).toEqual([{ kode: 'BPJ', nilai: '175000' }]);
         const [billed] = await pool.unsafe<{ open: number }[]>(
             `select count(*) filter (where status = 'terbuka')::int as open
-             from kunjungan_kasir_detail where kunjungan_id = $1 and deleted_at is null`,
+             from tagihan_kasir_detail where kunjungan_id = $1 and deleted_at is null`,
             [visitId],
         );
         expect(billed?.open).toBe(0);

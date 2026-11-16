@@ -80,7 +80,7 @@ describe.skipIf(!process.env.DB_HOST)(
             pool.unsafe<Charge[]>(
                 `select sumber_dokumen_id, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai,
                     trim_scale(harga_orig)::text as harga_orig, status
-             from kunjungan_kasir_detail
+             from tagihan_kasir_detail
              where tenant_id = $1 and kunjungan_id = $2 and group_biaya = 'OBAT' and deleted_at is null
              order by created_at, id`,
                 [pharmacy.tenantId, visitId],

@@ -16,7 +16,7 @@ info:
     dan tanpa bayar otomatis.
 
     Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime. Penerima: kasir Core
-    (`src/foundation/billing/charge/`), yang mencatatnya di `kunjungan_kasir` dan langsung membuat pembayaran bila
+    (`src/foundation/billing/charge/`), yang mencatatnya di `tagihan_kasir` dan langsung membuat pembayaran bila
     `automatic_payment_method_id` terisi.
 channels:
   healthcare.visit.completed.v1:
