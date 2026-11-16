@@ -17,7 +17,14 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { CircleCheck, CircleX, PackageCheck, Send, Truck } from 'lucide-react';
+import {
+    CircleCheck,
+    CircleX,
+    ListChecks,
+    PackageCheck,
+    Send,
+    Truck,
+} from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -34,6 +41,10 @@ import {
     type PostedTransfer,
     type PostedTransferKind,
 } from './posted-transfer-card.tsx';
+import {
+    TransferBatchPicksDialog,
+    type BatchPick,
+} from './transfer-batch-picks.tsx';
 
 export type TransferOrder = ApiBody<'inventoryTransferOrderShow'>['data'];
 export type TransferOrderPermissions =
@@ -62,7 +73,10 @@ type Header = {
     posting_date: string;
     description: string;
 };
-type Handling = Record<string, { to_ship: string; to_receive: string }>;
+type Handling = Record<
+    string,
+    { to_ship: string; to_receive: string; batches: BatchPick[] }
+>;
 
 export const transferOrderStatusLabels: Record<
     TransferOrder['status'],
@@ -113,6 +127,7 @@ function handlingOf(order: TransferOrder | null): Handling {
             {
                 to_ship: line.quantity_to_ship,
                 to_receive: line.quantity_to_receive,
+                batches: line.batches,
             },
         ]),
     );
@@ -359,6 +374,7 @@ export function TransferOrderCard({
     const [handling, setHandling] = useState(() => handlingOf(initial));
     const [postingDate, setPostingDate] = useState(today);
     const [selected, setSelected] = useState<string[]>([]);
+    const [picking, setPicking] = useState<StoredLine | null>(null);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -411,14 +427,31 @@ export function TransferOrderCard({
                 at === index ? { ...line, ...patch } : line,
             ),
         );
-    const handle = (
-        id: string,
-        patch: Partial<{ to_ship: string; to_receive: string }>,
-    ) =>
+    const handle = (id: string, patch: Partial<Handling[string]>) =>
         setHandling((current) => {
-            const previous = current[id] ?? { to_ship: '', to_receive: '' };
+            const previous = current[id] ?? {
+                to_ship: '',
+                to_receive: '',
+                batches: [],
+            };
             return { ...current, [id]: { ...previous, ...patch } };
         });
+    const picksOf = (id: string) => handling[id]?.batches ?? [];
+    // `batch_id` ikut: mesin posting menolak baris tanpa pilihan bila lokasinya wajib memilih batch.
+    const batchError = (index: number) => {
+        const prefix = field(index, 'batches');
+        return (
+            Object.entries(errors)
+                .filter(
+                    ([key]) =>
+                        key === prefix ||
+                        key.startsWith(`${prefix}.`) ||
+                        key === field(index, 'batch_id'),
+                )
+                .flatMap(([, messages]) => messages)
+                .join(' ') || undefined
+        );
+    };
 
     const failed = (caught: unknown, failure: string) => {
         setOperation(failure);
@@ -477,7 +510,8 @@ export function TransferOrderCard({
         }
     };
 
-    // Jumlah akan dikirim dan diterima hanya dikirim sesuai hak pengguna.
+    // Jumlah akan dikirim dan diterima hanya dikirim sesuai hak pengguna, dan batch pilihan hanya untuk baris yang
+    // pilihannya berubah.
     const saveHandling = async (
         current: TransferOrder,
     ): Promise<TransferOrder | null> => {
@@ -493,6 +527,16 @@ export function TransferOrderCard({
                             ? {
                                   quantity_to_ship:
                                       handling[line.id]?.to_ship ?? '0',
+                              }
+                            : {}),
+                        ...(shipping &&
+                        JSON.stringify(picksOf(line.id)) !==
+                            JSON.stringify(line.batches)
+                            ? {
+                                  batches: picksOf(line.id).map((pick) => ({
+                                      batch_id: pick.batch_id,
+                                      quantity: pick.quantity,
+                                  })),
                               }
                             : {}),
                         ...(receiving
@@ -1296,6 +1340,72 @@ export function TransferOrderCard({
                                       },
                                   ]
                                 : []),
+                            ...(open
+                                ? [
+                                      {
+                                          id: 'batches',
+                                          header: 'Batch',
+                                          content: shipping
+                                              ? ('control' as const)
+                                              : ('text' as const),
+                                          minWidth: 160,
+                                          cell: ({
+                                              index,
+                                              line,
+                                          }: {
+                                              index: number;
+                                              line: Line;
+                                          }) => {
+                                              const current = storedOf(line);
+                                              if (!current) return null;
+                                              const picks = picksOf(current.id);
+                                              const summary = picks.length
+                                                  ? picks
+                                                        .map(
+                                                            (pick) =>
+                                                                pick.batch_number,
+                                                        )
+                                                        .join(', ')
+                                                  : 'Otomatis';
+                                              return shipping ? (
+                                                  <FormControl
+                                                      error={batchError(index)}
+                                                      data-error-field={field(
+                                                          index,
+                                                          'batch_id',
+                                                      )}
+                                                  >
+                                                      <Button
+                                                          type="button"
+                                                          variant="ghost"
+                                                          size="command"
+                                                          className="w-full justify-start"
+                                                          aria-label={`Pilih batch ${current.item.name}: ${summary}`}
+                                                          title={summary}
+                                                          data-error-field={field(
+                                                              index,
+                                                              'batches',
+                                                          )}
+                                                          disabled={busy}
+                                                          onClick={() =>
+                                                              setPicking(
+                                                                  current,
+                                                              )
+                                                          }
+                                                      >
+                                                          <ListChecks aria-hidden="true" />
+                                                          <span className="truncate">
+                                                              {summary}
+                                                          </span>
+                                                      </Button>
+                                                  </FormControl>
+                                              ) : (
+                                                  text(summary)
+                                              );
+                                          },
+                                      },
+                                  ]
+                                : []),
                             ...(open && twoStep
                                 ? [
                                       {
@@ -1395,6 +1505,19 @@ export function TransferOrderCard({
                 </PageDialogBody>
                 {confirmation}
             </form>
+            {picking && (
+                <TransferBatchPicksDialog
+                    line={picking}
+                    location={order?.from_location.name ?? ''}
+                    toShip={handling[picking.id]?.to_ship ?? ''}
+                    picks={picksOf(picking.id)}
+                    onApply={(batches) => {
+                        handle(picking.id, { batches });
+                        setPicking(null);
+                    }}
+                    onClose={() => setPicking(null)}
+                />
+            )}
             {viewing && (
                 <PageDialog
                     open
