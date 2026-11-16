@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
-    approvalMessage,
     chargeLockedMessage,
     closedClerkMessage,
     lockChargeForChange,
@@ -25,15 +24,17 @@ import {
 } from '../../../support/operations-app.ts';
 import {
     createMember,
+    grantAllOrganizations,
     testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
 type Payment = { id: string; version: number; number: string };
 
-// Batal pembayaran kasir lewat aplikasi sungguhan, diperiksa dengan SQL langsung: penyetuju yang berhak dan alasan
-// wajib, TglBatal, BATAL, dan AlasanBatal tercatat, baris biaya kunjungan terbuka lagi sehingga kunci perubahan biaya
-// lepas, finance diberi tahu sekali dengan angka yang sama dengan saat bayar, termasuk jumlah valuta dan kursnya, dan
-// pembayaran di clerk yang sudah Clerk End tidak bisa dibatalkan.
+// Batal pembayaran kasir lewat aplikasi sungguhan, diperiksa dengan SQL langsung: hanya pengguna yang memegang izin batal
+// pembayaran yang boleh membatalkan, alasan wajib, TglBatal, BATAL, AlasanBatal, dan siapa yang membatalkan tercatat,
+// baris biaya kunjungan terbuka lagi sehingga kunci perubahan biaya lepas, finance diberi tahu sekali dengan angka yang
+// sama dengan saat bayar, termasuk jumlah valuta dan kursnya, dan pembayaran di clerk yang sudah Clerk End tidak bisa
+// dibatalkan.
 describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp({ DB_POOL_SIZE: '8' });
@@ -43,7 +44,6 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
     let legalEntityId: string;
     let cashier: Browser;
     let cashierUserId: string;
-    let approver: { userId: string; email: string; password: string };
     const methods: Record<string, string> = {};
     const visits = {
         local: Bun.randomUUIDv7(),
@@ -130,15 +130,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             version: payment.version,
             ...body,
         });
-    const approved = {
-        reason: 'Salah pilih pasien',
-        get approver_email() {
-            return approver.email;
-        },
-        get approver_password() {
-            return approver.password;
-        },
-    };
+    const withReason = { reason: 'Salah pilih pasien' };
     // Penolakan kunci perubahan biaya kunjungan itu, atau null bila biayanya boleh diubah.
     const lockRefusal = (visitId: string) =>
         withDatabase(async (db) => {
@@ -171,6 +163,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
                 'core.reference-data.manage',
             ],
         );
@@ -178,9 +171,6 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         legalEntityId = business.legalEntityId;
         cashier = business.admin;
         cashierUserId = business.member.userId;
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         await json(
             await cashier.post('/api/v1/currencies', {
                 currency_code: foreign,
@@ -228,32 +218,38 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         );
     });
 
-    test('a cancel needs a reason and an approver with the cancel right, and a wrong approver gets the legacy message', async () => {
+    test('a cancel needs a reason, and a cashier without the cancel permission neither sees Batal nor may cancel', async () => {
         const payment = await pay(visits.local, { received: '200000' });
+        expect(await refused(await cancel(payment, {}))).toEqual({
+            reason: ['Isi alasan batal.'],
+        });
+        const colleague = await createMember(pool, tenantId, [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        await grantAllOrganizations(pool, tenantId, colleague.membershipId);
+        const other = browser();
+        await other.login(colleague.email, colleague.password);
+        const shown = async (member: Browser) =>
+            (
+                await json<{ data: { can_cancel: boolean } }>(
+                    await member.get(`/api/v1/billing/visits/${visits.local}`),
+                    200,
+                )
+            ).data.can_cancel;
+        expect(await shown(cashier)).toBe(true);
+        expect(await shown(other)).toBe(false);
         expect(
-            Object.keys(await refused(await cancel(payment, {}))).sort(),
-        ).toEqual(['approver_email', 'approver_password', 'reason']);
-        // Kasir itu sendiri tidak memegang hak menyetujui batal, dan kata sandi yang salah ditolak dengan pesan yang sama.
-        for (const credentials of [
-            {
-                approver_email: (
-                    await pool.unsafe<{ email: string }[]>(
-                        'select email from users where id = $1',
-                        [cashierUserId],
-                    )
-                )[0]?.email,
-                approver_password: testPassword,
-            },
-            { approver_email: approver.email, approver_password: 'salah' },
-        ])
-            expect(
-                await refused(
-                    await cancel(payment, {
-                        ...credentials,
-                        reason: 'Salah pilih pasien',
-                    }),
-                ),
-            ).toEqual({ approver_password: [approvalMessage] });
+            (
+                await other.post(
+                    `/api/v1/billing/payments/${payment.id}/cancel`,
+                    {
+                        version: payment.version,
+                        ...withReason,
+                    },
+                )
+            ).status,
+        ).toBe(403);
         const [still] = await pool.unsafe<{ status: string }[]>(
             'select status from kasir where id = $1',
             [payment.id],
@@ -261,7 +257,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         expect(still?.status).toBe('diposting');
     });
 
-    test('an approved cancel records TglBatal, BATAL, and AlasanBatal, opens the charge lines, releases the change lock, and tells finance once', async () => {
+    test('a cancel records TglBatal, BATAL, AlasanBatal, and who cancelled, opens the charge lines, releases the change lock, and tells finance once', async () => {
         const [payment] = await pool.unsafe<Payment[]>(
             "select id, version, no_bukti as number from kasir where sumber_dokumen_id = $1 and status = 'diposting'",
             [visits.local],
@@ -272,13 +268,12 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             errors: { _form: [chargeLockedMessage] },
         });
         const result = await json<{ message: string }>(
-            await cancel(payment, approved),
+            await cancel(payment, withReason),
             200,
         );
         expect(result.message).toBe('Item data baru berhasil dibatalkan!');
         const [stored] = await pool.unsafe<Record<string, unknown>[]>(
-            `select status, tgl_batal is not null as dated, alasan_batal, dibatalkan_oleh_user_id,
-                    penyetuju_batal_user_id
+            `select status, tgl_batal is not null as dated, alasan_batal, dibatalkan_oleh_user_id
              from kasir where id = $1`,
             [payment.id],
         );
@@ -287,7 +282,6 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             dated: true,
             alasan_batal: 'Salah pilih pasien',
             dibatalkan_oleh_user_id: cashierUserId,
-            penyetuju_batal_user_id: approver.userId,
         });
         expect([
             ...(await pool.unsafe<{ status: string; kasir_id: null }[]>(
@@ -320,7 +314,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             (
                 await cancel(
                     { ...payment, version: payment.version + 1 },
-                    approved,
+                    withReason,
                 )
             ).status,
         ).toBe(409);
@@ -341,7 +335,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
                 [payment.id],
             );
         const before = [...(await lines())];
-        await json(await cancel(payment, approved), 200);
+        await json(await cancel(payment, withReason), 200);
         expect([...(await lines())]).toEqual(before);
         const [sent] = await envelopes(
             'billing.invoice.cancelled.v1',
@@ -380,7 +374,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             2,
             '225000',
         ]);
-        expect(await refused(await cancel(payment, approved))).toEqual({
+        expect(await refused(await cancel(payment, withReason))).toEqual({
             _form: [closedClerkMessage],
         });
     });

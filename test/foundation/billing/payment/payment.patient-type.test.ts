@@ -21,10 +21,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import {
-    createMember,
-    testPassword,
-} from '../../../support/tenant-fixtures.ts';
+import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Method = { refusal: string | null; id: string };
 
@@ -38,7 +35,6 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
     let legalEntityId: string;
     let cashier: Browser;
     let charges: ReturnType<typeof visitCharges>;
-    let approver: { email: string; password: string };
     const methods: Record<string, string> = {};
 
     const pay = (visitId: string, body: Record<string, unknown>) =>
@@ -69,6 +65,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
             ],
         );
         tenantId = business.tenantId;
@@ -78,9 +75,6 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             tenantId,
             legalEntityId: business.legalEntityId,
         });
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         for (const method of [
             { code: 'TUN', behavior: 'tunai', counted_at_close: true },
             { code: 'PRS', behavior: 'penjamin', party: 'penjamin_kunjungan' },
@@ -269,8 +263,6 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             {
                 version: payment?.version,
                 reason: 'Tipe pasien salah',
-                approver_email: approver.email,
-                approver_password: approver.password,
             },
         );
         expect(cancel.status).toBe(200);

@@ -6,7 +6,7 @@ info:
         Nota kredit kasir diposting: pembayaran yang clerk-nya sudah Clerk End dibalik seluruhnya, pola BC Sales Credit
         Memo (`CorrectPostedSalesInvoice` / Cancel) dan Refund. Sistem lama tidak punya padanannya; ia hanya punya Batal.
         Diterbitkan kasir Core (`src/foundation/billing/credit-memo/`) lewat `publishEvent` di transaksi nota kredit yang
-        sama, sesudah penyetuju yang berhak mengetik akunnya, pembayaran menjadi `dikreditkan`, piutangnya dibatalkan, dan
+        sama, oleh pengguna yang memegang izin `core.payment.cancel`, sesudah pembayaran menjadi `dikreditkan`, piutangnya dibatalkan, dan
         baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).
 
         Pengembalian adalah uang yang keluar dari laci clerk tempat nota kredit diposting, atau tanpa clerk bila legal

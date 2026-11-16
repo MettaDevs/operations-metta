@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Workspace } from '../../../platform/access/index.ts';
+import type { Workspace } from '../../../platform/access/index.ts';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import { publishEvent } from '../../../platform/events/index.ts';
 import {
@@ -53,11 +53,8 @@ import {
 export const invoicePosted = 'billing.invoice.posted.v1' as const;
 export const invoiceCancelled = 'billing.invoice.cancelled.v1' as const;
 
-// Batal pembayaran. Pesan persetujuan dari sistem lama (General_payment::cancel). Pembayaran di clerk yang sudah Clerk
-// End dikoreksi lewat nota kredit, bukan dibatalkan; pesan lamanya ("Pasien Sudah Di Proses Closing") diganti kalimat
-// sehari-hari.
-const cancelPermission = 'core.payment.cancel';
-export const approvalMessage = 'Username atau Password Salah';
+// Batal pembayaran. Pembayaran di clerk yang sudah Clerk End dikoreksi lewat nota kredit, bukan dibatalkan; pesan lamanya
+// ("Pasien Sudah Di Proses Closing") diganti kalimat sehari-hari.
 export const closedClerkMessage =
     'Pembayaran ini masuk clerk yang sudah Clerk End, jadi tidak bisa dibatalkan. Koreksi lewat Nota Kredit.';
 
@@ -100,41 +97,18 @@ const cancelledPaymentSchema = z.object({
     clerk_status: z.string().nullable(),
 });
 
-// Penyetuju batal pembayaran dan nota kredit: email dan kata sandinya diperiksa sesi, hasilnya id pengguna atau null.
-export type ApproverCheck = {
-    verify: (email: string, password: string) => Promise<string | null>;
-};
-
-// Isian persetujuan Batal dan nota kredit (modal Batal Pembayaran sistem lama): username dan password penyetuju yang
-// memegang izin batal pembayaran, lalu alasan. Penyetuju yang salah atau tidak berhak ditolak dengan pesan lama yang sama.
-export async function approval(
-    db: Database,
-    tenantId: string,
+// Alasan Batal dan nota kredit, wajib dan paling banyak 200 karakter seperti AlasanBatal sistem lama.
+export function cancelReason(
     input: z.infer<typeof paymentCancelInputSchema>,
-    approver: ApproverCheck,
     reasonName: string,
-): Promise<{ approverId: string; reason: string }> {
+): string {
     const reason = input.reason?.trim() ?? '';
-    const email = input.approver_email?.trim() ?? '';
-    const password = input.approver_password ?? '';
-    const errors: Record<string, string> = {};
-    if (!email) errors.approver_email = 'Isi username penyetuju.';
-    if (!password) errors.approver_password = 'Isi password penyetuju.';
-    if (!reason) errors.reason = `Isi alasan ${reasonName}.`;
-    else if (reason.length > 200)
-        errors.reason = `Alasan ${reasonName} paling banyak 200 karakter.`;
-    if (Object.keys(errors).length) validation(errors);
-    const approverId = await approver.verify(email, password);
-    if (
-        !approverId ||
-        !(
-            await Workspace.memberHolds(db, { tenantId, userId: approverId }, [
-                cancelPermission,
-            ])
-        ).has(cancelPermission)
-    )
-        validation({ approver_password: approvalMessage });
-    return { approverId, reason };
+    if (!reason) validation({ reason: `Isi alasan ${reasonName}.` });
+    if (reason.length > 200)
+        validation({
+            reason: `Alasan ${reasonName} paling banyak 200 karakter.`,
+        });
+    return reason;
 }
 
 // Kunjungan yang dibuka kembali poli (rujuk internal sesudah Selesai periksa) belum siap dibayar.
@@ -1086,16 +1060,13 @@ export class Payments {
         };
     }
 
-    // Batal pembayaran (General_payment::cancel Kuta 1): kunci lebih dulu, lalu persetujuan, lalu satu transaksi yang
-    // mengisi TglBatal, BATAL, dan AlasanBatal, membuka lagi baris biaya kunjungan, dan memberi tahu finance. Baris
-    // jenis bayar tidak diubah, jadi kurs dan jumlah valutanya tetap seperti saat dibayar.
-    async cancel(
-        request: Request,
-        paymentId: string,
-        body: unknown,
-        approver: ApproverCheck,
-    ) {
-        this.workspace.guard('payment', 'update');
+    // Batal pembayaran (General_payment::cancel Kuta 1): kunci lebih dulu, lalu satu transaksi yang mengisi TglBatal,
+    // BATAL, dan AlasanBatal, membuka lagi baris biaya kunjungan, dan memberi tahu finance. Baris jenis bayar tidak
+    // diubah, jadi kurs dan jumlah valutanya tetap seperti saat dibayar. Sistem lama meminta username dan password
+    // penyetuju (ListApprove); di sini pengguna yang masuk sendiri yang memegang izin batal pembayaran, karena semua
+    // login lewat SSO dan tidak ada kata sandi untuk diketik ulang (keputusan pemilik produk, 16 November 2026).
+    async cancel(request: Request, paymentId: string, body: unknown) {
+        this.workspace.guard('payment', 'cancel');
         const scope = this.scope;
         const parsed = paymentCancelInputSchema.safeParse(body);
         if (!parsed.success)
@@ -1118,13 +1089,7 @@ export class Payments {
             tenantId: scope.tenantId,
             paymentId: payment.id,
         });
-        const { approverId, reason } = await approval(
-            this.db,
-            scope.tenantId,
-            parsed.data,
-            approver,
-            'batal',
-        );
+        const reason = cancelReason(parsed.data, 'batal');
         await this.db.transaction(async () => {
             const stamp = nowSql();
             const header = await this.db.one(
@@ -1159,13 +1124,12 @@ export class Payments {
             await lockVisit(this.db, scope.tenantId, header.visit_id);
             const cancelled = await this.db.execute(
                 `update kasir set status = 'batal', tgl_batal = $1, alasan_batal = $2, dibatalkan_oleh_user_id = $3,
-                                  penyetuju_batal_user_id = $4, updated_at = $1
-                 where tenant_id = $5 and id = $6 and status = 'diposting' and version = $7`,
+                                  updated_at = $1
+                 where tenant_id = $4 and id = $5 and status = 'diposting' and version = $6`,
                 [
                     stamp,
                     reason,
                     scope.userId,
-                    approverId,
                     scope.tenantId,
                     payment.id,
                     version,

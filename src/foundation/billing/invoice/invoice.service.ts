@@ -374,6 +374,9 @@ export class Invoices {
                     : null,
                 credit_memos: creditMemos,
                 can_pay: this.workspace.permissions.has('core.payment.update'),
+                can_cancel: this.workspace.permissions.has(
+                    'core.payment.cancel',
+                ),
                 can_change_rate: this.workspace.permissions.has(
                     'core.payment-rate.update',
                 ),

@@ -88,6 +88,7 @@ export async function openCashier(
         'core.billing-setup.manage',
         'core.clerk.operate',
         'core.payment.operate',
+        'core.payment-cancel.approve',
     ]);
     await json(
         await cashier.post('/api/v1/billing/payment-methods', {

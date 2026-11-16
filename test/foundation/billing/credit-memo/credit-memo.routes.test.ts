@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
-    approvalMessage,
     automaticPaymentMessage,
     clerkNotStartedMessage,
     closedClerkMessage,
@@ -25,6 +24,7 @@ import {
 } from '../../../support/operations-app.ts';
 import {
     createMember,
+    grantAllOrganizations,
     testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
@@ -49,7 +49,6 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
     let tenantId: string;
     let cashier: Browser;
     let cashierUserId: string;
-    let approver: { userId: string; email: string; password: string };
     let charges: ReturnType<typeof visitCharges>;
     let merchantId: string;
     let endedClerkId: string;
@@ -80,18 +79,10 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
                 [paymentId],
             )
         )[0]?.version;
-    const approved = {
-        reason: 'Pasien membatalkan tindakan',
-        get approver_email() {
-            return approver.email;
-        },
-        get approver_password() {
-            return approver.password;
-        },
-    };
+    const withReason = { reason: 'Pasien membatalkan tindakan' };
     const creditMemo = async (
         paymentId: string,
-        body: Record<string, unknown> = approved,
+        body: Record<string, unknown> = withReason,
     ) =>
         cashier.post(`/api/v1/billing/payments/${paymentId}/credit-memo`, {
             version: await version(paymentId),
@@ -100,7 +91,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
     const cancel = async (paymentId: string) =>
         cashier.post(`/api/v1/billing/payments/${paymentId}/cancel`, {
             version: await version(paymentId),
-            ...approved,
+            ...withReason,
         });
     async function startClerk() {
         await json(
@@ -137,7 +128,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
     }
     const memoOf = (paymentId: string) =>
         pool.unsafe<Record<string, unknown>[]>(
-            `select no_bukti, clerk_id, user_id, penyetuju_user_id, alasan, trim_scale(nilai)::text as nilai
+            `select no_bukti, clerk_id, user_id, alasan, trim_scale(nilai)::text as nilai
              from nota_kredit where kasir_id = $1`,
             [paymentId],
         );
@@ -171,6 +162,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
             ],
         );
         tenantId = business.tenantId;
@@ -180,9 +172,6 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             tenantId,
             legalEntityId: business.legalEntityId,
         });
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         for (const method of [
             { code: 'TUN', behavior: 'tunai', counted_at_close: true },
             {
@@ -283,7 +272,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
         });
     });
 
-    test('after Clerk End the payment can only be corrected with a credit memo, posted in an open clerk with an approver', async () => {
+    test('after Clerk End the payment can only be corrected with a credit memo, posted in an open clerk by a cashier who may cancel', async () => {
         await endClerk();
         expect(await refused(await cancel(payments.cash))).toEqual({
             _form: [closedClerkMessage],
@@ -292,28 +281,27 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             _form: [clerkNotStartedMessage],
         });
         memoClerkId = await startClerk();
+        expect(await refused(await creditMemo(payments.cash, {}))).toEqual({
+            reason: ['Isi alasan koreksi.'],
+        });
+        const colleague = await createMember(pool, tenantId, [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        await grantAllOrganizations(pool, tenantId, colleague.membershipId);
+        const other = browser();
+        await other.login(colleague.email, colleague.password);
         expect(
-            Object.keys(await refused(await creditMemo(payments.cash, {})))
-                .sort()
-                .join(),
-        ).toBe('approver_email,approver_password,reason');
-        // Kasir itu sendiri tidak memegang hak menyetujui, dan kata sandi yang salah ditolak dengan pesan yang sama.
-        const [self] = await pool.unsafe<{ email: string }[]>(
-            'select email from users where id = $1',
-            [cashierUserId],
-        );
-        for (const credentials of [
-            { approver_email: self?.email, approver_password: testPassword },
-            { approver_email: approver.email, approver_password: 'salah' },
-        ])
-            expect(
-                await refused(
-                    await creditMemo(payments.cash, {
-                        ...credentials,
-                        reason: approved.reason,
-                    }),
-                ),
-            ).toEqual({ approver_password: [approvalMessage] });
+            (
+                await other.post(
+                    `/api/v1/billing/payments/${payments.cash}/credit-memo`,
+                    {
+                        version: await version(payments.cash),
+                        ...withReason,
+                    },
+                )
+            ).status,
+        ).toBe(403);
         expect(await memoOf(payments.cash)).toHaveLength(0);
 
         const form = await json<{
@@ -355,8 +343,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
                 no_bukti: posted.data.number,
                 clerk_id: memoClerkId,
                 user_id: cashierUserId,
-                penyetuju_user_id: approver.userId,
-                alasan: approved.reason,
+                alasan: withReason.reason,
                 nilai: '175000',
             },
         ]);
@@ -393,7 +380,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             visit_id: visits.cash,
             value: '175000',
             discount: '0',
-            reason: approved.reason,
+            reason: withReason.reason,
             refunds: [
                 {
                     payment_method_id: methods.TUN,

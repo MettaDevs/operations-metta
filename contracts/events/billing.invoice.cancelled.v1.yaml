@@ -3,8 +3,8 @@ info:
     title: billing.invoice.cancelled.v1
     version: 1.0.0
     description: |
-        Pembayaran kasir dibatalkan: SIMtrKasir sistem lama dengan TglBatal, BATAL = 1, dan AlasanBatal, sesudah penyetuju
-        yang berhak mengetik akunnya. Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di
+        Pembayaran kasir dibatalkan: SIMtrKasir sistem lama dengan TglBatal, BATAL = 1, dan AlasanBatal, oleh pengguna yang
+        memegang izin `core.payment.cancel`. Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di
         transaksi batal yang sama, sesudah baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).
 
         Isinya sama dengan `billing.invoice.posted.v1` untuk pembayaran itu, ditambah waktu dan alasan batal. Baris jenis bayar

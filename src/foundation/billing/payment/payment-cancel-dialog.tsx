@@ -10,7 +10,6 @@ import {
     DialogTitle,
 } from '@operations-metta/ui/dialog';
 import { FormControl } from '@operations-metta/ui/form-control';
-import { Input } from '@operations-metta/ui/input';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -20,11 +19,10 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
-    PasswordInput,
 } from '../../../platform/shell/index.ts';
 
-// Modal Batal Pembayaran sistem lama: Username, Password, dan Alasan Batal, lalu Proses atau Tutup. Penyetujunya pengguna
-// yang berhak menyetujui batal pembayaran, dan bisa kasir itu sendiri.
+// Modal Batal Pembayaran sistem lama: Alasan Batal, lalu Proses atau Tutup. Username dan Password penyetuju sistem lama
+// tidak ada lagi: yang membatalkan adalah pengguna yang sedang masuk, dan ia sendiri memegang izin batal pembayaran.
 export function PaymentCancelDialog({
     payment,
     onClose,
@@ -34,11 +32,7 @@ export function PaymentCancelDialog({
     onClose: () => void;
     onCancelled: () => Promise<unknown>;
 }): ReactNode {
-    const [form, setForm] = useState({
-        approver_email: '',
-        approver_password: '',
-        reason: '',
-    });
+    const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -50,7 +44,7 @@ export function PaymentCancelDialog({
         try {
             const { body } = await api.billingPaymentCancel({
                 params: { id: payment.id },
-                body: { ...form, version: payment.version },
+                body: { reason, version: payment.version },
             });
             toast.success(body.message);
             await onCancelled();
@@ -75,8 +69,7 @@ export function PaymentCancelDialog({
                     <DialogTitle>Batal Pembayaran</DialogTitle>
                     <DialogDescription>
                         Pembayaran {payment.number} akan dibatalkan, dan
-                        kunjungannya kembali belum dibayar. Penyetuju mengisi
-                        username dan password-nya.
+                        kunjungannya kembali belum dibayar.
                     </DialogDescription>
                 </DialogHeader>
                 <FormErrorHeader
@@ -92,37 +85,6 @@ export function PaymentCancelDialog({
                     }}
                 >
                     <DialogBody className="space-y-4">
-                        <FormControl error={errors.approver_email?.[0]}>
-                            <Input
-                                label="Username"
-                                required
-                                autoComplete="off"
-                                placeholder="Email penyetuju"
-                                data-error-field="approver_email"
-                                value={form.approver_email}
-                                onChange={(event) =>
-                                    setForm({
-                                        ...form,
-                                        approver_email: event.target.value,
-                                    })
-                                }
-                            />
-                        </FormControl>
-                        <FormControl error={errors.approver_password?.[0]}>
-                            <PasswordInput
-                                label="Password"
-                                required
-                                autoComplete="off"
-                                data-error-field="approver_password"
-                                value={form.approver_password}
-                                onChange={(event) =>
-                                    setForm({
-                                        ...form,
-                                        approver_password: event.target.value,
-                                    })
-                                }
-                            />
-                        </FormControl>
                         <FormControl error={errors.reason?.[0]}>
                             <Textarea
                                 label="Alasan Batal"
@@ -130,12 +92,9 @@ export function PaymentCancelDialog({
                                 rows={3}
                                 maxLength={200}
                                 data-error-field="reason"
-                                value={form.reason}
+                                value={reason}
                                 onChange={(event) =>
-                                    setForm({
-                                        ...form,
-                                        reason: event.target.value,
-                                    })
+                                    setReason(event.target.value)
                                 }
                             />
                         </FormControl>

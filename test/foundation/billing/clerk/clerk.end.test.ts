@@ -17,10 +17,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import {
-    createMember,
-    testPassword,
-} from '../../../support/tenant-fixtures.ts';
+import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Ended = { data: { transactions: number; system_total: string } };
 
@@ -33,7 +30,6 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
     afterAll(close);
     let tenantId: string;
     let cashier: Browser;
-    let approver: { email: string; password: string };
     let charges: ReturnType<typeof visitCharges>;
     let cash: string;
 
@@ -133,6 +129,7 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
             ],
         );
         tenantId = business.tenantId;
@@ -141,9 +138,6 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
             tenantId,
             legalEntityId: business.legalEntityId,
         });
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         cash = (
             await json<{ data: { id: string } }>(
                 await cashier.post('/api/v1/billing/payment-methods', {
@@ -197,8 +191,6 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
             cashier.post(`/api/v1/billing/payments/${cancelled.id}/cancel`, {
                 version: cancelled.version,
                 reason: 'Salah pilih pasien',
-                approver_email: approver.email,
-                approver_password: approver.password,
             }),
         );
         const cancelPid = await waitingOn(holder.pid, cancel);

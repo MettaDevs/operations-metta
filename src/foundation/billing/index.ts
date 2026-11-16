@@ -28,7 +28,6 @@ import { billingSetupRoutes } from './setup/billing-setup.routes.ts';
 // mewajibkan clerk (Setelan kasir).
 export { clerkNotStartedMessage, paymentClerk } from './clerk/clerk.service.ts';
 export {
-    approvalMessage,
     automaticCancelReason,
     chargeLockedMessage,
     closedClerkMessage,
