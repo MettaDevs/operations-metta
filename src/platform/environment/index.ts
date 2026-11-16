@@ -49,6 +49,10 @@ export {
     type HostReportEnvironment,
 } from './host-report.service.ts';
 export {
+    applyHostRetention,
+    type HostRetention,
+} from './host-retention.service.ts';
+export {
     readModuleCatalog,
     syncEntitlements,
     syncEntitlementsRequestSchema,

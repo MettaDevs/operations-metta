@@ -222,6 +222,45 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
         ]);
     });
 
+    test('changing the duties of a role is always written to the change log as protected', async () => {
+        const role = await createRole('Petugas log', ['core.vendor.inquire']);
+        await json(
+            await owner.put(`/api/v1/roles/${role.id}`, {
+                version: await version('roles', role.id),
+                name: 'Petugas log',
+                duty_codes: ['core.organization.inquire'],
+            }),
+            200,
+        );
+        expect([
+            ...(await pool.unsafe<
+                { record_id: string; change_type: string; protected: boolean }[]
+            >(
+                `select record_id, change_type, protected from change_log_entries
+                 where tenant_id = $1 and table_name = 'security_role_duties' and field_name = 'duty_code'
+                   and record_id like $2
+                 order by record_id, change_type`,
+                [tenantId, `${role.id},%`],
+            )),
+        ]).toEqual([
+            {
+                record_id: `${role.id},core.organization.inquire`,
+                change_type: 'insertion',
+                protected: true,
+            },
+            {
+                record_id: `${role.id},core.vendor.inquire`,
+                change_type: 'deletion',
+                protected: true,
+            },
+            {
+                record_id: `${role.id},core.vendor.inquire`,
+                change_type: 'insertion',
+                protected: true,
+            },
+        ]);
+    });
+
     test('reading roles needs access read, and changing them needs access update', async () => {
         const reader = await createMember(pool, tenantId, [
             'core.access.inquire',
