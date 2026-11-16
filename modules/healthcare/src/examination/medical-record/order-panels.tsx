@@ -5,6 +5,7 @@ import {
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
 import { DataTableText } from '@operations-metta/ui/data-table';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { displayNumber } from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
@@ -17,6 +18,7 @@ import {
     PageDialogContent,
 } from '@operations-metta/ui/page-dialog';
 import { Select } from '@operations-metta/ui/select';
+import type { SelectRecords } from '@operations-metta/ui/select-records-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import { FlaskConical, Send } from 'lucide-react';
@@ -55,6 +57,22 @@ type SetDraft = (update: (draft: Draft) => Draft) => void;
 type ProcedureRow = NonNullable<Draft['procedures']>[number];
 // Isian pilihan tindakan di baris: cukup yang ditampilkan lookup, jadi baris tersimpan bisa menjadi nilainya.
 type ProcedureChoice = Pick<Procedure, 'id' | 'code' | 'name'>;
+const procedureLabel = (procedure: ProcedureChoice) =>
+    `${procedure.code} - ${procedure.name}`;
+const procedureColumns: DataTableColumn<ProcedureChoice>[] = [
+    {
+        id: 'code',
+        header: 'Kode',
+        width: 100,
+        cell: (procedure) => procedure.code,
+    },
+    {
+        id: 'name',
+        header: 'Nama',
+        width: 300,
+        cell: (procedure) => procedure.name,
+    },
+];
 type Prescription = NonNullable<Draft['prescriptions']>[number];
 type PrescriptionLine = Prescription['lines'][number];
 type Errors = Record<string, string[]>;
@@ -129,7 +147,7 @@ function procedureTotal(rows: ProcedureRow[]): string {
         .normalized();
 }
 
-function useDrugLoader(): LookupLoader<Drug> {
+export function useDrugLoader(): LookupLoader<Drug> {
     return useCallback<LookupLoader<Drug>>(
         async ({ query, cursor, signal }) => {
             const { body } = await api.healthcareDrugList(
@@ -147,6 +165,32 @@ function useDrugLoader(): LookupLoader<Drug> {
         [],
     );
 }
+
+const drugColumns: DataTableColumn<Drug>[] = [
+    { id: 'code', header: 'Kode', width: 100, cell: (drug) => drug.code },
+    { id: 'name', header: 'Nama', width: 300, cell: (drug) => drug.name },
+    {
+        id: 'unit',
+        header: 'Satuan',
+        width: 100,
+        cell: (drug) => drug.base_unit_name,
+    },
+];
+
+// Tambah banyak obat: sumber dan kolom yang sama dengan pilihan obat per baris.
+export const selectDrugs = (
+    loadItems: LookupLoader<Drug>,
+    onAdd: (drugs: Drug[]) => void,
+    focusColumnId: string,
+): SelectRecords<Drug> => ({
+    noun: 'obat',
+    loadItems,
+    columns: drugColumns,
+    getItemValue: (drug) => drug.id,
+    getItemLabel: drugLabel,
+    onAdd,
+    focusColumnId,
+});
 
 // Pilihan obat dengan Baru, yang membuka kartu obat dan langsung memilih obat yang baru disimpan.
 export function DrugLookup({
@@ -203,26 +247,7 @@ export function DrugLookup({
                 }
                 popupClassName="w-[40rem]"
                 showDetails={false}
-                columns={[
-                    {
-                        id: 'code',
-                        header: 'Kode',
-                        width: 100,
-                        cell: (drug) => drug.code,
-                    },
-                    {
-                        id: 'name',
-                        header: 'Nama',
-                        width: 300,
-                        cell: (drug) => drug.name,
-                    },
-                    {
-                        id: 'unit',
-                        header: 'Satuan',
-                        width: 100,
-                        cell: (drug) => drug.base_unit_name,
-                    },
-                ]}
+                columns={drugColumns}
                 onCreate={canCreate ? () => setCreating(true) : undefined}
             />
             {creating && (
@@ -287,6 +312,24 @@ function ProcedureLines({
                 position === index ? { ...row, ...values } : row,
             ),
         }));
+    // Tarif datang dari server, sama dengan yang disimpan Simpan; layar tidak pernah menjadi sumbernya.
+    const loadTariff = (procedureId: string) =>
+        void api
+            .healthcareProcedureTariff({
+                params: { id: destinationId },
+                query: { procedure_id: procedureId },
+            })
+            .then(({ body }) =>
+                setDraft((current) => ({
+                    ...current,
+                    procedures: (current.procedures ?? []).map((row) =>
+                        row.procedure_id === procedureId
+                            ? { ...row, tariff: body.data.tariff }
+                            : row,
+                    ),
+                })),
+            )
+            .catch(() => undefined);
     const pick = (index: number, procedure: ProcedureChoice) => {
         if (
             rows.some(
@@ -303,23 +346,40 @@ function ProcedureLines({
             procedure_name: procedure.name,
             tariff: null,
         });
-        // Tarif datang dari server, sama dengan yang disimpan Simpan; layar tidak pernah menjadi sumbernya.
-        void api
-            .healthcareProcedureTariff({
-                params: { id: destinationId },
-                query: { procedure_id: procedure.id },
-            })
-            .then(({ body }) =>
-                setDraft((current) => ({
-                    ...current,
-                    procedures: (current.procedures ?? []).map((row) =>
-                        row.procedure_id === procedure.id
-                            ? { ...row, tariff: body.data.tariff }
-                            : row,
-                    ),
-                })),
+        loadTariff(procedure.id);
+    };
+    // Baris baru sama dengan Tambah: Qty 1 dan dokter anamnesis. Tindakan yang sudah ada di daftar dilewati dengan pesan
+    // yang sama seperti saat dipilih per baris.
+    const addProcedures = (procedures: (ProcedureChoice | null)[]) => {
+        const fresh = procedures.filter((procedure) => {
+            if (
+                !procedure ||
+                !rows.some((row) => row.procedure_id === procedure.id)
             )
-            .catch(() => undefined);
+                return true;
+            toast.error(procedureDuplicateMessage(procedure.name));
+            return false;
+        });
+        setDraft((current) => ({
+            ...current,
+            procedures: [
+                ...(current.procedures ?? []),
+                ...fresh.map((procedure) => ({
+                    procedure_id: procedure?.id ?? null,
+                    procedure_code: procedure?.code ?? null,
+                    procedure_name: procedure?.name ?? null,
+                    quantity: 1,
+                    doctor_id: current.anamnesis?.doctor_id ?? null,
+                    diagnosis_icd10_id: null,
+                    tariff: null,
+                    added_by: null,
+                    added_at: null,
+                })),
+            ],
+        }));
+        fresh.forEach((procedure) => {
+            if (procedure) loadTariff(procedure.id);
+        });
     };
     const loadProcedures = useCallback<LookupLoader<ProcedureChoice>>(
         async ({ query, cursor, signal }) => {
@@ -377,24 +437,19 @@ function ProcedureLines({
                                   setSelected(keys.map(Number)),
                           }
                 }
-                onAddRow={() =>
-                    setDraft((current) => ({
-                        ...current,
-                        procedures: [
-                            ...(current.procedures ?? []),
-                            {
-                                procedure_id: null,
-                                procedure_code: null,
-                                procedure_name: null,
-                                quantity: 1,
-                                doctor_id: current.anamnesis?.doctor_id ?? null,
-                                diagnosis_icd10_id: null,
-                                tariff: null,
-                                added_by: null,
-                                added_at: null,
-                            },
-                        ],
-                    }))
+                onAddRow={() => addProcedures([null])}
+                selectRecords={
+                    disabled
+                        ? undefined
+                        : {
+                              noun: 'tindakan',
+                              loadItems: loadProcedures,
+                              columns: procedureColumns,
+                              getItemValue: (procedure) => procedure.id,
+                              getItemLabel: procedureLabel,
+                              focusColumnId: 'quantity',
+                              onAdd: addProcedures,
+                          }
                 }
                 onDeleteRows={(removed) =>
                     setDraft((current) => ({
@@ -416,7 +471,7 @@ function ProcedureLines({
                 emptyMessage={
                     disabled
                         ? 'Belum ada tindakan.'
-                        : 'Belum ada tindakan. Pilih Tambah untuk menambahkan baris.'
+                        : 'Belum ada tindakan. Pilih Tambah atau Tambah banyak untuk menambahkan baris.'
                 }
                 columns={[
                     {
@@ -457,9 +512,7 @@ function ProcedureLines({
                                         getItemValue={(procedure) =>
                                             procedure.id
                                         }
-                                        getItemLabel={(procedure) =>
-                                            `${procedure.code} - ${procedure.name}`
-                                        }
+                                        getItemLabel={procedureLabel}
                                         placeholder="Cari kode atau nama…"
                                         emptyMessage={
                                             canCreate
@@ -468,22 +521,7 @@ function ProcedureLines({
                                         }
                                         popupClassName="w-[40rem]"
                                         showDetails={false}
-                                        columns={[
-                                            {
-                                                id: 'code',
-                                                header: 'Kode',
-                                                width: 100,
-                                                cell: (procedure) =>
-                                                    procedure.code,
-                                            },
-                                            {
-                                                id: 'name',
-                                                header: 'Nama',
-                                                width: 300,
-                                                cell: (procedure) =>
-                                                    procedure.name,
-                                            },
-                                        ]}
+                                        columns={procedureColumns}
                                         onCreate={
                                             canCreate
                                                 ? () => setCreatingFor(index)
@@ -786,31 +824,54 @@ function PrescriptionLines({
         diagnosis_icd10_id: null,
         notes: null,
     };
+    const drugValues = (drug: Drug, single: boolean) => ({
+        drug_id: drug.id,
+        drug_code: drug.code,
+        drug_name: drug.name,
+        units: drug.units,
+        ...unitValues(
+            drug.units.find((unit) => unit.id === drug.sales_unit_id),
+        ),
+        // Dosis obat tunggal bawaannya dalam satuan dasar obat, misalnya 1 tablet.
+        ...(single
+            ? doseUnitValues(
+                  drug.units.find((unit) => unit.id === drug.base_unit_id),
+              )
+            : {}),
+    });
+    // Obat yang membuat pasien alergi atau sudah ada di resep ditolak dengan pesan yang sama seperti memilih per baris.
+    const refusal = (drug: Drug, others: PrescriptionLine[]) =>
+        allergies.has(drug.id)
+            ? drugAllergyMessage(drug.name)
+            : others.some((row) => row.drug_id === drug.id)
+              ? drugDuplicateMessage(drug.name)
+              : null;
     const pick = (line: number, drug: Drug) => {
-        if (allergies.has(drug.id)) {
-            toast.error(drugAllergyMessage(drug.name));
+        const refused = refusal(
+            drug,
+            rows.filter((_, at) => at !== line),
+        );
+        if (refused) {
+            toast.error(refused);
             return;
         }
-        if (rows.some((row, at) => at !== line && row.drug_id === drug.id)) {
-            toast.error(drugDuplicateMessage(drug.name));
-            return;
-        }
-        change(line, {
-            drug_id: drug.id,
-            drug_code: drug.code,
-            drug_name: drug.name,
-            units: drug.units,
-            ...unitValues(
-                drug.units.find((unit) => unit.id === drug.sales_unit_id),
-            ),
-            // Dosis obat tunggal bawaannya dalam satuan dasar obat, misalnya 1 tablet.
-            ...(rows[line]?.compound === null
-                ? doseUnitValues(
-                      drug.units.find((unit) => unit.id === drug.base_unit_id),
-                  )
-                : {}),
-        });
+        change(line, drugValues(drug, rows[line]?.compound === null));
     };
+    const addDrugs = (drugs: Drug[]) => {
+        const fresh = drugs.filter((drug) => {
+            const refused = refusal(drug, rows);
+            if (refused) toast.error(refused);
+            return refused === null;
+        });
+        setLines((current) => [
+            ...current,
+            ...fresh.map((drug) => ({
+                ...blankLine,
+                ...drugValues(drug, true),
+            })),
+        ]);
+    };
+    const loadDrugs = useDrugLoader();
     const assign = (line: number, compound: number | null) =>
         setLines((current) => {
             const row = current[line];
@@ -922,6 +983,11 @@ function PrescriptionLines({
                     )
                 }
                 onAddRow={() => setLines((current) => [...current, blankLine])}
+                selectRecords={
+                    readOnly
+                        ? undefined
+                        : selectDrugs(loadDrugs, addDrugs, 'quantity')
+                }
                 onDeleteRows={(removed) =>
                     setLines((current) =>
                         removeLines(
@@ -933,7 +999,7 @@ function PrescriptionLines({
                 emptyMessage={
                     readOnly
                         ? 'Resep ini tidak berisi obat.'
-                        : 'Belum ada obat. Pilih Tambah untuk menambahkan obat, atau Tambah racikan.'
+                        : 'Belum ada obat. Pilih Tambah atau Tambah banyak untuk menambahkan obat, atau Tambah racikan.'
                 }
                 columns={[
                     {

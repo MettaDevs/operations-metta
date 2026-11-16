@@ -4,6 +4,7 @@ import {
     CollapsibleSectionGroup,
 } from '@operations-metta/ui/collapsible-section';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import {
@@ -44,6 +45,12 @@ type History = ApiBody<'healthcareDiagnosisHistory'>['data'][number];
 
 const offered = (rows: Reference[], current: string | null) =>
     rows.filter((row) => row.active || row.id === current);
+
+const icd10Label = (icd10: Icd10) => `${icd10.code} - ${icd10.name}`;
+const icd10Columns: DataTableColumn<Icd10>[] = [
+    { id: 'code', header: 'Kode', width: 90, cell: (icd10) => icd10.code },
+    { id: 'name', header: 'Nama', width: 360, cell: (icd10) => icd10.name },
+];
 
 function ReferenceCell({
     field,
@@ -272,6 +279,24 @@ export function DiagnosisPanels({
                 position === index ? { ...row, ...values } : row,
             ),
         }));
+    // Baris baru membawa dokter dan perawat anamnesis, sama dengan Tambah.
+    const addDiagnoses = (icd10s: (Icd10 | null)[]) =>
+        setDraft((current) => ({
+            ...current,
+            diagnoses: [
+                ...(current.diagnoses ?? []),
+                ...icd10s.map((icd10) => ({
+                    icd10_id: icd10?.id ?? null,
+                    icd10_code: icd10?.code ?? null,
+                    icd10_name: icd10?.name ?? null,
+                    type_id: null,
+                    case_id: null,
+                    doctor_id: current.anamnesis?.doctor_id ?? null,
+                    nurse_id: current.anamnesis?.nurse_id ?? null,
+                    ...(usesDental ? { tooth_position: null } : {}),
+                })),
+            ],
+        }));
     const pickIcd10 = (index: number, icd10: Icd10) =>
         change(index, {
             icd10_id: icd10.id,
@@ -337,28 +362,19 @@ export function DiagnosisPanels({
                                           setSelected(keys.map(Number)),
                                   }
                         }
-                        onAddRow={() =>
-                            setDraft((current) => ({
-                                ...current,
-                                diagnoses: [
-                                    ...(current.diagnoses ?? []),
-                                    {
-                                        icd10_id: null,
-                                        icd10_code: null,
-                                        icd10_name: null,
-                                        type_id: null,
-                                        case_id: null,
-                                        doctor_id:
-                                            current.anamnesis?.doctor_id ??
-                                            null,
-                                        nurse_id:
-                                            current.anamnesis?.nurse_id ?? null,
-                                        ...(usesDental
-                                            ? { tooth_position: null }
-                                            : {}),
-                                    },
-                                ],
-                            }))
+                        onAddRow={() => addDiagnoses([null])}
+                        selectRecords={
+                            disabled
+                                ? undefined
+                                : {
+                                      noun: 'diagnosa',
+                                      loadItems: loadIcd10,
+                                      columns: icd10Columns,
+                                      getItemValue: (icd10) => icd10.id,
+                                      getItemLabel: icd10Label,
+                                      focusColumnId: 'type_id',
+                                      onAdd: addDiagnoses,
+                                  }
                         }
                         onDeleteRows={(removed) =>
                             setDraft((current) => ({
@@ -374,7 +390,7 @@ export function DiagnosisPanels({
                         emptyMessage={
                             disabled
                                 ? 'Belum ada diagnosa.'
-                                : 'Belum ada diagnosa. Pilih Tambah untuk menambahkan baris.'
+                                : 'Belum ada diagnosa. Pilih Tambah atau Tambah banyak untuk menambahkan baris.'
                         }
                         columns={[
                             {
@@ -458,9 +474,7 @@ export function DiagnosisPanels({
                                                 getItemValue={(icd10) =>
                                                     icd10.id
                                                 }
-                                                getItemLabel={(icd10) =>
-                                                    `${icd10.code} - ${icd10.name}`
-                                                }
+                                                getItemLabel={icd10Label}
                                                 placeholder="Cari kode atau nama…"
                                                 emptyMessage={
                                                     metadata.permissions
@@ -470,22 +484,7 @@ export function DiagnosisPanels({
                                                 }
                                                 popupClassName="w-[36rem]"
                                                 showDetails={false}
-                                                columns={[
-                                                    {
-                                                        id: 'code',
-                                                        header: 'Kode',
-                                                        width: 90,
-                                                        cell: (icd10) =>
-                                                            icd10.code,
-                                                    },
-                                                    {
-                                                        id: 'name',
-                                                        header: 'Nama',
-                                                        width: 360,
-                                                        cell: (icd10) =>
-                                                            icd10.name,
-                                                    },
-                                                ]}
+                                                columns={icd10Columns}
                                                 onCreate={
                                                     metadata.permissions
                                                         .create_icd10
