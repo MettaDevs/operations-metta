@@ -24,9 +24,10 @@ import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
 import { PaymentForm } from '../payment/payment-form.tsx';
 import { useVisitHolds } from './visit-holds.ts';
 
-// Form Pembayaran Kuta 1: panel Pasien, Rincian Biaya, dan Detail Pembayaran. Nilai dihitung server dengan rumus
-// kasir Kuta (invoice.totals.ts); kunjungan yang sudah dibayar menampilkan pembayarannya. Rincian menampilkan nilai baris apa adanya; sistem lama
-// membulatkan tampilan baris ke atas per 1.000, padahal yang ditagih nilai tepatnya. Pembayaran yang clerk-nya masih
+// Form Pembayaran Kuta 1: panel Pasien (atau panel Penjualan untuk penjualan tanpa kunjungan), Rincian Biaya, dan Detail
+// Pembayaran. Nilai dihitung server dengan rumus kasir Kuta (invoice.totals.ts); tagihan yang sudah dibayar menampilkan
+// pembayarannya. Rincian menampilkan nilai baris apa adanya; sistem lama membulatkan tampilan baris ke atas per 1.000,
+// padahal yang ditagih nilai tepatnya. Pembayaran yang clerk-nya masih
 // berjalan dikoreksi dengan Batal Pembayaran; sesudah Clerk End, dengan Nota Kredit. Header menampilkan hal yang masih
 // ditunggu kunjungan belum bayar, misalnya resep yang belum disiapkan farmasi, dan tagihan dibaca ulang begitu status
 // itu berubah, karena obat yang disiapkan farmasi masuk tagihan di transaksi yang sama.
@@ -42,8 +43,14 @@ function PaymentPage(): ReactNode {
         }),
     );
     const { visit, charges, totals, payment } = data;
-    const holds = useVisitHolds({ from: visit.date, to: visit.date });
-    const waiting = payment ? [] : (holds?.get(visit.id) ?? []);
+    const number = data.visit
+        ? data.visit.registration_number
+        : data.sale.number;
+    // Penjualan tidak pernah menunggu apa pun, jadi status tunggu hanya dibaca untuk kunjungan.
+    const holds = useVisitHolds(
+        visit ? { from: visit.date, to: visit.date } : { from: '', to: '' },
+    );
+    const waiting = visit && !payment ? (holds?.get(visit.id) ?? []) : [];
     const waitingKey = holds === undefined ? null : waiting.join('|');
     const shownWaiting = useRef(waitingKey);
     useEffect(() => {
@@ -65,7 +72,7 @@ function PaymentPage(): ReactNode {
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
             <RecordActionBar
-                title={`Pembayaran ${visit.registration_number}`}
+                title={`Pembayaran ${number}`}
                 trailing={
                     waiting.length > 0 &&
                     waiting.map((hold) => (
@@ -123,72 +130,115 @@ function PaymentPage(): ReactNode {
                 ))}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <CollapsibleSectionGroup
-                    defaultValue={['patient', 'charges', 'cashier']}
+                    defaultValue={['patient', 'sale', 'charges', 'cashier']}
                 >
-                    <CollapsibleSection
-                        value="patient"
-                        title="Pasien"
-                        summary={`(${visit.patient_medical_record_number}) ${visit.patient_name}`}
-                    >
-                        <FormGrid>
-                            <FormControl>
-                                <Input
-                                    label="No. Registrasi"
-                                    value={visit.registration_number}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="NRM"
-                                    value={visit.patient_medical_record_number}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Tgl Reg"
-                                    value={displayDate(visit.date)}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Nama Pasien"
-                                    value={visit.patient_name}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Ruangan"
-                                    value={visit.sections}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Tipe Pasien"
-                                    value={visit.patient_type_name}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Penjamin"
-                                    value={visit.guarantor_name ?? ''}
-                                    readOnly
-                                />
-                            </FormControl>
-                            <FormControl>
-                                <Input
-                                    label="Tipe Perawatan"
-                                    value="RJ"
-                                    readOnly
-                                />
-                            </FormControl>
-                        </FormGrid>
-                    </CollapsibleSection>
+                    {data.visit ? (
+                        <CollapsibleSection
+                            value="patient"
+                            title="Pasien"
+                            summary={`(${data.visit.patient_medical_record_number}) ${data.visit.patient_name}`}
+                        >
+                            <FormGrid>
+                                <FormControl>
+                                    <Input
+                                        label="No. Registrasi"
+                                        value={data.visit.registration_number}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="NRM"
+                                        value={
+                                            data.visit
+                                                .patient_medical_record_number
+                                        }
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Tgl Reg"
+                                        value={displayDate(data.visit.date)}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Nama Pasien"
+                                        value={data.visit.patient_name}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Ruangan"
+                                        value={data.visit.sections}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Tipe Pasien"
+                                        value={data.visit.patient_type_name}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Penjamin"
+                                        value={data.visit.guarantor_name ?? ''}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Tipe Perawatan"
+                                        value="RJ"
+                                        readOnly
+                                    />
+                                </FormControl>
+                            </FormGrid>
+                        </CollapsibleSection>
+                    ) : (
+                        <CollapsibleSection
+                            value="sale"
+                            title="Penjualan"
+                            summary={`${data.sale.number} · ${data.sale.buyer_name ?? 'Pembeli umum'}`}
+                        >
+                            <FormGrid>
+                                <FormControl>
+                                    <Input
+                                        label="No. Bukti"
+                                        value={data.sale.number}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Waktu"
+                                        value={new Date(
+                                            data.sale.sold_at,
+                                        ).toLocaleString('id-ID', {
+                                            dateStyle: 'short',
+                                            timeStyle: 'short',
+                                        })}
+                                        readOnly
+                                    />
+                                </FormControl>
+                                <FormControl>
+                                    <Input
+                                        label="Pembeli"
+                                        value={
+                                            data.sale.buyer_name ??
+                                            'Pembeli umum'
+                                        }
+                                        readOnly
+                                    />
+                                </FormControl>
+                            </FormGrid>
+                        </CollapsibleSection>
+                    )}
                     <CollapsibleSection
                         value="charges"
                         title="Rincian Biaya"
@@ -200,7 +250,7 @@ function PaymentPage(): ReactNode {
                             getRowLabel={(charge) => charge.name}
                             scrollMode="inline"
                             showRowNumbers
-                            emptyMessage="Kunjungan ini belum punya baris biaya."
+                            emptyMessage="Tagihan ini belum punya baris biaya."
                             columns={[
                                 {
                                     id: 'group',

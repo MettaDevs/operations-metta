@@ -69,7 +69,7 @@ export function PaymentCancelDialog({
                     <DialogTitle>Batal Pembayaran</DialogTitle>
                     <DialogDescription>
                         Pembayaran {payment.number} akan dibatalkan, dan
-                        kunjungannya kembali belum dibayar.
+                        tagihannya kembali belum dibayar.
                     </DialogDescription>
                 </DialogHeader>
                 <FormErrorHeader

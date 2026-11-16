@@ -20,14 +20,40 @@ import {
 } from '../../../platform/shell/index.ts';
 import { useVisitHolds } from './visit-holds.ts';
 
-// Daftar Pembayaran (List Data Pembayaran Kuta 1): kunjungan yang selesai diperiksa dalam rentang tanggal, dengan
-// lencana Belum Bayar, Sudah Bayar, dan Total. Bayar membuka Form Pembayaran kunjungan itu. Kunjungan belum bayar yang
+// Daftar Pembayaran (List Data Pembayaran Kuta 1): kunjungan yang selesai diperiksa dan penjualan tanpa kunjungan
+// (misalnya obat bebas di loket farmasi) dalam rentang tanggal, dengan lencana Belum Bayar, Sudah Bayar, dan Total. Bayar
+// membuka Form Pembayaran tagihan itu, termasuk untuk membayar ulang penjualan yang pembayarannya dibatalkan atau
+// dikoreksi nota kredit. Kunjungan belum bayar yang
 // masih menunggu, misalnya resep yang belum disiapkan farmasi, membawa lencana tunggunya, dan Siap Dibayar menyaring
 // kunjungan belum bayar yang tidak menunggu apa pun. Lencana tunggu dibaca ulang berkala (visit-holds.ts), jadi
 // kunjungan yang resepnya baru disiapkan langsung masuk Siap Dibayar tanpa memuat ulang daftar.
 
-type Visit = ApiBody<'billingVisitList'>['data'][number];
+type Bill = ApiBody<'billingVisitList'>['data'][number];
 type Counts = ApiBody<'billingVisitList'>['counts'];
+
+// Isi kolom daftar untuk kedua jenis tagihan.
+function cells(bill: Bill) {
+    switch (bill.kind) {
+        case 'visit':
+            return {
+                time: bill.registered_at,
+                number: bill.registration_number,
+                party: `${bill.patient_medical_record_number} · ${bill.patient_name} · ${bill.patient_type_name}`,
+                status: bill.sections,
+            };
+        case 'sale':
+            return {
+                time: bill.sold_at,
+                number: bill.number,
+                party: bill.buyer_name ?? 'Pembeli umum',
+                status: 'Penjualan',
+            };
+        default: {
+            const unhandled: never = bill;
+            return unhandled;
+        }
+    }
+}
 
 const route = getRouteApi('/_app/billing/payments');
 const ALL = 'all';
@@ -55,7 +81,7 @@ function PaymentsPage(): ReactNode {
     const [range, setRange] = useState({ from: '', to: '' });
     const filterPanelId = useId();
     const { from, to, status } = search;
-    const loader = useCallback<ListLoader<Visit>>(
+    const loader = useCallback<ListLoader<Bill>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.billingVisitList(
                 {
@@ -86,13 +112,13 @@ function PaymentsPage(): ReactNode {
     const list = useIncrementalList({
         loadItems: loader,
         query: search.q ?? '',
-        getKey: (visit) => visit.id,
+        getKey: (bill) => bill.id,
     });
     const holds = useVisitHolds(range);
-    const visits =
+    const bills =
         status === 'ready'
             ? holds
-                ? list.items.filter((visit) => !holds.has(visit.id))
+                ? list.items.filter((bill) => !holds.has(bill.id))
                 : []
             : list.items;
     const setSearch = (next: Partial<Search>) =>
@@ -108,10 +134,10 @@ function PaymentsPage(): ReactNode {
                 ),
             replace: true,
         });
-    const open = (visit: Visit) =>
+    const open = (bill: Bill) =>
         void navigate({
             to: '/billing/payments/$visitId',
-            params: { visitId: visit.id },
+            params: { visitId: bill.id },
         });
 
     return (
@@ -122,9 +148,9 @@ function PaymentsPage(): ReactNode {
                     search={{
                         value: search.q ?? '',
                         onValueChange: (q) => setSearch({ q }),
-                        label: 'Cari pasien',
+                        label: 'Cari tagihan',
                         placeholder:
-                            'Cari NRM, nama pasien, atau no. registrasi...',
+                            'Cari NRM, nama pasien atau pembeli, atau nomor...',
                     }}
                     filter={{
                         open: filtersOpen,
@@ -222,80 +248,76 @@ function PaymentsPage(): ReactNode {
             }
         >
             <DataTable
-                data={visits}
-                getRowKey={(visit) => visit.id}
-                getRowLabel={(visit) =>
-                    `${visit.registration_number} ${visit.patient_name}`
+                data={bills}
+                getRowKey={(bill) => bill.id}
+                getRowLabel={(bill) =>
+                    `${cells(bill).number} ${cells(bill).party}`
                 }
                 showRowNumbers
                 actionsPlacement="inline"
                 actions={[{ id: 'open', label: 'Bayar' }]}
-                onRowAction={(_, visit) => open(visit)}
+                onRowAction={(_, bill) => open(bill)}
                 onRowClick={open}
                 sort={list.sort}
                 onSortChange={list.onSortChange}
                 serverSort
                 incremental={list}
-                emptyMessage="Belum ada kunjungan selesai yang cocok di rentang tanggal ini."
+                emptyMessage="Belum ada tagihan yang cocok di rentang tanggal ini."
                 columns={[
                     {
-                        id: 'registered_at',
+                        id: 'time',
                         header: 'Tgl Masuk',
                         width: 150,
-                        cell: (visit) => (
+                        cell: (bill) => (
                             <DataTableText>
-                                {new Date(visit.registered_at).toLocaleString(
+                                {new Date(cells(bill).time).toLocaleString(
                                     'id-ID',
                                     { dateStyle: 'short', timeStyle: 'short' },
                                 )}
                             </DataTableText>
                         ),
-                        sortValue: (visit) => visit.registered_at,
+                        sortValue: (bill) => cells(bill).time,
                     },
                     {
-                        id: 'registration_number',
-                        header: 'NoReg',
+                        id: 'number',
+                        header: 'Nomor',
                         width: 170,
-                        cell: (visit) => (
-                            <DataTableText>
-                                {visit.registration_number}
-                            </DataTableText>
+                        cell: (bill) => (
+                            <DataTableText>{cells(bill).number}</DataTableText>
                         ),
-                        sortValue: (visit) => visit.registration_number,
+                        sortValue: (bill) => cells(bill).number,
                     },
                     {
-                        id: 'patient_name',
-                        header: 'Data Pasien',
+                        id: 'name',
+                        header: 'Pasien / Pembeli',
                         width: 260,
-                        cell: (visit) => (
-                            <DataTableText>
-                                {`${visit.patient_medical_record_number} · ${visit.patient_name} · ${visit.patient_type_name}`}
-                            </DataTableText>
+                        cell: (bill) => (
+                            <DataTableText>{cells(bill).party}</DataTableText>
                         ),
-                        sortValue: (visit) => visit.patient_name,
+                        sortValue: (bill) => cells(bill).party,
                     },
                     {
                         id: 'sections',
                         header: 'Status',
                         width: 200,
-                        cell: (visit) => (
-                            <DataTableText>{visit.sections}</DataTableText>
+                        cell: (bill) => (
+                            <DataTableText>{cells(bill).status}</DataTableText>
                         ),
                     },
                     {
                         id: 'paid',
                         header: 'Status periksa',
                         width: 300,
-                        cell: (visit) => (
+                        cell: (bill) => (
                             <div className="flex flex-wrap gap-1">
                                 <Badge
                                     variant={
-                                        visit.paid ? 'secondary' : 'outline'
+                                        bill.paid ? 'secondary' : 'outline'
                                     }
                                 >
-                                    {visit.paid ? 'Sudah Bayar' : 'Belum Bayar'}
+                                    {bill.paid ? 'Sudah Bayar' : 'Belum Bayar'}
                                 </Badge>
-                                {holds?.get(visit.id)?.map((hold) => (
+                                {holds?.get(bill.id)?.map((hold) => (
                                     <Badge key={hold} variant="outline">
                                         <Hourglass aria-hidden="true" />
                                         {hold}

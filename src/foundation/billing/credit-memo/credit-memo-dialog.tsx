@@ -106,7 +106,7 @@ export function CreditMemoDialog({
                         Pembayaran {payment.number} sudah masuk Clerk End, jadi
                         dikoreksi lewat nota kredit. Uangnya dikembalikan lewat
                         jenis bayar yang sama, piutangnya dibatalkan, dan
-                        kunjungannya kembali belum dibayar.
+                        tagihannya kembali belum dibayar.
                     </DialogDescription>
                 </DialogHeader>
                 <FormErrorHeader
