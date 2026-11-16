@@ -378,6 +378,56 @@ describe.skipIf(!process.env.DB_HOST)(
             ).toEqual([['1', 'ditagih']]);
         });
 
+        // Pengganti peringatan saat form dibuka di sistem lama: Daftar Pembayaran dan header Form Pembayaran membaca
+        // resep yang belum disiapkan per kunjungan, dengan hitungan yang sama dengan penolakan Simpan.
+        test('the payment list shows how many prescriptions each unpaid visit still waits for', async () => {
+            const waitingVisit = Bun.randomUUIDv7();
+            const readyVisit = Bun.randomUUIDv7();
+            const first = await prescribe(waitingVisit, '1');
+            const second = await prescribe(waitingVisit, '1');
+            const prepared = await prescribe(readyVisit, '1');
+            const visits = visitCharges(pool, {
+                tenantId: pharmacy.tenantId,
+                legalEntityId: pharmacy.legalEntityId,
+            });
+            await visits.completedVisit(waitingVisit, []);
+            await visits.completedVisit(readyVisit, []);
+            await json(await prepare(prepared), 200);
+            const cashier = await openCashier();
+            const holds = async () =>
+                Object.fromEntries(
+                    (
+                        await billingJson<{
+                            data: { visit_id: string; holds: string[] }[];
+                        }>(
+                            await cashier.get(
+                                '/api/v1/billing/visits/holds?from=2026-11-13&to=2026-11-13',
+                            ),
+                            200,
+                        )
+                    ).data
+                        .filter((row) =>
+                            [waitingVisit, readyVisit].includes(row.visit_id),
+                        )
+                        .map((row) => [row.visit_id, row.holds]),
+                );
+            expect(await holds()).toEqual({
+                [waitingVisit]: ['2 resep menunggu farmasi'],
+            });
+            await json(await prepare(first), 200);
+            expect(await holds()).toEqual({
+                [waitingVisit]: ['1 resep menunggu farmasi'],
+            });
+            await json(
+                await pharmacy.admin.post(
+                    `${api}/prescriptions/${second}/cancel`,
+                    { reason: 'Pasien tidak mengambil obat', version: null },
+                ),
+                200,
+            );
+            expect(await holds()).toEqual({});
+        });
+
         // Sistem lama tidak menunggu farmasi untuk bayar otomatis BPJS: Seroja melunasi dari poli tanpa memeriksa resep,
         // dan Kuta melunasi obat saat Siapkan. Di sini pembayaran otomatis dilunasi ulang saat obatnya disiapkan.
         test('an automatic payment does not wait for the pharmacy, and is settled again once the drugs are prepared', async () => {

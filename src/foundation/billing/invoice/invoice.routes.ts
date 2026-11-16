@@ -6,7 +6,10 @@ import {
     typedQuery,
     type Context,
 } from '../../../platform/http/index.ts';
-import type { visitListQuerySchema } from './invoice.schema.ts';
+import type {
+    visitHoldsQuerySchema,
+    visitListQuerySchema,
+} from './invoice.schema.ts';
 import { Invoices } from './invoice.service.ts';
 
 const route = (suffix = '') =>
@@ -30,6 +33,15 @@ export function invoiceRoutes() {
                     await (
                         await invoices(context)
                     ).list(new URL(context.request.url).searchParams),
+                ),
+            ),
+        billingVisitHolds: route('/holds')
+            .input(typedQuery<z.input<typeof visitHoldsQuerySchema>>())
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await invoices(context)
+                    ).holds(new URL(context.request.url).searchParams),
                 ),
             ),
         billingVisitShow: route('/{id}')

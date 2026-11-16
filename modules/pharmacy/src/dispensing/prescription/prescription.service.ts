@@ -204,23 +204,35 @@ export class Prescriptions {
     }
 }
 
-// Kasir menolak Simpan pembayaran selama resep kunjungan itu belum disiapkan, seperti Simpan Seroja dan tombol Bayar Kuta
-// (SIMtrResep Realisasi = 0 AND Batal = 0). Resep yang sudah disiapkan, diserahkan, atau dibatalkan tidak dihitung, dan
-// draf penyerahan belum menyiapkan apa pun.
-export async function waitingPrescriptionRefusal(
+// Resep kunjungan yang belum disiapkan farmasi, seperti SIMtrResep Realisasi = 0 AND Batal = 0 yang diperiksa Simpan
+// Seroja dan tombol Bayar Kuta. Resep yang sudah disiapkan, diserahkan, atau dibatalkan tidak dihitung, dan draf
+// penyerahan belum menyiapkan apa pun.
+async function waitingPrescriptions(
     db: Database,
-    visit: { tenantId: string; visitId: string },
-): Promise<string | null> {
-    const waiting = await db.rows(
-        z.object({ number: z.string() }),
-        `select r.nomor_resep as number from far_tr_resep r
-         where r.tenant_id = $1 and r.kunjungan_id = $2 and r.deleted_at is null and r.dibatalkan_pada is null
+    visits: { tenantId: string; visitIds: string[] },
+) {
+    return db.rows(
+        z.object({ visit_id: z.string(), number: z.string() }),
+        `select r.kunjungan_id as visit_id, r.nomor_resep as number from far_tr_resep r
+         where r.tenant_id = $1 and r.kunjungan_id = any($2::uuid[]) and r.deleted_at is null
+           and r.dibatalkan_pada is null
            and not exists (select 1 from bill_farmasi b
                            where b.tenant_id = r.tenant_id and b.resep_id = r.id and b.deleted_at is null
                              and b.status not in ('draf', 'dibatalkan'))
          order by r.diterbitkan_pada, r.nomor_resep`,
-        [visit.tenantId, visit.visitId],
+        [visits.tenantId, `{${visits.visitIds.join(',')}}`],
     );
+}
+
+// Kasir menolak Simpan pembayaran selama resep kunjungan itu belum disiapkan.
+export async function waitingPrescriptionRefusal(
+    db: Database,
+    visit: { tenantId: string; visitId: string },
+): Promise<string | null> {
+    const waiting = await waitingPrescriptions(db, {
+        tenantId: visit.tenantId,
+        visitIds: [visit.visitId],
+    });
     if (!waiting.length) return null;
     const numbers = waiting.map((row) => row.number);
     const listed =
@@ -228,4 +240,20 @@ export async function waitingPrescriptionRefusal(
             ? `Resep ${numbers[0]}`
             : `Resep ${numbers.slice(0, -1).join(', ')} dan ${numbers.at(-1)}`;
     return `${listed} belum disiapkan farmasi. Tunggu farmasi menyiapkannya dulu, atau minta farmasi membatalkan resep yang tidak diambil pasien.`;
+}
+
+// Status yang sama untuk Daftar Pembayaran dan header Form Pembayaran, satu query untuk semua kunjungan yang diminta.
+export async function waitingPrescriptionHolds(
+    db: Database,
+    visits: { tenantId: string; visitIds: string[] },
+): Promise<Map<string, string>> {
+    const counts = new Map<string, number>();
+    for (const row of await waitingPrescriptions(db, visits))
+        counts.set(row.visit_id, (counts.get(row.visit_id) ?? 0) + 1);
+    return new Map(
+        [...counts].map(([visitId, count]) => [
+            visitId,
+            `${count} resep menunggu farmasi`,
+        ]),
+    );
 }

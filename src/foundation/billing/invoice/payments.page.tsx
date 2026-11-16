@@ -9,6 +9,7 @@ import { Select } from '@operations-metta/ui/select';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { getRouteApi } from '@tanstack/react-router';
+import { Hourglass } from 'lucide-react';
 import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
@@ -17,18 +18,26 @@ import {
     definePage,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import { useVisitHolds } from './visit-holds.ts';
 
 // Daftar Pembayaran (List Data Pembayaran Kuta 1): kunjungan yang selesai diperiksa dalam rentang tanggal, dengan
-// lencana Belum Bayar, Sudah Bayar, dan Total. Bayar membuka Form Pembayaran kunjungan itu.
+// lencana Belum Bayar, Sudah Bayar, dan Total. Bayar membuka Form Pembayaran kunjungan itu. Kunjungan belum bayar yang
+// masih menunggu, misalnya resep yang belum disiapkan farmasi, membawa lencana tunggunya, dan Siap Dibayar menyaring
+// kunjungan belum bayar yang tidak menunggu apa pun. Lencana tunggu dibaca ulang berkala (visit-holds.ts), jadi
+// kunjungan yang resepnya baru disiapkan langsung masuk Siap Dibayar tanpa memuat ulang daftar.
 
 type Visit = ApiBody<'billingVisitList'>['data'][number];
 type Counts = ApiBody<'billingVisitList'>['counts'];
 
 const route = getRouteApi('/_app/billing/payments');
 const ALL = 'all';
-const statusLabels = { unpaid: 'Belum Bayar', paid: 'Sudah Bayar' } as const;
+const statusLabels = {
+    unpaid: 'Belum Bayar',
+    ready: 'Siap Dibayar',
+    paid: 'Sudah Bayar',
+} as const;
 const isStatus = (value: unknown): value is keyof typeof statusLabels =>
-    value === 'unpaid' || value === 'paid';
+    value === 'unpaid' || value === 'ready' || value === 'paid';
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
@@ -54,7 +63,12 @@ function PaymentsPage(): ReactNode {
                         q: query,
                         ...(from ? { from } : {}),
                         ...(to ? { to } : {}),
-                        ...(status ? { status } : {}),
+                        ...(status
+                            ? {
+                                  status:
+                                      status === 'ready' ? 'unpaid' : status,
+                              }
+                            : {}),
                         ...(cursor ? { cursor } : {}),
                         ...(sort
                             ? { sort: sort.columnId, direction: sort.direction }
@@ -74,6 +88,13 @@ function PaymentsPage(): ReactNode {
         query: search.q ?? '',
         getKey: (visit) => visit.id,
     });
+    const holds = useVisitHolds(range);
+    const visits =
+        status === 'ready'
+            ? holds
+                ? list.items.filter((visit) => !holds.has(visit.id))
+                : []
+            : list.items;
     const setSearch = (next: Partial<Search>) =>
         void navigate({
             search: (current) =>
@@ -201,7 +222,7 @@ function PaymentsPage(): ReactNode {
             }
         >
             <DataTable
-                data={list.items}
+                data={visits}
                 getRowKey={(visit) => visit.id}
                 getRowLabel={(visit) =>
                     `${visit.registration_number} ${visit.patient_name}`
@@ -264,13 +285,23 @@ function PaymentsPage(): ReactNode {
                     {
                         id: 'paid',
                         header: 'Status periksa',
-                        width: 130,
+                        width: 300,
                         cell: (visit) => (
-                            <Badge
-                                variant={visit.paid ? 'secondary' : 'outline'}
-                            >
-                                {visit.paid ? 'Sudah Bayar' : 'Belum Bayar'}
-                            </Badge>
+                            <div className="flex flex-wrap gap-1">
+                                <Badge
+                                    variant={
+                                        visit.paid ? 'secondary' : 'outline'
+                                    }
+                                >
+                                    {visit.paid ? 'Sudah Bayar' : 'Belum Bayar'}
+                                </Badge>
+                                {holds?.get(visit.id)?.map((hold) => (
+                                    <Badge key={hold} variant="outline">
+                                        <Hourglass aria-hidden="true" />
+                                        {hold}
+                                    </Badge>
+                                ))}
+                            </div>
                         ),
                     },
                 ]}

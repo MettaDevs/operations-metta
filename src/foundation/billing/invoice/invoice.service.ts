@@ -20,6 +20,7 @@ import {
 } from './invoice.schema.ts';
 import { invoiceTotals } from './invoice.totals.ts';
 import { creditMemoPreview } from '../credit-memo/credit-memo.service.ts';
+import { paymentHolds } from '../payment/payment.checks.ts';
 import { patientTypeMessage } from '../payment/payment.service.ts';
 
 // Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
@@ -112,6 +113,29 @@ export class Invoices {
             counts: counts ?? { unpaid: 0, paid: 0, total: 0 },
             from,
             to,
+        };
+    }
+
+    // Status tunggu Daftar Pembayaran dan header Form Pembayaran, dibaca ulang layar secara berkala: hal yang masih
+    // ditunggu kunjungan belum bayar dalam rentang tanggal, dari module yang terpasang (payment.checks.ts). Satu jawaban
+    // untuk semua kunjungan itu, berisi kunjungan yang masih menunggu saja.
+    async holds(parameters: URLSearchParams) {
+        this.workspace.guard('payment', 'read');
+        const { from, to } = await this.range(parameters);
+        const unpaid = await this.db.rows(
+            z.object({ id: z.string() }),
+            `select id from (${visitSql} and date between $3 and $4 and not paid) unpaid`,
+            [this.scope.tenantId, this.scope.legalEntityId, from, to],
+        );
+        const held = await paymentHolds(this.db, {
+            tenantId: this.scope.tenantId,
+            visitIds: unpaid.map((row) => row.id),
+        });
+        return {
+            data: [...held].map(([visitId, holds]) => ({
+                visit_id: visitId,
+                holds,
+            })),
         };
     }
 
