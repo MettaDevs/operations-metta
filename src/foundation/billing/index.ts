@@ -48,7 +48,7 @@ export {
 let registered = false;
 
 // Dipanggil src/main.ts dan src/worker.ts. Biaya pemeriksaan dan kunjungan selesai dari layanan kesehatan masuk kasir
-// lewat event (kunjungan_kasir_detail, kunjungan_kasir).
+// lewat event (tagihan_kasir_detail, tagihan_kasir).
 export function registerBillingEventHandlers(): void {
     if (registered) return;
     registered = true;

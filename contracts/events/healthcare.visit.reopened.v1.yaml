@@ -9,7 +9,7 @@ info:
     dibayar. Sesudah poli rujukan Selesai periksa, `healthcare.visit.completed.v1` terbit lagi untuk kunjungan yang
     sama.
 
-    Penerima: kasir Core (`src/foundation/billing/charge/`), yang menandai `kunjungan_kasir` kunjungan itu `dibuka`,
+    Penerima: kasir Core (`src/foundation/billing/charge/`), yang menandai `tagihan_kasir` kunjungan itu `dibuka`,
     sehingga ia keluar dari Daftar Pembayaran dan tidak bisa dibayar sampai selesai lagi. Baris biayanya tetap terbuka.
 
     Keadaan sebenarnya, 13 November 2026: hanya diantar di dalam runtime.

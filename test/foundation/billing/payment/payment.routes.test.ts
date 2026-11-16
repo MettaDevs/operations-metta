@@ -237,7 +237,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
         const [billed] = await pool.unsafe<{ open: number; billed: number }[]>(
             `select count(*) filter (where status = 'terbuka')::int as open,
                     count(*) filter (where status = 'ditagih' and kasir_id = $2)::int as billed
-             from kunjungan_kasir_detail where kunjungan_id = $1 and deleted_at is null`,
+             from tagihan_kasir_detail where kunjungan_id = $1 and deleted_at is null`,
             [visits.first, created.data.id],
         );
         expect(billed).toEqual({ open: 0, billed: 2 });

@@ -291,7 +291,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         });
         expect([
             ...(await pool.unsafe<{ status: string; kasir_id: null }[]>(
-                'select status, kasir_id from kunjungan_kasir_detail where kunjungan_id = $1',
+                'select status, kasir_id from tagihan_kasir_detail where kunjungan_id = $1',
                 [visits.local],
             )),
         ]).toEqual([{ status: 'terbuka', kasir_id: null }]);

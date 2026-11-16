@@ -34,7 +34,7 @@ const visitSql = `select * from (
                              k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
                              ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
                              to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids, k.version
-                      from kunjungan_kasir k
+                      from tagihan_kasir k
                       where k.tenant_id = $1 and k.legal_entity_id = $2 and k.status = 'selesai') visits
                   where true`;
 
@@ -161,10 +161,10 @@ export class Invoices {
                     r.tanggal::text as date, r.status, r.jenis_biaya_id as procedure_id, r.dokter_id as doctor_id,
                     coalesce((select json_agg(json_build_object('charge_component_id', c.komponen_biaya_id,
                                                                 'value', trim_scale(c.nilai)::text))
-                              from kunjungan_kasir_detail_komponen c
-                              where c.tenant_id = r.tenant_id and c.kunjungan_kasir_detail_id = r.id
+                              from tagihan_kasir_detail_komponen c
+                              where c.tenant_id = r.tenant_id and c.tagihan_kasir_detail_id = r.id
                                 and c.deleted_at is null), '[]'::json) as components
-             from kunjungan_kasir_detail r
+             from tagihan_kasir_detail r
              where r.tenant_id = $1 and r.legal_entity_id = $2 and r.kunjungan_id = $3 and r.deleted_at is null
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
             [this.scope.tenantId, this.scope.legalEntityId, visitId],

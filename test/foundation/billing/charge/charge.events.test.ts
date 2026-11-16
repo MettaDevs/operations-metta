@@ -90,7 +90,7 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
         });
     const visit = () =>
         pool.unsafe<{ status: string; pasien_nama: string }[]>(
-            'select status, pasien_nama from kunjungan_kasir where tenant_id = $1 and kunjungan_id = $2',
+            'select status, pasien_nama from tagihan_kasir where tenant_id = $1 and kunjungan_id = $2',
             [tenantId, visitId],
         );
 
@@ -99,9 +99,9 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
             ...(await pool.unsafe<Stored[]>(
                 `select r.jenis_biaya_kode as kode, trim_scale(r.qty)::text as qty, trim_scale(r.nilai)::text as nilai,
                         r.status, r.deleted_at is null as live,
-                        coalesce((select array_agg(trim_scale(c.nilai)::text) from kunjungan_kasir_detail_komponen c
-                                  where c.kunjungan_kasir_detail_id = r.id and c.deleted_at is null), '{}') as komponen
-                 from kunjungan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
+                        coalesce((select array_agg(trim_scale(c.nilai)::text) from tagihan_kasir_detail_komponen c
+                                  where c.tagihan_kasir_detail_id = r.id and c.deleted_at is null), '{}') as komponen
+                 from tagihan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
                  order by r.deleted_at nulls first, r.jenis_biaya_kode`,
                 [tenantId, visitId],
             )),
@@ -164,7 +164,7 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
 
     test('a billed line is not touched by a later snapshot', async () => {
         await pool.unsafe(
-            "update kunjungan_kasir_detail set status = 'ditagih' where tenant_id = $1 and sumber_baris_id = $2",
+            "update tagihan_kasir_detail set status = 'ditagih' where tenant_id = $1 and sumber_baris_id = $2",
             [tenantId, lines.injection],
         );
         await charges([]);
@@ -175,7 +175,7 @@ describe.skipIf(!process.env.DB_HOST)('billing charge events', () => {
             ['J-LUKA', '1', 'terbuka'],
         ]);
         await pool.unsafe(
-            "update kunjungan_kasir_detail set status = 'terbuka' where tenant_id = $1 and sumber_baris_id = $2",
+            "update tagihan_kasir_detail set status = 'terbuka' where tenant_id = $1 and sumber_baris_id = $2",
             [tenantId, lines.injection],
         );
     });

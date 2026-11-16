@@ -31,7 +31,7 @@ const rowSql = `select * from (
 
 // Kelompok jasa yang sudah dikirim layanan kesehatan bersama baris biaya, nama terakhirnya.
 const serviceGroupsSql = `select distinct on (kelompok_jasa_id) kelompok_jasa_id as id, kelompok_jasa_nama as name
-                          from kunjungan_kasir_detail
+                          from tagihan_kasir_detail
                           where tenant_id = $1 and legal_entity_id = $2 and kelompok_jasa_id is not null
                             and kelompok_jasa_nama is not null
                           order by kelompok_jasa_id, updated_at desc`;

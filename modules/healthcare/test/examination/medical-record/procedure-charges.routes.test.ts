@@ -162,7 +162,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                 { kode: string; qty: string; nilai: string; status: string }[]
             >(
                 `select jenis_biaya_kode as kode, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai, status
-                 from kunjungan_kasir_detail
+                 from tagihan_kasir_detail
                  where tenant_id = $1 and kunjungan_id = $2 and deleted_at is null
                  order by jenis_biaya_kode`,
                 [clinic.tenantId, visitId],
@@ -588,10 +588,10 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             }[]
         >(
             `select r.jenis_biaya_kode as kode, trim_scale(r.qty)::text as qty, trim_scale(r.nilai)::text as nilai,
-                    (select count(*)::int from kunjungan_kasir_detail_komponen c
-                     where c.kunjungan_kasir_detail_id = r.id and c.deleted_at is null) as komponen,
+                    (select count(*)::int from tagihan_kasir_detail_komponen c
+                     where c.tagihan_kasir_detail_id = r.id and c.deleted_at is null) as komponen,
                     r.deleted_at is null as live
-             from kunjungan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
+             from tagihan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
              order by r.deleted_at nulls first, r.jenis_biaya_kode`,
             [clinic.tenantId, visitId],
         );
