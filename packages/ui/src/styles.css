@@ -227,7 +227,7 @@
 .core-page-dialog {
     --page-inset: max(0px, calc((100% - 1328px) / 2));
     position: absolute;
-    inset: 0 var(--page-inset);
+    inset: 40px var(--page-inset);
     display: flex;
     flex-direction: column;
     min-width: 0;
