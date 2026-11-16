@@ -3,6 +3,7 @@ import { registerBillingEventHandlers } from '../../../../src/foundation/billing
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
     visitCharges,
 } from '../../../support/billing-fixtures.ts';
@@ -102,7 +103,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment discounts', () => {
         return visitId;
     }
     const pay = (visitId: string, body: Record<string, unknown>) =>
-        cashier.post(`/api/v1/billing/visits/${visitId}/payments`, body);
+        payVisit(cashier, visitId, body);
 
     beforeAll(async () => {
         registerBillingEventHandlers();

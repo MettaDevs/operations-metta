@@ -3,6 +3,7 @@ import {
     FormErrorSummary,
     useFormValidation,
 } from '@operations-metta/ui/form-feedback';
+import type { FormFeedback } from '@operations-metta/ui/form-feedback';
 import { cn } from '@operations-metta/ui/utils';
 import { useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
@@ -13,12 +14,14 @@ import type { RefObject } from 'react';
 // Karena itu ia harus berada langsung di antara isi form, bukan di dalam pembungkus yang hanya berisi dirinya. z-20
 // menaruhnya di atas label mengambang isian (z-10) yang tergulir di bawahnya.
 export function FormErrorHeader({
+    actions,
     className,
     errors,
     message,
     operation = 'Perubahan belum disimpan',
     scopeRef,
 }: {
+    actions?: FormFeedback['actions'];
     className?: string;
     errors?: Record<string, string | string[]>;
     message?: string | null;
@@ -45,9 +48,10 @@ export function FormErrorHeader({
                       'Periksa isian yang ditandai sebelum melanjutkan.',
                   errors: fieldErrors,
                   code: errors?.version ? 'stale_version' : null,
+                  actions,
               })
             : null;
-    }, [errors, message, operation]);
+    }, [actions, errors, message, operation]);
 
     const clientFeedback = useFormValidation(scopeRef ?? ownScope);
     const messages = useMemo(

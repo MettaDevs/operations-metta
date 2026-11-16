@@ -3,6 +3,7 @@ import {
     eventContract,
     outboxEnvelopes,
 } from '../../../../../test/support/event-contracts.ts';
+import { payVisit } from '../../../../../test/support/billing-fixtures.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
     api,
@@ -525,12 +526,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         expect(await visit()).toEqual({ status: 'diperiksa', finished: false });
         expect(await payable()).toBe(false);
         expect(
-            await refused(
-                await cashier.post(
-                    `/api/v1/billing/visits/${visitId}/payments`,
-                    { received: '0' },
-                ),
-            ),
+            await refused(await payVisit(cashier, visitId, { received: '0' })),
         ).toEqual({
             _form: [
                 'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.',
@@ -555,7 +551,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
         expect(await payable()).toBe(true);
 
         await json(
-            await cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+            await payVisit(cashier, visitId, {
                 received: '0',
             }),
             201,

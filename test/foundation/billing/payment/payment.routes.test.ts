@@ -11,6 +11,7 @@ import { publishEvent } from '../../../../src/platform/events/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
 } from '../../../support/billing-fixtures.ts';
 import {
@@ -99,7 +100,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
         });
     }
     const pay = (visitId: string, body: Record<string, unknown>) =>
-        cashier.post(`/api/v1/billing/visits/${visitId}/payments`, body);
+        payVisit(cashier, visitId, body);
     const lock = (visitId: string) =>
         withDatabase((db) =>
             db.transaction(() =>

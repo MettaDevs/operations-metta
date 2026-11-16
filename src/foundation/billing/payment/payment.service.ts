@@ -154,6 +154,8 @@ export const patientTypeMessage =
     'Tidak Dapat Menggunakan Tipe Pembayaran, Karena berbeda tipe pasien';
 export const chargeLockedMessage =
     'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.';
+const billChangedMessage =
+    'Tagihan berubah sejak dibuka. Muat ulang untuk melihat total terbaru.';
 
 const methodSchema = z.object({
     id: z.string(),
@@ -335,7 +337,9 @@ export async function legalEntityToday(
 
 // Kunjungan yang ditagih beserta baris biaya terbukanya, dikunci untuk Simpan pembayaran: kunci kunjungan lebih dulu,
 // lalu baris biayanya, dengan Nilai tagihan rumus kasir Kuta. restricted adalah jenis bayar yang dikhususkan tipe
-// pasien lain, dari potret kunjungan selesai.
+// pasien lain, dari potret kunjungan selesai. version adalah versi tagihan: trigger bump_row_version menaikkannya di
+// setiap update kunjungan_kasir (potret kunjungan, dibuka, batal), dan replaceCharges menyentuh baris itu setiap kali
+// baris biayanya diganti (charge.events.ts). Pembayaran tidak mengubah kunjungan_kasir.
 async function openInvoice(
     db: Database,
     scope: Scope,
@@ -348,8 +352,9 @@ async function openInvoice(
             registration_number: z.string(),
             status: z.string(),
             restricted: z.array(z.string()),
+            version: z.number(),
         }),
-        `select no_reg as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted
+        `select no_reg as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted, version
          from kunjungan_kasir
          where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and kunjungan_id = $4
            and status in ('selesai', 'dibuka')`,
@@ -802,14 +807,17 @@ export class Payments {
         };
     }
 
-    // Simpan pembayaran: tagihan dan pembayaran kunjungan dalam satu transaksi, dengan rumus layar Kuta.
-    async create(visitId: string, body: unknown) {
+    // Simpan pembayaran: tagihan dan pembayaran kunjungan dalam satu transaksi, dengan rumus layar Kuta. Form mengirim
+    // versi tagihan yang ditampilkannya, dan Simpan ditolak bila biaya kunjungan berubah sesudah form dibuka, supaya
+    // kasir tidak menerima uang untuk total yang tidak ia lihat.
+    async create(request: Request, visitId: string, body: unknown) {
         this.workspace.guard('payment', 'update');
         const scope = this.scope;
         const parsed = paymentInputSchema.safeParse(body);
         if (!parsed.success || !lookupId(visitId))
             validation({ _form: 'Isian pembayaran tidak sah.' });
         const input = parsed.data;
+        const version = expectedVersion(request, body);
         const posted = await this.db.transaction(async () => {
             const clerk = await openClerk(this.db, scope);
             const currency = new Currency(this.db, scope.tenantId);
@@ -832,6 +840,8 @@ export class Payments {
                 visitId,
             });
             if (refusal) validation({ _form: refusal });
+            if (invoice.visit.version !== version)
+                coded(409, 'stale_version', billChangedMessage);
             const { charges, totals } = invoice;
             const restricted = new Set(invoice.visit.restricted);
             const methods = new Map(

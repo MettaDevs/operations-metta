@@ -395,10 +395,7 @@ function PaymentPage(): ReactNode {
                                 </FormControl>
                             </FormGrid>
                         ) : data.can_pay ? (
-                            <PaymentForm
-                                form={data}
-                                onSaved={() => refetch()}
-                            />
+                            <PaymentForm form={data} reload={() => refetch()} />
                         ) : (
                             <FormGrid>
                                 <FormControl hint="Jumlah Qty x (Nilai - Disc %) + HExt semua baris, dibulatkan ke rupiah.">

@@ -15,6 +15,7 @@ import { HttpFailure } from '../../../../src/platform/http/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
     visitCharges,
 } from '../../../support/billing-fixtures.ts';
@@ -53,7 +54,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
     const methods: Record<string, string> = {};
 
     const pay = (visitId: string, body: Record<string, unknown>) =>
-        cashier.post(`/api/v1/billing/visits/${visitId}/payments`, body);
+        payVisit(cashier, visitId, body);
     const payoff = (body: Record<string, unknown>) =>
         cashier.post('/api/v1/billing/receivable-payments', body);
     const cancelPayoff = (

@@ -12,6 +12,7 @@ import { HttpFailure } from '../../../../src/platform/http/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
 } from '../../../support/billing-fixtures.ts';
 import {
@@ -115,10 +116,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
     }
     async function pay(visitId: string, body: Record<string, unknown>) {
         const created = await json<{ data: { id: string; number: string } }>(
-            await cashier.post(
-                `/api/v1/billing/visits/${visitId}/payments`,
-                body,
-            ),
+            await payVisit(cashier, visitId, body),
             201,
         );
         const [row] = await pool.unsafe<{ version: number }[]>(
