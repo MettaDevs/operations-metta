@@ -38,6 +38,10 @@ export {
     openClerkPaymentMessage,
 } from './credit-memo/credit-memo.service.ts';
 export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
+export {
+    onBeforePayment,
+    type PaymentCheck,
+} from './payment/payment.checks.ts';
 
 let registered = false;
 

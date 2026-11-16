@@ -203,3 +203,29 @@ export class Prescriptions {
         return { data: { ...header, lines } };
     }
 }
+
+// Kasir menolak Simpan pembayaran selama resep kunjungan itu belum disiapkan, seperti Simpan Seroja dan tombol Bayar Kuta
+// (SIMtrResep Realisasi = 0 AND Batal = 0). Resep yang sudah disiapkan, diserahkan, atau dibatalkan tidak dihitung, dan
+// draf penyerahan belum menyiapkan apa pun.
+export async function waitingPrescriptionRefusal(
+    db: Database,
+    visit: { tenantId: string; visitId: string },
+): Promise<string | null> {
+    const waiting = await db.rows(
+        z.object({ number: z.string() }),
+        `select r.nomor_resep as number from far_tr_resep r
+         where r.tenant_id = $1 and r.kunjungan_id = $2 and r.deleted_at is null and r.dibatalkan_pada is null
+           and not exists (select 1 from bill_farmasi b
+                           where b.tenant_id = r.tenant_id and b.resep_id = r.id and b.deleted_at is null
+                             and b.status not in ('draf', 'dibatalkan'))
+         order by r.diterbitkan_pada, r.nomor_resep`,
+        [visit.tenantId, visit.visitId],
+    );
+    if (!waiting.length) return null;
+    const numbers = waiting.map((row) => row.number);
+    const listed =
+        numbers.length === 1
+            ? `Resep ${numbers[0]}`
+            : `Resep ${numbers.slice(0, -1).join(', ')} dan ${numbers.at(-1)}`;
+    return `${listed} belum disiapkan farmasi. Tunggu farmasi menyiapkannya dulu, atau minta farmasi membatalkan resep yang tidak diambil pasien.`;
+}

@@ -76,6 +76,14 @@ Apoteker dan asisten adalah pengguna tenant (`users`), dipilih dengan namanya. D
 
 Serahkan juga mencatat siapa yang menerima obat (`0011_dispensing_receiver.sql`): pasien sendiri (`diterima_pasien`), atau orang lain beserta namanya (`nama_penerima`). Pilihan penerima wajib saat Serahkan, dan namanya wajib bila penerimanya orang lain. Aksi Serahkan ke pasien di antrean mencatat pasien sebagai penerima; obat yang diambil orang lain diserahkan dari kartu resepnya. Sistem lama tidak mencatat penerima; kolom ini ditambahkan karena MedicationDispense SATUSEHAT membutuhkannya. Waktu siap, waktu serah, dan apoteker yang juga dibutuhkannya sudah tercatat, dan obat tidak pernah diganti karena penyerahan tidak bisa mengganti obat resep. Pemetaan lengkapnya ada di kepala migration itu.
 
+## Kasir menunggu resep
+
+Kasir menolak Simpan pembayaran selama kunjungan itu masih punya resep yang belum disiapkan, seperti Simpan Seroja ("Masih Ada Resep Yang Belum Direalisasi") dan tombol Bayar Kuta (`SIMtrResep` `Realisasi = 0 AND Batal = 0`). Pesannya menyebut nomor resepnya dan meminta kasir menunggu farmasi atau meminta farmasi membatalkan resep yang tidak diambil pasien. Resep yang sudah disiapkan, diserahkan, atau dibatalkan tidak dihitung; draf penyerahan belum menyiapkan apa pun.
+
+Pemeriksaannya milik module ini (`waitingPrescriptionRefusal`), karena hanya module ini yang membaca tabelnya. Ia didaftarkan ke kasir Core lewat `onBeforePayment`, padanan integration event `OnBeforePostSalesDoc` di BC, dari `registerPharmacyEventHandlers()`, dan kasir hanya menjalankannya untuk tenant yang memasang module ini.
+
+Pembayaran otomatis tipe pasien tidak menunggu, sama dengan sistem lama: Seroja melunasi pasien BPJS dari poli tanpa memeriksa resep, dan Kuta melunasi obat BPJS saat Siapkan. Di sini pembayaran otomatis dilunasi ulang begitu obatnya disiapkan.
+
 ## Harga obat
 
 Makna fungsi sistem lama `GetHargaObatNew_WithStok` (Seroja dan Penta; Kuta 1 memakai rumus yang sama). Keputusan pemilik produk 13 November 2026 (opsi 8.3 A): grading tinggal di module ini, harga dihitung saat Siapkan dan disalin ke `bill_farmasi_detail`, dan kasir tidak menghitung ulang.
