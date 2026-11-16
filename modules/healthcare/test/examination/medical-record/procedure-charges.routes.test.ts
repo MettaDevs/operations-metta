@@ -16,7 +16,6 @@ import {
     eventContract,
     outboxEnvelopes,
 } from '../../../../../test/support/event-contracts.ts';
-import { createMember } from '../../../../../test/support/tenant-fixtures.ts';
 
 type Entry = { id: string; version: number };
 type Line = {
@@ -736,10 +735,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
         }
         expect(await sent()).toBe(sentBefore);
 
-        // Batal pembayaran kasir, disetujui pengguna yang berhak, membuka lagi baris biaya kunjungan.
-        const approver = await createMember(pool, clinic.tenantId, [
-            'core.payment-cancel.approve',
-        ]);
+        // Batal pembayaran kasir oleh kasir yang memegang izin batal membuka lagi baris biaya kunjungan.
         const [payment] = await pool.unsafe<{ id: string; version: number }[]>(
             "select id, version from kasir where tenant_id = $1 and sumber_dokumen_id = $2 and status = 'diposting'",
             [clinic.tenantId, visitId],
@@ -748,8 +744,6 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             await cashier.post(
                 `/api/v1/billing/payments/${payment?.id}/cancel`,
                 {
-                    approver_email: approver.email,
-                    approver_password: approver.password,
                     reason: 'Tindakan diubah sesudah bayar',
                     version: payment?.version,
                 },

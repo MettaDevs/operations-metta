@@ -23,10 +23,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import {
-    createMember,
-    testPassword,
-} from '../../../support/tenant-fixtures.ts';
+import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Receivable = {
     id: string;
@@ -49,7 +46,6 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
     let tenantId: string;
     let cashier: Browser;
     let charges: ReturnType<typeof visitCharges>;
-    let approver: { email: string; password: string };
     let merchantId: string;
     const methods: Record<string, string> = {};
 
@@ -111,8 +107,6 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
         return cashier.post(`/api/v1/billing/payments/${paymentId}/cancel`, {
             version: row?.version,
             reason: 'Salah pilih pasien',
-            approver_email: approver.email,
-            approver_password: approver.password,
         });
     };
 
@@ -126,6 +120,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
             ],
         );
         tenantId = business.tenantId;
@@ -134,9 +129,6 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
             tenantId,
             legalEntityId: business.legalEntityId,
         });
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         for (const method of [
             { code: 'TUN', behavior: 'tunai', counted_at_close: true },
             {

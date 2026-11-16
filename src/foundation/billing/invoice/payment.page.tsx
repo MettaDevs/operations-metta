@@ -76,7 +76,7 @@ function PaymentPage(): ReactNode {
                     ))
                 }
             >
-                {payment && data.can_pay && (
+                {payment && data.can_cancel && (
                     <Button
                         type="button"
                         variant="ghost"

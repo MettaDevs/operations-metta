@@ -23,10 +23,7 @@ export function creditMemoRoutes() {
                 new CreditMemos(
                     context.db,
                     await coreWorkspace(context, input.body),
-                ).post(context.request, input.params.id, input.body, {
-                    verify: (email, password) =>
-                        context.session.verifyApprover(email, password),
-                }),
+                ).post(context.request, input.params.id, input.body),
             ),
     };
 }

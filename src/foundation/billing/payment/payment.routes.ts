@@ -46,10 +46,7 @@ export function paymentRoutes() {
                     await new Payments(
                         context.db,
                         await coreWorkspace(context, input.body),
-                    ).cancel(context.request, input.params.id, input.body, {
-                        verify: (email, password) =>
-                            context.session.verifyApprover(email, password),
-                    }),
+                    ).cancel(context.request, input.params.id, input.body),
                 ),
             ),
     };

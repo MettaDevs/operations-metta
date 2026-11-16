@@ -16,13 +16,12 @@ import { paymentClerk } from '../clerk/clerk.service.ts';
 import { behaviorsSettledAs } from '../payment-method/payment-method.behaviors.ts';
 import { paymentCancelInputSchema } from '../payment/payment.schema.ts';
 import {
-    approval,
+    cancelReason,
     legalEntityToday,
     lockVisit,
     paymentStatusSchema,
     refuseUnlessPosted,
     reopenCharges,
-    type ApproverCheck,
 } from '../payment/payment.service.ts';
 import {
     cancelReceivables,
@@ -114,15 +113,11 @@ export class CreditMemos {
         private readonly workspace: Workspace,
     ) {}
 
-    // Penolakan dibaca lebih dulu, lalu persetujuan, lalu satu transaksi dengan urutan kunci yang sama dengan Batal
-    // pembayaran: clerk kasir yang berjalan, kunjungan, pembayaran, lalu piutangnya.
-    async post(
-        request: Request,
-        paymentId: string,
-        body: unknown,
-        approver: ApproverCheck,
-    ) {
-        this.workspace.guard('payment', 'update');
+    // Penolakan dibaca lebih dulu, lalu satu transaksi dengan urutan kunci yang sama dengan Batal pembayaran: clerk kasir
+    // yang berjalan, kunjungan, pembayaran, lalu piutangnya. Izinnya sama dengan Batal: pengguna yang masuk sendiri
+    // memegang izin batal pembayaran.
+    async post(request: Request, paymentId: string, body: unknown) {
+        this.workspace.guard('payment', 'cancel');
         const scope = {
             tenantId: this.workspace.tenantId,
             legalEntityId: activeLegalEntity(this.workspace),
@@ -159,13 +154,7 @@ export class CreditMemos {
             tenantId: scope.tenantId,
             paymentId: payment.id,
         });
-        const { approverId, reason } = await approval(
-            this.db,
-            scope.tenantId,
-            parsed.data,
-            approver,
-            'koreksi',
-        );
+        const reason = cancelReason(parsed.data, 'koreksi');
         const posted = await this.db.transaction(async () => {
             const clerk = await paymentClerk(this.db, scope);
             const header = await this.db.one(
@@ -227,7 +216,6 @@ export class CreditMemos {
                 kasir_id: payment.id,
                 clerk_id: clerk?.id ?? null,
                 user_id: scope.userId,
-                penyetuju_user_id: approverId,
                 alasan: reason,
                 nilai: header.value,
                 nilai_discount: header.discount,

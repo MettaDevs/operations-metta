@@ -37,7 +37,6 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
     let tenantId: string;
     let cashier: Browser;
     let charges: ReturnType<typeof visitCharges>;
-    let approver: { email: string; password: string };
     const methods: Record<string, string> = {};
 
     const setup = async () =>
@@ -73,8 +72,6 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
         cashier.post(`/api/v1/billing/payments/${paymentId}/cancel`, {
             version: await version('kasir', paymentId),
             reason: 'Salah pilih pasien',
-            approver_email: approver.email,
-            approver_password: approver.password,
         });
 
     beforeAll(async () => {
@@ -87,6 +84,7 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
                 'core.billing-setup.manage',
                 'core.clerk.operate',
                 'core.payment.operate',
+                'core.payment-cancel.approve',
             ],
         );
         tenantId = business.tenantId;
@@ -95,9 +93,6 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
             tenantId,
             legalEntityId: business.legalEntityId,
         });
-        approver = await createMember(pool, tenantId, [
-            'core.payment-cancel.approve',
-        ]);
         for (const method of [
             { code: 'TUN', behavior: 'tunai', counted_at_close: true },
             {
@@ -180,8 +175,6 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
                     {
                         version: await version('kasir', paymentId),
                         reason: 'Salah pilih pasien',
-                        approver_email: approver.email,
-                        approver_password: approver.password,
                     },
                 ),
             ),
