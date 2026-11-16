@@ -261,6 +261,60 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
         ]);
     });
 
+    test('a role that newly takes the cashier duty also gets cancelling payments as its own duty, and removing it sticks', async () => {
+        const stored = async (id: string) =>
+            [
+                ...(await pool.unsafe<{ duty_code: string }[]>(
+                    'select duty_code from security_role_duties where role_id = $1 order by duty_code',
+                    [id],
+                )),
+            ].map((row) => row.duty_code);
+        const save = async (id: string, name: string, duties: string[]) =>
+            json(
+                await owner.put(`/api/v1/roles/${id}`, {
+                    version: await version('roles', id),
+                    name,
+                    duty_codes: duties,
+                }),
+                200,
+            );
+
+        const cashier = await createRole('Kasir loket', [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        expect(await stored(cashier.id)).toEqual([
+            'core.clerk.operate',
+            'core.payment-cancel.approve',
+            'core.payment.operate',
+        ]);
+
+        await save(cashier.id, 'Kasir loket', [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        await save(cashier.id, 'Kasir loket pagi', [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        expect(await stored(cashier.id)).toEqual([
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+
+        const clerk = await createRole('Pembuka loket', ['core.clerk.operate']);
+        expect(await stored(clerk.id)).toEqual(['core.clerk.operate']);
+        await save(clerk.id, 'Pembuka loket', [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        expect(await stored(clerk.id)).toEqual([
+            'core.clerk.operate',
+            'core.payment-cancel.approve',
+            'core.payment.operate',
+        ]);
+    });
+
     test('reading roles needs access read, and changing them needs access update', async () => {
         const reader = await createMember(pool, tenantId, [
             'core.access.inquire',
