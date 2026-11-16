@@ -16,6 +16,8 @@ export {
     type ChargeGroup,
     type SaleBill,
 } from './charge/charge.events.ts';
+// Total tagihan dengan rumus kasir, supaya module penjual menampilkan total yang sama dengan yang ditagih payBill.
+export { invoiceTotals } from './invoice/invoice.totals.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
 import { creditMemoRoutes } from './credit-memo/credit-memo.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';

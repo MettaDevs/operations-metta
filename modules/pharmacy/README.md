@@ -1,6 +1,6 @@
 # pharmacy
 
-Module farmasi: antrean resep dari layanan kesehatan, penyerahan obat, dan retur obat pasien. Nama yang tampil di layar datang dari baris `apps` (`Farmasi`), bukan dari kode. Module ini bisa dijual sendiri: ia tidak membaca tabel module lain, stoknya milik persediaan Core, dan resep datang lewat event.
+Module farmasi: antrean resep dari layanan kesehatan, penyerahan obat, retur obat pasien, dan penjualan obat bebas di loket. Nama yang tampil di layar datang dari baris `apps` (`Farmasi`), bukan dari kode. Module ini bisa dijual sendiri: ia tidak membaca tabel module lain, stoknya milik persediaan Core, dan resep datang lewat event.
 
 ## Satu farmasi, lokasi diatur
 
@@ -25,10 +25,11 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 | `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, Patient KTP, dan rentang harga dasar (SIMmGradingHargaObat) |
 | `far_m_parameter`        | Yatim sejak 0008: desimal harga satuan obat pindah ke setelan keuangan Core                                           |
 | `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                                  |
+| `far_m_lokasi_penjualan` | Lokasi stok yang boleh menjual obat bebas, dengan kelompok harga bawaannya                                            |
 | `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                               |
 | `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                            |
-| `bill_farmasi`           | Penyerahan obat satu resep: nomor, status, lokasi stok keluar, apoteker, asisten, penerima, dan waktu setiap langkah  |
-| `bill_farmasi_detail`    | Satu baris per obat resep: jumlah diserahkan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan      |
+| `bill_farmasi`           | Penyerahan obat satu resep, atau satu penjualan obat bebas tanpa resep: nomor, status, lokasi, orang, dan waktu       |
+| `bill_farmasi_detail`    | Satu baris per obat: jumlah diserahkan, satuan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan    |
 | `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                                   |
 | `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                            |
 
@@ -99,6 +100,21 @@ Makna fungsi sistem lama `GetHargaObatNew_WithStok` (Seroja dan Penta; Kuta 1 me
 - **Golden test** terhadap fungsi SQL sistem lama: `test/drug/drug-price/legacy-drug-prices.test.ts` memakai keluaran oracle `legacy-drug-prices.sql` (dijalankan read-only di Kuta 1, Seroja, dan Penta dengan KTP 1, dan di Seroja dan Penta sekali lagi dengan KTP 0) yang disimpan di `legacy-drug-prices.json`. Setiap kasus dihitung dengan KTP-nya dan presisi harga satuan sumbernya (`unit_price_decimals`: Kuta 1 dan Penta 0, Seroja 4) dan wajib sama dengan harga sistem lama kecuali yang tercatat di `expected_differences` beserta alasannya: satu barang Seroja berkelas ALKES di kelompok XX, yang salinan Seroja hargai 0 % untuk kedua nilai KTP karena juga mencocokkan kelas barang.
 - **Tidak dibawa sebagai kode**: KTP 1 yang dipaksakan untuk BPJS (JenisKerjasamaID 9; kelompok harga yang tidak membedakan KTP cukup diberi baris untuk kedua nilai), TipePelayanan (mati di setiap salinan sistem lama: lookup-nya dikomentari dan yang hidup memakai `'STANDARD'`), kontrak penjamin dan HargaObatDigunakan, BPJS + Fornas tanpa kenaikan (cukup baris grading 0 %), dan diskon karyawan; semuanya bergantung pada id yang ditulis mati di sistem lama.
 
+## Penjualan obat bebas
+
+Pembeli datang ke loket farmasi tanpa resep. Petugas memilih obat, melihat total, menerima bayar, lalu menyerahkan obatnya, semuanya dalam satu langkah. Sistem lama punya satu "pembayaran obat bebas" yang mencampur penjualan dan pembayaran; di sini polanya transaksi Commerce F&O (baris penjualan dan baris tender dalam satu transaksi) dan dokumen penjualan BC yang dibayar saat diposting. Resep tetap dua langkah: Siapkan di farmasi, lalu kasir. Module ini tidak membaca module layanan kesehatan, jadi apotek yang hanya memasang farmasi bisa menjual obat bebas (`0015_otc_sale.sql`).
+
+- **Lokasi.** Setelan Lokasi penjualan obat bebas (`far_m_lokasi_penjualan`, API `/otc-sale-locations`; layarnya menyusul bersama layar loket): satu baris hidup per lokasi stok berarti lokasi itu boleh menjual, dengan kelompok harga bawaannya; kosong berarti harga dasar. Lokasi adalah identitas baris, jadi Ubah hanya mengganti kelompok harga. Menghapus barisnya (lunak) mencabut izin menjual; penjualan yang sudah terjadi tetap tercatat. Lokasi transit ditolak.
+- **Pilihan loket** (`GET .../otc-sales/options`): lokasi yang boleh menjual beserta kelompok harga bawaannya.
+- **Harga tanpa menyimpan** (`POST .../otc-sales/quote`): lokasi, kelompok harga, Patient KTP, dan baris obat (barang, satuan, jumlah). Harga satuan dan % diskon dihitung `priceDrugLines`, sama dengan Siapkan resep, pada tanggal hari ini di legal entity itu. Nilai baris dan total dihitung `invoiceTotals` kasir Core atas baris tagihan yang sama (Qty jumlah jual, Nilai dan HargaOrig harga satuan, Disc % diskon, HExt 0, tanpa kelompok jasa), jadi total yang terlihat sama dengan yang ditagih kasir. `price_group_id` yang tidak dikirim berarti kelompok harga bawaan lokasi, dan `null` berarti harga dasar.
+- **Simpan dan bayar** (`POST .../otc-sales`): isian quote ditambah pembeli, batch per baris, `expected_total`, dan `payment` (isian Form Pembayaran kasir: `received`, `lines`, `take_remainder`). Satu transaksi: periksa isian, hitung ulang total, tolak dengan 409 `stale_total` bila berbeda dengan `expected_total`, ambil nomor `pharmacy.dispensing-number` untuk operating unit lokasi, tulis `bill_farmasi` tanpa resep berstatus `diserahkan` (siap dan serah dengan waktu dan pengguna yang sama) beserta barisnya, posting stok keluar `penyerahan` lewat `postItemLines` (batch kosong diambil menurut cara pengambilan lokasi, FEFO bawaan), tulis tagihan penjualan kasir lewat `replaceSaleBill` (group OBAT), lalu simpan pembayarannya lewat `payBill` dengan clerk pengguna loket. Yang ditolak tidak menulis apa pun. Jawabannya 201 berisi id dan nomor penjualan serta id dan nomor pembayaran.
+- **Penolakan kasir** memakai nama field Form Pembayaran, yang bertabrakan dengan baris obat (`lines.0`). Di loket nama field-nya dipindah ke bawah `payment.` (`payment.received`, `payment.lines.0.amount`); `_form` tetap, misalnya "Masih terdapat Sisa pembayaran!!" dan pesan Clerk Start.
+- **Pembeli.** Pihak buku alamat Core, nama yang diketik, keduanya, atau tidak ada (pembeli umum). Nama yang disalin ke penjualan dan tagihannya adalah nama yang diketik, atau nama pihaknya. Pembayaran yang menjadi piutang wajib punya pihak, aturan kasir Core.
+- **Izin.** Duty `pharmacy.otc-sale.operate` membuka loket; uangnya diterima kasir Core, jadi petugas loket juga butuh izin terima pembayaran kasir (`core.payment.update`) dan Clerk Start. Tanpa izin itu Simpan dan bayar dijawab 403.
+- **Tidak ada event ke layanan kesehatan.** Penjualan obat bebas tidak punya kunjungan, jadi `pharmacy.dispensing.charges-replaced.v1` tidak terbit; tagihannya ditulis langsung lewat `replaceSaleBill`.
+- **Patient KTP per penjualan.** Buku alamat Core tidak menyimpan KTP; KTP pasien ada di master pasien layanan kesehatan, yang tidak dibaca module ini. Karena itu KTP diisi per penjualan, bawaannya `true`, juga untuk pembeli dari buku alamat. Ini gap sampai pihak Core punya atribut KTP.
+- **Belum termasuk.** Layar loket (berikutnya), retur penjualan obat bebas, poin member, cetak struk (menunggu mesin cetak), dan resep luar.
+
 ## Obat diserahkan: event ke layanan kesehatan
 
 Serahkan menerbitkan `pharmacy.prescription.dispensed.v1` (kontrak `contracts/events/pharmacy.prescription.dispensed.v1.yaml`) di transaksi yang sama. Isinya: id dan nomor resep asal, nomor penyerahan, waktu, lokasi, apoteker, asisten, dan satu baris per obat resep dengan satuan dan jumlah resep, satuan dan jumlah yang diserahkan beserta isi satuan itu dan jumlahnya dalam satuan dasar, alasan, dan batch yang diambil (nomor, kedaluwarsa, jumlah dalam satuan dasar). Serahkan yang diulang tidak menerbitkan event kedua, dan penyiapan yang dibatalkan tidak menerbitkan apa pun.
@@ -123,13 +139,14 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                             |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                    |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep (apoteker) |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat, dan harga obat            |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat, dan harga obat           |
+| Duty                          | Isi                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                                            |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                                   |
+| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep (apoteker)                |
+| `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya)                      |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat  |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
@@ -137,7 +154,7 @@ Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). 
 
 - Pembatasan akses per lokasi atau unit kerja (petugas pusling hanya melihat resep pusling).
 - Layar antrean di TV (display board).
-- Obat bebas tanpa resep (OTC) dan resep luar. Di Kuta 1 keduanya hampir tidak dipakai (2 dan 0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
+- Resep luar. Di Kuta 1 hampir tidak dipakai (0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
 - Tagihan; menyusul lewat billing/kasir di Foundation, yang membaca harga yang sudah disalin ke baris penyerahan.
 - Mengganti obat resep dengan obat lain (Item Substitution BC).
 - Cetak etiket dan kuitansi; menunggu mesin cetak.
