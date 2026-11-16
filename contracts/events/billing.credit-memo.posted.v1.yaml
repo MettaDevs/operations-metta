@@ -3,6 +3,10 @@ info:
     title: billing.credit-memo.posted.v1
     version: 1.0.0
     description: |
+        Tidak lagi diterbitkan sejak 16 November 2026. Penggantinya v2 dengan nama yang sama, yang membawa dokumen
+        sumber tagihan, bukan kunjungan, karena tagihan penjualan tanpa kunjungan masuk kasir yang sama. Belum ada
+        penerima v1 saat diganti.
+
         Nota kredit kasir diposting: pembayaran yang clerk-nya sudah Clerk End dibalik seluruhnya, pola BC Sales Credit
         Memo (`CorrectPostedSalesInvoice` / Cancel) dan Refund. Sistem lama tidak punya padanannya; ia hanya punya Batal.
         Diterbitkan kasir Core (`src/foundation/billing/credit-memo/`) lewat `publishEvent` di transaksi nota kredit yang

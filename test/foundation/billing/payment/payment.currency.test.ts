@@ -294,14 +294,16 @@ describe.skipIf(!process.env.DB_HOST)(
                     nilai: '200694',
                 },
             ]);
-            const contract = await eventContract('billing.invoice.posted.v1');
+            const contract = await eventContract('billing.invoice.posted.v2');
             const [sent] = (
                 await outboxEnvelopes(
                     pool,
                     tenantId,
-                    'billing.invoice.posted.v1',
+                    'billing.invoice.posted.v2',
                 )
-            ).filter((envelope) => envelope.data.visit_id === visits.exact);
+            ).filter(
+                (envelope) => envelope.data.source_document_id === visits.exact,
+            );
             expect(contract.safeParse(sent).error).toBeUndefined();
             expect(sent?.data.payments).toContainEqual({
                 payment_method_id: methods[foreign],

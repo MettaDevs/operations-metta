@@ -310,8 +310,7 @@ export async function lockVisitCharges(
     try {
         await lockChargeForChange(db, {
             tenantId: scope.tenantId,
-            sourceModule: 'healthcare',
-            visitId: scope.visitId,
+            documentId: scope.visitId,
         });
     } catch (error) {
         if (scope.message && error instanceof HttpFailure)

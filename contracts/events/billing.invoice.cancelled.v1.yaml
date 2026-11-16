@@ -3,6 +3,10 @@ info:
     title: billing.invoice.cancelled.v1
     version: 1.0.0
     description: |
+        Tidak lagi diterbitkan sejak 16 November 2026. Penggantinya v2 dengan nama yang sama, yang membawa dokumen
+        sumber tagihan, bukan kunjungan, karena tagihan penjualan tanpa kunjungan masuk kasir yang sama. Belum ada
+        penerima v1 saat diganti.
+
         Pembayaran kasir dibatalkan: SIMtrKasir sistem lama dengan TglBatal, BATAL = 1, dan AlasanBatal, oleh pengguna yang
         memegang izin `core.payment.cancel`. Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat `publishEvent` di
         transaksi batal yang sama, sesudah baris biaya kunjungan dibuka lagi (`ditagih` kembali `terbuka`).

@@ -227,10 +227,10 @@ describe.skipIf(!process.env.DB_HOST)('billing payment discounts', () => {
             },
             { kode: 'DSC67', persen: '7.4', nilai: '50000', jasa: null },
         ]);
-        const contract = await eventContract('billing.invoice.posted.v1');
+        const contract = await eventContract('billing.invoice.posted.v2');
         const [sent] = (
-            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v1')
-        ).filter((envelope) => envelope.data.visit_id === visitId);
+            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v2')
+        ).filter((envelope) => envelope.data.source_document_id === visitId);
         expect(contract.safeParse(sent).error).toBeUndefined();
         expect(sent?.data.discount).toBe('71750');
     });

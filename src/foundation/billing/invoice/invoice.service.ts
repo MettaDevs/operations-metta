@@ -35,7 +35,8 @@ const visitSql = `select * from (
                              ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
                              to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids, k.version
                       from tagihan_kasir k
-                      where k.tenant_id = $1 and k.legal_entity_id = $2 and k.status = 'selesai') visits
+                      where k.tenant_id = $1 and k.legal_entity_id = $2 and k.jenis = 'kunjungan'
+                        and k.status = 'selesai') visits
                   where true`;
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;

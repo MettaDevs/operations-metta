@@ -162,10 +162,12 @@ describe.skipIf(!process.env.DB_HOST)('billing setup', () => {
         const posted = await outboxEnvelopes(
             pool,
             tenantId,
-            'billing.invoice.posted.v1',
+            'billing.invoice.posted.v2',
         );
         expect(
-            posted.filter((envelope) => envelope.data.visit_id === visitId),
+            posted.filter(
+                (envelope) => envelope.data.source_document_id === visitId,
+            ),
         ).toHaveLength(1);
 
         expect(

@@ -18,7 +18,7 @@ import { paymentCancelInputSchema } from '../payment/payment.schema.ts';
 import {
     cancelReason,
     legalEntityToday,
-    lockVisit,
+    lockBill,
     paymentStatusSchema,
     refuseUnlessPosted,
     reopenCharges,
@@ -31,10 +31,10 @@ import {
 // Nota kredit kasir, pola BC Sales Credit Memo (CorrectPostedSalesInvoice / Cancel) dan Refund: pembayaran yang clerk-nya
 // sudah Clerk End dibalik seluruhnya di clerk kasir yang sedang berjalan. Uang yang diterima (tunai dan non tunai)
 // dikembalikan lewat jenis bayar yang sama dengan jumlah, valuta, dan kurs saat dibayar; piutangnya dibatalkan; baris
-// biaya kunjungan kembali terbuka, jadi kunjungannya bisa dibayar lagi dengan nomor baru. Selama clerk pembayaran itu
+// biaya tagihan kembali terbuka, jadi tagihannya bisa dibayar lagi dengan nomor baru. Selama clerk pembayaran itu
 // masih berjalan, koreksinya Batal pembayaran.
 
-export const creditMemoPosted = 'billing.credit-memo.posted.v1' as const;
+export const creditMemoPosted = 'billing.credit-memo.posted.v2' as const;
 export const openClerkPaymentMessage =
     'Pembayaran ini masih di clerk yang berjalan. Batalkan pembayarannya saja.';
 export const automaticPaymentMessage =
@@ -114,7 +114,7 @@ export class CreditMemos {
     ) {}
 
     // Penolakan dibaca lebih dulu, lalu satu transaksi dengan urutan kunci yang sama dengan Batal pembayaran: clerk kasir
-    // yang berjalan, kunjungan, pembayaran, lalu piutangnya. Izinnya sama dengan Batal: pengguna yang masuk sendiri
+    // yang berjalan, tagihan, pembayaran, lalu piutangnya. Izinnya sama dengan Batal: pengguna yang masuk sendiri
     // memegang izin batal pembayaran.
     async post(request: Request, paymentId: string, body: unknown) {
         this.workspace.guard('payment', 'cancel');
@@ -159,24 +159,23 @@ export class CreditMemos {
             const clerk = await paymentClerk(this.db, scope);
             const header = await this.db.one(
                 z.object({
-                    visit_id: z.string(),
+                    document_id: z.string(),
                     source_module: z.string(),
                     number: z.string(),
                     value: z.string(),
                     discount: z.string(),
-                    registration_number: z.string(),
+                    document_number: z.string(),
                 }),
-                `select k.sumber_dokumen_id as visit_id, k.sumber_module as source_module, k.no_bukti as number,
+                `select k.sumber_dokumen_id as document_id, k.sumber_module as source_module, k.no_bukti as number,
                         trim_scale(k.nilai)::text as value, trim_scale(k.nilai_discount)::text as discount,
-                        v.sumber_nomor as registration_number
+                        v.sumber_nomor as document_number
                  from kasir k
-                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                       and v.sumber_dokumen_id = k.sumber_dokumen_id
+                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_dokumen_id = k.sumber_dokumen_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],
             );
             if (!header) abort(404, 'Not Found');
-            await lockVisit(this.db, scope.tenantId, header.visit_id);
+            await lockBill(this.db, scope.tenantId, header.document_id);
             const stamp = nowSql();
             const credited = await this.db.execute(
                 `update kasir set status = 'dikreditkan', updated_at = $1
@@ -247,8 +246,8 @@ export class CreditMemos {
                     payment_id: payment.id,
                     payment_number: header.number,
                     source_module: header.source_module,
-                    visit_id: header.visit_id,
-                    registration_number: header.registration_number,
+                    source_document_id: header.document_id,
+                    source_document_number: header.document_number,
                     date,
                     value: header.value,
                     discount: header.discount,
@@ -270,7 +269,7 @@ export class CreditMemos {
             headers: {},
             body: {
                 data: posted,
-                message: `Nota kredit ${posted.number} tersimpan. Kunjungan ini kembali belum dibayar.`,
+                message: `Nota kredit ${posted.number} tersimpan. Tagihan ini kembali belum dibayar.`,
             },
         };
     }

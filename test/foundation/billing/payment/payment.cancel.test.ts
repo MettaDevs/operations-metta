@@ -138,8 +138,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
                 await db.transaction(() =>
                     lockChargeForChange(db, {
                         tenantId,
-                        sourceModule: 'healthcare',
-                        visitId,
+                        documentId: visitId,
                     }),
                 );
                 return null;
@@ -291,20 +290,20 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         ]).toEqual([{ status: 'terbuka', kasir_id: null }]);
         expect(await lockRefusal(visits.local)).toBeNull();
 
-        const contract = await eventContract('billing.invoice.cancelled.v1');
+        const contract = await eventContract('billing.invoice.cancelled.v2');
         const sent = await envelopes(
-            'billing.invoice.cancelled.v1',
+            'billing.invoice.cancelled.v2',
             payment.id,
         );
         expect(sent).toHaveLength(1);
         expect(contract.safeParse(sent[0]).error).toBeUndefined();
         const [posted] = await envelopes(
-            'billing.invoice.posted.v1',
+            'billing.invoice.posted.v2',
             payment.id,
         );
         expect(sent[0]?.data).toMatchObject({
             payment_number: payment.number,
-            visit_id: visits.local,
+            source_document_id: visits.local,
             value: '175000',
             reason: 'Salah pilih pasien',
             payments: posted?.data.payments,
@@ -338,7 +337,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         await json(await cancel(payment, withReason), 200);
         expect([...(await lines())]).toEqual(before);
         const [sent] = await envelopes(
-            'billing.invoice.cancelled.v1',
+            'billing.invoice.cancelled.v2',
             payment.id,
         );
         expect(sent?.data.payments).toContainEqual({

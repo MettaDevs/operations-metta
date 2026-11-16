@@ -20,7 +20,7 @@ const load = async ({ query, cursor, signal }: LookupRequest) => {
         items: body.data.map((row): Receivable => ({
             ...row,
             code: row.invoice_number,
-            name: row.patient_name,
+            name: row.patient_name ?? row.party_name,
         })),
         nextCursor: body.next_cursor,
     };

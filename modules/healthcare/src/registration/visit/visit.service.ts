@@ -1131,8 +1131,7 @@ export class Visits {
             );
             await lockChargeForChange(this.db, {
                 tenantId: this.workspace.tenantId,
-                sourceModule: moduleId,
-                visitId: current.id,
+                documentId: current.id,
             });
             await publishVisitCancelled(
                 this.db,

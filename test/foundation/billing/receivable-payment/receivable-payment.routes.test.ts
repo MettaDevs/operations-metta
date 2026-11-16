@@ -415,8 +415,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
                 await db.transaction(() =>
                     lockChargeForChange(db, {
                         tenantId,
-                        sourceModule: 'healthcare',
-                        visitId,
+                        documentId: visitId,
                     }),
                 );
                 return null;
