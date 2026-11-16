@@ -293,7 +293,7 @@ function DispensingForm({
     const returnContent = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const canReturn = useCanReturn(
-        prescription.id,
+        { kind: 'prescription', id: prescription.id },
         dispensing?.status === 'diserahkan',
     );
     const dirty =
@@ -852,7 +852,10 @@ function DispensingForm({
                         {status === 'diserahkan' && (
                             <CollapsibleSection value="returns" title="Retur">
                                 <ReturnsSection
-                                    prescriptionId={prescription.id}
+                                    target={{
+                                        kind: 'prescription',
+                                        id: prescription.id,
+                                    }}
                                 />
                             </CollapsibleSection>
                         )}
@@ -881,7 +884,10 @@ function DispensingForm({
                 >
                     <PageDialogContent ref={returnContent} title="Retur obat">
                         <ReturnCard
-                            prescriptionId={prescription.id}
+                            target={{
+                                kind: 'prescription',
+                                id: prescription.id,
+                            }}
                             onDone={() => setReturning(false)}
                             portalContainer={returnContent}
                         />

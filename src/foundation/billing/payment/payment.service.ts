@@ -300,6 +300,23 @@ export async function lockChargeForChange(
     });
 }
 
+// Dokumen sumber yang punya pembayaran kasir yang masih berlaku (belum dibatalkan atau dikreditkan), untuk status bayar
+// di daftar module penjual.
+export async function paidDocuments(
+    db: Database,
+    tenantId: string,
+    documentIds: string[],
+): Promise<Set<string>> {
+    if (!documentIds.length) return new Set();
+    const rows = await db.rows(
+        z.object({ document_id: z.string() }),
+        `select distinct sumber_dokumen_id as document_id from kasir
+         where tenant_id = $1 and sumber_dokumen_id = any($2::uuid[]) and status = 'diposting'`,
+        [tenantId, `{${documentIds.join(',')}}`],
+    );
+    return new Set(rows.map((row) => row.document_id));
+}
+
 type Scope = { tenantId: string; legalEntityId: string };
 
 export async function legalEntityToday(

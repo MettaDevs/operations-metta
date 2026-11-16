@@ -4819,6 +4819,42 @@
             }
         }
     },
+    "pharmacyOtcSaleReturnList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/otc-sales/{id}/returns",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyOtcSaleReturnCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/pharmacy/v1/otc-sales/{id}/returns",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyOtcSaleReturnReverse": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/pharmacy/v1/otc-sales/{id}/returns/{returnId}/reverse",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pharmacyServiceLocationList": {
         "~orpc": {
             "errorMap": {},
@@ -5114,6 +5150,30 @@
             "route": {
                 "method": "POST",
                 "path": "/api/modules/pharmacy/v1/otc-sales/quote",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyOtcSaleList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/otc-sales",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyOtcSaleShow": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/otc-sales/{id}",
                 "inputStructure": "detailed",
                 "outputStructure": "detailed"
             }

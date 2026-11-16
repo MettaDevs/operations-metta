@@ -43,6 +43,7 @@ import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modul
 import { page as modulesPharmacySrcDashboardDashboardPage } from '../modules/pharmacy/src/dashboard/dashboard.page.tsx';
 import { page as modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage } from '../modules/pharmacy/src/dispensing/otc-sale-location/otc-sale-locations.page.tsx';
 import { page as modulesPharmacySrcDispensingOtcSaleOtcSalePage } from '../modules/pharmacy/src/dispensing/otc-sale/otc-sale.page.tsx';
+import { page as modulesPharmacySrcDispensingOtcSaleOtcSalesPage } from '../modules/pharmacy/src/dispensing/otc-sale/otc-sales.page.tsx';
 import { page as modulesPharmacySrcDispensingPrescriptionPrescriptionsPage } from '../modules/pharmacy/src/dispensing/prescription/prescriptions.page.tsx';
 import { page as modulesPharmacySrcDispensingServiceLocationServiceLocationsPage } from '../modules/pharmacy/src/dispensing/service-location/service-locations.page.tsx';
 import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modules/pharmacy/src/drug/drug-class/drug-classes.page.tsx';
@@ -582,6 +583,17 @@ const modulesPharmacySrcDispensingOtcSaleOtcSaleRoute = createRoute({
     path: modulesPharmacySrcDispensingOtcSaleOtcSalePage.path,
     component: modulesPharmacySrcDispensingOtcSaleOtcSalePage.component,
     staticData: { title: modulesPharmacySrcDispensingOtcSaleOtcSalePage.title },
+});
+
+const modulesPharmacySrcDispensingOtcSaleOtcSalesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDispensingOtcSaleOtcSalesPage.path,
+    component: modulesPharmacySrcDispensingOtcSaleOtcSalesPage.component,
+    validateSearch:
+        modulesPharmacySrcDispensingOtcSaleOtcSalesPage.validateSearch,
+    staticData: {
+        title: modulesPharmacySrcDispensingOtcSaleOtcSalesPage.title,
+    },
 });
 
 const modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute = createRoute({
@@ -1133,6 +1145,7 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDashboardDashboardRoute,
         modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsRoute,
         modulesPharmacySrcDispensingOtcSaleOtcSaleRoute,
+        modulesPharmacySrcDispensingOtcSaleOtcSalesRoute,
         modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute,
         modulesPharmacySrcDispensingServiceLocationServiceLocationsRoute,
         modulesPharmacySrcDrugDrugClassDrugClassesRoute,

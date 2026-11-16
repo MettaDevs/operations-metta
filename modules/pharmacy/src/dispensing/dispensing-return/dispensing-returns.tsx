@@ -32,9 +32,29 @@ import {
 type View = ApiBody<'pharmacyReturnList'>;
 type Returnable = View['data']['returnable'][number];
 
-export const returnsKey = (prescriptionId: string) => [
+// Dokumen yang diretur: resep atau penjualan obat bebas. Keduanya memakai retur yang sama; yang berbeda hanya alamat API
+// dan sebutan orang yang mengembalikan obatnya.
+export type ReturnTarget = { kind: 'prescription' | 'otc-sale'; id: string };
+
+const targets = {
+    prescription: {
+        list: api.pharmacyReturnList,
+        create: api.pharmacyReturnCreate,
+        reverse: api.pharmacyReturnReverse,
+        returner: 'pasien',
+    },
+    'otc-sale': {
+        list: api.pharmacyOtcSaleReturnList,
+        create: api.pharmacyOtcSaleReturnCreate,
+        reverse: api.pharmacyOtcSaleReturnReverse,
+        returner: 'pembeli',
+    },
+} as const satisfies Record<ReturnTarget['kind'], unknown>;
+
+const returnsKey = (target: ReturnTarget) => [
     'pharmacy-returns',
-    prescriptionId,
+    target.kind,
+    target.id,
 ];
 
 const numberFormat =
@@ -56,33 +76,30 @@ const batchText = (row: Returnable) =>
         ? `${row.batch.batch_number}${row.batch.expiry_date ? ` · ED ${displayDate(row.batch.expiry_date)}` : ''}`
         : 'Tanpa batch';
 
-function useReturns(prescriptionId: string, enabled = true) {
+function useReturns(target: ReturnTarget, enabled = true) {
     return useQuery({
-        queryKey: returnsKey(prescriptionId),
+        queryKey: returnsKey(target),
         queryFn: async () =>
-            (
-                await api.pharmacyReturnList({
-                    params: { id: prescriptionId },
-                })
-            ).body,
+            (await targets[target.kind].list({ params: { id: target.id } }))
+                .body,
         refetchOnWindowFocus: false,
         enabled,
     });
 }
 
-// Retur dari pasien: obat dan batch yang diserahkan, berapa yang sudah kembali, dan berapa yang kembali sekarang. Stok
+// Retur dari pasien atau pembeli: obat dan batch yang diserahkan, berapa yang sudah kembali, dan berapa yang kembali sekarang. Stok
 // masuk lagi ke lokasi penyerahan dengan batch, harga satuan, dan sumber dana yang sama dengan saat keluar.
 export function ReturnCard({
-    prescriptionId,
+    target,
     onDone,
     portalContainer,
 }: {
-    prescriptionId: string;
-    onDone: () => void;
+    target: ReturnTarget;
+    onDone: (saved: boolean) => void;
     portalContainer: RefObject<HTMLElement | null>;
 }): ReactNode {
     const queryClient = useQueryClient();
-    const stored = useReturns(prescriptionId);
+    const stored = useReturns(target);
     const [quantities, setQuantities] = useState<Record<string, string>>({});
     const [units, setUnits] = useState<Record<string, string>>({});
     const [reason, setReason] = useState('');
@@ -124,16 +141,16 @@ export function ReturnCard({
         setBusy(true);
         setErrors({});
         try {
-            const { body } = await api.pharmacyReturnCreate({
-                params: { id: prescriptionId },
+            const { body } = await targets[target.kind].create({
+                params: { id: target.id },
                 body: { reason, lines },
             });
-            queryClient.setQueryData(returnsKey(prescriptionId), body);
+            queryClient.setQueryData(returnsKey(target), body);
             const created = body.data.returns.at(-1);
             toast.success(
                 `Retur ${created?.number ?? ''} tersimpan. Obatnya kembali ke stok lokasi farmasi.`,
             );
-            onDone();
+            onDone(true);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
                 setErrors(caught.errors);
@@ -164,7 +181,7 @@ export function ReturnCard({
                     action="cancel"
                     type="button"
                     disabled={busy}
-                    onClick={onDone}
+                    onClick={() => onDone(false)}
                 />
             </PageDialogToolbar>
             <FormErrorHeader
@@ -326,12 +343,14 @@ export function ReturnCard({
 
 // Retur yang sudah tercatat untuk penyerahan ini, dengan Batal retur selama stoknya belum terpakai.
 export function ReturnsSection({
-    prescriptionId,
+    target,
+    onReversed,
 }: {
-    prescriptionId: string;
+    target: ReturnTarget;
+    onReversed?: () => void;
 }): ReactNode {
     const queryClient = useQueryClient();
-    const stored = useReturns(prescriptionId);
+    const stored = useReturns(target);
     const [message, setMessage] = useState<string | null>(null);
     const { confirm, confirmation } = useConfirmation();
     const returns = stored.data?.data.returns ?? [];
@@ -351,12 +370,13 @@ export function ReturnsSection({
             return;
         setMessage(null);
         try {
-            const { body } = await api.pharmacyReturnReverse({
-                params: { id: prescriptionId, returnId: row.id },
+            const { body } = await targets[target.kind].reverse({
+                params: { id: target.id, returnId: row.id },
                 body: { version: row.version },
             });
-            queryClient.setQueryData(returnsKey(prescriptionId), body);
+            queryClient.setQueryData(returnsKey(target), body);
             toast.success(`Retur ${row.number} dibatalkan.`);
+            onReversed?.();
         } catch (caught) {
             setMessage(
                 caught instanceof ApiError && caught.status === 422
@@ -391,7 +411,7 @@ export function ReturnsSection({
                 emptyMessage={
                     stored.isError
                         ? errorText(stored.error, 'Retur belum dapat dimuat.')
-                        : 'Belum ada obat yang diretur pasien.'
+                        : `Belum ada obat yang diretur ${targets[target.kind].returner}.`
                 }
                 columns={[
                     {
@@ -459,8 +479,6 @@ export function ReturnsSection({
     );
 }
 
-export function useCanReturn(prescriptionId: string, enabled: boolean) {
-    return (
-        useReturns(prescriptionId, enabled).data?.permissions.create ?? false
-    );
+export function useCanReturn(target: ReturnTarget, enabled: boolean) {
+    return useReturns(target, enabled).data?.permissions.create ?? false;
 }

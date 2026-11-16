@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { coreWorkspace } from '@core/platform/access/index.ts';
 import {
     base,
@@ -19,7 +19,8 @@ async function otcSales(context: Context, body?: unknown) {
     return new OtcSales(context.db, await moduleWorkspace(context, body));
 }
 
-// Loket penjualan obat bebas: pilihan lokasi, harga tanpa menyimpan, lalu Simpan dan bayar.
+// Loket penjualan obat bebas: pilihan lokasi, harga tanpa menyimpan, lalu Simpan dan bayar. Daftar dan kartu
+// penjualan untuk melihat penjualan yang sudah terjadi dan meretur obatnya.
 export function otcSaleRoutes() {
     const root: `/${string}` = `/api/modules/${moduleId}/v1/otc-sales`;
     const route = (method: 'GET' | 'POST', path: string) =>
@@ -61,6 +62,27 @@ export function otcSaleRoutes() {
                         await otcSales(context, input.body)
                     ).quote(input.body),
                 ),
+            ),
+        pharmacyOtcSaleList: route('GET', '')
+            .input(
+                typedQuery<
+                    z.input<typeof listParametersSchema> & {
+                        from?: string;
+                        to?: string;
+                    }
+                >(),
+            )
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await otcSales(context)
+                    ).list(new URL(context.request.url).searchParams),
+                ),
+            ),
+        pharmacyOtcSaleShow: route('GET', '/{id}')
+            .input(z.object({ params: z.object({ id: z.string() }) }))
+            .handler(async ({ context, input }) =>
+                ok(await (await otcSales(context)).show(input.params.id)),
             ),
         pharmacyOtcSaleCreate: route('POST', '')
             .input(typedBody<z.input<typeof otcSaleInputSchema>>())

@@ -1,8 +1,15 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
-import { nowSql, type Database } from '@core/platform/database/index.ts';
 import {
+    isoSql,
+    nowSql,
+    type Bind,
+    type Database,
+} from '@core/platform/database/index.ts';
+import {
+    abort,
     coded,
+    dateSchema,
     HttpFailure,
     incrementalList,
     lookupId,
@@ -23,6 +30,7 @@ import {
 } from '@core/foundation/inventory/index.ts';
 import {
     invoiceTotals,
+    paidDocuments,
     payBill,
     paymentOptions,
     replaceSaleBill,
@@ -42,6 +50,7 @@ import {
     dispensingSource,
     inexactBaseMessage,
 } from '../dispensing/dispensing.service.ts';
+import { netLines, type NetLine } from '../dispensing/dispensing.events.ts';
 import { quantityText } from '../dispensing/dispensing.units.ts';
 import {
     priceGroupAvailable,
@@ -103,6 +112,117 @@ const itemRowSchema = z.object({
     name: z.string(),
     sales_unit_id: z.string(),
 });
+
+const reference = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+});
+
+const saleRowSchema = z.object({
+    id: z.string(),
+    number: z.string(),
+    date: z.string(),
+    handed_over_at: z.string(),
+    location: reference,
+    buyer_name: z.string().nullable(),
+});
+
+// Penjualan obat bebas legal entity ini: bill_farmasi tanpa resep.
+const saleRowSql = `select * from (
+                        select h.id, h.nomor as number, h.tanggal::text as date,
+                               ${isoSql('h.diserahkan_pada')} as handed_over_at, h.diserahkan_pada as handed_over_order,
+                               json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
+                               l.nama as location_name, h.pembeli_nama as buyer_name
+                        from bill_farmasi h
+                        join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
+                        where h.tenant_id = $1 and h.legal_entity_id = $2 and h.resep_id is null
+                          and h.deleted_at is null) sales where true`;
+
+// Baris tagihan penjualan dengan rumus kasir: Qty jumlah jual, Nilai dan HargaOrig harga satuan, Disc % diskon, HExt
+// 0, tanpa kelompok jasa. Quote, daftar, dan kartu penjualan memakainya, jadi angka yang terlihat sama dengan yang
+// ditagih kasir.
+const saleCharge = (quantity: string, unitPrice: string, discount: string) => ({
+    serviceGroupId: null,
+    quantity,
+    value: unitPrice,
+    originalPrice: unitPrice,
+    discountPercent: discount,
+    extra: '0',
+});
+
+const lineAmount = (line: NetLine, precision: Precision) =>
+    line.kept
+        ? (invoiceTotals(
+              [
+                  saleCharge(
+                      line.net_quantity,
+                      line.unit_price,
+                      line.discount_percent,
+                  ),
+              ],
+              precision,
+          ).groups.get(null) ?? '0')
+        : '0';
+
+const saleTotal = (lines: NetLine[], precision: Precision) =>
+    invoiceTotals(
+        lines
+            .filter((line) => line.kept)
+            .map((line) =>
+                saleCharge(
+                    line.net_quantity,
+                    line.unit_price,
+                    line.discount_percent,
+                ),
+            ),
+        precision,
+    ).value;
+
+// Tagihan penjualan kasir dari penjualan yang tersimpan: baris dengan Qty bersih sesudah retur yang masih berlaku, dan
+// baris yang habis diretur keluar dari tagihan. Dipanggil di transaksi Simpan dan bayar, retur, dan Batal retur.
+// Menjawab versi tagihan untuk payBill.
+export async function replaceOtcSaleBill(
+    db: Database,
+    scope: Scope,
+    billId: string,
+): Promise<{ version: number }> {
+    const sale = await db.one(
+        z.object({
+            operating_unit_id: z.string(),
+            number: z.string(),
+            date: z.string(),
+            buyer_party_id: z.string().nullable(),
+            buyer_name: z.string().nullable(),
+        }),
+        `select operating_unit_id, nomor as number, tanggal::text as date, pembeli_pihak_id as buyer_party_id,
+                pembeli_nama as buyer_name
+         from bill_farmasi
+         where tenant_id = $1 and legal_entity_id = $2 and id = $3 and resep_id is null`,
+        [scope.tenantId, scope.legalEntityId, billId],
+    );
+    if (!sale) throw new Error(`OTC sale ${billId} was not found.`);
+    return replaceSaleBill(db, {
+        tenantId: scope.tenantId,
+        legalEntityId: scope.legalEntityId,
+        operatingUnitId: sale.operating_unit_id,
+        module: moduleId,
+        documentId: billId,
+        number: sale.number,
+        date: sale.date,
+        buyer: { partyId: sale.buyer_party_id, name: sale.buyer_name },
+        group: 'OBAT',
+        lines: (await netLines(db, scope.tenantId, [billId]))
+            .filter((line) => line.kept)
+            .map((line) => ({
+                lineId: line.line_id,
+                item: line.item,
+                quantity: line.net_quantity,
+                unitPrice: line.unit_price,
+                discountPercent: line.discount_percent,
+            })),
+    });
+}
 
 const errorsSchema = z.object({
     errors: z.record(z.string(), z.array(z.string())),
@@ -353,24 +473,11 @@ export class OtcSales {
                     batchId: line.batchId,
                 })),
             );
-            const { version } = await replaceSaleBill(this.db, {
-                tenantId: scope.tenantId,
-                legalEntityId: scope.legalEntityId,
-                operatingUnitId: sale.location.operating_unit_id,
-                module: moduleId,
-                documentId: billId,
-                number,
-                date,
-                buyer,
-                group: 'OBAT',
-                lines: lines.map(({ id, line, price }) => ({
-                    lineId: id,
-                    item: line.item,
-                    quantity: quantityText(line.quantity),
-                    unitPrice: quantityText(price.unitPrice),
-                    discountPercent: quantityText(price.discountPercent),
-                })),
-            });
+            const { version } = await replaceOtcSaleBill(
+                this.db,
+                scope,
+                billId,
+            );
             const payment = await paymentFieldsUnderPayment(
                 payBill(this.db, cashier, billId, data.payment, version),
             );
@@ -380,6 +487,103 @@ export class OtcSales {
                 body: { data: { id: billId, number, payment } },
             };
         });
+    }
+
+    // Daftar penjualan menurut tanggal penjualan (from dan to, keduanya opsional), dimuat bertahap, terbaru lebih dulu.
+    // total adalah yang ditagih kasir sesudah retur; paid berarti ada pembayaran kasir yang masih berlaku.
+    async list(parameters: URLSearchParams) {
+        this.workspace.guard('otc-sale', 'read');
+        const bindings: Bind[] = [
+            this.scope.tenantId,
+            this.scope.legalEntityId,
+        ];
+        let filter = '';
+        const from = parameters.get('from') ?? '';
+        if (dateSchema.safeParse(from).success)
+            filter += ` and date >= $${bindings.push(from)}`;
+        const to = parameters.get('to') ?? '';
+        if (dateSchema.safeParse(to).success)
+            filter += ` and date <= $${bindings.push(to)}`;
+        const batch = await incrementalList(this.db, {
+            query: `${saleRowSql}${filter}`,
+            bindings,
+            parameters,
+            columns: {
+                handed_over_at: 'handed_over_order',
+                number: 'number',
+                location: 'location_name',
+                buyer_name: 'buyer_name',
+            },
+            searchColumns: ['number', 'buyer_name'],
+            numericColumns: [],
+            defaultSort: 'handed_over_at',
+            defaultDirection: 'desc',
+        });
+        const rows = batch.data.map((row) => saleRowSchema.parse(row));
+        const lines = await netLines(
+            this.db,
+            this.scope.tenantId,
+            rows.map((row) => row.id),
+        );
+        const paid = await paidDocuments(
+            this.db,
+            this.scope.tenantId,
+            rows.map((row) => row.id),
+        );
+        const precision = await this.precision();
+        return {
+            data: rows.map((row) => ({
+                ...row,
+                total: saleTotal(
+                    lines.filter((line) => line.dispensing_id === row.id),
+                    precision,
+                ),
+                paid: paid.has(row.id),
+            })),
+            next_cursor: batch.next_cursor,
+        };
+    }
+
+    // Kartu penjualan: kepala, lalu baris dengan jumlah terjual, jumlah yang masih ditagih sesudah retur, dan nilainya.
+    async show(id: string) {
+        this.workspace.guard('otc-sale', 'read');
+        const scope = this.scope;
+        const sale = lookupId(id)
+            ? await this.db.one(
+                  saleRowSchema.extend({
+                      ktp_patient: z.boolean(),
+                      price_group: reference.nullable(),
+                  }),
+                  `select sales.*, h.pasien_ktp as ktp_patient,
+                          case when g.id is null then null
+                               else json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) end as price_group
+                   from (${saleRowSql} and id = $3) sales
+                   join bill_farmasi h on h.tenant_id = $1 and h.id = sales.id
+                   left join kelompok_harga g on g.tenant_id = h.tenant_id and g.id = h.kelompok_harga_id`,
+                  [scope.tenantId, scope.legalEntityId, id],
+              )
+            : undefined;
+        if (!sale) abort(404, 'Not Found');
+        const lines = await netLines(this.db, scope.tenantId, [sale.id]);
+        const paid = await paidDocuments(this.db, scope.tenantId, [sale.id]);
+        const precision = await this.precision();
+        return {
+            data: {
+                ...sale,
+                total: saleTotal(lines, precision),
+                paid: paid.has(sale.id),
+                lines: lines.map((line) => ({
+                    line_id: line.line_id,
+                    item: line.item,
+                    unit_code: line.unit_code,
+                    quantity: line.quantity,
+                    net_quantity: line.net_quantity,
+                    unit_price: line.unit_price,
+                    discount_percent: line.discount_percent,
+                    amount: lineAmount(line, precision),
+                })),
+            },
+        };
     }
 
     private precision(): Promise<Precision> {
@@ -541,14 +745,12 @@ export class OtcSales {
         }: {
             line: SaleLine;
             price: { unitPrice: bigint; discountPercent: bigint };
-        }) => ({
-            serviceGroupId: null,
-            quantity: quantityText(line.quantity),
-            value: quantityText(price.unitPrice),
-            originalPrice: quantityText(price.unitPrice),
-            discountPercent: quantityText(price.discountPercent),
-            extra: '0',
-        });
+        }) =>
+            saleCharge(
+                quantityText(line.quantity),
+                quantityText(price.unitPrice),
+                quantityText(price.discountPercent),
+            );
         const lines = (
             await priceDrugLines(
                 this.db,

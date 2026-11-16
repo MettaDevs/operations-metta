@@ -199,6 +199,54 @@ export async function publishPrescriptionCancelled(
     });
 }
 
+const netLineSchema = z.object({
+    dispensing_id: z.string(),
+    line_id: z.string(),
+    item: reference,
+    unit_code: z.string(),
+    quantity: z.string(),
+    net_quantity: z.string(),
+    unit_price: z.string(),
+    discount_percent: z.string(),
+    kept: z.boolean(),
+});
+export type NetLine = z.infer<typeof netLineSchema>;
+
+// Baris penyerahan dengan Qty bersih sesudah retur yang masih berlaku (JmlPemakaian - JmlRetur sistem lama), dalam
+// satuan saat diserahkan. kept berarti masih ada yang ditagih. Satu rumus untuk biaya resep di kasir dan tagihan
+// penjualan obat bebas.
+export async function netLines(
+    db: Database,
+    tenantId: string,
+    dispensingIds: string[],
+): Promise<NetLine[]> {
+    if (!dispensingIds.length) return [];
+    return db.rows(
+        netLineSchema,
+        `select dispensing_id, line_id, item, unit_code, quantity, trim_scale(net)::text as net_quantity, unit_price,
+                discount_percent, net > 0 as kept
+         from (
+             select d.bill_farmasi_id as dispensing_id, d.id as line_id,
+                    json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item, s.kode as unit_code,
+                    trim_scale(d.jumlah)::text as quantity,
+                    (d.jumlah * d.konversi - coalesce((
+                        select sum(x.jumlah * x.konversi) from retur_farmasi_detail x
+                        join retur_farmasi y on y.tenant_id = x.tenant_id and y.id = x.retur_farmasi_id
+                        where x.tenant_id = d.tenant_id and x.bill_farmasi_detail_id = d.id
+                          and x.deleted_at is null and y.status = 'diposting' and y.deleted_at is null), 0))
+                        / d.konversi as net,
+                    trim_scale(coalesce(d.harga_satuan, 0))::text as unit_price,
+                    trim_scale(coalesce(d.persen_diskon, 0))::text as discount_percent,
+                    d.urutan
+             from bill_farmasi_detail d
+             join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+             join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
+             where d.tenant_id = $1 and d.bill_farmasi_id = any($2::uuid[]) and d.deleted_at is null) lines
+         order by dispensing_id, urutan, line_id`,
+        [tenantId, `{${dispensingIds.join(',')}}`],
+    );
+}
+
 // Biaya obat satu penyerahan untuk kasir Core, sebagai potret penuh: baris yang masih ditagih dengan Qty bersih sesudah
 // retur (JmlPemakaian - JmlRetur sistem lama), atau kosong bila penyerahan dibatalkan. Harga satuan dan persen diskon
 // dibekukan saat Siapkan. Diterbitkan di transaksi Siapkan, Batal siapkan, retur, dan batal retur. Resep tanpa
@@ -236,32 +284,8 @@ export async function publishDispensingCharges(
     const lines =
         header.status === 'dibatalkan'
             ? []
-            : await db.rows(
-                  z.object({
-                      line_id: z.string(),
-                      item: reference,
-                      quantity: z.string(),
-                      unit_price: z.string(),
-                      discount_percent: z.string(),
-                  }),
-                  `select * from (
-                       select d.id as line_id,
-                              json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item,
-                              trim_scale((d.jumlah * d.konversi - coalesce((
-                                  select sum(x.jumlah * x.konversi) from retur_farmasi_detail x
-                                  join retur_farmasi y on y.tenant_id = x.tenant_id and y.id = x.retur_farmasi_id
-                                  where x.tenant_id = d.tenant_id and x.bill_farmasi_detail_id = d.id
-                                    and x.deleted_at is null and y.status = 'diposting' and y.deleted_at is null), 0))
-                                  / d.konversi)::text as quantity,
-                              trim_scale(coalesce(d.harga_satuan, 0))::text as unit_price,
-                              trim_scale(coalesce(d.persen_diskon, 0))::text as discount_percent,
-                              d.urutan
-                       from bill_farmasi_detail d
-                       join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
-                       where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null) lines
-                   where quantity::numeric > 0
-                   order by urutan, line_id`,
-                  [scope.tenantId, dispensingId],
+            : (await netLines(db, scope.tenantId, [dispensingId])).filter(
+                  (line) => line.kept,
               );
     await publishEvent(db, {
         type: dispensingChargesReplaced,
@@ -281,13 +305,13 @@ export async function publishDispensingCharges(
                 ({
                     line_id,
                     item,
-                    quantity,
+                    net_quantity,
                     unit_price,
                     discount_percent,
                 }) => ({
                     line_id,
                     item,
-                    quantity,
+                    quantity: net_quantity,
                     unit_price,
                     discount_percent,
                 }),
@@ -300,17 +324,17 @@ export async function publishDispensingCharges(
 // ClosePayment = 1).
 export const paidMessage = 'Data ini sudah melakukan Pembayaran diKasir!';
 
-// Kunci tagihan kunjungan di kasir sebelum biaya obatnya berubah: kunjungan yang sudah dibayar kasir ditolak, dan
-// pembatalannya urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis dibatalkan kasir sendiri lalu
-// dilunasi ulang. Resep berasal dari layanan kesehatan, jadi kunjungannya milik module itu.
-export async function lockVisitCharges(
+// Kunci tagihan di kasir sebelum biaya obatnya berubah: tagihan yang sudah dibayar kasir ditolak, dan pembatalannya
+// urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis dibatalkan kasir sendiri lalu dilunasi ulang.
+// documentId adalah dokumen sumber tagihan: kunjungan resep, milik layanan kesehatan, atau penjualan obat bebas.
+export async function lockCharges(
     db: Database,
-    scope: { tenantId: string; visitId: string; message?: string },
+    scope: { tenantId: string; documentId: string; message?: string },
 ): Promise<void> {
     try {
         await lockChargeForChange(db, {
             tenantId: scope.tenantId,
-            documentId: scope.visitId,
+            documentId: scope.documentId,
         });
     } catch (error) {
         if (scope.message && error instanceof HttpFailure)

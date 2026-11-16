@@ -39,16 +39,11 @@ import {
     quantityOf,
     quantityText,
 } from '../dispensing/dispensing.units.ts';
+import { returnPosted, returnReversed } from './dispensing-return.events.ts';
 import {
-    publishReturn,
-    returnPosted,
-    returnReversed,
-} from './dispensing-return.events.ts';
-import {
-    lockVisitCharges,
-    paidMessage,
-    publishDispensingCharges,
-} from '../dispensing/dispensing.events.ts';
+    returnSources,
+    type ReturnDocument,
+} from './dispensing-return.source.ts';
 import {
     returnInputSchema,
     returnReverseInputSchema,
@@ -99,25 +94,32 @@ function returnUnit(raw: string | null | undefined, line: DispensedLine) {
         : null;
 }
 
-const messages = {
+const messagesFor = (label: string) => ({
     reason: 'Tulis alasan obat dikembalikan.',
     lines: 'Pilih sedikitnya satu obat yang dikembalikan.',
-    dispensing_line_id: 'Muat ulang resep ini, lalu ulangi returmu.',
-    batch_id: 'Muat ulang resep ini, lalu ulangi returmu.',
+    dispensing_line_id: `Muat ulang ${label}, lalu ulangi returmu.`,
+    batch_id: `Muat ulang ${label}, lalu ulangi returmu.`,
     quantity: 'Isi jumlah lebih dari 0.',
     unit_id: 'Pilih satuan obat ini dari daftar.',
-    version: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
-};
+    version: `Muat ulang ${label}, lalu ulangi perubahanmu.`,
+});
 
 // Retur obat pasien dari penyerahan yang sudah diserahkan: stok kembali ke lokasi asalnya dengan batch, kedaluwarsa,
 // harga satuan, dan sumber dana yang sama dengan saat keluar. Bagian yang diretur diambil dari bagian stok keluar
 // sesuai urutannya, dan retur berikutnya melanjutkan dari bagian yang belum diretur, jadi jumlah retur tidak pernah
-// melebihi yang diserahkan.
+// melebihi yang diserahkan. Dokumennya resep atau penjualan obat bebas; bedanya hanya di returnSources.
 export class DispensingReturns {
+    private readonly definition;
+    private readonly messages;
+
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
-    ) {}
+        private readonly document: ReturnDocument,
+    ) {
+        this.definition = returnSources[document.kind];
+        this.messages = messagesFor(this.definition.label);
+    }
 
     private get scope() {
         return {
@@ -126,36 +128,12 @@ export class DispensingReturns {
         };
     }
 
-    // Penyerahan yang diserahkan untuk resep ini, dikunci lewat baris resepnya seperti setiap perubahan penyerahan.
-    private async handedOver(prescriptionId: string, lock: boolean) {
-        const prescription = lookupId(prescriptionId)
-            ? await this.db.one(
-                  z.object({ id: z.string() }),
-                  `select id from far_tr_resep
-                   where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
-                   ${lock ? 'for update' : ''}`,
-                  [
-                      this.scope.tenantId,
-                      this.scope.legalEntityId,
-                      prescriptionId,
-                  ],
-              )
-            : undefined;
-        if (!prescription) abort(404, 'Not Found');
-        return this.db.one(
-            z.object({
-                id: z.string(),
-                operating_unit_id: z.string(),
-                location_id: z.string(),
-                handed_over_at: z.string(),
-                visit_id: z.string().nullable(),
-            }),
-            `select h.id, h.operating_unit_id, h.lokasi_id as location_id, h.diserahkan_pada::text as handed_over_at,
-                    r.kunjungan_id as visit_id
-             from bill_farmasi h
-             join far_tr_resep r on r.tenant_id = h.tenant_id and r.id = h.resep_id
-             where h.tenant_id = $1 and h.resep_id = $2 and h.status = 'diserahkan' and h.deleted_at is null`,
-            [this.scope.tenantId, prescription.id],
+    private handedOver(lock: boolean) {
+        return this.definition.resolve(
+            this.db,
+            this.scope,
+            this.document.id,
+            lock,
         );
     }
 
@@ -285,9 +263,9 @@ export class DispensingReturns {
         return groups;
     }
 
-    async show(prescriptionId: string) {
-        this.workspace.guard('prescription', 'read');
-        const dispensing = await this.handedOver(prescriptionId, false);
+    async show() {
+        this.workspace.guard(this.definition.readResource, 'read');
+        const dispensing = await this.handedOver(false);
         const has = (permission: string) =>
             this.workspace.permissions.has(`${moduleId}.${permission}`);
         if (!dispensing)
@@ -298,8 +276,8 @@ export class DispensingReturns {
                     reverse: has('return.reverse'),
                 },
             };
-        const groups = await this.remaining(dispensing.id);
-        const lines = await this.dispensingLines(dispensing.id);
+        const groups = await this.remaining(dispensing.dispensingId);
+        const lines = await this.dispensingLines(dispensing.dispensingId);
         const returns = await this.db.rows(
             z.object({
                 id: z.string(),
@@ -333,7 +311,7 @@ export class DispensingReturns {
              from retur_farmasi h
              where h.tenant_id = $1 and h.bill_farmasi_id = $2 and h.deleted_at is null
              order by h.diposting_pada, h.id`,
-            [this.scope.tenantId, dispensing.id],
+            [this.scope.tenantId, dispensing.dispensingId],
         );
         return {
             data: {
@@ -370,24 +348,19 @@ export class DispensingReturns {
         };
     }
 
-    async create(prescriptionId: string, body: unknown) {
+    async create(body: unknown) {
         this.workspace.guard('return', 'create');
+        const messages = this.messages;
         const data = parseInput(returnInputSchema, body, messages);
         await this.db.transaction(async () => {
-            const dispensing = await this.handedOver(prescriptionId, true);
+            const dispensing = await this.handedOver(true);
             if (!dispensing)
-                validation({
-                    _form: 'Obat resep ini belum diserahkan, jadi belum ada yang bisa diretur.',
-                });
-            // Retur mengurangi Qty obat di tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
-            if (dispensing.visit_id)
-                await lockVisitCharges(this.db, {
-                    tenantId: this.scope.tenantId,
-                    visitId: dispensing.visit_id,
-                    message: paidMessage,
-                });
-            const groups = await this.remaining(dispensing.id);
-            const dispensed = await this.dispensingLines(dispensing.id);
+                validation({ _form: this.definition.notHandedOver });
+            await dispensing.lock();
+            const groups = await this.remaining(dispensing.dispensingId);
+            const dispensed = await this.dispensingLines(
+                dispensing.dispensingId,
+            );
             const taken = new Set<string>();
             const errors: Record<string, string> = {};
             const reason = data.reason.trim();
@@ -460,18 +433,18 @@ export class DispensingReturns {
                 key: `${returnSource}:${id}`,
                 documentDate: posting.today,
                 legalEntityId: this.scope.legalEntityId,
-                operatingUnitId: dispensing.operating_unit_id,
+                operatingUnitId: dispensing.operatingUnitId,
             });
             const stamp = nowSql();
             await this.db.insert('retur_farmasi', {
                 id,
                 tenant_id: this.scope.tenantId,
                 legal_entity_id: this.scope.legalEntityId,
-                operating_unit_id: dispensing.operating_unit_id,
-                bill_farmasi_id: dispensing.id,
+                operating_unit_id: dispensing.operatingUnitId,
+                bill_farmasi_id: dispensing.dispensingId,
                 nomor: number,
                 tanggal: posting.today,
-                lokasi_id: dispensing.location_id,
+                lokasi_id: dispensing.locationId,
                 alasan: reason,
                 diposting_pada: stamp,
                 diposting_oleh_user_id: this.workspace.userId,
@@ -513,7 +486,7 @@ export class DispensingReturns {
                         sourceLineId: detailId,
                         itemId: line.group.itemId,
                         quantity,
-                        locationId: dispensing.location_id,
+                        locationId: dispensing.locationId,
                         unitCost: part.slice.unitCost,
                         batchNumber: part.slice.batch?.number ?? null,
                         expiry: part.slice.batch?.expiry ?? null,
@@ -532,39 +505,33 @@ export class DispensingReturns {
                 },
                 inbound,
             );
-            await publishReturn(this.db, this.scope, id, returnPosted);
-            await publishDispensingCharges(this.db, this.scope, dispensing.id);
+            await dispensing.settle(id, returnPosted);
         });
-        return this.show(prescriptionId);
+        return this.show();
     }
 
     // Batal retur: stok yang masuk lewat retur ini keluar lagi lewat baris pembalik, selama belum terpakai.
-    async reverse(prescriptionId: string, returnId: string, body: unknown) {
+    async reverse(returnId: string, body: unknown) {
         this.workspace.guard('return', 'reverse');
         const { version } = parseInput(returnReverseInputSchema, body, {
-            version: messages.version,
+            version: this.messages.version,
         });
         await this.db.transaction(async () => {
-            const dispensing = await this.handedOver(prescriptionId, true);
-            const current =
-                dispensing && lookupId(returnId)
-                    ? await this.db.one(
-                          z.object({ status: z.string(), version: z.number() }),
-                          `select status, version from retur_farmasi
+            const dispensing = await this.handedOver(true);
+            if (!dispensing) abort(404, 'Not Found');
+            const current = lookupId(returnId)
+                ? await this.db.one(
+                      z.object({ status: z.string(), version: z.number() }),
+                      `select status, version from retur_farmasi
                            where tenant_id = $1 and bill_farmasi_id = $2 and id = $3 and deleted_at is null`,
-                          [this.scope.tenantId, dispensing.id, returnId],
-                      )
-                    : undefined;
+                      [this.scope.tenantId, dispensing.dispensingId, returnId],
+                  )
+                : undefined;
             if (!current) abort(404, 'Not Found');
             if (current.status === 'dibatalkan') return;
             if (current.version !== version)
                 coded(409, 'stale_version', staleMessage);
-            if (dispensing?.visit_id)
-                await lockVisitCharges(this.db, {
-                    tenantId: this.scope.tenantId,
-                    visitId: dispensing.visit_id,
-                    message: paidMessage,
-                });
+            await dispensing.lock();
             const stamp = nowSql();
             await this.db.execute(
                 `update retur_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
@@ -581,14 +548,8 @@ export class DispensingReturns {
                 },
                 { type: returnSource, id: returnId },
             );
-            await publishReturn(this.db, this.scope, returnId, returnReversed);
-            if (dispensing)
-                await publishDispensingCharges(
-                    this.db,
-                    this.scope,
-                    dispensing.id,
-                );
+            await dispensing.settle(returnId, returnReversed);
         });
-        return this.show(prescriptionId);
+        return this.show();
     }
 }

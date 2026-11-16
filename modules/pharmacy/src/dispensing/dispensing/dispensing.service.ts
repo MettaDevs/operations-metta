@@ -33,7 +33,7 @@ import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
 import {
-    lockVisitCharges,
+    lockCharges,
     paidMessage,
     publishDispensingCharges,
     publishPrescriptionCancelled,
@@ -647,9 +647,9 @@ export class Dispensings {
             if (current && current.status !== 'draf') return;
             // Obat yang disiapkan masuk tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
             if (locked.visit_id)
-                await lockVisitCharges(this.db, {
+                await lockCharges(this.db, {
                     tenantId: this.scope.tenantId,
-                    visitId: locked.visit_id,
+                    documentId: locked.visit_id,
                 });
             const hasLines =
                 typeof body === 'object' &&
@@ -944,9 +944,9 @@ export class Dispensings {
     // dilunasi ulang saat biaya obat yang baru (kosong) sampai di kasir.
     private async reversePreparation(billId: string, visitId: string | null) {
         if (visitId)
-            await lockVisitCharges(this.db, {
+            await lockCharges(this.db, {
                 tenantId: this.scope.tenantId,
-                visitId,
+                documentId: visitId,
                 message: paidMessage,
             });
         const stamp = nowSql();
