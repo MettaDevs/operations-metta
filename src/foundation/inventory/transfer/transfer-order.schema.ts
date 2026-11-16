@@ -37,7 +37,9 @@ export const transferOrderInputSchema = z.object({
     version: z.number().optional(),
 });
 
-// Jumlah yang akan dikirim dan diterima pada posting berikutnya. Field yang tidak dikirim tidak berubah.
+// Jumlah yang akan dikirim dan diterima pada posting berikutnya, dan batch yang diambil untuk jumlah akan dikirim
+// (Item Tracking Lines BC) dalam satuan dasar. Daftar batch kosong berarti batch diambil otomatis. Field yang tidak
+// dikirim tidak berubah.
 export const transferQuantitiesInputSchema = z.object({
     lines: z
         .array(
@@ -45,6 +47,10 @@ export const transferQuantitiesInputSchema = z.object({
                 id: z.string(),
                 quantity_to_ship: amount.optional(),
                 quantity_to_receive: amount.optional(),
+                batches: z
+                    .array(z.object({ batch_id: z.string(), quantity: amount }))
+                    .max(100)
+                    .optional(),
             }),
         )
         .max(500),
@@ -73,7 +79,15 @@ export const transferOrderRowSchema = z.object({
     version: z.number(),
 });
 
-// Semua jumlah dalam satuan baris, kecuali stok di lokasi pemasok yang dalam satuan dasar.
+// Jumlah batch dalam satuan dasar.
+export const transferBatchQuantitySchema = z.object({
+    batch_id: z.string(),
+    batch_number: z.string(),
+    expiry_date: z.string().nullable(),
+    quantity: z.string(),
+});
+
+// Semua jumlah dalam satuan baris, kecuali stok di lokasi pemasok dan batch, yang dalam satuan dasar.
 export const transferOrderLineRowSchema = z.object({
     id: z.string(),
     line_no: z.number(),
@@ -88,6 +102,10 @@ export const transferOrderLineRowSchema = z.object({
     quantity_to_ship: z.string(),
     quantity_to_receive: z.string(),
     supplier_stock: z.string(),
+    // Batch pilihan pengirim untuk posting kirim berikutnya; kosong berarti otomatis.
+    batches: z.array(transferBatchQuantitySchema),
+    // Stok per batch barang ini di lokasi pemasok, kedaluwarsa terdekat lebih dulu.
+    supplier_batches: z.array(transferBatchQuantitySchema),
 });
 
 export const transferPostingSummarySchema = z.object({

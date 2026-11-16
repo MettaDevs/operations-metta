@@ -33,6 +33,7 @@ import {
     toNumeric,
 } from '../quantity.ts';
 import {
+    transferBatchQuantitySchema,
     transferOrderInputSchema,
     transferOrderLineRowSchema,
     transferOrderRowSchema,
@@ -124,6 +125,7 @@ const storedLineSchema = z.object({
     id: z.string(),
     item_id: z.string(),
     item_code: z.string(),
+    base_unit: z.string(),
     conversion: z.string(),
     quantity: z.string(),
     shipped: z.string(),
@@ -136,6 +138,7 @@ type StoredLine = {
     id: string;
     itemId: string;
     itemCode: string;
+    baseUnit: string;
     conversion: bigint;
     quantity: bigint;
     shipped: bigint;
@@ -176,9 +179,69 @@ const messages = {
     quantity: 'Isi jumlah lebih dari 0.',
     quantity_to_ship: 'Isi jumlah akan dikirim 0 atau lebih.',
     quantity_to_receive: 'Isi jumlah akan diterima 0 atau lebih.',
+    batches: 'Satu baris paling banyak 100 batch.',
+    batch_id: 'Pilih batch dari daftar.',
 };
 
 const quantity = (value: bigint) => display(value, quantityScale);
+
+const pickRowSchema = transferBatchQuantitySchema.extend({
+    line_id: z.string(),
+});
+const supplierBatchSchema = transferBatchQuantitySchema.extend({
+    item_id: z.string(),
+});
+
+// Jumlah dalam satuan dasar.
+type BatchPick = { batchId: string; quantity: bigint };
+type BatchStock = { itemId: string; number: string; available: bigint };
+type PickedLine = {
+    position: number;
+    line: StoredLine;
+    toShip: bigint;
+    picks: BatchPick[];
+};
+
+// Batch pilihan pengirim (Item Tracking Lines BC), diperiksa saat disimpan dan lagi saat posting kirim: batchnya milik
+// barang baris itu dan tidak dipilih dua kali, stoknya di lokasi pemasok cukup untuk semua baris amprah yang
+// memilihnya, dan jumlahnya sama dengan jumlah akan dikirim dalam satuan dasar.
+function pickErrors(lines: PickedLine[], batches: Map<string, BatchStock>) {
+    const errors: Record<string, string> = {};
+    const used = new Map<string, bigint>();
+    for (const { position, line, toShip, picks } of lines) {
+        const seen = new Set<string>();
+        let total = 0n;
+        for (const [index, pick] of picks.entries()) {
+            const field = `lines.${position}.batches.${index}`;
+            total += pick.quantity;
+            const batch = batches.get(pick.batchId);
+            if (batch?.itemId !== line.itemId) {
+                errors[`${field}.batch_id`] = messages.batch_id;
+                continue;
+            }
+            if (seen.has(pick.batchId)) {
+                errors[`${field}.batch_id`] =
+                    `Batch ${batch.number} sudah dipilih di baris ini. Satukan jumlahnya.`;
+                continue;
+            }
+            seen.add(pick.batchId);
+            const before = used.get(pick.batchId) ?? 0n;
+            used.set(pick.batchId, before + pick.quantity);
+            if (before + pick.quantity <= batch.available) continue;
+            errors[`${field}.quantity`] =
+                batch.available === 0n
+                    ? `Batch ${batch.number} tidak punya stok di lokasi pemasok.`
+                    : `Stok batch ${batch.number} di lokasi pemasok hanya ${quantity(batch.available)} ${line.baseUnit}` +
+                      (before > 0n
+                          ? `, dan ${quantity(before)} ${line.baseUnit} sudah dipilih di baris lain amprah ini.`
+                          : '.');
+        }
+        if (picks.length && total !== toShip)
+            errors[`lines.${position}.batches`] =
+                `Jumlah batch yang dipilih ${quantity(total)} ${line.baseUnit}, sedangkan jumlah akan dikirim ${quantity(toShip)} ${line.baseUnit}. Samakan keduanya, atau pilih Otomatis supaya batch diambil otomatis.`;
+    }
+    return errors;
+}
 
 // Amprah (Transfer Order di BC): lokasi peminta meminta barang, lokasi pemasok mengirimnya sebagian atau seluruhnya,
 // dan lokasi peminta menerimanya. Cara mutasi diambil dari setelan lokasi pemasok saat posting kirim: langsung
@@ -264,8 +327,11 @@ export class TransferOrders {
 
     private async document(id: string) {
         const header = await this.header(id);
-        const lines = await this.db.rows(
-            transferOrderLineRowSchema,
+        const rows = await this.db.rows(
+            transferOrderLineRowSchema.omit({
+                batches: true,
+                supplier_batches: true,
+            }),
             `select d.id, d.urutan as line_no,
                     json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode) as item,
                     json_build_object('id', u.id, 'code', u.kode, 'name', u.nama) as unit,
@@ -288,6 +354,25 @@ export class TransferOrders {
              order by d.urutan, d.id`,
             [this.scope.tenantId, header.id, header.from_location.id],
         );
+        const picks = Map.groupBy(
+            await this.pickRows(header.id),
+            (pick) => pick.line_id,
+        );
+        const stock = Map.groupBy(
+            header.status === 'diajukan'
+                ? await this.supplierBatches(header.id, header.from_location.id)
+                : [],
+            (batch) => batch.item_id,
+        );
+        const lines = rows.map((line) => ({
+            ...line,
+            batches: (picks.get(line.id) ?? []).map(
+                ({ line_id: _, ...pick }) => pick,
+            ),
+            supplier_batches: (stock.get(line.item.id) ?? []).map(
+                ({ item_id: _, ...batch }) => batch,
+            ),
+        }));
         const postings = await this.db.rows(
             transferPostingSummarySchema,
             `select id, kind, number, posting_date, status from (
@@ -300,6 +385,99 @@ export class TransferOrders {
             [this.scope.tenantId, header.id],
         );
         return { ...header, lines, postings };
+    }
+
+    private pickRows(orderId: string) {
+        return this.db.rows(
+            pickRowSchema,
+            `select p.amprahan_detail_id as line_id, p.batch_id, t.no_batch as batch_number,
+                    t.kedaluwarsa::text as expiry_date, trim_scale(p.jumlah_dasar)::text as quantity
+             from gd_tr_amprahan_detail_batch p
+             join gd_m_batch t on t.tenant_id = p.tenant_id and t.id = p.batch_id
+             where p.tenant_id = $1 and p.amprahan_id = $2 and p.deleted_at is null
+             order by t.kedaluwarsa nulls last, t.no_batch, t.id`,
+            [this.scope.tenantId, orderId],
+        );
+    }
+
+    private async picks(orderId: string) {
+        return Map.groupBy(
+            (await this.pickRows(orderId)).map((row) => ({
+                lineId: row.line_id,
+                batchId: row.batch_id,
+                quantity: fromNumeric(row.quantity, quantityScale),
+            })),
+            (pick) => pick.lineId,
+        );
+    }
+
+    // Batch barang-barang amprah ini yang masih punya stok di lokasi pemasok: yang bisa dipilih pengirim.
+    private supplierBatches(orderId: string, locationId: string) {
+        return this.db.rows(
+            supplierBatchSchema,
+            `select k.barang_id as item_id, t.id as batch_id, t.no_batch as batch_number,
+                    t.kedaluwarsa::text as expiry_date, trim_scale(sum(k.sisa))::text as quantity
+             from gd_tr_kartu_gudang k
+             join gd_m_batch t on t.tenant_id = k.tenant_id and t.id = k.batch_id
+             where k.tenant_id = $1 and k.legal_entity_id = $2 and k.lokasi_id = $4 and k.sisa > 0
+               and k.barang_id in (select d.barang_id from gd_tr_amprahan_detail d
+                                   where d.tenant_id = $1 and d.amprahan_id = $3 and d.deleted_at is null)
+             group by k.barang_id, t.id
+             order by t.kedaluwarsa nulls last, t.no_batch, t.id`,
+            [
+                this.scope.tenantId,
+                this.scope.legalEntityId,
+                orderId,
+                locationId,
+            ],
+        );
+    }
+
+    private async refusedPicks(locationId: string, lines: PickedLine[]) {
+        return pickErrors(
+            lines,
+            await this.batchStock(
+                locationId,
+                lines.flatMap((entry) =>
+                    entry.picks.map((pick) => pick.batchId),
+                ),
+            ),
+        );
+    }
+
+    // Barang dan stok di lokasi pemasok untuk batch yang dipilih. Batch yang tidak ada di legal entity ini tidak ikut.
+    private async batchStock(
+        locationId: string,
+        batchIds: string[],
+    ): Promise<Map<string, BatchStock>> {
+        const ids = [...new Set(batchIds)].filter((id) => lookupId(id));
+        if (!ids.length) return new Map();
+        const rows = await this.db.rows(
+            z.object({
+                id: z.string(),
+                item_id: z.string(),
+                number: z.string(),
+                available: z.string(),
+            }),
+            `select t.id, t.barang_id as item_id, t.no_batch as number,
+                    coalesce((select sum(k.sisa) from gd_tr_kartu_gudang k
+                              where k.tenant_id = t.tenant_id and k.barang_id = t.barang_id and k.lokasi_id = $3
+                                and k.batch_id = t.id and k.sisa > 0), 0)::text as available
+             from gd_m_batch t
+             where t.tenant_id = $1 and t.legal_entity_id = $2
+               and t.id in (${ids.map((_, index) => `$${index + 4}`).join(',')})`,
+            [this.scope.tenantId, this.scope.legalEntityId, locationId, ...ids],
+        );
+        return new Map(
+            rows.map((row) => [
+                row.id,
+                {
+                    itemId: row.item_id,
+                    number: row.number,
+                    available: fromNumeric(row.available, quantityScale),
+                },
+            ]),
+        );
     }
 
     async show(id: string) {
@@ -684,12 +862,13 @@ export class TransferOrders {
     private async storedLines(id: string): Promise<StoredLine[]> {
         const rows = await this.db.rows(
             storedLineSchema,
-            `select d.id, d.barang_id as item_id, b.kode as item_code, d.konversi::text as conversion,
+            `select d.id, d.barang_id as item_id, b.kode as item_code, s.kode as base_unit, d.konversi::text as conversion,
                     d.jumlah_diminta::text as quantity, d.jumlah_dikirim::text as shipped,
                     d.jumlah_diterima::text as received, d.jumlah_akan_dikirim::text as to_ship,
                     d.jumlah_akan_diterima::text as to_receive
              from gd_tr_amprahan_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+             join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
              where d.tenant_id = $1 and d.amprahan_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.scope.tenantId, id],
@@ -699,6 +878,7 @@ export class TransferOrders {
             id: row.id,
             itemId: row.item_id,
             itemCode: row.item_code,
+            baseUnit: row.base_unit,
             conversion: scaled(row.conversion),
             quantity: scaled(row.quantity),
             shipped: scaled(row.shipped),
@@ -709,7 +889,8 @@ export class TransferOrders {
     }
 
     // Jumlah yang akan dikirim dan diterima pada posting berikutnya, seperti Qty. to Ship dan Qty. to Receive di baris
-    // Transfer Order BC. Mengisi jumlah akan dikirim butuh hak posting kirim, jumlah akan diterima hak posting terima.
+    // Transfer Order BC, dan batch pilihan untuk jumlah akan dikirim. Mengisi jumlah akan dikirim dan batchnya butuh hak
+    // posting kirim, jumlah akan diterima hak posting terima.
     async quantities(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'read');
         const current = await this.header(id);
@@ -718,7 +899,9 @@ export class TransferOrders {
         if (
             data.lines.some(
                 (line) =>
-                    (line.quantity_to_ship !== undefined && !allowed.ship) ||
+                    ((line.quantity_to_ship !== undefined ||
+                        line.batches !== undefined) &&
+                        !allowed.ship) ||
                     (line.quantity_to_receive !== undefined &&
                         !allowed.receive),
             )
@@ -732,9 +915,16 @@ export class TransferOrders {
             if (locked.version !== version)
                 coded(409, 'stale_version', staleMessage);
             const stored = await this.storedLines(current.id);
+            const picked = await this.picks(current.id);
             const errors: Record<string, string> = {};
-            const changes: { id: string; toShip: bigint; toReceive: bigint }[] =
-                [];
+            const changes: {
+                line: StoredLine;
+                position: number;
+                toShip: bigint;
+                toReceive: bigint;
+                shipChanged: boolean;
+                picks: BatchPick[] | undefined;
+            }[] = [];
             for (const [index, input] of data.lines.entries()) {
                 const line = stored.find((entry) => entry.id === input.id);
                 if (!line) {
@@ -760,11 +950,49 @@ export class TransferOrders {
                     line.conversion,
                     'barang dalam perjalanan',
                 );
-                changes.push({ id: line.id, toShip, toReceive });
+                const picks = input.batches?.map((pick, at) => {
+                    const value = decimalInput(pick.quantity);
+                    if (value === null || value <= 0n)
+                        errors[`lines.${position}.batches.${at}.quantity`] =
+                            `Isi jumlah lebih dari 0, ${quantityHint}.`;
+                    return { batchId: pick.batch_id, quantity: value ?? 0n };
+                });
+                changes.push({
+                    line,
+                    position,
+                    toShip,
+                    toReceive,
+                    shipChanged: input.quantity_to_ship !== undefined,
+                    picks,
+                });
             }
             if (Object.keys(errors).length) validation(errors);
+            // Batch pilihan diperiksa ulang bila pilihannya atau jumlah akan dikirimnya disimpan. Baris yang hanya diisi
+            // jumlah akan diterimanya tidak ikut, karena penerima tidak bisa mengubah pilihan pengirim.
+            const refused = await this.refusedPicks(
+                current.from_location.id,
+                changes.flatMap((change) => {
+                    const picks =
+                        change.picks ?? picked.get(change.line.id) ?? [];
+                    return change.picks !== undefined ||
+                        (change.shipChanged && picks.length)
+                        ? [
+                              {
+                                  position: change.position,
+                                  line: change.line,
+                                  toShip: this.baseOf(
+                                      change.line,
+                                      change.toShip,
+                                  ),
+                                  picks,
+                              },
+                          ]
+                        : [];
+                }),
+            );
+            if (Object.keys(refused).length) validation(refused);
             const stamp = nowSql();
-            for (const change of changes)
+            for (const change of changes) {
                 await this.db.execute(
                     `update gd_tr_amprahan_detail set jumlah_akan_dikirim = $1, jumlah_akan_diterima = $2,
                             updated_at = $3
@@ -774,12 +1002,45 @@ export class TransferOrders {
                         toNumeric(change.toReceive, quantityScale),
                         stamp,
                         this.scope.tenantId,
-                        change.id,
+                        change.line.id,
                     ],
                 );
+                if (change.picks !== undefined)
+                    await this.replacePicks(
+                        current.id,
+                        change.line.id,
+                        change.picks,
+                        stamp,
+                    );
+            }
             await this.touch(current.id);
         });
         return this.reply(current.id);
+    }
+
+    private async replacePicks(
+        orderId: string,
+        lineId: string,
+        picks: BatchPick[],
+        stamp: string,
+    ) {
+        await this.db.execute(
+            `update gd_tr_amprahan_detail_batch set deleted_at = $1
+             where tenant_id = $2 and amprahan_detail_id = $3 and deleted_at is null`,
+            [stamp, this.scope.tenantId, lineId],
+        );
+        for (const pick of picks)
+            await this.db.insert('gd_tr_amprahan_detail_batch', {
+                id: Bun.randomUUIDv7(),
+                tenant_id: this.scope.tenantId,
+                legal_entity_id: this.scope.legalEntityId,
+                amprahan_id: orderId,
+                amprahan_detail_id: lineId,
+                batch_id: pick.batchId,
+                jumlah_dasar: toNumeric(pick.quantity, quantityScale),
+                created_at: stamp,
+                created_by_user_id: this.workspace.userId,
+            });
     }
 
     private handled(
@@ -894,6 +1155,27 @@ export class TransferOrders {
             if (!stored.some((line) => line.toShip > 0n))
                 errors.lines =
                     'Isi jumlah akan dikirim pada sedikitnya satu baris.';
+            // Stok batch bisa berkurang sejak pilihannya disimpan, jadi pilihan diperiksa lagi sebelum diposting.
+            const picked = await this.picks(current.id);
+            Object.assign(
+                errors,
+                await this.refusedPicks(
+                    claimed.from_location_id,
+                    stored.flatMap((line, position) => {
+                        const picks = picked.get(line.id) ?? [];
+                        return picks.length
+                            ? [
+                                  {
+                                      position,
+                                      line,
+                                      toShip: this.baseOf(line, line.toShip),
+                                      picks,
+                                  },
+                              ]
+                            : [];
+                    }),
+                ),
+            );
             if (Object.keys(errors).length) validation(errors);
             const mode = await this.transferMode(claimed.from_location_id);
             let transitId: string | null = null;
@@ -946,17 +1228,35 @@ export class TransferOrders {
                     postingDate,
                     source: { type: shipmentSource, id: shipmentId, number },
                 },
-                shipping.map(({ line, index }): TransferLine => ({
-                    kind: 'transfer',
-                    key: `${shipmentSource}:${shipmentId}:${line.id}`,
-                    field: `lines.${index}`,
-                    sourceLineId: line.id,
-                    itemId: line.itemId,
-                    quantity: this.baseOf(line, line.toShip),
-                    fromLocationId: claimed.from_location_id,
-                    toLocationId: transitId ?? claimed.to_location_id,
-                    batchId: null,
-                })),
+                // Baris tanpa batch pilihan diambil otomatis menurut setelan pengambilan; baris berpilihan menjadi satu
+                // baris posting per batch, sehingga mesin mengambil tepat batch dan jumlah itu.
+                shipping.flatMap(({ line, index }): TransferLine[] => {
+                    const common = {
+                        kind: 'transfer' as const,
+                        sourceLineId: line.id,
+                        itemId: line.itemId,
+                        fromLocationId: claimed.from_location_id,
+                        toLocationId: transitId ?? claimed.to_location_id,
+                    };
+                    const picks = picked.get(line.id) ?? [];
+                    return picks.length
+                        ? picks.map((pick, at) => ({
+                              ...common,
+                              key: `${shipmentSource}:${shipmentId}:${line.id}:${pick.batchId}`,
+                              field: `lines.${index}.batches.${at}`,
+                              quantity: pick.quantity,
+                              batchId: pick.batchId,
+                          }))
+                        : [
+                              {
+                                  ...common,
+                                  key: `${shipmentSource}:${shipmentId}:${line.id}`,
+                                  field: `lines.${index}`,
+                                  quantity: this.baseOf(line, line.toShip),
+                                  batchId: null,
+                              },
+                          ];
+                }),
             );
             await this.recordTaken(
                 'gd_tr_mutasi_detail',

@@ -36,8 +36,16 @@ type Order = {
         quantity_to_ship: string;
         quantity_to_receive: string;
         supplier_stock: string;
+        batches: BatchQuantity[];
+        supplier_batches: BatchQuantity[];
     }[];
     postings: Posting[];
+};
+type BatchQuantity = {
+    batch_id: string;
+    batch_number: string;
+    expiry_date: string | null;
+    quantity: string;
 };
 type Line = Record<string, unknown>;
 
@@ -530,6 +538,347 @@ describe.skipIf(!process.env.DB_HOST)('transfer orders', () => {
         );
     });
 
+    describe('with batches picked by the shipper', () => {
+        const batchOf = (order: Order, line: number, number: string) => {
+            const found = order.lines[line]?.supplier_batches.find(
+                (batch) => batch.batch_number === number,
+            );
+            if (!found) throw new Error(`No stock of batch ${number}.`);
+            return found.batch_id;
+        };
+
+        async function picksOf(orderId: string) {
+            const [counts] = await pool.unsafe<
+                { live: number; total: number }[]
+            >(
+                `select count(*) filter (where deleted_at is null)::int as live, count(*)::int as total
+                 from gd_tr_amprahan_detail_batch where amprahan_id = $1`,
+                [orderId],
+            );
+            return counts;
+        }
+
+        async function shipmentLines(shipmentId: string) {
+            const rows = await pool.unsafe<
+                { batch: string | null; quantity: string }[]
+            >(
+                `select t.no_batch as batch, trim_scale(d.jumlah_dasar)::text as quantity
+                 from gd_tr_mutasi_detail d
+                 left join gd_m_batch t on t.id = d.batch_id
+                 where d.mutasi_id = $1
+                 order by d.urutan`,
+                [shipmentId],
+            );
+            return rows.map((row) => [row.batch, row.quantity]);
+        }
+
+        test('picks are saved in the base unit and returned per line, with the batches the supplier holds', async () => {
+            const warehouse = await business.location('SIMPAN-GDG');
+            const pharmacy = await business.location('SIMPAN-FAR');
+            const item = await medicine(business, 'SIMPAN-1');
+            await received(business, warehouse.id, [
+                {
+                    item_id: item.id,
+                    quantity: 30,
+                    batch_number: 'SP-LAMA',
+                    expiry_date: '2027-12-31',
+                },
+                {
+                    item_id: item.id,
+                    quantity: 30,
+                    batch_number: 'SP-DEKAT',
+                    expiry_date: '2027-01-31',
+                },
+            ]);
+            const order = await submitted(
+                business,
+                {
+                    from_location_id: warehouse.id,
+                    to_location_id: pharmacy.id,
+                },
+                [{ item_id: item.id, unit_id: box.id, quantity: 2 }],
+            );
+            expect(
+                order.lines[0]?.supplier_batches.map((batch) => [
+                    batch.batch_number,
+                    batch.expiry_date,
+                    batch.quantity,
+                ]),
+            ).toEqual([
+                ['SP-DEKAT', '2027-01-31', '30'],
+                ['SP-LAMA', '2027-12-31', '30'],
+            ]);
+            expect(order.lines[0]?.batches).toEqual([]);
+
+            const saved = await done(
+                await quantities(business, order, [
+                    {
+                        id: order.lines[0]?.id,
+                        batches: [
+                            {
+                                batch_id: batchOf(order, 0, 'SP-LAMA'),
+                                quantity: 12,
+                            },
+                            {
+                                batch_id: batchOf(order, 0, 'SP-DEKAT'),
+                                quantity: '8',
+                            },
+                        ],
+                    },
+                ]),
+            );
+            expect(
+                saved.lines[0]?.batches.map((batch) => [
+                    batch.batch_number,
+                    batch.quantity,
+                ]),
+            ).toEqual([
+                ['SP-DEKAT', '8'],
+                ['SP-LAMA', '12'],
+            ]);
+            const shown = await json<{ data: Order }>(
+                await business.admin.get(`${path}/${order.id}`),
+                200,
+            );
+            expect(shown.data.lines[0]?.batches).toEqual(
+                saved.lines[0]?.batches ?? [],
+            );
+
+            const automatic = await done(
+                await quantities(business, saved, [
+                    { id: order.lines[0]?.id, batches: [] },
+                ]),
+            );
+            expect(automatic.lines[0]?.batches).toEqual([]);
+            expect(await picksOf(order.id)).toEqual({ live: 0, total: 2 });
+        });
+
+        test('picks that do not add up to the quantity to ship, belong to another item, or exceed a batch are refused, at saving and again at shipping', async () => {
+            const warehouse = await business.location('TOLAKBATCH-GDG');
+            const pharmacy = await business.location('TOLAKBATCH-FAR');
+            const item = await medicine(business, 'TOLAKBATCH-1');
+            const other = await medicine(business, 'TOLAKBATCH-2');
+            await received(business, warehouse.id, [
+                {
+                    item_id: item.id,
+                    quantity: 5,
+                    batch_number: 'TB-KECIL',
+                    expiry_date: '2027-01-31',
+                },
+                {
+                    item_id: item.id,
+                    quantity: 50,
+                    batch_number: 'TB-BESAR',
+                    expiry_date: '2027-12-31',
+                },
+                { item_id: other.id, quantity: 50, batch_number: 'TB-LAIN' },
+            ]);
+            const order = await submitted(
+                business,
+                {
+                    from_location_id: warehouse.id,
+                    to_location_id: pharmacy.id,
+                },
+                [{ item_id: item.id, unit_id: box.id, quantity: 2 }],
+            );
+            const line = order.lines[0]?.id;
+            const small = batchOf(order, 0, 'TB-KECIL');
+            const large = batchOf(order, 0, 'TB-BESAR');
+            const [foreign] = await pool.unsafe<{ id: string }[]>(
+                `select id from gd_m_batch where barang_id = $1 and no_batch = 'TB-LAIN'`,
+                [other.id],
+            );
+
+            const mismatch = await refused(
+                await quantities(business, order, [
+                    { id: line, batches: [{ batch_id: large, quantity: 15 }] },
+                ]),
+            );
+            expect(Object.keys(mismatch)).toEqual(['lines.0.batches']);
+            expect(mismatch['lines.0.batches']?.[0]).toContain(
+                'Jumlah batch yang dipilih 15 TAB, sedangkan jumlah akan dikirim 20 TAB.',
+            );
+            expect(
+                Object.keys(
+                    await refused(
+                        await quantities(business, order, [
+                            {
+                                id: line,
+                                quantity_to_ship: 1,
+                                batches: [{ batch_id: large, quantity: 20 }],
+                            },
+                        ]),
+                    ),
+                ),
+            ).toEqual(['lines.0.batches']);
+            expect(
+                Object.keys(
+                    await refused(
+                        await quantities(business, order, [
+                            {
+                                id: line,
+                                batches: [
+                                    { batch_id: foreign?.id, quantity: 20 },
+                                ],
+                            },
+                        ]),
+                    ),
+                ),
+            ).toEqual(['lines.0.batches.0.batch_id']);
+            const tooMuch = await refused(
+                await quantities(business, order, [
+                    { id: line, batches: [{ batch_id: small, quantity: 20 }] },
+                ]),
+            );
+            expect(Object.keys(tooMuch)).toEqual([
+                'lines.0.batches.0.quantity',
+            ]);
+            expect(tooMuch['lines.0.batches.0.quantity']?.[0]).toBe(
+                'Stok batch TB-KECIL di lokasi pemasok hanya 5 TAB.',
+            );
+            expect(
+                Object.keys(
+                    await refused(
+                        await quantities(business, order, [
+                            {
+                                id: line,
+                                batches: [
+                                    { batch_id: small, quantity: 0 },
+                                    { batch_id: large, quantity: 20 },
+                                ],
+                            },
+                        ]),
+                    ),
+                ),
+            ).toEqual(['lines.0.batches.0.quantity']);
+            expect(await picksOf(order.id)).toEqual({ live: 0, total: 0 });
+
+            const picked = await done(
+                await quantities(business, order, [
+                    {
+                        id: line,
+                        batches: [
+                            { batch_id: small, quantity: 5 },
+                            { batch_id: large, quantity: 15 },
+                        ],
+                    },
+                ]),
+            );
+            await business.posted('keluar', warehouse.id, [
+                { item_id: item.id, quantity: 3, batch_id: small },
+            ]);
+            const stale = await refused(await ship(business, picked));
+            expect(Object.keys(stale)).toEqual(['lines.0.batches.0.quantity']);
+            expect(stale['lines.0.batches.0.quantity']?.[0]).toBe(
+                'Stok batch TB-KECIL di lokasi pemasok hanya 2 TAB.',
+            );
+            expect(postingsOf(picked, 'shipment')).toHaveLength(0);
+            expect(await business.stock(item.id, warehouse.id)).toEqual({
+                'TB-BESAR': 50,
+                'TB-KECIL': 2,
+            });
+        });
+
+        test('shipping takes exactly the picked batches, an unpicked line still takes the nearest expiry, and the next partial shipment is automatic again', async () => {
+            const warehouse = await business.location('PILIH-GDG');
+            const pharmacy = await business.location('PILIH-FAR');
+            const picked = await medicine(business, 'PILIH-1');
+            const automatic = await medicine(business, 'PILIH-2');
+            await received(business, warehouse.id, [
+                {
+                    item_id: picked.id,
+                    quantity: 30,
+                    batch_number: 'PA-DEKAT',
+                    expiry_date: '2027-01-31',
+                },
+                {
+                    item_id: picked.id,
+                    quantity: 30,
+                    batch_number: 'PA-LAMA',
+                    expiry_date: '2027-12-31',
+                },
+                {
+                    item_id: automatic.id,
+                    quantity: 20,
+                    batch_number: 'PB-DEKAT',
+                    expiry_date: '2027-01-31',
+                },
+                {
+                    item_id: automatic.id,
+                    quantity: 20,
+                    batch_number: 'PB-LAMA',
+                    expiry_date: '2027-12-31',
+                },
+            ]);
+            let order = await submitted(
+                business,
+                {
+                    from_location_id: warehouse.id,
+                    to_location_id: pharmacy.id,
+                },
+                [
+                    { item_id: picked.id, unit_id: box.id, quantity: 4 },
+                    { item_id: automatic.id, unit_id: box.id, quantity: 1 },
+                ],
+            );
+            order = await done(
+                await quantities(business, order, [
+                    {
+                        id: order.lines[0]?.id,
+                        quantity_to_ship: 2,
+                        batches: [
+                            {
+                                batch_id: batchOf(order, 0, 'PA-LAMA'),
+                                quantity: 15,
+                            },
+                            {
+                                batch_id: batchOf(order, 0, 'PA-DEKAT'),
+                                quantity: 5,
+                            },
+                        ],
+                    },
+                ]),
+            );
+            order = await done(await ship(business, order));
+            const [first] = postingsOf(order, 'shipment');
+            if (!first) throw new Error('No shipment.');
+            expect(await shipmentLines(first.id)).toEqual([
+                ['PA-DEKAT', '5'],
+                ['PA-LAMA', '15'],
+                ['PB-DEKAT', '10'],
+            ]);
+            expect(
+                (await ledger([first.id])).map((entry) => [
+                    entry.location,
+                    entry.batch,
+                    entry.quantity,
+                ]),
+            ).toEqual([
+                ['PILIH-GDG', 'PA-LAMA', '-15'],
+                ['PILIH-GDG', 'PB-DEKAT', '-10'],
+                ['PILIH-GDG', 'PA-DEKAT', '-5'],
+                ['PILIH-FAR', 'PA-DEKAT', '5'],
+                ['PILIH-FAR', 'PB-DEKAT', '10'],
+                ['PILIH-FAR', 'PA-LAMA', '15'],
+            ]);
+            expect(order.lines[0]?.batches).toEqual([]);
+            expect(order.lines[0]?.quantity_to_ship).toBe('2');
+            expect(await picksOf(order.id)).toEqual({ live: 0, total: 2 });
+
+            order = await done(await ship(business, order, '2026-11-13'));
+            const second = postingsOf(order, 'shipment')[1];
+            if (!second) throw new Error('No second shipment.');
+            expect(await shipmentLines(second.id)).toEqual([
+                ['PA-DEKAT', '20'],
+            ]);
+            expect(order.status).toBe('selesai');
+            expect(await business.stock(picked.id, warehouse.id)).toEqual({
+                'PA-DEKAT': 5,
+                'PA-LAMA': 15,
+            });
+        });
+    });
+
     describe('through a transit location', () => {
         let twoStep: Business;
         let warehouse: { id: string };
@@ -908,6 +1257,14 @@ describe.skipIf(!process.env.DB_HOST)('transfer orders', () => {
                 await requester.patch(`${path}/${ready.id}/quantities`, {
                     version: ready.version,
                     lines: [{ id: ready.lines[0]?.id, quantity_to_ship: 1 }],
+                })
+            ).status,
+        ).toBe(403);
+        expect(
+            (
+                await requester.patch(`${path}/${ready.id}/quantities`, {
+                    version: ready.version,
+                    lines: [{ id: ready.lines[0]?.id, batches: [] }],
                 })
             ).status,
         ).toBe(403);
