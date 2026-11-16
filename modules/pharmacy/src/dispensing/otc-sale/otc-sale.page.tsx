@@ -55,6 +55,7 @@ type Header = {
     buyer: Reference | null;
     buyerName: string;
     ktp: boolean;
+    withoutPrescription: boolean;
 };
 
 const quoteDelay = 300;
@@ -143,6 +144,7 @@ function OtcSaleCounter({
     userId: string;
 }): ReactNode {
     const ktpId = useId();
+    const withoutPrescriptionId = useId();
     const portalContainer = useRef<HTMLFormElement>(null);
     const headerFor = (locationId: string): Header => ({
         locationId,
@@ -152,6 +154,7 @@ function OtcSaleCounter({
         buyer: null,
         buyerName: '',
         ktp: true,
+        withoutPrescription: true,
     });
     const [header, setHeader] = useState<Header>(() => {
         const stored = readLocation(userId);
@@ -175,6 +178,7 @@ function OtcSaleCounter({
               location_id: header.locationId,
               price_group_id: header.priceGroup?.id ?? null,
               ktp_patient: header.ktp,
+              without_prescription: header.withoutPrescription,
               lines: quoted.map(({ line }) => ({
                   item_id: line.drug?.id ?? '',
                   unit_id: line.unitId,
@@ -261,6 +265,7 @@ function OtcSaleCounter({
                     location_id: header.locationId,
                     price_group_id: header.priceGroup?.id ?? null,
                     ktp_patient: header.ktp,
+                    without_prescription: header.withoutPrescription,
                     buyer_party_id: header.buyer?.id ?? null,
                     buyer_name: header.buyerName.trim() || null,
                     lines: sent.map(({ line }) => ({
@@ -310,6 +315,7 @@ function OtcSaleCounter({
             buyer: now.buyer,
             buyerName: now.buyerName,
             ktp: now.ktp,
+            withoutPrescription: now.withoutPrescription,
         }));
         setLines((now) => now.map((line) => ({ ...line, batch: null })));
     };
@@ -437,6 +443,29 @@ function OtcSaleCounter({
                                 </FieldLabel>
                             </Field>
                         </FormControl>
+                        <FormControl
+                            error={shownErrors.without_prescription?.[0]}
+                            hint="Penjualan tanpa resep dokter tidak dikenai biaya resep. Matikan bila pembeli membawa resep."
+                        >
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id={withoutPrescriptionId}
+                                    checked={header.withoutPrescription}
+                                    onCheckedChange={(withoutPrescription) =>
+                                        setHeader((now) => ({
+                                            ...now,
+                                            withoutPrescription,
+                                        }))
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={withoutPrescriptionId}
+                                    className="font-normal"
+                                >
+                                    Tanpa resep
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
                     </FormGrid>
                     <OtcSaleLines
                         lines={lines}
@@ -444,6 +473,7 @@ function OtcSaleCounter({
                         locationId={header.locationId}
                         priced={priced}
                         pricesCurrent={current !== null}
+                        fees={shown?.fees ?? []}
                         total={total}
                         errors={shownErrors}
                         portalContainer={portalContainer}

@@ -28,6 +28,7 @@ type Quote = {
         discount_percent: string;
         amount: string;
     })[];
+    fees: { kind: string; name: string; amount: string }[];
     total: string;
 };
 type Sold = {
@@ -285,6 +286,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 lines: [{ item_id: item.id, unit_id: strip.id, quantity: 2 }],
             });
             expect(quoted).toEqual({
+                fees: [],
                 lines: [
                     {
                         item_id: item.id,

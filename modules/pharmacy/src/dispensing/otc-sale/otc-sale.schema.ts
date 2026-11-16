@@ -4,10 +4,12 @@ const amount = z.union([z.string(), z.number()]);
 
 // price_group_id yang tidak dikirim berarti kelompok harga bawaan lokasi; null berarti harga dasar. ktp_patient adalah
 // Patient KTP pembeli untuk grading harga obat; buku alamat Core tidak menyimpan KTP, jadi diisi per penjualan.
+// without_prescription adalah "Tanpa Resep" sistem lama: tanpa resep dokter tidak ada biaya resep. Bawaannya true.
 const saleBase = {
     location_id: z.string(),
     price_group_id: z.string().nullable().optional(),
     ktp_patient: z.boolean().optional(),
+    without_prescription: z.boolean().optional(),
 };
 
 export const otcSaleQuoteInputSchema = z.object({

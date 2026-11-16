@@ -29,11 +29,19 @@ import {
 } from '@core/foundation/inventory/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
+import {
+    billedFees,
+    feeRates,
+    freezeFees,
+    plannedFees,
+} from '../dispensing-fee/dispensing-fee.service.ts';
+import type { BilledFee } from '../dispensing-fee/dispensing-fee.schema.ts';
 import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
 import {
     lockCharges,
+    netLines,
     paidMessage,
     publishDispensingCharges,
     publishPrescriptionCancelled,
@@ -82,9 +90,12 @@ const headerSql = `select h.id, h.nomor as number, h.status, h.tanggal::text as 
                           ${personSql('h.diserahkan_oleh_user_id')} as handed_over_by,
                           h.diterima_pasien as received_by_patient, h.nama_penerima as receiver_name,
                           ${isoSql('h.dibatalkan_pada')} as cancelled_at,
-                          (select trim_scale(sum(${lineAmountSql('d')}))::text from bill_farmasi_detail d
-                           where d.tenant_id = h.tenant_id and d.bill_farmasi_id = h.id and d.deleted_at is null)
-                              as total_amount
+                          trim_scale((select sum(${lineAmountSql('d')}) from bill_farmasi_detail d
+                                      where d.tenant_id = h.tenant_id and d.bill_farmasi_id = h.id
+                                        and d.deleted_at is null)
+                                     + coalesce((select sum(f.nilai) from bill_farmasi_biaya f
+                                                 where f.tenant_id = h.tenant_id and f.bill_farmasi_id = h.id
+                                                   and f.deleted_at is null), 0))::text as total_amount
                    from bill_farmasi h
                    left join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
                    where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null`;
@@ -207,6 +218,7 @@ export class Dispensings {
                 prescription,
                 dispensing: active ? this.withoutPrescription(active) : null,
                 lines: await this.lines(prescription.id, active),
+                fees: active ? await this.fees(active.id) : [],
                 cancelled,
                 stock: itemIds.map((itemId) => ({
                     item_id: itemId,
@@ -215,6 +227,21 @@ export class Dispensings {
             },
             permissions: this.permissions(),
         };
+    }
+
+    // Biaya racik dan resep yang dibekukan saat Siapkan, sebatas yang masih ditagih sesudah retur.
+    private async fees(billId: string): Promise<BilledFee[]> {
+        const kept = (await netLines(this.db, this.scope.tenantId, [billId]))
+            .filter((line) => line.kept)
+            .map((line) => line.line_id);
+        return (
+            await billedFees(
+                this.db,
+                this.scope.tenantId,
+                [billId],
+                new Set(kept),
+            )
+        ).map(({ dispensing_id: _, ...fee }) => fee);
     }
 
     private withoutPrescription(header: Header) {
@@ -693,7 +720,11 @@ export class Dispensings {
                 });
             const stamp = nowSql();
             const claimed = await this.db.one(
-                z.object({ number: z.string(), posting_date: z.string() }),
+                z.object({
+                    number: z.string(),
+                    posting_date: z.string(),
+                    includes_service: z.boolean(),
+                }),
                 `update bill_farmasi h set status = 'disiapkan', lokasi_id = $1,
                         tanggal = (now() at time zone e.timezone)::date, disiapkan_pada = $2,
                         disiapkan_oleh_user_id = $3, asisten_user_id = coalesce(h.asisten_user_id, $3), updated_at = $2,
@@ -708,7 +739,7 @@ export class Dispensings {
                  where e.tenant_id = h.tenant_id and e.organization_id = h.legal_entity_id
                    and r.tenant_id = h.tenant_id and r.id = h.resep_id
                    and h.tenant_id = $4 and h.id = $5 and h.status = 'draf'
-                 returning h.nomor as number, h.tanggal::text as posting_date`,
+                 returning h.nomor as number, h.tanggal::text as posting_date, h.termasuk_jasa as includes_service`,
                 [
                     location,
                     stamp,
@@ -725,11 +756,14 @@ export class Dispensings {
                     quantity: z.string(),
                     conversion: z.string(),
                     batch_id: z.string().nullable(),
+                    compound: z.number().nullable(),
                 }),
-                `select id, barang_id as item_id, jumlah::text as quantity, konversi::text as conversion, batch_id
-                 from bill_farmasi_detail
-                 where tenant_id = $1 and bill_farmasi_id = $2 and deleted_at is null
-                 order by urutan, id`,
+                `select d.id, d.barang_id as item_id, d.jumlah::text as quantity, d.konversi::text as conversion,
+                        d.batch_id, r.racikan_ke as compound
+                 from bill_farmasi_detail d
+                 left join far_tr_resep_detail r on r.tenant_id = d.tenant_id and r.id = d.resep_detail_id
+                 where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null
+                 order by d.urutan, d.id`,
                 [this.scope.tenantId, billId],
             );
             const outbound = lines.map((line, index) => ({
@@ -775,6 +809,26 @@ export class Dispensings {
                         this.scope.tenantId,
                         line.id,
                     ],
+                );
+            // Biaya racik dan resep dibekukan bersama harga obat. Obat yang tidak diserahkan tidak dikenai biaya, dan
+            // penyerahan yang termasuk jasa tidak ditagih biayanya.
+            if (!claimed.includes_service)
+                await freezeFees(
+                    this.db,
+                    this.scope,
+                    billId,
+                    plannedFees(
+                        await feeRates(this.db, this.scope, {
+                            locationId: location,
+                            priceGroupId: locked.price_group_id,
+                        }),
+                        outbound.flatMap(({ line, quantity }) =>
+                            quantity !== null && quantity > 0n
+                                ? [{ lineId: line.id, compound: line.compound }]
+                                : [],
+                        ),
+                        false,
+                    ),
                 );
             await postItemLines(
                 this.db,

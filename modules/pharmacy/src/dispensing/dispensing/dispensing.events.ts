@@ -10,6 +10,10 @@ import {
     toNumeric,
 } from '@core/foundation/inventory/index.ts';
 import { moduleId } from '../../module.ts';
+import {
+    billedFees,
+    chargeFees,
+} from '../dispensing-fee/dispensing-fee.service.ts';
 
 // Obat resep sudah diserahkan, sebagai event untuk layanan kesehatan (E-Resep menampilkan yang diserahkan). Isinya
 // potret saat diserahkan; kontraknya ditulis tangan di contracts/events/pharmacy.prescription.dispensed.v1.yaml, dan
@@ -248,9 +252,10 @@ export async function netLines(
 }
 
 // Biaya obat satu penyerahan untuk kasir Core, sebagai potret penuh: baris yang masih ditagih dengan Qty bersih sesudah
-// retur (JmlPemakaian - JmlRetur sistem lama), atau kosong bila penyerahan dibatalkan. Harga satuan dan persen diskon
-// dibekukan saat Siapkan. Diterbitkan di transaksi Siapkan, Batal siapkan, retur, dan batal retur. Resep tanpa
-// kunjungan (diterima sebelum kunjungan ikut dikirim bersama resep) tidak dikirim, karena kasir tidak tahu tagihannya.
+// retur (JmlPemakaian - JmlRetur sistem lama), atau kosong bila penyerahan dibatalkan. Harga satuan, persen diskon, dan
+// biaya racik dan resep dibekukan saat Siapkan. Diterbitkan di transaksi Siapkan, Batal siapkan, retur, dan batal retur.
+// Resep tanpa kunjungan (diterima sebelum kunjungan ikut dikirim bersama resep) tidak dikirim, karena kasir tidak tahu
+// tagihannya.
 export const dispensingChargesReplaced =
     `${moduleId}.dispensing.charges-replaced.v1` as const;
 
@@ -287,6 +292,15 @@ export async function publishDispensingCharges(
             : (await netLines(db, scope.tenantId, [dispensingId])).filter(
                   (line) => line.kept,
               );
+    const fees =
+        header.status === 'dibatalkan'
+            ? []
+            : await billedFees(
+                  db,
+                  scope.tenantId,
+                  [dispensingId],
+                  new Set(lines.map((line) => line.line_id)),
+              );
     await publishEvent(db, {
         type: dispensingChargesReplaced,
         tenantId: scope.tenantId,
@@ -316,6 +330,7 @@ export async function publishDispensingCharges(
                     discount_percent,
                 }),
             ),
+            fees: chargeFees(fees),
         },
     });
 }

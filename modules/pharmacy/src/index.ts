@@ -22,6 +22,7 @@ import { gradingGroupRoutes } from './drug/grading-group/grading-group.routes.ts
 import { moduleId } from './module.ts';
 import { otcSaleRoutes } from './dispensing/otc-sale/otc-sale.routes.ts';
 import { otcSaleLocationRoutes } from './dispensing/otc-sale-location/otc-sale-location.routes.ts';
+import { dispensingFeeRoutes } from './dispensing/dispensing-fee/dispensing-fee.routes.ts';
 
 export function pharmacyRoutes() {
     return {
@@ -35,6 +36,7 @@ export function pharmacyRoutes() {
         ...drugPriceRoutes(),
         ...otcSaleRoutes(),
         ...otcSaleLocationRoutes(),
+        ...dispensingFeeRoutes(),
     };
 }
 

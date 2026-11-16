@@ -46,6 +46,7 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
+import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
 import { dateTimeText, Fact } from '../prescription/prescription-display.tsx';
 import { PrescriptionFacts } from '../prescription/prescription-facts.tsx';
 import {
@@ -831,6 +832,11 @@ function DispensingForm({
                                     portalContainer={portalContainer}
                                 />
                             </div>
+                            {prepared && (
+                                <div className="mt-3">
+                                    <FeeLines fees={view.data.fees} />
+                                </div>
+                            )}
                             {prepared && dispensing?.total_amount ? (
                                 <p className="mt-3 text-sm">
                                     Total{' '}

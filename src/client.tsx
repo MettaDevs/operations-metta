@@ -41,6 +41,7 @@ import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPag
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as modulesPharmacySrcDashboardDashboardPage } from '../modules/pharmacy/src/dashboard/dashboard.page.tsx';
+import { page as modulesPharmacySrcDispensingDispensingFeeDispensingFeesPage } from '../modules/pharmacy/src/dispensing/dispensing-fee/dispensing-fees.page.tsx';
 import { page as modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage } from '../modules/pharmacy/src/dispensing/otc-sale-location/otc-sale-locations.page.tsx';
 import { page as modulesPharmacySrcDispensingOtcSaleOtcSalePage } from '../modules/pharmacy/src/dispensing/otc-sale/otc-sale.page.tsx';
 import { page as modulesPharmacySrcDispensingOtcSaleOtcSalesPage } from '../modules/pharmacy/src/dispensing/otc-sale/otc-sales.page.tsx';
@@ -564,6 +565,19 @@ const modulesPharmacySrcDashboardDashboardRoute = createRoute({
     component: modulesPharmacySrcDashboardDashboardPage.component,
     staticData: { title: modulesPharmacySrcDashboardDashboardPage.title },
 });
+
+const modulesPharmacySrcDispensingDispensingFeeDispensingFeesRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesPharmacySrcDispensingDispensingFeeDispensingFeesPage.path,
+        component:
+            modulesPharmacySrcDispensingDispensingFeeDispensingFeesPage.component,
+        validateSearch:
+            modulesPharmacySrcDispensingDispensingFeeDispensingFeesPage.validateSearch,
+        staticData: {
+            title: modulesPharmacySrcDispensingDispensingFeeDispensingFeesPage.title,
+        },
+    });
 
 const modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsRoute =
     createRoute({
@@ -1143,6 +1157,7 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,
         modulesPharmacySrcDashboardDashboardRoute,
+        modulesPharmacySrcDispensingDispensingFeeDispensingFeesRoute,
         modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsRoute,
         modulesPharmacySrcDispensingOtcSaleOtcSaleRoute,
         modulesPharmacySrcDispensingOtcSaleOtcSalesRoute,

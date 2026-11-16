@@ -140,13 +140,14 @@ export class OtcSaleLocations {
         };
     }
 
-    // Kelompok harga Core, dibaca setelan ini dan loket penjualan.
+    // Kelompok harga Core, dibaca setelan ini, setelan biaya racik dan resep, dan loket penjualan.
     async priceGroups(parameters: URLSearchParams) {
         if (
             !this.workspace.permissions.has(
                 'pharmacy.otc-sale-location.read',
             ) &&
-            !this.workspace.permissions.has('pharmacy.otc-sale.read')
+            !this.workspace.permissions.has('pharmacy.otc-sale.read') &&
+            !this.workspace.permissions.has('pharmacy.dispensing-fee.read')
         )
             abort(403, 'Tidak diizinkan.');
         const batch = await incrementalList(this.db, {
