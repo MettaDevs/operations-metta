@@ -41,6 +41,82 @@ const visitSql = `select * from (
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
+// Isian tender yang digambar form kasir, untuk Form Pembayaran dan module yang menerima bayar lewat payBill, misalnya
+// loket obat bebas: jenis bayar berurut letaknya, merchan aktif untuk isian kartu, presisi jumlah, tanggal hari ini di
+// legal entity, dan izin kasir. Jenis bayar bermata uang asing membawa presisi mata uangnya dan kurs hari ini, atau pesan
+// bila kursnya belum diisi. workspace adalah workspace Core, karena izinnya izin kasir Core.
+export async function paymentOptions(db: Database, workspace: Workspace) {
+    const tenantId = workspace.tenantId;
+    const legalEntityId = activeLegalEntity(workspace);
+    const currency = new Currency(db, tenantId);
+    const precision = await currency.precision(localCurrencyCode);
+    const today = await db.one(
+        z.object({ date: z.string() }),
+        `select (now() at time zone l.timezone)::date::text as date
+         from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
+        [tenantId, legalEntityId],
+    );
+    const date = today?.date ?? new Date().toISOString().slice(0, 10);
+    const methodRows = await db.rows(
+        z.object({
+            id: z.string(),
+            label: z.string(),
+            behavior: z.string(),
+            party: z.string(),
+            requires_merchant: z.boolean(),
+            requires_reference: z.boolean(),
+            allows_surcharge: z.boolean(),
+            takes_remainder: z.boolean(),
+            currency_code: z.string().nullable(),
+        }),
+        `select id, coalesce(label_kasir, nama) as label, perilaku as behavior, pihak as party,
+                wajib_merchan as requires_merchant, wajib_referensi as requires_reference,
+                biaya_tambahan as allows_surcharge, menampung_sisa as takes_remainder, mata_uang as currency_code
+         from jenis_bayar
+         where tenant_id = $1 and legal_entity_id = $2 and aktif and tampil_di_kasir and deleted_at is null
+         order by urutan, kode`,
+        [tenantId, legalEntityId],
+    );
+    const paymentMethods = await Promise.all(
+        methodRows.map(async (method) => {
+            if (!method.currency_code)
+                return {
+                    ...method,
+                    currency_decimals: precision.amount_decimals,
+                    rate: null,
+                    rate_message: null,
+                };
+            const rate = await currency.findRate(method.currency_code, date);
+            return {
+                ...method,
+                currency_decimals: (
+                    await currency.precision(method.currency_code)
+                ).amount_decimals,
+                rate: rate?.normalized() ?? null,
+                rate_message: rate
+                    ? null
+                    : missingRateMessage(method.currency_code, date),
+            };
+        }),
+    );
+    const merchants = await db.rows(
+        z.object({ id: z.string(), code: z.string(), name: z.string() }),
+        `select id, kode as code, nama as name from merchan
+         where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null order by kode`,
+        [tenantId, legalEntityId],
+    );
+    return {
+        payment_methods: paymentMethods,
+        merchants,
+        can_pay: workspace.permissions.has('core.payment.update'),
+        can_cancel: workspace.permissions.has('core.payment.cancel'),
+        can_change_rate: workspace.permissions.has('core.payment-rate.update'),
+        amount_decimals: precision.amount_decimals,
+        local_currency: localCurrencyCode,
+        date,
+    };
+}
+
 export class Invoices {
     constructor(
         private readonly db: Database,
@@ -183,73 +259,18 @@ export class Invoices {
             })),
             precision,
         );
-        const today = await this.db.one(
-            z.object({ date: z.string() }),
-            `select (now() at time zone l.timezone)::date::text as date
-             from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
-            [this.scope.tenantId, this.scope.legalEntityId],
-        );
-        const date = today?.date ?? new Date().toISOString().slice(0, 10);
-        // Jenis bayar yang digambar form kasir, berurut letaknya, dan merchan aktif untuk isian kartu. Jenis bayar
-        // bermata uang asing membawa presisi mata uangnya dan kurs hari ini, atau pesan bila kursnya belum diisi.
-        const methodRows = await this.db.rows(
-            z.object({
-                id: z.string(),
-                label: z.string(),
-                behavior: z.string(),
-                party: z.string(),
-                requires_merchant: z.boolean(),
-                requires_reference: z.boolean(),
-                allows_surcharge: z.boolean(),
-                takes_remainder: z.boolean(),
-                currency_code: z.string().nullable(),
-            }),
-            `select id, coalesce(label_kasir, nama) as label, perilaku as behavior, pihak as party,
-                    wajib_merchan as requires_merchant, wajib_referensi as requires_reference,
-                    biaya_tambahan as allows_surcharge, menampung_sisa as takes_remainder, mata_uang as currency_code
-             from jenis_bayar
-             where tenant_id = $1 and legal_entity_id = $2 and aktif and tampil_di_kasir and deleted_at is null
-             order by urutan, kode`,
-            [this.scope.tenantId, this.scope.legalEntityId],
-        );
+        const options = await paymentOptions(this.db, this.workspace);
         // Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama; refusal membawa pesan yang
         // ditampilkan layar saat jenis bayar itu diisi.
         const restricted = new Set(visit.restricted_payment_method_ids);
-        const paymentMethods = await Promise.all(
-            methodRows.map(async (method) => {
-                const refusal = restricted.has(method.id)
-                    ? patientTypeMessage
-                    : null;
-                if (!method.currency_code)
-                    return {
-                        ...method,
-                        refusal,
-                        currency_decimals: precision.amount_decimals,
-                        rate: null,
-                        rate_message: null,
-                    };
-                const rate = await currency.findRate(
-                    method.currency_code,
-                    date,
-                );
-                return {
-                    ...method,
-                    refusal,
-                    currency_decimals: (
-                        await currency.precision(method.currency_code)
-                    ).amount_decimals,
-                    rate: rate?.normalized() ?? null,
-                    rate_message: rate
-                        ? null
-                        : missingRateMessage(method.currency_code, date),
-                };
+        const paymentMethods = options.payment_methods.map(
+            ({ currency_decimals, rate, rate_message, ...method }) => ({
+                ...method,
+                refusal: restricted.has(method.id) ? patientTypeMessage : null,
+                currency_decimals,
+                rate,
+                rate_message,
             }),
-        );
-        const merchants = await this.db.rows(
-            z.object({ id: z.string(), code: z.string(), name: z.string() }),
-            `select id, kode as code, nama as name from merchan
-             where tenant_id = $1 and legal_entity_id = $2 and aktif and deleted_at is null order by kode`,
-            [this.scope.tenantId, this.scope.legalEntityId],
         );
         const discounts = await this.db.rows(
             z.object({
@@ -360,7 +381,7 @@ export class Invoices {
                     original_value: totals.originalValue,
                 },
                 payment_methods: paymentMethods,
-                merchants,
+                merchants: options.merchants,
                 discounts,
                 payment: payment
                     ? {
@@ -374,16 +395,12 @@ export class Invoices {
                       }
                     : null,
                 credit_memos: creditMemos,
-                can_pay: this.workspace.permissions.has('core.payment.update'),
-                can_cancel: this.workspace.permissions.has(
-                    'core.payment.cancel',
-                ),
-                can_change_rate: this.workspace.permissions.has(
-                    'core.payment-rate.update',
-                ),
-                amount_decimals: precision.amount_decimals,
-                local_currency: localCurrencyCode,
-                date,
+                can_pay: options.can_pay,
+                can_cancel: options.can_cancel,
+                can_change_rate: options.can_change_rate,
+                amount_decimals: options.amount_decimals,
+                local_currency: options.local_currency,
+                date: options.date,
             },
         };
     }

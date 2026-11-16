@@ -5,15 +5,13 @@ import { displayNumber } from '@operations-metta/ui/display-number';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
-import {
-    MasterLookup,
-    type LookupRequest,
-    type Reference,
-} from '@operations-metta/ui/master-lookup';
+import type { Reference } from '@operations-metta/ui/master-lookup';
 import { Select } from '@operations-metta/ui/select';
-import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { api } from '@core/platform/shell/index.ts';
+import {
+    BatchLookup,
+    type PickedBatch,
+} from '../service-location/pharmacy-lookups.tsx';
 import {
     compoundText,
     instructionText,
@@ -22,11 +20,6 @@ import {
     type PrescriptionLine,
 } from '../prescription/prescription-facts.tsx';
 
-export type PickedBatch = {
-    id: string;
-    batch_number: string;
-    expiry_date: string | null;
-};
 export type Taken = {
     batch_number: string | null;
     expiry_date: string | null;
@@ -53,97 +46,6 @@ export type LineDraft = {
     taken: Taken[];
     price: LinePrice | null;
 };
-
-type BatchRow = Reference & { expiry_date: string | null; quantity: string };
-
-// Batch yang masih punya stok untuk obat ini di lokasi farmasi, kedaluwarsa terdekat lebih dulu. Batch lahir dari stok
-// masuk, jadi pilihan ini tidak punya Baru.
-function BatchLookup({
-    itemId,
-    locationId,
-    value,
-    onChange,
-    error,
-    field,
-    portalContainer,
-}: {
-    itemId: string;
-    locationId: string | null;
-    value: PickedBatch | null;
-    onChange: (batch: PickedBatch) => void;
-    error: string | undefined;
-    field: string;
-    portalContainer: RefObject<HTMLElement | null>;
-}): ReactNode {
-    const load = useCallback(
-        async ({ query, signal }: LookupRequest) => {
-            const { body } = await api.pharmacyBatchLookup(
-                {
-                    query: {
-                        q: query,
-                        item_id: itemId,
-                        ...(locationId ? { location_id: locationId } : {}),
-                    },
-                },
-                { signal },
-            );
-            return { items: body.data, nextCursor: body.next_cursor };
-        },
-        [itemId, locationId],
-    );
-    return (
-        <MasterLookup<BatchRow>
-            label="Batch"
-            field={field}
-            value={
-                value
-                    ? {
-                          id: value.id,
-                          code: value.batch_number,
-                          name: value.batch_number,
-                      }
-                    : null
-            }
-            onChange={(row) =>
-                onChange({
-                    id: row.id,
-                    batch_number: row.code,
-                    expiry_date: row.expiry_date,
-                })
-            }
-            disabled={locationId === null}
-            error={error}
-            hint="Boleh dikosongkan: batch diambil otomatis saat disiapkan, menurut cara pengambilan lokasi ini (kedaluwarsa terdekat lebih dulu). Bila caranya Pilih batch manual, batch wajib dipilih."
-            portalContainer={portalContainer}
-            noun="Batch"
-            placeholder="Cari nomor batch…"
-            load={load}
-            display={(batch) => batch.code}
-            columns={[
-                {
-                    id: 'code',
-                    header: 'Batch',
-                    width: 140,
-                    cell: (row) => row.code,
-                },
-                {
-                    id: 'expiry_date',
-                    header: 'Kedaluwarsa',
-                    width: 120,
-                    cell: (row) =>
-                        row.expiry_date ? displayDate(row.expiry_date) : '',
-                },
-                {
-                    id: 'quantity',
-                    header: 'Stok',
-                    width: 100,
-                    align: 'right',
-                    cell: (row) => displayNumber(row.quantity),
-                },
-            ]}
-        />
-    );
-}
 
 type Row = {
     line: PrescriptionLine;
@@ -371,6 +273,7 @@ export function DispensingLines({
                     />
                 ) : editing ? (
                     <BatchLookup
+                        hint="Boleh dikosongkan: batch diambil otomatis saat disiapkan, menurut cara pengambilan lokasi ini (kedaluwarsa terdekat lebih dulu). Bila caranya Pilih batch manual, batch wajib dipilih."
                         itemId={line.item.id}
                         locationId={locationId}
                         field={field(index ?? 0, 'batch_id')}
