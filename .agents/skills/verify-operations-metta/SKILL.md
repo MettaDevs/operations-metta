@@ -49,7 +49,7 @@ bun scripts/verify.ts sql "select no_reg, status from sim_tr_registrasi" --save 
 - Nama dicocokkan sebagai potongan teks tanpa peduli huruf besar. `--exact` mencocokkan seluruh nama, `--prefix` awal nama, `--nth N` memilih kecocokan ke-N (mulai 0), dan `--within T` membatasi ke dialog, group, region, form, atau baris yang nama atau teksnya memuat T.
 - `click` dan `fill` menunggu sampai 15 detik sampai elemen muncul dan aktif. `wait <role> <nama> [--gone]` menunggu tanpa mengklik, dan `find` mencetak kecocokan tanpa mengkliknya.
 - `snapshot` adalah cara tercepat menemukan nama elemen di layar yang belum dikenal. Baca berkasnya, lalu pakai role dan nama yang tertulis.
-- `fill-password <role> <nama> [email]` mengisi kata sandi dari `dev/tenants.json` tanpa mencetaknya, misalnya untuk Clerk Start. Jangan menulis kata sandi di perintah, chat, PR, atau skill.
+- `fill-password <role> <nama> [email]` mengisi kata sandi dari `dev/tenants.json` tanpa mencetaknya, misalnya untuk menautkan SSO di halaman Profil. Jangan menulis kata sandi di perintah, chat, PR, atau skill.
 - `sql` berjalan di database lingkungan tenant contoh (bukan database runtime) lewat `psql` di container run.
 - Di Git Bash, path layar ditulis tanpa `/` di depan. Git Bash mengubah argumen berawalan `/` menjadi path Windows.
 

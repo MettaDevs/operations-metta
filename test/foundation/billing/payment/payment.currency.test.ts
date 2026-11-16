@@ -16,10 +16,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import {
-    setCurrencyPrecision,
-    testPassword,
-} from '../../../support/tenant-fixtures.ts';
+import { setCurrencyPrecision } from '../../../support/tenant-fixtures.ts';
 
 // Pembayaran kasir dengan mata uang asing: jenis bayar bermata uang asing diisi dalam mata uang itu, dikali kurs Sys
 // Admin › Kurs untuk tanggal pembayaran, dan kembaliannya mata uang lokal. Diperiksa dengan SQL langsung. Kode mata
@@ -187,7 +184,6 @@ describe.skipIf(!process.env.DB_HOST)(
             await completedVisit(visits.rate, '100000');
             await json(
                 await cashier.post('/api/v1/billing/clerks/start', {
-                    password: testPassword,
                     opening: {
                         [methods.TUN!]: '1000000',
                         [methods[foreign]!]: '10',
@@ -489,7 +485,6 @@ describe.skipIf(!process.env.DB_HOST)(
                 await cashier.post(
                     `/api/v1/billing/clerks/${current.data.id}/end`,
                     {
-                        password: testPassword,
                         counts: {
                             [methods.TUN!]: '999365.42',
                             [methods[foreign]!]: '34.70',

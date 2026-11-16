@@ -22,7 +22,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 // Simpan pembayaran kasir lewat aplikasi sungguhan, diperiksa dengan SQL langsung: clerk wajib, rumus layar Kuta, sisa
 // ke Pasien BON, satu pembayaran per kunjungan, event billing.invoice.posted, kunci perubahan biaya sesudah bayar, dan
@@ -170,12 +169,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
         ).toEqual({
             _form: [clerkNotStartedMessage],
         });
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a remainder without Pasien BON and a card without a merchant are refused with the legacy messages', async () => {
@@ -322,7 +316,6 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
             await cashier.post(
                 `/api/v1/billing/clerks/${current.data.id}/end`,
                 {
-                    password: testPassword,
                     counts: {
                         [methods.TUN!]: '140000',
                         [methods.BNK!]: '50000',

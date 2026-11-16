@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { outboxEnvelopes } from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
-import { testPassword } from '../../../../../test/support/tenant-fixtures.ts';
 import {
     api,
     createPharmacy,
@@ -204,9 +203,7 @@ describe.skipIf(!process.env.DB_HOST)('returns on an OTC sale', () => {
             behavior: 'tunai',
         });
         await json(
-            await pharmacy.admin.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
+            await pharmacy.admin.post('/api/v1/billing/clerks/start', {}),
             201,
         );
     });

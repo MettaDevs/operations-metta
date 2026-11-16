@@ -14,7 +14,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Listed = {
     data: Record<string, unknown>[];
@@ -122,9 +121,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 201,
             );
             await json(
-                await cashier.post('/api/v1/billing/clerks/start', {
-                    password: testPassword,
-                }),
+                await cashier.post('/api/v1/billing/clerks/start', {}),
                 201,
             );
             const charges = visitCharges(pool, { tenantId, legalEntityId });

@@ -26,7 +26,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
 type Receivable = {
@@ -169,12 +168,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
                 201,
             )
         ).data.id;
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a bon opens one receivable that partial and full payoffs settle, never beyond what is owed', async () => {
@@ -490,7 +484,6 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
                 };
             }>(
                 await cashier.post(`/api/v1/billing/clerks/${clerk.id}/end`, {
-                    password: testPassword,
                     counts: { [methods.TUN!]: counted },
                     version: clerk.version,
                 }),
@@ -498,12 +491,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
             );
         };
         await end('0');
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
         const { visitId } = await bon('100000');
         const opened = await receivable(visitId);
         const cash = await paidOff(opened.id, '40000');

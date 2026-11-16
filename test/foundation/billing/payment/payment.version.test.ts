@@ -9,7 +9,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Shown = {
     data: { visit: { version: number }; totals: { value: string } };
@@ -82,12 +81,7 @@ describe.skipIf(!process.env.DB_HOST)('bill version at Simpan', () => {
             }),
             201,
         );
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a charge added after the form loaded refuses Simpan until the form reloads the bill', async () => {

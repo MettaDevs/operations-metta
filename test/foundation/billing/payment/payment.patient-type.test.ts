@@ -21,7 +21,6 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
 
 type Method = { refusal: string | null; id: string };
 
@@ -89,12 +88,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
                     201,
                 )
             ).data.id;
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a method reserved for another patient type is refused on the server with the legacy message, and the form knows it', async () => {

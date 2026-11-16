@@ -25,7 +25,6 @@ import {
 import {
     createMember,
     grantAllOrganizations,
-    testPassword,
 } from '../../../support/tenant-fixtures.ts';
 
 type Payment = { id: string; version: number; number: string };
@@ -209,12 +208,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         await completedVisit(visits.local, '175000');
         await completedVisit(visits.foreign, '200000');
         await completedVisit(visits.closed, '50000');
-        await json(
-            await cashier.post('/api/v1/billing/clerks/start', {
-                password: testPassword,
-            }),
-            201,
-        );
+        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
     });
 
     test('a cancel needs a reason, and a cashier without the cancel permission neither sees Batal nor may cancel', async () => {
@@ -361,7 +355,6 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
             await cashier.post(
                 `/api/v1/billing/clerks/${current.data.id}/end`,
                 {
-                    password: testPassword,
                     counts: {},
                     version: current.data.version,
                 },

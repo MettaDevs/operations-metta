@@ -52,11 +52,10 @@ type Current = {
     data: Clerk | null;
     opening_methods: { payment_method_id: string; code: string }[];
     local_currency: string;
-    password_required: boolean;
     can_operate: boolean;
 };
 
-// Clerk Start dan Clerk End lewat aplikasi sungguhan: kata sandi diketik ulang, satu clerk berjalan per kasir, Clerk End
+// Clerk Start dan Clerk End lewat aplikasi sungguhan: tanpa kata sandi, satu clerk berjalan per kasir, Clerk End
 // hanya menghitung jenis bayar bertanda dihitung saat tutup kas, dan pembayaran ditolak dengan pesan sistem lama selama
 // kasir belum Clerk Start. Belum ada pembayaran yang bisa dicatat, jadi jumlah sistem setiap sesi nol.
 describe.skipIf(!process.env.DB_HOST)('clerk', () => {
@@ -169,25 +168,14 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
                 }),
             ],
             local_currency: 'IDR',
-            password_required: true,
             can_operate: true,
         });
     });
 
-    test('Clerk Start needs the cashier password, and opens one session with a legacy-shaped code', async () => {
-        expect(
-            await refused(
-                await cashier.post(`${api}/start`, { password: 'salah' }),
-            ),
-        ).toEqual({
-            password: [
-                'Password Anda Salah... Proses tidak dapat dilanjutkan.',
-            ],
-        });
+    test('Clerk Start opens one session with a legacy-shaped code', async () => {
         expect(
             await refused(
                 await cashier.post(`${api}/start`, {
-                    password: 'kata-sandi-uji-yang-panjang',
                     opening: { [methods.TUN!]: '-1', [methods.BNK!]: '5000' },
                 }),
             ),
@@ -209,7 +197,6 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         ).toBe(0);
         const started = await json<{ data: Clerk; message: string }>(
             await cashier.post(`${api}/start`, {
-                password: 'kata-sandi-uji-yang-panjang',
                 opening: { [methods.TUN!]: '100000' },
             }),
             201,
@@ -235,13 +222,7 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             ['TUN', '100000', null],
             ['BNK', '0', null],
         ]);
-        expect(
-            (
-                await cashier.post(`${api}/start`, {
-                    password: 'kata-sandi-uji-yang-panjang',
-                })
-            ).status,
-        ).toBe(409);
+        expect((await cashier.post(`${api}/start`, {})).status).toBe(409);
         expect((await guard())?.id).toBe(started.data.id);
     });
 
@@ -261,7 +242,6 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         expect(
             (
                 await colleague.post(`${api}/${clerk?.id}/end`, {
-                    password: 'kata-sandi-uji-yang-panjang',
                     counts: {},
                     version: clerk?.version,
                 })
@@ -276,7 +256,6 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         if (!clerk) throw new Error('Clerk belum berjalan.');
         const refusedCounts = await refused(
             await cashier.post(`${api}/${clerk.id}/end`, {
-                password: 'kata-sandi-uji-yang-panjang',
                 counts: {
                     [methods.BPJ!]: '250000',
                     [methods.TUN!]: 'seratus',
@@ -290,7 +269,6 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         ]);
         const ended = await json<{ data: Clerk; message: string }>(
             await cashier.post(`${api}/${clerk.id}/end`, {
-                password: 'kata-sandi-uji-yang-panjang',
                 counts: { [methods.TUN!]: '125000.50', [methods.BNK!]: '' },
                 version: clerk.version,
             }),
@@ -339,7 +317,6 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
         expect(
             (
                 await cashier.post(`${api}/${clerk.id}/end`, {
-                    password: 'kata-sandi-uji-yang-panjang',
                     counts: {},
                     version: ended.data.version,
                 })
@@ -385,5 +362,59 @@ describe.skipIf(!process.env.DB_HOST)('clerk', () => {
             ['TUN', '100000', '25000.5'],
             ['BNK', '0', '0'],
         ]);
+    });
+
+    test('a cashier who signs in only through SSO starts and ends their own clerk, and a password in the body is ignored', async () => {
+        const member = await createMember(pool, tenantId, [
+            'core.clerk.operate',
+        ]);
+        await grantAllOrganizations(pool, tenantId, member.membershipId);
+        const ssoCashier = browser();
+        await ssoCashier.login(member.email, member.password);
+        await pool.unsafe('update users set password = null where id = $1', [
+            member.userId,
+        ]);
+        const current = await json<Current>(
+            await ssoCashier.get(`${api}/current`),
+            200,
+        );
+        expect(current.data).toBeNull();
+        expect(current.can_operate).toBe(true);
+        const started = await json<{ data: Clerk }>(
+            await ssoCashier.post(`${api}/start`, {
+                password: 'bukan-kata-sandinya',
+            }),
+            201,
+        );
+        const ended = await json<{ data: Clerk }>(
+            await ssoCashier.post(`${api}/${started.data.id}/end`, {
+                password: 'bukan-kata-sandinya',
+                counts: {},
+                version: started.data.version,
+            }),
+            200,
+        );
+        expect(ended.data.status).toBe('end');
+        const [stored] = await pool.unsafe<
+            {
+                user_id: string;
+                status: string;
+                started: boolean;
+                ended: boolean;
+                password: string | null;
+            }[]
+        >(
+            `select c.user_id, c.status, c.waktu_mulai is not null as started,
+                    c.waktu_akhir >= c.waktu_mulai as ended, u.password
+             from clerk c join users u on u.id = c.user_id where c.id = $1`,
+            [started.data.id],
+        );
+        expect(stored).toEqual({
+            user_id: member.userId,
+            status: 'end',
+            started: true,
+            ended: true,
+            password: null,
+        });
     });
 });
