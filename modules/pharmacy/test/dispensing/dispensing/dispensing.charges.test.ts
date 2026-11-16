@@ -266,7 +266,6 @@ describe.skipIf(!process.env.DB_HOST)(
             );
             const prepared = await prescribe(visitId, '1');
             await json(await prepare(prepared), 200);
-            const waiting = await prescribe(visitId, '1');
             await visitCharges(pool, {
                 tenantId: pharmacy.tenantId,
                 legalEntityId: pharmacy.legalEntityId,
@@ -287,6 +286,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 ['2', 'ditagih'],
                 ['1', 'ditagih'],
             ]);
+            const waiting = await prescribe(visitId, '1');
             expect(
                 await refused(
                     await pharmacy.admin.post(
@@ -333,8 +333,95 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         });
 
-        // Petugas kasir yang sudah Clerk Start dengan jenis bayar tunai di legal entity farmasi.
-        async function openCashier(): Promise<Browser> {
+        test('the cashier refuses Simpan while a prescription waits, and pays once it is prepared or cancelled', async () => {
+            const visitId = Bun.randomUUIDv7();
+            const prepared = await prescribe(visitId, '1');
+            const cancelled = await prescribe(visitId, '1');
+            await visitCharges(pool, {
+                tenantId: pharmacy.tenantId,
+                legalEntityId: pharmacy.legalEntityId,
+            }).completedVisit(visitId, []);
+            const cashier = await openCashier();
+            const pay = () =>
+                cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+                    received: '1500',
+                });
+            const number = async (id: string) =>
+                (
+                    await pool.unsafe<{ number: string }[]>(
+                        'select nomor_resep as number from far_tr_resep where id = $1',
+                        [id],
+                    )
+                )[0]?.number;
+            const advice =
+                'belum disiapkan farmasi. Tunggu farmasi menyiapkannya dulu, atau minta farmasi membatalkan resep yang tidak diambil pasien.';
+            const both = [await number(prepared), await number(cancelled)]
+                .sort()
+                .join(' dan ');
+            expect(await refused(await pay())).toEqual({
+                _form: [`Resep ${both} ${advice}`],
+            });
+            await json(await prepare(prepared), 200);
+            expect(await refused(await pay())).toEqual({
+                _form: [`Resep ${await number(cancelled)} ${advice}`],
+            });
+            await json(
+                await pharmacy.admin.post(
+                    `${api}/prescriptions/${cancelled}/cancel`,
+                    { reason: 'Pasien tidak mengambil obat', version: null },
+                ),
+                200,
+            );
+            await billingJson(await pay(), 201);
+            expect(
+                (await charges(visitId)).map((row) => [row.qty, row.status]),
+            ).toEqual([['1', 'ditagih']]);
+        });
+
+        // Sistem lama tidak menunggu farmasi untuk bayar otomatis BPJS: Seroja melunasi dari poli tanpa memeriksa resep,
+        // dan Kuta melunasi obat saat Siapkan. Di sini pembayaran otomatis dilunasi ulang saat obatnya disiapkan.
+        test('an automatic payment does not wait for the pharmacy, and is settled again once the drugs are prepared', async () => {
+            const cashier = await openCashier();
+            const automatic = await billingJson<{ data: { id: string } }>(
+                await cashier.post('/api/v1/billing/payment-methods', {
+                    code: 'BPJ',
+                    name: 'BPJS',
+                    behavior: 'penjamin',
+                    party: 'penjamin_kunjungan',
+                }),
+                201,
+            );
+            const visitId = Bun.randomUUIDv7();
+            const waiting = await prescribe(visitId, '2');
+            await visitCharges(pool, {
+                tenantId: pharmacy.tenantId,
+                legalEntityId: pharmacy.legalEntityId,
+            }).completedVisit(visitId, ['10000'], {
+                automatic_payment_method_id: automatic.data.id,
+            });
+            const payments = () =>
+                pool.unsafe<{ value: string; status: string }[]>(
+                    `select trim_scale(nilai)::text as value, status from kasir
+                     where tenant_id = $1 and kunjungan_id = $2 order by created_at, id`,
+                    [pharmacy.tenantId, visitId],
+                );
+            expect([...(await payments())]).toEqual([
+                { value: '10000', status: 'diposting' },
+            ]);
+            await json(await prepare(waiting), 200);
+            expect([...(await payments())]).toEqual([
+                { value: '10000', status: 'batal' },
+                { value: '13000', status: 'diposting' },
+            ]);
+        });
+
+        // Petugas kasir yang sudah Clerk Start dengan jenis bayar tunai di legal entity farmasi, dibuat sekali.
+        let cashierSession: Promise<Browser> | undefined;
+        function openCashier(): Promise<Browser> {
+            cashierSession ??= startCashier();
+            return cashierSession;
+        }
+        async function startCashier(): Promise<Browser> {
             const member = await createMember(pool, pharmacy.tenantId, [
                 'core.billing-setup.manage',
                 'core.clerk.operate',

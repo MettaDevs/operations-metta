@@ -42,6 +42,7 @@ import {
     paymentInputSchema,
 } from './payment.schema.ts';
 import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
+import { paymentRefusal } from './payment.checks.ts';
 import {
     discountBase,
     discountLine,
@@ -826,6 +827,11 @@ export class Payments {
                 validation({ _form: reopenedMessage });
             if (invoice.paid)
                 coded(409, 'already_paid', 'Kunjungan ini sudah dibayar.');
+            const refusal = await paymentRefusal(this.db, {
+                tenantId: scope.tenantId,
+                visitId,
+            });
+            if (refusal) validation({ _form: refusal });
             const { charges, totals } = invoice;
             const restricted = new Set(invoice.visit.restricted);
             const methods = new Map(
