@@ -7,16 +7,16 @@ description: Design or audit number-sequence references, prefixes, scopes, range
 
 ## Start from zero context
 
-1. Read `AGENTS.md`, section Kode dan nomor dokumen, then CoreERP's [`docs/dev/14-number-sequences.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/14-number-sequences.md).
+1. Read `AGENTS.md`, section Kode dan nomor dokumen, then [`docs/dev/14-number-sequences.md`](../../../docs/dev/14-number-sequences.md).
 2. Read the owning module and, when the feature is being ported, CoreERP's manifest for it. Otherwise inspect only the relevant domain docs, navigation, UI labels, API contracts, schemas, and migrations needed to identify business records.
-3. Read the approved number-reference decision from `module-discovery`; do not reopen whether a record needs a number unless the design changed. Automatic numbers exist only for transaction documents and main masters people search by code (owner decision, 4 November 2026). Small setup masters get no number sequence.
+3. Read the approved number-reference decision from `module-discovery`; do not reopen whether a record needs a number unless the design changed. A number exists only when it is genuinely needed: transaction documents and main masters people search by code (owner decision, 4 November 2026). Small setup masters get no number sequence; when people do type or filter by a code, it is a short code the user types, like the `Code` field in Business Central.
 4. Treat each approved readable business identifier as a **reference**, following Dynamics 365 terminology.
 5. Classify every candidate as:
    - **Master**: a main business record people search by code, such as an asset.
    - **Transaction**: a document or event with a lifecycle, such as an order, receipt, journal, or invoice.
 6. For every candidate, determine the reference code, business title, scope, prefix, continuity, manual-entry policy, reset period, range, numeric width, segments, and preview.
 7. Group all unresolved prefixes or document policies into one concise question. Do not edit uncertain declarations and never invent an answer silently.
-8. Declare every approved reference where the owning module's references are declared. Never hardcode module-specific reference names or prefixes in Core. In CoreERP that place was the module manifest; this repository has no manifest yet, so ask the product owner where the first new reference is declared.
+8. Declare every approved reference as an `app_number_sequence_references` row in a migration of its owner: `database/migrations/` for Core, `modules/<module>/database/migrations/` for a module (for example `modules/healthcare/database/migrations/0001_patient.sql`). The code starts with the owner id (`core.`, `healthcare.`). Never hardcode module-specific reference names or prefixes in Core.
 9. Verify that every declared reference reaches `app_number_sequence_references` and a tenant sequence in `tenant_number_sequences`, so `NumberIssuer.issue` finds an active sequence for it.
 
 `module-discovery` owns the decision whether a record needs a number. This skill owns the approved reference's technical design and configuration.
@@ -44,14 +44,14 @@ Map that model to this repository:
 
 | Dynamics 365 | operations-metta |
 | --- | --- |
-| Module number-sequence references | `app_number_sequence_references` rows for the owning module (declared in the CoreERP manifest; declaration place here not decided) |
+| Module number-sequence references | `app_number_sequence_references` rows written by the owner's migration |
 | Generate wizard | Materializing every declared reference for a tenant — not ported |
-| Number sequences page | **Nomor dokumen** (`/settings/number-sequences`, `src/foundation/number-sequence/number-sequences.page.tsx`): list with Smallest/Largest/Next/Format, filtered by area, reference, scope, and status; card in F&O order: Identification, Scope (create only, value picker beside it), Segments grid with computed Format, other sequences of the same reference (in place of References), General, Performance. Status list and Manual cleanup sit in the Administrasi toolbar group of the list and card. Guarded by `core.number-sequence.read` / `.update` |
+| Number sequences page | **Sys Admin › Nomor dokumen** (`/sysadmin/number-sequences`, `src/foundation/number-sequence/number-sequences.page.tsx`): list with Smallest/Largest/Next/Format, filtered by area, reference, scope, and status; card in F&O order: Identification, Scope (create only, value picker beside it), Segments grid with computed Format, other sequences of the same reference (in place of References), General, Performance. Status list and Manual cleanup sit in the Administrasi toolbar group of the list and card. Guarded by `core.number-sequence.read` / `.update` |
 | Reference association | `NumberIssuer.issue({ reference, key, documentDate, legalEntityId, operatingUnitId })`, called inside the document transaction |
-| Shared, Company/Legal entity, Operating unit, Legal entity + Fiscal calendar period | One `tenant_number_sequences` row per scope value: `scope_type` `tenant`, `legal_entity`, `operating_unit`, `legal_entity_fiscal_period`, with `legal_entity_id`, `operating_unit_id`, `fiscal_period_id`. Operating unit type is not supported |
+| Shared, Company/Legal entity, Operating unit | One `tenant_number_sequences` row per scope value: `scope_type` `tenant`, `legal_entity`, or `operating_unit`, with `legal_entity_id` or `operating_unit_id`. Operating unit type is not supported. The issuer also knows `legal_entity_fiscal_period`, but fiscal calendars are not in use (owner decision, 16 November 2026): never choose it |
 | Allow user changes: To a lower number / To a higher number | `allow_lower_number`, `allow_higher_number`; the typed value is passed as `number` |
 | Status list / Manual cleanup | `NumberSequences.statusList` / `NumberSequences.cleanup` (expired reservations) |
-| Constant, alphanumeric, Legal entity, and Operating unit segments | Segments `NumberIssuer` supports: `constant`, `number`, `context`, `year`, `scope`, `fiscal_year`, `fiscal_period`. `scope` prints `legal_entities.company_code`, or `operating_units.number` for an operating-unit sequence; a unit without a number is refused when the format prints it, never replaced by its id |
+| Constant, alphanumeric, Legal entity, and Operating unit segments | Segments to use: `constant`, `number`, `context`, `year`, `scope`. The fiscal segments exist in code but are not used. `scope` prints `legal_entities.company_code`, or `operating_units.number` for an operating-unit sequence; a unit without a number is refused when the format prints it, never replaced by its id |
 
 Keep intentional differences visible:
 
@@ -63,7 +63,7 @@ Keep intentional differences visible:
 - Scope and its value are fixed once a sequence exists (service check and database trigger). Changing policy means creating a new sequence and stopping the old one. Continuous, Manual, In use/Stopped, Smallest/Largest/Next, Reset every, Allow user changes, and Preallocation stay editable; the format is locked after the first number.
 - All active sequences of one reference share one scope type, so a document never matches two sequences.
 - `NumberIssuer.issue` must run inside the document transaction, so a failed save returns the number. It replays the same number for the same idempotency key. Continuous sequences issue from the pool inside that transaction; `reserve`/`confirm`/`cancel` exist for reserving before the save. A reservation expires after `reservationMinutes`; expired reservations are released lazily on the next reservation and by `NumberSequences.cleanup`.
-- The fiscal period comes from the document date, not from today. The `year` segment is still the issue year.
+- The issuer picks the sequence from the document date, not from today. The `year` segment is still the issue year.
 
 ## Automatic defaults
 
@@ -84,17 +84,17 @@ segments:
     length: 5
 ```
 
-If an approved prefix exists, place it before the number segment:
+A prefix is optional. When one is approved, write it as a `constant` segment before the number segment:
 
 ```yaml
 segments:
   - type: constant
-    value: ENTA
+    value: PNR-
   - type: number
     length: 5
 ```
 
-Require the UI preview to show both endpoints, for example `ENTA00001 - ENTA19999`, before saving. Ensure the maximum fits the numeric width.
+Require the UI preview to show both endpoints, for example `PNR-00001 - PNR-19999`, before saving. Ensure the maximum fits the numeric width.
 
 ## Scope, reset, and lifecycle
 
@@ -104,27 +104,18 @@ Require the UI preview to show both endpoints, for example `ENTA00001 - ENTA1999
   - `operating_unit` only when each unit truly owns an independent series.
 - Add a scope segment only when users need to recognize the scope from the formatted number. Counter separation does not require printing it.
 - Keep `reset_period: never` for ordinary master data.
-- Propose calendar or fiscal reset only when the document policy requires it, and include a year/period segment so values cannot collide after reset.
+- Propose `calendar_year` reset only when the document policy requires it, and include a `year` segment so values cannot collide after reset. Do not propose fiscal reset: fiscal calendars are not in use.
 - Use separate references when lifecycle, legal requirement, scope, reset, or continuity differs.
 - Do not change structural format, scope, reset, or continuity after numbers have been issued.
 - Master references use non-continuous mode, so gaps are allowed. Continuous mode is only for documents that are actually audited.
 
 ## Prefix rules
 
-- Every reference must declare a prefix of exactly four uppercase letters (`A-Z`). A missing, shorter, longer, numeric, or mixed-case prefix fails the audit.
-- Build the first three letters from the user-facing business title, then append the one-letter module code. The module code is the same final letter for every reference in a module and is agreed as module vocabulary; never use a table name or internal code.
-- For a module audit, inventory every business reference first and assign all approved prefixes in one pass. Never seed only the examples already discussed while leaving sibling references blank.
-- CoreERP approved these asset-management mappings before the 4 November 2026 rule. Reuse a prefix only for a record that still gets a number under that rule; setup masters such as conditions, manufacturers, and checklist items are decided again when they are ported, and most of them lose their number sequence:
-  - `Entitas aset` -> `ENTA`
-  - `Grup aset` -> `GRPA`
-  - `Kategori aset` -> `KTGA`
-  - `Jenis aset` -> `JNSA`
-  - `Kondisi aset` -> `KNDA`
-  - `Pabrikan aset` -> `PBRA`
-  - `Item checklist maintenance` -> `ICMA`
-  - `Analisa maintenance` -> `ANMA`
-- These mappings are explicit project vocabulary, not an algorithm to reuse blindly in another domain.
-- If a new title has no approved first-three-letter abbreviation, the module code is unknown, or the resulting four-letter prefix collides with another reference in the same module, ask once with the complete unresolved list. Do not leave the default prefix empty and do not silently invent a collision.
+- A prefix is not mandatory (owner decision, 16 November 2026). A reference gets one only when people need it to recognize the document from its number; many references have none, for example the medical record number.
+- There is no fixed length or casing rule. The prefix is a `constant` segment in the sequence format, for example `PNR-`, and the tenant administrator can change it on the Nomor dokumen screen. `default_prefix` in `app_number_sequence_references` may be `NULL`.
+- When a prefix is proposed, base it on the abbreviation users already know for that document, often the one in the legacy system, not on a table name or internal code. Keep prefixes within one module distinct so documents stay recognizable.
+- CoreERP's four-letter mappings for asset management (`ENTA`, `GRPA`, and the like) belong to the old rule and are not reused automatically.
+- If the prefix is unclear, ask once with the complete list of unresolved references.
 
 ## Transaction rules
 
@@ -148,26 +139,27 @@ Fixtures must derive scope from the declared reference using the production defa
 
 An in-process issuer can still suffer database failures and bugs. Translate only known validation failures to 422 (`failSequence` raises `number_sequence_failed`); never catch every error and classify it as validation. Unexpected failures must reach the normal error path as 5xx, with a durable user-facing failure message.
 
-Keep reference-to-document index coverage so a new scoped reference cannot silently skip verification, and prove the guard rejects a tenant-wide index. CoreERP's asset module did this in `NumberSequenceScopeTest`; no such test exists here yet. The rationale is in [`docs/dev/14-number-sequences.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/14-number-sequences.md#scope-nomor-harus-sama-dengan-indeks-dokumen).
+Keep reference-to-document index coverage so a new scoped reference cannot silently skip verification, and prove the guard rejects a tenant-wide index. CoreERP's asset module did this in `NumberSequenceScopeTest`; no such test exists here yet. The rationale is in [`docs/dev/14-number-sequences.md`](../../../docs/dev/14-number-sequences.md#nomor-sama-dengan-indeks-dokumen).
 
 Verify a migration on an empty database (`bun run migrate`) as well as on an existing one. Do not rely on a later step to add a column needed by an index being created inside that migration.
 
-CoreERP declared references as module-owned data in the manifest, in this shape:
+A reference is declared in its owner's migration, in this shape:
 
-```yaml
-number_sequences:
-  references:
-    - code: owning-module.business-reference
-      name: Business title
-      default_prefix: ABC
-      allowed_scopes:
-        - tenant
+```sql
+INSERT INTO public.app_number_sequence_references (id, app_id, code, name, allowed_scopes, default_prefix,
+                                                  default_settings, created_at, updated_at)
+VALUES ('<uuid>', 'owning-module', 'owning-module.business-reference', 'Business title', '["legal_entity"]', NULL,
+        '{"minimum_number":1,"maximum_number":19999,"segments":[{"type":"number","length":5}]}',
+        now() AT TIME ZONE 'utc', now() AT TIME ZONE 'utc')
+ON CONFLICT (code) DO NOTHING;
 ```
+
+`default_per_legal_entity`, `default_per_operating_unit`, and `numbers_unique_per_scope` are set when the reference needs them; their meaning is in `docs/dev/14-number-sequences.md`.
 
 Then verify:
 
-1. The declaration is accepted and reaches `app_number_sequence_references`.
-2. Every declared reference has exactly one four-letter uppercase prefix, all references share the module's final letter, and prefixes do not collide within the module.
+1. The migration runs on an empty database and on an existing one, and the row reaches `app_number_sequence_references`.
+2. Every approved prefix is present in the default format, and prefixes do not collide within the module. A reference without a prefix is valid.
 3. A tenant that has the module gets every declared reference exactly once.
 4. New defaults are active and bounded.
 5. Every sequence of the reference appears on the Nomor dokumen screen with first/last previews.
@@ -179,7 +171,7 @@ Then verify:
 
 Return a compact decision table:
 
-| Reference | Type | Prefix | Scope | Reset | Continuous | Manual | Range | Preview | Decision |
+| Reference | Type | Prefix (optional) | Scope | Reset | Continuous | Manual | Range | Preview | Decision |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Mark unresolved cells as `needs user approval`. Do not mark the audit complete while any required decision is unresolved.

@@ -11,7 +11,6 @@ Sejak 10 November 2026 bentuknya mengikuti [number sequence F&O](https://learn.m
 | Reference: kode, judul, scope yang diizinkan, setelan bawaan | Core atau module pemilik nomor | Baris `app_number_sequence_references`, ditulis migration pemiliknya |
 | Sequence tenant: scope dan nilainya, format, rentang, status, mode | Admin tenant | `tenant_number_sequences`, diatur di layar **Nomor dokumen** |
 | Penghitung, blok, pool, pesanan, catatan terbit, audit | Core | `number_sequence_counters`, `number_sequence_allocations`, `number_sequence_continuous_pool`, `number_sequence_reservations`, `number_sequence_reusable_numbers`, `number_sequence_issues`, `number_sequence_audit_events` |
-| Kalender fiskal | Legal entity | `legal_entities.fiscal_calendar_id`, lihat [kalender fiskal](15-fiscal-calendars.md) |
 | Dokumen yang memakai nomor | Pemanggil | Tabel dokumen pemanggil |
 
 Semua tabel di atas ada di database tenant. Tidak ada penghitung atau rentang nomor yang disimpan di memori proses, karena beberapa proses Bun dan beberapa instance melayani tenant yang sama.
@@ -43,9 +42,8 @@ Reference yang tidak meminta sequence bawaan baru bisa dipakai setelah admin mem
 | `tenant` | Shared | tidak ada |
 | `legal_entity` | Company / Legal entity | `legal_entity_id` |
 | `operating_unit` | Operating unit | `operating_unit_id` |
-| `legal_entity_fiscal_period` | Legal entity + Fiscal calendar period | `legal_entity_id`, `fiscal_period_id` |
 
-Scope *Operating unit type* dari F&O sengaja belum ada di `number-sequence.schema.ts`.
+Scope *Operating unit type* dari F&O sengaja belum ada di `number-sequence.schema.ts`. Kode penerbit juga mengenal scope dan reset berbasis kalender fiskal, tetapi kalender fiskal tidak dipakai di repo ini, jadi jangan dipilih untuk reference baru.
 
 Aturan yang dijaga database dan service:
 
@@ -74,7 +72,7 @@ Contoh pemanggil sungguhan ada di `modules/pharmacy/src/dispensing/dispensing/di
 
 - **Selalu di dalam transaksi dokumen.** `issue`, `reserve`, `confirm`, dan `cancel` melempar bila `db` tidak sedang di dalam transaksi. Dokumen gagal disimpan, nomornya ikut batal: penghitung, blok, pool, dan catatan terbit kembali seperti semula.
 - **`key` wajib stabil.** Kunci idempoten yang sama selalu mendapat nomor yang sama. Kunci yang dibuat ulang setiap percobaan membakar satu nomor per retry.
-- **`documentDate` menentukan periode fiskal**, bukan tanggal hari ini. Segmen `year` tetap tahun penerbitan, sama dengan CoreERP; tahun dokumen dikirim lewat segmen `context` bila perlu dicetak.
+- **`documentDate` adalah tanggal dokumen**, bukan tanggal hari ini. Segmen `year` tetap tahun penerbitan, sama dengan CoreERP; tahun dokumen dikirim lewat segmen `context` bila perlu dicetak.
 - **`values`** mengisi segmen `context`, misalnya kode yang diambil pemanggil dari record miliknya. Nilainya hanya huruf, angka, strip, atau underscore, dan setiap kombinasi nilai memisahkan penghitung.
 - **`number`** membawa nomor yang diketik pengguna: nomor manual, atau nomor otomatis yang diubah ke lebih kecil atau lebih besar bila sequence mengizinkan. Izinnya `allow_lower_number` dan `allow_higher_number`, padanan *Allow user changes* F&O.
 
@@ -103,7 +101,7 @@ Sequence continuous yang perlu menampilkan nomor sebelum dokumen disimpan memaka
 - Satu sequence menolak pesanan baru setelah 500 pesanan terbuka, dengan pesan yang menyebut sebabnya.
 - Continuous tidak dapat digabung dengan nomor manual atau dengan *Allow user changes*. CHECK `tenant_number_sequences_izin_ubah_nomor` menjaganya.
 
-## Periode reset dan kalender fiskal
+## Periode reset
 
 `reset_period` menentukan bagaimana penghitung dipecah lewat `period_key`.
 
@@ -111,23 +109,8 @@ Sequence continuous yang perlu menampilkan nomor sebelum dokumen disimpan memaka
 | --- | --- | --- |
 | `never` | `all` | tidak ada |
 | `calendar_year` | tahun penerbitan, misalnya `2026` | `year` |
-| `fiscal_year` | `FY:<fiscal_year_id>` | `fiscal_year` |
-| `fiscal_period` | `FP:<fiscal_year_id>:<ordinal>` | `fiscal_year` dan `fiscal_period` |
 
-Reset tanpa segmen pembeda ditolak saat sequence disimpan. Indeks unik catatan terbit dibatasi per `period_key`, jadi bila format tidak berubah saat periode berganti, database tidak akan menangkap nomor dokumen yang berulang.
-
-Kalender fiskal milik legal entity, jadi reset fiskal selalu butuh legal entity:
-
-| Scope | Asal legal entity |
-| --- | --- |
-| `legal_entity` | dari sequence itu sendiri |
-| `operating_unit` | wajib dikirim pemanggil sebagai `legalEntityId` |
-| `tenant` | tidak ada, reset fiskal ditolak |
-| `legal_entity_fiscal_period` | dari sequence; sequence ini sudah satu per periode, jadi `reset_period` harus `never` |
-
-Di F&O kalender fiskal menggantung pada ledger, dan ledger hanya dimiliki legal entity. Operating unit sengaja dipakai lintas legal entity, jadi ia tidak bisa menyiratkan satu kalender. Karena itu, untuk scope operating unit dengan reset fiskal, legal entity ikut menjadi bagian `scope_key`, misalnya `operating_unit:<id>|legal_entity:<id>`. Satu unit yang dipakai dua legal entity punya dua aliran nomor. Aturan umumnya: apa pun yang memecah penghitung harus ada di `scope_key`, bukan hanya di `period_key`.
-
-Tanggal dokumen di luar periode fiskal yang terdefinisi ditolak, bukan diam-diam memakai kalender lain.
+Reset tanpa segmen pembeda ditolak saat sequence disimpan. Indeks unik catatan terbit dibatasi per `period_key`, jadi bila format tidak berubah saat periode berganti, database tidak akan menangkap nomor dokumen yang berulang. Apa pun yang memecah penghitung harus ada di `scope_key`, bukan hanya di `period_key`.
 
 ## Format
 
@@ -140,7 +123,6 @@ Segmen format didefinisikan `segmentSchema` di `number-sequence.schema.ts`:
 | `context` | Nilai dari pemanggil lewat `values`. Hanya segmen `context` yang dinyatakan `default_settings` reference yang boleh dipakai |
 | `year` | Tahun penerbitan |
 | `scope` | `legal_entities.company_code`, atau `operating_units.number` untuk sequence per unit. Id internal tidak pernah dicetak; unit tanpa nomor ditolak bila formatnya memuat segmen ini |
-| `fiscal_year`, `fiscal_period` | Nama tahun fiskal dan nomor urut periode |
 
 Segmen alfabet yang bertambah, yaitu `&` di F&O, tidak didukung. Nomor yang melampaui lebar segmennya ditolak, bukan melebar diam-diam.
 
@@ -169,7 +151,7 @@ Kegagalan ini pernah terjadi di CoreERP pada 6 Oktober 2026: sequence aset per l
 
 ## Test
 
-Test penerbit ada di `test/foundation/number-sequence/number-sequence.test.ts` dan berjalan di PostgreSQL sungguhan. Test itu dilewati bila `DB_HOST` kosong. PostgreSQL wajib di sini: tanpa database sungguhan, `FOR UPDATE` dan `SKIP LOCKED` tidak membuktikan apa pun. Bantuan fixture organisasi, kalender fiskal, dan sequence ada di `test/support/number-sequence-fixtures.ts`.
+Test penerbit ada di `test/foundation/number-sequence/number-sequence.test.ts` dan berjalan di PostgreSQL sungguhan. Test itu dilewati bila `DB_HOST` kosong. PostgreSQL wajib di sini: tanpa database sungguhan, `FOR UPDATE` dan `SKIP LOCKED` tidak membuktikan apa pun. Bantuan fixture, antara lain organisasi dan sequence, ada di `test/support/number-sequence-fixtures.ts`.
 
 Yang dibuktikan antara lain: nomor tidak terbit bila dokumen gagal disimpan, dua dokumen paralel di koneksi berbeda tidak pernah berbagi nomor, sequence dipilih dari scope dan tanggal dokumen, scope tidak dapat diubah, format kembar ditolak, dan pesanan continuous yang ditinggalkan dilepas.
 
@@ -179,6 +161,5 @@ Penomoran dokumen termasuk alur yang wajib dibuktikan harness kesetaraan sebelum
 
 ## Lihat juga
 
-- [Kalender fiskal](15-fiscal-calendars.md): periode yang dipakai reset fiskal dan scope per periode fiskal
 - [Gate penemuan dan keputusan](18-module-discovery-and-decision-gate.md): kapan sebuah record memang perlu nomor
 - Desain lama CoreERP, termasuk API internal dan rekonsiliasi untuk app di luar runtime yang tidak dipindah: [`docs/dev/14-number-sequences.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/14-number-sequences.md)

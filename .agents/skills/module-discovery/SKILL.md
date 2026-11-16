@@ -56,7 +56,7 @@ Automatic numbers exist only for transaction documents and main masters people s
 
 Inventory only readable business masters and documents; exclude IDs, joins, logs, and internal rows. For each candidate, explicitly decide `required`, `not required`, or `deferred`.
 
-When required, the reference is a row in `app_number_sequence_references` for the owning module, and each tenant's configuration is a row in `tenant_number_sequences`; the module asks `NumberIssuer` in `src/foundation/number-sequence/` for a number by reference code. In CoreERP the module declared its references in its manifest and the tenant administrator adjusted them in **Atur nomor**; neither the declaration place nor that screen has been ported. Ask the product owner where a new reference is declared before adding one. Do not infer references from tables or hardcode module references in Core. After approval, use `number-sequence-design` for scope, prefix, range, format, and verification.
+When required, the reference is a row in `app_number_sequence_references` for the owning module, and each tenant's configuration is a row in `tenant_number_sequences`; the module asks `NumberIssuer` in `src/foundation/number-sequence/` for a number by reference code. The owning module declares the reference as a row in its own migration, and the tenant administrator adjusts sequences on **Sys Admin › Nomor dokumen** (`/sysadmin/number-sequences`). Do not infer references from tables or hardcode module references in Core. After approval, use `number-sequence-design` for scope, prefix, range, format, and verification.
 
 ## Workflow and SoD decision
 

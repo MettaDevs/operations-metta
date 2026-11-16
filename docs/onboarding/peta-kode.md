@@ -60,7 +60,7 @@ Berkas yang tidak dibutuhkan sebuah fitur memang tidak ada. Peran berkas lain bo
 | Data sharing antar legal entity | `src/platform/data-sharing/` | [Standar module](../dev/02-module-standard.md) |
 | Event dan outbox | `src/platform/events/`, `contracts/events/` | [API dan integrasi](../dev/04-api-and-integration.md) |
 | Nomor dokumen | `src/foundation/number-sequence/` | [Number sequences](../dev/14-number-sequences.md), skill `number-sequence-design` |
-| Kalender | `src/foundation/calendar/` | [Fiscal calendars](../dev/15-fiscal-calendars.md) |
+| Kalender kerja | `src/foundation/calendar/` | Komentar di kodenya |
 | Persediaan dan satuan | `src/foundation/inventory/` | [Satuan dan konversi](../dev/16-units-of-measure.md) |
 | Tagihan, kasir, posting finance | `src/foundation/billing/`, `src/foundation/finance-posting/` | [Healthcare dan finance subledger](../dev/17-healthcare-finance-subledger.md), [Feed posting finance](../dev/34-feed-posting-finance.md) |
 | Pelaporan kesalahan | `src/platform/error-reporting/` | [Pelaporan kesalahan](../dev/28-pelaporan-kesalahan.md) |
