@@ -58,11 +58,13 @@ const decimal = (text: string) =>
 export function ReceivablePaymentCard({
     record,
     canPay,
+    canCancel,
     onSaved,
     onClose,
 }: {
     record: ReceivablePayment | null;
     canPay: boolean;
+    canCancel: boolean;
     onSaved: (payment: ReceivablePayment) => void;
     onClose: () => void;
 }): ReactNode {
@@ -207,7 +209,7 @@ export function ReceivablePaymentCard({
                             />
                         </>
                     )}
-                    {record?.status === 'diposting' && canPay && (
+                    {record?.status === 'diposting' && canCancel && (
                         <Button
                             type="button"
                             variant="ghost"

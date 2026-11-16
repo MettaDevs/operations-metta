@@ -23,7 +23,11 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
-import { testPassword } from '../../../support/tenant-fixtures.ts';
+import {
+    createMember,
+    grantAllOrganizations,
+    testPassword,
+} from '../../../support/tenant-fixtures.ts';
 
 type Receivable = {
     id: string;
@@ -309,6 +313,38 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
             [opened.id],
         );
         expect(cancelled.map((row) => row.status)).toEqual(['batal', 'batal']);
+    });
+
+    test('a cashier without the payment cancel permission neither sees Batal on a payoff nor may cancel it', async () => {
+        const { visitId } = await bon('100000');
+        const settled = await paidOff((await receivable(visitId)).id, '25000');
+        const colleague = await createMember(pool, tenantId, [
+            'core.clerk.operate',
+            'core.payment.operate',
+        ]);
+        await grantAllOrganizations(pool, tenantId, colleague.membershipId);
+        const other = browser();
+        await other.login(colleague.email, colleague.password);
+        const shown = async (member: Browser) =>
+            (
+                await json<{ can_pay: boolean; can_cancel: boolean }>(
+                    await member.get('/api/v1/billing/receivable-payments'),
+                    200,
+                )
+            ).can_cancel;
+        expect(await shown(cashier)).toBe(true);
+        expect(await shown(other)).toBe(false);
+        expect(
+            (
+                await other.post(
+                    `/api/v1/billing/receivable-payments/${settled.id}/cancel`,
+                    { reason: 'Salah input nilai', version: settled.version },
+                )
+            ).status,
+        ).toBe(403);
+        expect(await receivable(visitId)).toMatchObject({ sisa: '75000' });
+        await json(await cancelPayoff(settled), 200);
+        expect(await receivable(visitId)).toMatchObject({ sisa: '100000' });
     });
 
     test('a payment whose receivable has a payoff cannot be cancelled until the payoff is', async () => {
