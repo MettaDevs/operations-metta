@@ -4,6 +4,7 @@ import { DataTableText } from '@operations-metta/ui/data-table';
 import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
+import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
@@ -19,9 +20,10 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
+import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { BookCheck, Undo2 } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
@@ -59,6 +61,7 @@ type Line = {
     quantity: string;
     unit_cost: string;
     discount_percent: string;
+    vat_percent: string;
     batch_number: string;
     expiry_date: string;
     funding_source: Reference | null;
@@ -71,6 +74,7 @@ type Header = {
     posting_date: string;
     vendor_document_number: string;
     description: string;
+    prices_including_vat: boolean;
 };
 
 const statusLabels: Record<Receipt['status'], string> = {
@@ -91,6 +95,7 @@ function headerOf(receipt: Receipt | null): Header {
         posting_date: receipt?.posting_date ?? today(),
         vendor_document_number: receipt?.vendor_document_number ?? '',
         description: receipt?.description ?? '',
+        prices_including_vat: receipt?.prices_including_vat ?? false,
     };
 }
 
@@ -114,6 +119,7 @@ function linesOf(receipt: Receipt | null): Line[] {
         quantity: line.quantity,
         unit_cost: line.unit_cost,
         discount_percent: line.discount_percent,
+        vat_percent: line.vat_percent,
         batch_number: line.batch_number ?? '',
         expiry_date: line.expiry_date ?? '',
         funding_source: line.funding_source,
@@ -144,6 +150,23 @@ function amountOf(line: Line): Decimal {
               .multipliedBy(hundred.minus(discount))
               .multipliedBy(hundredth)
         : Decimal.of('0');
+}
+
+// Subtotal dan PPN dokumen dihitung seperti server: nilai baris dibulatkan ke presisi jumlah, lalu PPN = jumlah nilai
+// baris x PPN % / 100, dibulatkan sekali. PPN % yang belum berupa angka dihitung 0.
+function totalsOf(lines: Line[], decimals: number) {
+    let subtotal = Decimal.of('0');
+    let vat = Decimal.of('0');
+    for (const line of lines) {
+        const amount = amountOf(line).rounded(decimals);
+        subtotal = subtotal.plus(amount);
+        const percent = decimalOf(line.vat_percent);
+        if (percent)
+            vat = vat.plus(
+                amount.multipliedBy(percent).multipliedBy(hundredth),
+            );
+    }
+    return { subtotal, vat: vat.rounded(decimals) };
 }
 
 function useLoader<T>(
@@ -378,10 +401,8 @@ export function ReceiptCard({
     const showExpiry = lines.some(
         (line) => line.item?.expiry_required || line.expiry_date,
     );
-    const total = lines.reduce(
-        (sum, line) => sum.plus(amountOf(line)),
-        Decimal.of('0'),
-    );
+    const { subtotal, vat } = totalsOf(lines, amountDecimals);
+    const pricesIncludingVatId = useId();
 
     const payload = () => ({
         vendor_id: header.vendor?.id ?? '',
@@ -389,6 +410,7 @@ export function ReceiptCard({
         posting_date: header.posting_date,
         vendor_document_number: header.vendor_document_number || null,
         description: header.description || null,
+        prices_including_vat: header.prices_including_vat,
         lines: lines.map((line) => ({
             id: line.id,
             item_id: line.item?.id ?? '',
@@ -396,6 +418,7 @@ export function ReceiptCard({
             quantity: line.quantity,
             unit_cost: line.unit_cost,
             discount_percent: line.discount_percent || null,
+            vat_percent: line.vat_percent || null,
             batch_number: line.batch_number || null,
             expiry_date: line.expiry_date || null,
             funding_source_id: line.funding_source?.id ?? null,
@@ -549,8 +572,9 @@ export function ReceiptCard({
                     discount_percent: '',
                     batch_number: '',
                     expiry_date: '',
-                    // Satu penerimaan biasanya satu sumber dana dan program, jadi baris baru meneruskan isian baris
-                    // sebelumnya; tetap bisa diganti per baris.
+                    // Satu penerimaan biasanya satu PPN %, sumber dana, dan program (layar lama mengisi PPN sekali
+                    // untuk semua baris), jadi baris baru meneruskan isian baris sebelumnya; tetap bisa diganti per baris.
+                    vat_percent: previous?.vat_percent ?? '',
                     funding_source: previous?.funding_source ?? null,
                     procurement_program: previous?.procurement_program ?? null,
                     budget_year: previous?.budget_year ?? '',
@@ -818,6 +842,34 @@ export function ReceiptCard({
                                 }
                             />
                         </FormControl>
+                        <FormControl
+                            error={error('prices_including_vat')}
+                            hint="Tandai bila harga dari vendor sudah termasuk PPN. Tanda ini dicatat untuk pembukuan pajak dan tidak mengubah harga dasar barang maupun nilai PPN dokumen."
+                        >
+                            <Field
+                                orientation="horizontal"
+                                className="w-auto"
+                                data-error-field="prices_including_vat"
+                            >
+                                <Switch
+                                    id={pricesIncludingVatId}
+                                    checked={header.prices_including_vat}
+                                    disabled={!editable}
+                                    onCheckedChange={(checked) =>
+                                        setHeader({
+                                            ...header,
+                                            prices_including_vat: checked,
+                                        })
+                                    }
+                                />
+                                <FieldLabel
+                                    htmlFor={pricesIncludingVatId}
+                                    className="font-normal"
+                                >
+                                    Harga vendor termasuk PPN
+                                </FieldLabel>
+                            </Field>
+                        </FormControl>
                         <FormControl error={error('description')}>
                             <Input
                                 label="Keterangan"
@@ -898,13 +950,29 @@ export function ReceiptCard({
                                 : 'Dokumen ini tidak berisi barang.'
                         }
                         footer={
-                            <p className="text-right text-sm">
-                                Total nilai{' '}
-                                <span className="font-semibold">
+                            <p className="flex flex-wrap justify-end gap-x-6 text-sm">
+                                <span>
+                                    Subtotal{' '}
                                     {displayAmount(
-                                        total.normalized(),
+                                        subtotal.normalized(),
                                         amountDecimals,
                                     )}
+                                </span>
+                                <span>
+                                    PPN{' '}
+                                    {displayAmount(
+                                        vat.normalized(),
+                                        amountDecimals,
+                                    )}
+                                </span>
+                                <span>
+                                    Total nilai{' '}
+                                    <span className="font-semibold">
+                                        {displayAmount(
+                                            subtotal.plus(vat).normalized(),
+                                            amountDecimals,
+                                        )}
+                                    </span>
                                 </span>
                             </p>
                         }
@@ -1102,6 +1170,49 @@ export function ReceiptCard({
                                             Number(line.discount_percent)
                                                 ? displayNumber(
                                                       line.discount_percent,
+                                                  )
+                                                : '',
+                                        )
+                                    ),
+                            },
+                            {
+                                id: 'vat_percent',
+                                header: 'PPN %',
+                                content: control,
+                                minWidth: 90,
+                                align: 'right',
+                                cell: ({ index, line }) =>
+                                    editable ? (
+                                        <FormControl
+                                            error={error(
+                                                field(index, 'vat_percent'),
+                                            )}
+                                        >
+                                            <Input
+                                                label="PPN %"
+                                                type="number"
+                                                min={0}
+                                                max={100}
+                                                step="any"
+                                                inputMode="decimal"
+                                                data-error-field={field(
+                                                    index,
+                                                    'vat_percent',
+                                                )}
+                                                value={line.vat_percent}
+                                                onChange={(event) =>
+                                                    change(index, {
+                                                        vat_percent:
+                                                            event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </FormControl>
+                                    ) : (
+                                        text(
+                                            Number(line.vat_percent)
+                                                ? displayNumber(
+                                                      line.vat_percent,
                                                   )
                                                 : '',
                                         )
