@@ -58,10 +58,10 @@ setErrorActions(caught.actions);
 Semua penolakan "sudah dibayar" datang dari `lockChargeForChange` di `src/foundation/billing/payment/payment.service.ts`. Tombolnya terpasang di:
 
 - retur obat dan Batal retur, untuk resep dan penjualan obat bebas (`dispensing-returns.tsx`);
-- Siapkan dan batal penyiapan di kartu penyerahan (`dispensing-card.tsx`), serta batal resep (`prescription-cancel-dialog.tsx`);
+- Siapkan dan batal penyiapan di kartu penyerahan (`dispensing-card.tsx`);
 - Simpan pemeriksaan yang mengubah Biaya Tindakan (`examination.page.tsx`).
 
-Batal registrasi dan rujuk internal juga ditolak lewat kunci itu. Layarnya belum memasang tombol, jadi hanya pesannya yang tampil.
+Batal resep, batal registrasi, dan rujuk internal juga ditolak lewat kunci itu, tetapi layarnya belum memasang tombol, jadi hanya pesannya yang tampil. Batal resep dan batal registrasi memakai `Dialog` modal, dan jendela yang dibuka dari dalamnya belum diuji.
 
 ## Bukti
 

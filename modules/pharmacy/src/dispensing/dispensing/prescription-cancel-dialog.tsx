@@ -19,7 +19,6 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
-    type ErrorAction,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 
@@ -43,15 +42,11 @@ export function PrescriptionCancelDialog({
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
-    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
-        [],
-    );
     const [message, setMessage] = useState<string | null>(null);
 
     const submit = async () => {
         setBusy(true);
         setErrors({});
-        setErrorActions([]);
         setMessage(null);
         try {
             const { body } = await api.pharmacyPrescriptionCancel({
@@ -63,10 +58,9 @@ export function PrescriptionCancelDialog({
             );
             onCancelled(body);
         } catch (caught) {
-            if (caught instanceof ApiError && caught.status === 422) {
+            if (caught instanceof ApiError && caught.status === 422)
                 setErrors(caught.errors);
-                setErrorActions(caught.actions);
-            } else setMessage(errorText(caught, 'Resep belum dibatalkan.'));
+            else setMessage(errorText(caught, 'Resep belum dibatalkan.'));
         } finally {
             setBusy(false);
         }
@@ -94,7 +88,6 @@ export function PrescriptionCancelDialog({
                 </DialogHeader>
                 <FormErrorHeader
                     errors={errors}
-                    errorActions={errorActions}
                     message={message}
                     operation="Resep belum dibatalkan"
                 />
