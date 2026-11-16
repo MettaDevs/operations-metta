@@ -6,17 +6,10 @@ import type {
     returnReverseInputSchema,
 } from './dispensing-return.schema.ts';
 import { DispensingReturns } from './dispensing-return.service.ts';
+import type { ReturnSourceKind } from './dispensing-return.source.ts';
 
-async function returns(context: Context, body?: unknown) {
-    return new DispensingReturns(
-        context.db,
-        await moduleWorkspace(context, body),
-    );
-}
-
-// Retur obat dibuka dari resepnya, seperti penyerahannya.
-export function dispensingReturnRoutes() {
-    const path: `/${string}` = `/api/modules/${moduleId}/v1/prescriptions/{id}/returns`;
+// Retur obat dibuka dari dokumennya: resep, seperti penyerahannya, atau penjualan obat bebas.
+function returnRoutes(kind: ReturnSourceKind, path: `/${string}`) {
     const route = (method: 'GET' | 'POST', suffix = '') =>
         base.route({
             method,
@@ -24,13 +17,19 @@ export function dispensingReturnRoutes() {
             inputStructure: 'detailed',
             outputStructure: 'detailed',
         });
+    const returns = async (context: Context, id: string, body?: unknown) =>
+        new DispensingReturns(
+            context.db,
+            await moduleWorkspace(context, body),
+            { kind, id },
+        );
     return {
-        pharmacyReturnList: route('GET')
+        list: route('GET')
             .input(z.object({ params: z.object({ id: z.string() }) }))
             .handler(async ({ context, input }) =>
-                ok(await (await returns(context)).show(input.params.id)),
+                ok(await (await returns(context, input.params.id)).show()),
             ),
-        pharmacyReturnCreate: route('POST')
+        create: route('POST')
             .input(
                 z.object({
                     params: z.object({ id: z.string() }),
@@ -40,11 +39,11 @@ export function dispensingReturnRoutes() {
             .handler(async ({ context, input }) =>
                 ok(
                     await (
-                        await returns(context, input.body)
-                    ).create(input.params.id, input.body),
+                        await returns(context, input.params.id, input.body)
+                    ).create(input.body),
                 ),
             ),
-        pharmacyReturnReverse: route('POST', '/{returnId}/reverse')
+        reverse: route('POST', '/{returnId}/reverse')
             .input(
                 z.object({
                     params: z.object({ id: z.string(), returnId: z.string() }),
@@ -54,13 +53,28 @@ export function dispensingReturnRoutes() {
             .handler(async ({ context, input }) =>
                 ok(
                     await (
-                        await returns(context, input.body)
-                    ).reverse(
-                        input.params.id,
-                        input.params.returnId,
-                        input.body,
-                    ),
+                        await returns(context, input.params.id, input.body)
+                    ).reverse(input.params.returnId, input.body),
                 ),
             ),
+    };
+}
+
+export function dispensingReturnRoutes() {
+    const prescription = returnRoutes(
+        'prescription',
+        `/api/modules/${moduleId}/v1/prescriptions/{id}/returns`,
+    );
+    const sale = returnRoutes(
+        'otc-sale',
+        `/api/modules/${moduleId}/v1/otc-sales/{id}/returns`,
+    );
+    return {
+        pharmacyReturnList: prescription.list,
+        pharmacyReturnCreate: prescription.create,
+        pharmacyReturnReverse: prescription.reverse,
+        pharmacyOtcSaleReturnList: sale.list,
+        pharmacyOtcSaleReturnCreate: sale.create,
+        pharmacyOtcSaleReturnReverse: sale.reverse,
     };
 }

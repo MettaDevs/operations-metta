@@ -115,8 +115,10 @@ Pembeli datang ke loket farmasi tanpa resep. Petugas memilih obat, melihat total
 - **Tidak ada event ke layanan kesehatan.** Penjualan obat bebas tidak punya kunjungan, jadi `pharmacy.dispensing.charges-replaced.v1` tidak terbit; tagihannya ditulis langsung lewat `replaceSaleBill`.
 - **Patient KTP per penjualan.** Buku alamat Core tidak menyimpan KTP; KTP pasien ada di master pasien layanan kesehatan, yang tidak dibaca module ini. Karena itu KTP diisi per penjualan, bawaannya `true`, juga untuk pembeli dari buku alamat. Ini gap sampai pihak Core punya atribut KTP.
 - **Layar loket** (`/pharmacy/dispensing/otc-sale`, menu Pelayanan resep › Penjualan obat bebas). Kepala: lokasi (yang terakhir dipilih diingat per pengguna di peramban), kelompok harga (bawaan lokasi, bisa diganti), pembeli dari buku alamat atau nama yang diketik (kosong berarti pembeli umum), dan saklar KTP (bawaannya hidup). Baris: obat, jumlah, satuan (bawaannya satuan jual), dan batch opsional. Harga, diskon, nilai, dan total hanya datang dari quote, yang diminta ulang 300 ms sesudah isian berhenti berubah; angka quote lama tampil redup sampai quote terbaru kembali, dan Simpan dan bayar baru bisa ditekan sesudah itu. Tender digambar dari jenis bayar kasir seperti tab Pembayaran Form Pembayaran, tanpa tab Diskon: uang tunai diterima dengan kembalian, jenis bayar lain beserta merchan, referensi, biaya kartu, pihak, dan kurs bila jenis bayarnya memintanya, dan saklar piutang bila ada jenis bayar penampung sisa. Rumus kembalian dan sisa disalin dari `payment.amounts.ts` ke `otc-sale-tender.tsx`, karena module tidak meng-import layar Core; server kasir tetap yang memutuskan. Penolakan 409 `stale_total` meminta quote ulang dan menampilkan pesan server; 422 dipetakan ke baris obat (`lines.N.*`), isian tender (`payment.*`), dan ringkasan kesalahan (`_form`). Berhasil menampilkan nomor penjualan, nomor pembayaran, dan kembalian, lalu mengosongkan layar untuk pembeli berikutnya dengan lokasi dan kelompok harga yang sama.
-- **Menu** (`0017_otc_sale_navigation.sql`): Penjualan obat bebas di Pelayanan resep (izin `pharmacy.otc-sale.read`), Lokasi penjualan obat bebas di Setup › Pelayanan resep (izin `pharmacy.otc-sale-location.read`).
-- **Belum termasuk.** Retur penjualan obat bebas, poin member, cetak struk (menunggu mesin cetak), dan resep luar.
+- **Daftar dan kartu penjualan** (`GET .../otc-sales?from=&to=&q=` dan `GET .../otc-sales/{id}`; layar `/pharmacy/dispensing/otc-sales`). Daftar dimuat bertahap, terbaru lebih dulu, dengan filter tanggal penjualan dari dan sampai (bawaannya hari ini di peramban) dan pencarian nomor atau pembeli. Kolomnya nomor, waktu, lokasi, pembeli, total, dan status bayar. Total adalah yang ditagih kasir sesudah retur, dihitung `invoiceTotals` atas baris dengan Qty bersih. Status bayar dibaca dari `paidDocuments` kasir Core: Dibayar bila ada pembayaran yang belum dibatalkan atau dikreditkan. Kartu penjualan menampilkan kepala, baris obat dengan jumlah terjual dan jumlah yang masih ditagih, retur yang sudah tercatat, dan tombol Retur.
+- **Retur.** Penjualan obat bebas diretur dengan retur farmasi yang sama dengan resep (bagian [Retur obat](#retur-obat)), lewat `.../otc-sales/{id}/returns` (dan `.../{returnId}/reverse`). Penjualan yang sudah dibayar kasir terkunci seperti tagihan kunjungan: retur dan Batal retur memanggil `lockChargeForChange` dengan penjualan sebagai dokumen sumber tagihan, dan tagihan yang dibayar ditolak dengan pesan sistem lama "Data ini sudah melakukan Pembayaran diKasir!". Kasir membuka kuncinya dengan Batal pembayaran selama clerk masih terbuka, atau dengan Nota Kredit sesudah Clerk End. Sesudah retur atau Batal retur, tagihan penjualan ditulis ulang (`replaceOtcSaleBill`, nomor, tanggal, dan pembeli yang sama) dengan Qty bersih, yaitu yang diserahkan dikurangi retur yang masih berlaku. Baris yang habis diretur keluar dari tagihan, jadi kasir menagih ulang hanya obat yang tidak dikembalikan. Simpan dan bayar memakai fungsi yang sama. Retur penjualan tidak menerbitkan event apa pun, karena tidak ada resep. Izinnya sama dengan retur resep (`pharmacy.return.create` dan `.reverse`, duty apoteker), ditambah izin baca penjualan.
+- **Menu** (`0017_otc_sale_navigation.sql`, `0018_otc_sale_list_navigation.sql`): Penjualan obat bebas dan Daftar penjualan di Pelayanan resep (izin `pharmacy.otc-sale.read`), Lokasi penjualan obat bebas di Setup › Pelayanan resep (izin `pharmacy.otc-sale-location.read`).
+- **Belum termasuk.** Batal penjualan obat bebas (seluruh penjualan, bukan per obat), poin member, cetak struk (menunggu mesin cetak), dan resep luar.
 
 ## Obat diserahkan: event ke layanan kesehatan
 
@@ -127,6 +129,8 @@ Penerimanya module layanan kesehatan (`registerHealthcareEventHandlers()`, `modu
 ## Retur obat
 
 Retur langsung diposting saat disimpan (8 retur dari 12.177 penyerahan di Kuta 1 tidak membutuhkan draf). Stok masuk lagi ke lokasi penyerahan lewat `postItemLines` (jenis `penyerahan` dengan jumlah positif, seperti retur penjualan di BC yang tercatat sebagai Sale) dengan batch, kedaluwarsa, harga satuan, dan sumber dana yang sama dengan bagian stok yang keluar (`issuedSlices`; Appl.-from Item Entry di BC). Retur dicatat per obat dan batch dalam satuan yang dipilih, bawaannya satuan saat diserahkan, dengan isi satuan disalin ke baris; stok kembali dalam satuan dasar. Jumlah retur per obat dan batch, dalam satuan dasar, tidak pernah melebihi yang diserahkan dikurangi yang sudah diretur; bagian yang sudah kembali dicocokkan dengan batch, harga, dan sumber dana baris kartu gudang retur sebelumnya, jadi retur berikutnya mengambil bagian yang memang belum kembali. Batal retur membalik posting itu lewat `reverseItemEntries` dan ditolak bila stoknya sudah terpakai.
+
+Penyerahan yang diretur datang dari resep atau dari penjualan obat bebas. Bedanya dikumpulkan di satu tempat, `returnSources` di `dispensing-return.source.ts`, yang menentukan sekali per request dokumen yang dibuka, izin bacanya, kunci kasirnya (kunjungan resep, atau penjualan itu sendiri), dan apa yang terjadi sesudah retur atau Batal retur: event ke layanan kesehatan dan biaya kunjungan untuk resep, atau tagihan penjualan yang ditulis ulang untuk penjualan obat bebas.
 
 ## Retur: event ke layanan kesehatan
 
@@ -142,14 +146,14 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                                                            |
-| ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                                            |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                                   |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep (apoteker)                |
-| `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya)                      |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat  |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat |
+| Duty                          | Isi                                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                                                         |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                                                |
+| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep; retur penjualan obat bebas (apoteker) |
+| `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya), lihat daftar penjualan           |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat               |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, golongan obat, data obat, dan harga obat              |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 

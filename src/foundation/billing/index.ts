@@ -40,6 +40,7 @@ export {
     chargeLockedMessage,
     closedClerkMessage,
     lockChargeForChange,
+    paidDocuments,
     patientTypeMessage,
     payBill,
     receivableBuyerMessage,
