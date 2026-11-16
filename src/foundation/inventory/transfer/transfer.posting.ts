@@ -6,17 +6,24 @@ export const shipmentSource = 'mutasi';
 export const receiptSource = 'mutasi_terima';
 
 // Jumlah akan dikirim kembali ke sisa yang belum dikirim, dan jumlah akan diterima ke barang dalam perjalanan, seperti
-// Qty. to Ship dan Qty. to Receive BC sesudah posting.
+// Qty. to Ship dan Qty. to Receive BC sesudah posting. Batch pilihan berlaku untuk jumlah akan dikirim yang lama, jadi
+// ikut dihapus dan kiriman berikutnya kembali otomatis.
 export async function resetQuantitiesToHandle(
     db: Database,
     tenantId: string,
     orderId: string,
 ) {
+    const stamp = nowSql();
     await db.execute(
         `update gd_tr_amprahan_detail
          set jumlah_akan_dikirim = jumlah_diminta - jumlah_dikirim,
              jumlah_akan_diterima = jumlah_dikirim - jumlah_diterima, updated_at = $1
          where tenant_id = $2 and amprahan_id = $3 and deleted_at is null`,
-        [nowSql(), tenantId, orderId],
+        [stamp, tenantId, orderId],
+    );
+    await db.execute(
+        `update gd_tr_amprahan_detail_batch set deleted_at = $1
+         where tenant_id = $2 and amprahan_id = $3 and deleted_at is null`,
+        [stamp, tenantId, orderId],
     );
 }
