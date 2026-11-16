@@ -50,10 +50,24 @@ export function ClerkResult({ clerk }: { clerk: Clerk }): ReactNode {
                         readOnly
                     />
                 </FormControl>
-                <FormControl hint="Nilai semua pembayaran kasir ini selama clerk, semua jenis bayar.">
+                <FormControl hint="Nilai semua pembayaran kunjungan kasir ini selama clerk, semua jenis bayar, termasuk bon. Pelunasan bon dihitung di Pembayaran Hutang.">
                     <Input
                         label="Jumlah Total"
                         value={amount(clerk.system_total)}
+                        readOnly
+                    />
+                </FormControl>
+                <FormControl>
+                    <Input
+                        label="Jumlah Pembayaran Hutang"
+                        value={String(clerk.receivable_payments)}
+                        readOnly
+                    />
+                </FormControl>
+                <FormControl hint="Pelunasan bon dan piutang selama clerk. Bukan penjualan baru, tetapi uangnya masuk laci, jadi ikut Jumlah Sistem jenis bayarnya.">
+                    <Input
+                        label="Total Pembayaran Hutang"
+                        value={amount(clerk.receivable_payment_total)}
                         readOnly
                     />
                 </FormControl>

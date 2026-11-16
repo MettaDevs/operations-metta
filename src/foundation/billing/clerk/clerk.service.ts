@@ -27,7 +27,11 @@ import {
 } from '../../currency/index.ts';
 import { Decimal } from '../../../platform/money/index.ts';
 import { closeClerk, countedMethods } from './clerk.close.ts';
-import { clerkOpenings, clerkSales } from './clerk.sales.ts';
+import {
+    clerkOpenings,
+    clerkReceivablePayments,
+    clerkSales,
+} from './clerk.sales.ts';
 import {
     clerkEndInputSchema,
     clerkLineSchema,
@@ -59,7 +63,9 @@ const rowSql = `select * from (
                            trim_scale(c.jumlah_uang_awal)::text as opening_total,
                            trim_scale(c.jumlah_total_system)::text as system_total,
                            trim_scale(c.jumlah_total_clerk)::text as clerk_total,
-                           trim_scale(c.jumlah_total_selisih)::text as difference_total, c.version
+                           trim_scale(c.jumlah_total_selisih)::text as difference_total,
+                           c.jumlah_pembayaran_hutang as receivable_payments,
+                           trim_scale(c.jumlah_total_pembayaran_hutang)::text as receivable_payment_total, c.version
                     from clerk c join users u on u.id = c.user_id
                     where c.tenant_id = $1 and c.legal_entity_id = $2) clerks
                 where true`;
@@ -481,12 +487,16 @@ export class Clerks {
                 rates,
                 (value) => roundAmount(value, precision),
             );
+            const receivablePayments = await clerkReceivablePayments(
+                this.db,
+                session,
+            );
             const stamp = nowSql();
             await this.db.execute(
                 `update clerk set status = 'end', waktu_akhir = $1, jumlah_transaksi = $2, jumlah_uang_awal = $3,
                                   jumlah_total_system = $4, jumlah_total_clerk = $5, jumlah_total_selisih = $6,
-                                  updated_at = $1
-                 where tenant_id = $7 and id = $8`,
+                                  jumlah_pembayaran_hutang = $7, jumlah_total_pembayaran_hutang = $8, updated_at = $1
+                 where tenant_id = $9 and id = $10`,
                 [
                     stamp,
                     closed.transactions,
@@ -494,6 +504,8 @@ export class Clerks {
                     closed.systemTotal,
                     closed.clerkTotal,
                     closed.differenceTotal,
+                    receivablePayments.transactions,
+                    receivablePayments.total,
                     scope.tenantId,
                     clerk.id,
                 ],

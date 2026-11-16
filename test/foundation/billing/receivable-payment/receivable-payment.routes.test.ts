@@ -442,7 +442,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
         });
     });
 
-    test('Clerk End counts cash payoffs as money in the drawer, and a closed clerk takes no payoff and cancels none', async () => {
+    test('Clerk End counts cash payoffs as money in the drawer but apart from sales, and a closed clerk takes no payoff and cancels none', async () => {
         const current = async () =>
             (
                 await json<{ data: { id: string; version: number } }>(
@@ -453,7 +453,13 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
         const end = async (counted: string) => {
             const clerk = await current();
             return json<{
-                data: { transactions: number; system_total: string };
+                data: {
+                    transactions: number;
+                    system_total: string;
+                    receivable_payments: number;
+                    receivable_payment_total: string;
+                    difference_total: string;
+                };
             }>(
                 await cashier.post(`/api/v1/billing/clerks/${clerk.id}/end`, {
                     password: testPassword,
@@ -476,8 +482,11 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
         const clerkId = (await current()).id;
         const ended = await end('40000');
         expect(ended.data).toMatchObject({
-            transactions: 2,
-            system_total: '140000',
+            transactions: 1,
+            system_total: '100000',
+            receivable_payments: 1,
+            receivable_payment_total: '40000',
+            difference_total: '0',
         });
         const [drawer] = await pool.unsafe<{ jumlah_sistem: string }[]>(
             `select trim_scale(jumlah_sistem)::text as jumlah_sistem from clerk_detail
