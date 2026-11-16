@@ -71,11 +71,12 @@ export class ServiceLocations {
         };
     }
 
-    // Pilihan lokasi dibaca layar setelan ini dan layar antrean resep.
+    // Pilihan lokasi dibaca layar setelan ini, layar antrean resep, dan setelan lokasi penjualan obat bebas.
     private guardLookup() {
         if (
             !this.workspace.permissions.has('pharmacy.service-location.read') &&
-            !this.workspace.permissions.has('pharmacy.prescription.read')
+            !this.workspace.permissions.has('pharmacy.prescription.read') &&
+            !this.workspace.permissions.has('pharmacy.otc-sale-location.read')
         )
             abort(403, 'Tidak diizinkan.');
     }
