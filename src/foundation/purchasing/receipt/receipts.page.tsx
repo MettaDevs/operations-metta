@@ -22,6 +22,7 @@ import {
     errorText,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import { Decimal } from '../../../platform/money/index.ts';
 import {
     ReceiptCard,
     type Receipt,
@@ -208,7 +209,12 @@ function ReceiptsPage(): ReactNode {
                             align: 'right',
                             cell: (row) => (
                                 <DataTableText>
-                                    {displayAmount(row.amount, amountDecimals)}
+                                    {displayAmount(
+                                        Decimal.of(row.amount)
+                                            .plus(Decimal.of(row.vat_amount))
+                                            .normalized(),
+                                        amountDecimals,
+                                    )}
                                 </DataTableText>
                             ),
                         },
