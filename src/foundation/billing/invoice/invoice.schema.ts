@@ -57,4 +57,6 @@ export const visitDetailSchema = visitRowSchema.extend({
     card_number: z.string().nullable(),
     // Jenis bayar yang dikhususkan tipe pasien lain, ditolak untuk kunjungan ini.
     restricted_payment_method_ids: z.array(z.string()),
+    // Versi tagihan yang ditampilkan, dikirim lagi saat Simpan pembayaran.
+    version: z.number(),
 });

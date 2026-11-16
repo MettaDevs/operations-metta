@@ -9,6 +9,7 @@ import type { Database } from '../../../../src/platform/database/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
     visitCharges,
 } from '../../../support/billing-fixtures.ts';
@@ -37,7 +38,7 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
     let cash: string;
 
     const pay = (visitId: string, received: string) =>
-        cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+        payVisit(cashier, visitId, {
             received,
         });
     async function paid(visitId: string, received: string) {

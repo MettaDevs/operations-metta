@@ -42,6 +42,8 @@ import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 // Jenis bayar bermata uang asing diisi dalam mata uang itu; kursnya bawaan Sys Admin › Kurs hari ini, bisa diubah oleh
 // pemegang izin ubah kurs, dan nilainya dalam mata uang lokal ikut ditampilkan. Kembalian selalu mata uang lokal.
 // Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama, dan menolak isian dengan pesannya.
+// Simpan mengirim versi tagihan yang ditampilkan. Bila biaya kunjungan berubah sesudahnya, server menolak dan form
+// menawarkan Muat ulang, yang membaca tagihan terbaru tanpa membuang isian kasir.
 
 type Form = ApiBody<'billingVisitShow'>['data'];
 type Method = Form['payment_methods'][number];
@@ -74,10 +76,11 @@ const minor = (text: string) => {
 
 export function PaymentForm({
     form,
-    onSaved,
+    reload,
 }: {
     form: Form;
-    onSaved: () => Promise<unknown>;
+    // Membaca ulang tagihan kunjungan ini, sesudah Simpan atau saat tagihannya berubah.
+    reload: () => Promise<unknown>;
 }): ReactNode {
     const localCash = (method: Method) =>
         method.behavior === 'tunai' && !method.currency_code;
@@ -95,6 +98,7 @@ export function PaymentForm({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [message, setMessage] = useState<string | null>(null);
+    const [billChanged, setBillChanged] = useState(false);
     // Jenis bayar yang baru saja menolak isian karena dikhususkan tipe pasien lain.
     const [refused, setRefused] = useState<Method | null>(null);
     const refusal = (method: Method) =>
@@ -153,6 +157,7 @@ export function PaymentForm({
     const save = async () => {
         setErrors({});
         setMessage(null);
+        setBillChanged(false);
         if (amounts.remainder > 0n && !takeRemainder) {
             setMessage('Masih terdapat Sisa pembayaran!!');
             return;
@@ -170,6 +175,7 @@ export function PaymentForm({
             const { body } = await api.billingPaymentCreate({
                 params: { id: form.visit.id },
                 body: {
+                    version: form.visit.version,
                     received: typed(received),
                     take_remainder: takeRemainder,
                     discounts: discountPayload(discounts),
@@ -187,17 +193,22 @@ export function PaymentForm({
                 },
             });
             toast.success(body.message);
-            await onSaved();
+            await reload();
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 422)
                 setErrors(caught.errors);
-            else
+            else {
+                setBillChanged(
+                    caught instanceof ApiError &&
+                        caught.errorCode === 'stale_version',
+                );
                 setMessage(
                     errorText(
                         caught,
                         'Operasi buat data gagal! Silakan coba lagi.',
                     ),
                 );
+            }
         } finally {
             setBusy(false);
         }
@@ -224,6 +235,20 @@ export function PaymentForm({
                 errors={errors}
                 message={message}
                 operation="Pembayaran belum disimpan"
+                actions={
+                    billChanged
+                        ? [
+                              {
+                                  label: 'Muat ulang',
+                                  onClick: () =>
+                                      void reload().then(() => {
+                                          setBillChanged(false);
+                                          setMessage(null);
+                                      }),
+                              },
+                          ]
+                        : undefined
+                }
             />
             <Tabs defaultValue="payment">
                 <TabsList>

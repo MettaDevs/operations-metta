@@ -26,7 +26,7 @@ export function paymentRoutes() {
                 new Payments(
                     context.db,
                     await coreWorkspace(context, input.body),
-                ).create(input.params.id, input.body),
+                ).create(context.request, input.params.id, input.body),
             ),
         billingPaymentCancel: base
             .route({

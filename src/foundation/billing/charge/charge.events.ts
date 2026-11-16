@@ -122,7 +122,9 @@ type ChargeLine = {
 // Potret penuh baris biaya satu dokumen sumber (pemeriksaan atau penyerahan farmasi). Baris terbuka diubah di tempat,
 // baris baru ditambah, dan baris terbuka yang tidak ada lagi di potret dihapus lunak. Baris yang sudah ditagih tidak
 // disentuh: module menolak mengubahnya sebelum event ini terbit, kecuali tagihan yang lunas otomatis, yang dibatalkan
-// lebih dulu lalu dilunasi ulang di sini.
+// lebih dulu lalu dilunasi ulang di sini. Versi tagihan kunjungan (kunjungan_kasir.version) naik, sehingga Simpan dari
+// Form Pembayaran yang dibuka sebelum perubahan ini ditolak. Kunjungan yang belum selesai belum punya baris
+// kunjungan_kasir; versinya mulai saat selesai.
 async function replaceCharges(
     db: Database,
     envelope: EventEnvelope & { legal_entity_id: string },
@@ -199,6 +201,11 @@ async function replaceCharges(
                 updated_at: stamp,
             });
     }
+    await db.execute(
+        `update kunjungan_kasir set version = version + 1, updated_at = $1
+         where tenant_id = $2 and sumber_module = $3 and kunjungan_id = $4`,
+        [stamp, tenantId, source, document.visitId],
+    );
     await settleAgain(db, {
         tenantId,
         legalEntityId: envelope.legal_entity_id,

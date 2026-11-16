@@ -33,7 +33,7 @@ const visitSql = `select * from (
                              k.pasien_nrm as patient_medical_record_number, k.pasien_nama as patient_name,
                              k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
                              ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
-                             to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids
+                             to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids, k.version
                       from kunjungan_kasir k
                       where k.tenant_id = $1 and k.legal_entity_id = $2 and k.status = 'selesai') visits
                   where true`;

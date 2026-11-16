@@ -5,6 +5,7 @@ import { publishEvent } from '../../../../src/platform/events/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
 } from '../../../support/billing-fixtures.ts';
 import {
@@ -107,7 +108,7 @@ describe.skipIf(!process.env.DB_HOST)(
             });
         }
         const pay = (visitId: string, body: Record<string, unknown>) =>
-            cashier.post(`/api/v1/billing/visits/${visitId}/payments`, body);
+            payVisit(cashier, visitId, body);
         const details = async (paymentId: string) => [
             ...(await pool.unsafe<Record<string, string>[]>(
                 `select j.kode, d.mata_uang, trim_scale(d.nilai_valuta)::text as nilai_valuta,

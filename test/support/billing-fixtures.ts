@@ -18,6 +18,24 @@ export async function json<T>(response: Response, status: number): Promise<T> {
     return JSON.parse(text) as T;
 }
 
+// Simpan pembayaran seperti Form Pembayaran: versi tagihan yang dikirim adalah versi yang baru saja ditampilkan. Kunjungan
+// yang tidak bisa dibuka (404, 403) tetap dikirim, supaya penolakan server yang diuji. version di body menimpa versi itu.
+export async function payVisit(
+    cashier: Browser,
+    visitId: string,
+    body: Record<string, unknown>,
+): Promise<Response> {
+    const shown = await cashier.get(`/api/v1/billing/visits/${visitId}`);
+    const version = shown.ok
+        ? (await json<{ data: { visit: { version: number } } }>(shown, 200))
+              .data.visit.version
+        : 0;
+    return cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+        version,
+        ...body,
+    });
+}
+
 export async function refused(response: Response) {
     return (await json<{ errors: Record<string, string[]> }>(response, 422))
         .errors;

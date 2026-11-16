@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { payVisit } from '../../../../../test/support/billing-fixtures.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import type { Browser } from '../../../../../test/support/operations-app.ts';
 import {
@@ -171,7 +172,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
 
     const pay = async (visitId: string) =>
         json(
-            await cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+            await payVisit(cashier, visitId, {
                 received: '1000000',
             }),
             201,

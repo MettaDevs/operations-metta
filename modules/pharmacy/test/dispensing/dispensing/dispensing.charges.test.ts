@@ -5,6 +5,7 @@ import {
 } from '@core/foundation/billing/index.ts';
 import {
     json as billingJson,
+    payVisit,
     visitCharges,
 } from '../../../../../test/support/billing-fixtures.ts';
 import {
@@ -272,12 +273,9 @@ describe.skipIf(!process.env.DB_HOST)(
             }).completedVisit(visitId, []);
             const cashier = await openCashier();
             await billingJson(
-                await cashier.post(
-                    `/api/v1/billing/visits/${visitId}/payments`,
-                    {
-                        received: '4500',
-                    },
-                ),
+                await payVisit(cashier, visitId, {
+                    received: '4500',
+                }),
                 201,
             );
             expect(
@@ -343,7 +341,7 @@ describe.skipIf(!process.env.DB_HOST)(
             }).completedVisit(visitId, []);
             const cashier = await openCashier();
             const pay = () =>
-                cashier.post(`/api/v1/billing/visits/${visitId}/payments`, {
+                payVisit(cashier, visitId, {
                     received: '1500',
                 });
             const number = async (id: string) =>

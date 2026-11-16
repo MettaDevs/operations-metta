@@ -2,8 +2,10 @@ import { z } from 'zod';
 
 // Simpan pembayaran. received adalah uang tunai lokal yang diterima (isian TUNAI); lines adalah isian Metode Pembayaran
 // Lain, dengan amount dalam mata uang jenis bayarnya; take_remainder adalah centang jenis bayar penampung sisa (Pasien
-// BON). Angka dari layar dikirim sebagai teks apa adanya, dan service yang memeriksanya.
+// BON). Angka dari layar dikirim sebagai teks apa adanya, dan service yang memeriksanya. version adalah versi tagihan
+// yang ditampilkan form (visit.version di Form Pembayaran).
 export const paymentInputSchema = z.object({
+    version: z.number().optional(),
     received: z.union([z.number(), z.string()]).optional(),
     lines: z
         .array(

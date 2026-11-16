@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { payVisit } from '../../../../../test/support/billing-fixtures.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import type { Browser } from '../../../../../test/support/operations-app.ts';
 import {
@@ -224,14 +225,9 @@ describe.skipIf(!process.env.DB_HOST)('patient type payment methods', () => {
         expect(sent?.data.automatic_payment_method_id).toBeNull();
         expect(
             await refused(
-                await cashier.post(
-                    `/api/v1/billing/visits/${visitId}/payments`,
-                    {
-                        lines: [
-                            { payment_method_id: methods.PRS, amount: '0' },
-                        ],
-                    },
-                ),
+                await payVisit(cashier, visitId, {
+                    lines: [{ payment_method_id: methods.PRS, amount: '0' }],
+                }),
             ),
         ).toEqual({ 'lines.0.amount': [patientTypeMessage] });
     });

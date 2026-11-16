@@ -9,6 +9,7 @@ import { publishEvent } from '../../../../src/platform/events/index.ts';
 import {
     createBillingBusiness,
     json,
+    payVisit,
     refused,
     visitCharges,
 } from '../../../support/billing-fixtures.ts';
@@ -41,7 +42,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
     const methods: Record<string, string> = {};
 
     const pay = (visitId: string, body: Record<string, unknown>) =>
-        cashier.post(`/api/v1/billing/visits/${visitId}/payments`, body);
+        payVisit(cashier, visitId, body);
     const paymentsOf = (visitId: string) =>
         pool.unsafe<
             {
@@ -186,6 +187,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
         expect(await paymentsOf(visitId)).toHaveLength(1);
     });
 
+    // Biaya yang berubah menaikkan versi tagihan. Pembayaran otomatis tidak membawa versi, jadi tetap dilunasi ulang.
     test('an automatic payment follows its bill: drugs prepared after the visit completes settle it again', async () => {
         const visitId = Bun.randomUUIDv7();
         await charges.completedVisit(visitId, ['60000'], {
