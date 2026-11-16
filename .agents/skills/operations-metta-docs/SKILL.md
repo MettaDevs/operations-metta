@@ -15,6 +15,8 @@ Where documentation lives in this repository:
 | A module's behaviour and the rules it enforces | `modules/<module>/README.md` (table Susunan repo in `AGENTS.md`) |
 | The parity harness and its waivers | `parity/README.md` |
 | Stack-neutral design: tokens, component behaviour, screen-to-database flows | `docs/design-system/` |
+| Canonical design shared by Core and modules, moved from CoreERP and adapted | `docs/dev/` |
+| Orientation for new team members: first day, setup, glossary, contribution | `docs/onboarding/` |
 | Promises to callers outside the runtime | `contracts/`, including the gap statement in `info.description` |
 
 The full pattern for a module page, its section order, and worked examples live in CoreERP at [`docs/apps/management-aset/pola-dokumen.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/apps/management-aset/pola-dokumen.md). Read it before writing a module README; this skill does not restate it, because a second copy of a style guide drifts from the first. CoreERP's `docs/` is the behaviour reference for flows not yet ported, not the description of this repository: never copy a CoreERP page here without checking every claim against this repository's code.
@@ -64,7 +66,7 @@ The same holds for protocol and integration vocabulary, and it holds on screens,
 
 The sentence around the term stays Indonesian: "Kirim ack setelah posting dibukukan", not a whole sentence switched to English. A business screen may still describe an effect in plain words instead of naming the mechanism — "Posting ini belum pernah sampai ke aplikasi finance" needs neither "pull" nor "tarik".
 
-What gets replaced is the word with **no technical reason** that already has a plain equivalent — "artefak" becomes "berkas", "krusial" becomes an explanation of why it matters. And no architecture term reaches a business user's screen; CoreERP's forbidden list is in [`docs/onboarding/glosarium.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/onboarding/glosarium.md).
+What gets replaced is the word with **no technical reason** that already has a plain equivalent — "artefak" becomes "berkas", "krusial" becomes an explanation of why it matters. And no architecture term reaches a business user's screen; the forbidden list is in [`docs/onboarding/glosarium.md`](../../../docs/onboarding/glosarium.md).
 
 ## Coverage is verified mechanically, never by feeling finished
 
