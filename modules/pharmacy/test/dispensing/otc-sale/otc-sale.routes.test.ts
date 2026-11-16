@@ -809,5 +809,145 @@ describe.skipIf(!process.env.DB_HOST)(
                 'lines.3.quantity': [expect.any(String)],
             });
         });
+
+        test('the counter options carry the sale locations and the cashier tender choices', async () => {
+            const options = (
+                await json<{
+                    data: {
+                        locations: (Reference & {
+                            price_group: Reference | null;
+                        })[];
+                        payment_methods: {
+                            id: string;
+                            behavior: string;
+                            takes_remainder: boolean;
+                            currency_code: string | null;
+                            rate: string | null;
+                        }[];
+                        merchants: Reference[];
+                        can_pay: boolean;
+                        amount_decimals: number;
+                        local_currency: string;
+                        date: string;
+                        can_search_buyers: boolean;
+                    };
+                }>(await pharmacy.admin.get(`${sales}/options`), 200)
+            ).data;
+            expect(options.locations).toEqual([
+                {
+                    id: counter.id,
+                    code: counter.code,
+                    name: counter.name,
+                    price_group: {
+                        id: umum.id,
+                        code: umum.code,
+                        name: umum.name,
+                    },
+                },
+            ]);
+            expect(
+                options.payment_methods.map((method) => ({
+                    id: method.id,
+                    behavior: method.behavior,
+                    currency_code: method.currency_code,
+                    rate: method.rate,
+                })),
+            ).toEqual([
+                {
+                    id: methods.BON ?? '',
+                    behavior: 'piutang',
+                    currency_code: null,
+                    rate: null,
+                },
+                {
+                    id: methods.TUN ?? '',
+                    behavior: 'tunai',
+                    currency_code: null,
+                    rate: null,
+                },
+            ]);
+            expect(options).toMatchObject({
+                merchants: [],
+                can_pay: true,
+                amount_decimals: expect.any(Number),
+                local_currency: expect.any(String),
+                date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+            });
+            const seller = await member(['pharmacy.otc-sale.operate']);
+            expect(
+                (
+                    await json<{
+                        data: { can_pay: boolean; can_search_buyers: boolean };
+                    }>(await seller.get(`${sales}/options`), 200)
+                ).data,
+            ).toMatchObject({ can_pay: false, can_search_buyers: false });
+        });
+
+        test('the drug search finds items with their units, the sales unit, and the stock at a sale location only', async () => {
+            const item = await drug('OTC-CARI', [
+                { batch: 'S1', expiry: '2027-03-31', quantity: 12 },
+                { batch: 'S2', expiry: '2028-03-31', quantity: 30 },
+            ]);
+            type Found = Reference & {
+                sales_unit_id: string;
+                units: (Reference & { quantity_per_unit: string })[];
+                stock: string | null;
+            };
+            const search = async (locationId: string) =>
+                (
+                    await json<{ data: Found[] }>(
+                        await pharmacy.admin.get(
+                            `${sales}/items?q=OTC-CARI&location_id=${locationId}`,
+                        ),
+                        200,
+                    )
+                ).data;
+            const [found] = await search(counter.id);
+            expect(found).toMatchObject({
+                id: item.id,
+                code: 'OTC-CARI',
+                sales_unit_id: pharmacy.uom.id,
+                stock: '42',
+            });
+            expect(
+                found?.units.map((unit) => [
+                    unit.id,
+                    Number(unit.quantity_per_unit),
+                ]),
+            ).toEqual([
+                [pharmacy.uom.id, 1],
+                [strip.id, 10],
+            ]);
+            expect((await search(warehouse.id))[0]?.stock).toBeNull();
+        });
+
+        test('a counter user reads drugs and batches without prescription access; others are refused', async () => {
+            const item = await drug('OTC-BATCH', [
+                { batch: 'B1', expiry: '2027-05-31', quantity: 5 },
+            ]);
+            const seller = await member(['pharmacy.otc-sale.operate']);
+            expect(
+                (
+                    await json<{ data: Reference[] }>(
+                        await seller.get(
+                            `${api}/lookups/batches?item_id=${item.id}&location_id=${counter.id}`,
+                        ),
+                        200,
+                    )
+                ).data.map((batch) => batch.code),
+            ).toEqual(['B1']);
+            expect(
+                (await seller.get(`${sales}/items?q=OTC-BATCH`)).status,
+            ).toBe(200);
+            const outsider = await member(['core.payment.operate']);
+            expect((await outsider.get(`${sales}/items`)).status).toBe(403);
+            expect(
+                (
+                    await outsider.get(
+                        `${api}/lookups/batches?item_id=${item.id}&location_id=${counter.id}`,
+                    )
+                ).status,
+            ).toBe(403);
+        });
     },
 );

@@ -2,8 +2,10 @@ import type { z } from 'zod';
 import { coreWorkspace } from '@core/platform/access/index.ts';
 import {
     base,
+    type listParametersSchema,
     ok,
     typedBody,
+    typedQuery,
     type Context,
 } from '@core/platform/http/index.ts';
 import { moduleId, moduleWorkspace } from '../../module.ts';
@@ -30,8 +32,27 @@ export function otcSaleRoutes() {
     return {
         pharmacyOtcSaleOptions: route('GET', '/options').handler(
             async ({ context }) =>
-                ok(await (await otcSales(context)).options()),
+                ok(
+                    await (
+                        await otcSales(context)
+                    ).options(await coreWorkspace(context)),
+                ),
         ),
+        pharmacyOtcSaleItems: route('GET', '/items')
+            .input(
+                typedQuery<
+                    z.input<typeof listParametersSchema> & {
+                        location_id?: string;
+                    }
+                >(),
+            )
+            .handler(async ({ context }) =>
+                ok(
+                    await (
+                        await otcSales(context)
+                    ).items(new URL(context.request.url).searchParams),
+                ),
+            ),
         pharmacyOtcSaleQuote: route('POST', '/quote')
             .input(typedBody<z.input<typeof otcSaleQuoteInputSchema>>())
             .handler(async ({ context, input }) =>

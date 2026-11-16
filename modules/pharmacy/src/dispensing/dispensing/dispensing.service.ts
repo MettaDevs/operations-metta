@@ -1009,9 +1009,14 @@ export class Dispensings {
         return this.show(prescriptionId);
     }
 
-    // Batch yang masih punya stok untuk satu barang di satu lokasi, kedaluwarsa terdekat lebih dulu.
+    // Batch yang masih punya stok untuk satu barang di satu lokasi, kedaluwarsa terdekat lebih dulu. Dibaca layar
+    // penyiapan resep dan loket obat bebas.
     async batches(parameters: URLSearchParams) {
-        this.workspace.guard('prescription', 'read');
+        if (
+            !this.workspace.permissions.has('pharmacy.prescription.read') &&
+            !this.workspace.permissions.has('pharmacy.otc-sale.read')
+        )
+            abort(403, 'Tidak diizinkan.');
         const itemId = lookupId(parameters.get('item_id') ?? '');
         const locationId = lookupId(parameters.get('location_id') ?? '');
         if (!itemId || !locationId) return { data: [], next_cursor: null };

@@ -4,6 +4,7 @@ import { nowSql, type Database } from '@core/platform/database/index.ts';
 import {
     coded,
     HttpFailure,
+    incrementalList,
     lookupId,
     validation,
 } from '@core/platform/http/index.ts';
@@ -11,6 +12,8 @@ import {
     activeLegalEntity,
     baseQuantity,
     decimalInput,
+    itemUnits,
+    openStock,
     parseInput,
     postItemLines,
     quantityHint,
@@ -21,6 +24,7 @@ import {
 import {
     invoiceTotals,
     payBill,
+    paymentOptions,
     replaceSaleBill,
 } from '@core/foundation/billing/index.ts';
 import {
@@ -93,6 +97,13 @@ type CheckedSale = {
     lines: SaleLine[];
 };
 
+const itemRowSchema = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    sales_unit_id: z.string(),
+});
+
 const errorsSchema = z.object({
     errors: z.record(z.string(), z.array(z.string())),
 });
@@ -135,7 +146,10 @@ export class OtcSales {
         };
     }
 
-    async options() {
+    // Lokasi yang boleh menjual beserta kelompok harga bawaannya, lalu isian tender kasir Core. cashier adalah workspace
+    // Core permintaan yang sama: jenis bayar, merchan, dan izin kasir dibaca dari sana. Pencarian pembeli memakai buku
+    // alamat Core, jadi layar perlu tahu apakah pengguna boleh membacanya.
+    async options(cashier: Workspace) {
         this.workspace.guard('otc-sale', 'read');
         return {
             data: {
@@ -147,7 +161,60 @@ export class OtcSales {
                         price_group: location.price_group,
                     }),
                 ),
+                ...(await paymentOptions(this.db, cashier)),
+                can_search_buyers: cashier.permissions.has(
+                    'core.organization.read',
+                ),
             },
+        };
+    }
+
+    // Pencarian obat di loket: barang legal entity ini yang tidak diblokir, sama dengan yang diterima quote, dengan
+    // pilihan satuannya (satuan dasar lebih dulu) dan satuan jual bawaannya. Stok dalam satuan dasar hanya diisi untuk
+    // lokasi yang boleh menjual obat bebas.
+    async items(parameters: URLSearchParams) {
+        this.workspace.guard('otc-sale', 'read');
+        const scope = this.scope;
+        const batch = await incrementalList(this.db, {
+            query: `select * from (select id, kode as code, nama as name,
+                                          coalesce(satuan_jual_id, satuan_dasar_id) as sales_unit_id
+                                   from gd_m_barang
+                                   where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null
+                                     and not diblokir) items where true`,
+            bindings: [scope.tenantId, scope.legalEntityId],
+            parameters,
+            columns: { name: 'name', code: 'code' },
+            searchColumns: ['code', 'name'],
+            numericColumns: [],
+            defaultSort: 'name',
+            defaultDirection: 'asc',
+        });
+        const rows = batch.data.map((row) => itemRowSchema.parse(row));
+        const ids = rows.map((row) => row.id);
+        const units = await itemUnits(this.db, scope, ids);
+        const locationId = lookupId(parameters.get('location_id') ?? '');
+        const [location] = locationId
+            ? await saleLocations(this.db, scope, locationId)
+            : [];
+        const stock = new Map<string, bigint>();
+        if (location)
+            for (const entry of await openStock(
+                this.db,
+                scope,
+                location.id,
+                ids,
+            ))
+                stock.set(
+                    entry.itemId,
+                    (stock.get(entry.itemId) ?? 0n) + entry.quantity,
+                );
+        return {
+            data: rows.map((row) => ({
+                ...row,
+                units: units.get(row.id) ?? [],
+                stock: location ? quantityText(stock.get(row.id) ?? 0n) : null,
+            })),
+            next_cursor: batch.next_cursor,
         };
     }
 

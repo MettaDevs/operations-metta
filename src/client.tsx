@@ -41,6 +41,8 @@ import { page as modulesHealthcareSrcServicePracticeScheduleScheduleTemplatesPag
 import { page as modulesHealthcareSrcServiceRoomRoomsPage } from '../modules/healthcare/src/service/room/rooms.page.tsx';
 import { page as modulesHealthcareSrcServiceSectionSectionsPage } from '../modules/healthcare/src/service/section/sections.page.tsx';
 import { page as modulesPharmacySrcDashboardDashboardPage } from '../modules/pharmacy/src/dashboard/dashboard.page.tsx';
+import { page as modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage } from '../modules/pharmacy/src/dispensing/otc-sale-location/otc-sale-locations.page.tsx';
+import { page as modulesPharmacySrcDispensingOtcSaleOtcSalePage } from '../modules/pharmacy/src/dispensing/otc-sale/otc-sale.page.tsx';
 import { page as modulesPharmacySrcDispensingPrescriptionPrescriptionsPage } from '../modules/pharmacy/src/dispensing/prescription/prescriptions.page.tsx';
 import { page as modulesPharmacySrcDispensingServiceLocationServiceLocationsPage } from '../modules/pharmacy/src/dispensing/service-location/service-locations.page.tsx';
 import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modules/pharmacy/src/drug/drug-class/drug-classes.page.tsx';
@@ -560,6 +562,26 @@ const modulesPharmacySrcDashboardDashboardRoute = createRoute({
     path: modulesPharmacySrcDashboardDashboardPage.path,
     component: modulesPharmacySrcDashboardDashboardPage.component,
     staticData: { title: modulesPharmacySrcDashboardDashboardPage.title },
+});
+
+const modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage.path,
+        component:
+            modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage.component,
+        validateSearch:
+            modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage.validateSearch,
+        staticData: {
+            title: modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsPage.title,
+        },
+    });
+
+const modulesPharmacySrcDispensingOtcSaleOtcSaleRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: modulesPharmacySrcDispensingOtcSaleOtcSalePage.path,
+    component: modulesPharmacySrcDispensingOtcSaleOtcSalePage.component,
+    staticData: { title: modulesPharmacySrcDispensingOtcSaleOtcSalePage.title },
 });
 
 const modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute = createRoute({
@@ -1109,6 +1131,8 @@ const routeTree = rootRoute.addChildren([
         modulesHealthcareSrcServiceRoomRoomsRoute,
         modulesHealthcareSrcServiceSectionSectionsRoute,
         modulesPharmacySrcDashboardDashboardRoute,
+        modulesPharmacySrcDispensingOtcSaleLocationOtcSaleLocationsRoute,
+        modulesPharmacySrcDispensingOtcSaleOtcSaleRoute,
         modulesPharmacySrcDispensingPrescriptionPrescriptionsRoute,
         modulesPharmacySrcDispensingServiceLocationServiceLocationsRoute,
         modulesPharmacySrcDrugDrugClassDrugClassesRoute,

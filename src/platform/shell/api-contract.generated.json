@@ -5095,6 +5095,18 @@
             }
         }
     },
+    "pharmacyOtcSaleItems": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/otc-sales/items",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pharmacyOtcSaleQuote": {
         "~orpc": {
             "errorMap": {},
