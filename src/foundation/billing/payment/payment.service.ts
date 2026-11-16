@@ -28,6 +28,7 @@ import {
     type Precision,
 } from '../../currency/index.ts';
 import { paymentClerk } from '../clerk/clerk.service.ts';
+import { behaviorsSettledAs } from '../payment-method/payment-method.behaviors.ts';
 import {
     cancelReceivables,
     openReceivables,
@@ -50,8 +51,8 @@ import {
     type DiscountCharge,
 } from './payment.discount.ts';
 
-export const invoicePosted = 'billing.invoice.posted.v1' as const;
-export const invoiceCancelled = 'billing.invoice.cancelled.v1' as const;
+export const invoicePosted = 'billing.invoice.posted.v2' as const;
+export const invoiceCancelled = 'billing.invoice.cancelled.v2' as const;
 
 // Batal pembayaran. Pembayaran di clerk yang sudah Clerk End dikoreksi lewat nota kredit, bukan dibatalkan; pesan lamanya
 // ("Pasien Sudah Di Proses Closing") diganti kalimat sehari-hari.
@@ -115,7 +116,6 @@ export function cancelReason(
 export const reopenedMessage =
     'Kunjungan ini sedang diperiksa lagi di poli. Pembayaran bisa dilakukan setelah pemeriksaannya selesai.';
 
-const source = 'healthcare';
 const numberReference = 'core.payment-number';
 
 // Pesan sistem lama (form.php, form/credit_card.php, form/credit_bon.php, SM poly_helper.php).
@@ -130,6 +130,9 @@ export const chargeLockedMessage =
     'Data sudah diproses pembayaran kasir. Tarif, BHP, dan resep tidak dapat diubah.';
 const billChangedMessage =
     'Tagihan berubah sejak dibuka. Muat ulang untuk melihat total terbaru.';
+// Piutang penjualan menjadi milik pembeli, jadi pembelinya wajib ada di buku alamat.
+export const receivableBuyerMessage =
+    'Pilih pembeli dari buku alamat untuk pembayaran yang menjadi piutang.';
 
 const methodSchema = z.object({
     id: z.string(),
@@ -158,20 +161,20 @@ const chargeSchema = z.object({
     hext: z.string(),
 });
 
-// Kunci kunjungan untuk Simpan pembayaran dan perubahan biaya sumbernya, supaya keduanya tidak berjalan bersamaan:
-// yang kedua menunggu yang pertama selesai, lalu melihat hasilnya.
-export async function lockVisit(
+// Kunci tagihan untuk Simpan pembayaran dan perubahan biaya sumbernya, supaya keduanya tidak berjalan bersamaan: yang
+// kedua menunggu yang pertama selesai, lalu melihat hasilnya. Kuncinya dokumen sumber tagihan, yang unik per tenant.
+export async function lockBill(
     db: Database,
     tenantId: string,
-    visitId: string,
+    documentId: string,
 ): Promise<void> {
     await db.execute(
-        "select pg_advisory_xact_lock(hashtextextended($1 || ':' || $2 || ':' || $3, 0))",
-        [tenantId, source, visitId],
+        "select pg_advisory_xact_lock(hashtextextended($1 || ':tagihan_kasir:' || $2, 0))",
+        [tenantId, documentId],
     );
 }
 
-// Baris biaya yang ditagih pembayaran itu kembali terbuka, jadi kunjungannya kembali belum dibayar dan biayanya boleh
+// Baris biaya yang ditagih pembayaran itu kembali terbuka, jadi tagihannya kembali belum dibayar dan biayanya boleh
 // diubah lagi.
 export async function reopenCharges(
     db: Database,
@@ -184,7 +187,7 @@ export async function reopenCharges(
     );
 }
 
-// Pembayaran batal: piutangnya ikut batal (ditolak bila sudah ada pelunasan), baris biaya kunjungan kembali terbuka, dan
+// Pembayaran batal: piutangnya ikut batal (ditolak bila sudah ada pelunasan), baris biaya tagihan kembali terbuka, dan
 // finance diberi tahu sekali dengan angka yang sama dengan saat bayar. Status pembayaran sudah diubah pemanggil.
 async function reopenCancelled(
     db: Database,
@@ -193,8 +196,9 @@ async function reopenCancelled(
         legalEntityId: string;
         paymentId: string;
         number: string;
-        visitId: string;
-        registrationNumber: string;
+        sourceModule: string;
+        documentId: string;
+        documentNumber: string;
         date: string;
         value: string;
         stamp: string;
@@ -224,9 +228,9 @@ async function reopenCancelled(
         data: {
             payment_id: cancelled.paymentId,
             payment_number: cancelled.number,
-            source_module: source,
-            visit_id: cancelled.visitId,
-            registration_number: cancelled.registrationNumber,
+            source_module: cancelled.sourceModule,
+            source_document_id: cancelled.documentId,
+            source_document_number: cancelled.documentNumber,
             date: cancelled.date,
             value: cancelled.value,
             cancelled_at: `${cancelled.stamp.replace(' ', 'T')}Z`,
@@ -240,18 +244,19 @@ async function reopenCancelled(
 export const automaticCancelReason =
     'Biaya kunjungan berubah sesudah lunas otomatis, jadi tagihan dilunasi ulang.';
 
-// Dipanggil module sumber di dalam transaksi yang mengubah atau membatalkan biaya kunjungan (Biaya Tindakan, batal
-// kunjungan, obat yang disiapkan, dibatalkan, atau diretur). Kunjungan yang dibayar kasir ditolak dengan pesan sistem
+// Dipanggil module sumber di dalam transaksi yang mengubah atau membatalkan biaya tagihan (Biaya Tindakan, batal
+// kunjungan, obat yang disiapkan, dibatalkan, atau diretur). Tagihan yang dibayar kasir ditolak dengan pesan sistem
 // lama; pembatalannya urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis mengikuti tagihan:
 // pembayaran itu dibatalkan di sini, lalu kunjungan dilunasi lagi saat biayanya yang baru sampai ke kasir, seperti
-// Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli.
+// Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli. documentId adalah dokumen sumber tagihan: kunjungan,
+// atau dokumen penjualan module penjual.
 export async function lockChargeForChange(
     db: Database,
-    scope: { tenantId: string; sourceModule: string; visitId: string },
+    scope: { tenantId: string; documentId: string },
 ): Promise<void> {
     if (!db.inTransaction)
         throw new Error('lockChargeForChange wajib di dalam transaksi.');
-    await lockVisit(db, scope.tenantId, scope.visitId);
+    await lockBill(db, scope.tenantId, scope.documentId);
     const paid = await db.one(
         z.object({
             id: z.string(),
@@ -260,15 +265,15 @@ export async function lockChargeForChange(
             number: z.string(),
             date: z.string(),
             value: z.string(),
-            registration_number: z.string(),
+            source_module: z.string(),
+            document_number: z.string(),
         }),
         `select k.id, k.otomatis as automatic, k.legal_entity_id, k.no_bukti as number, k.tanggal::text as date,
-                trim_scale(k.nilai)::text as value, v.sumber_nomor as registration_number
+                trim_scale(k.nilai)::text as value, k.sumber_module as source_module, v.sumber_nomor as document_number
          from kasir k
-         join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                               and v.sumber_dokumen_id = k.sumber_dokumen_id
-         where k.tenant_id = $1 and k.sumber_module = $2 and k.sumber_dokumen_id = $3 and k.status = 'diposting'`,
-        [scope.tenantId, scope.sourceModule, scope.visitId],
+         join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_dokumen_id = k.sumber_dokumen_id
+         where k.tenant_id = $1 and k.sumber_dokumen_id = $2 and k.status = 'diposting'`,
+        [scope.tenantId, scope.documentId],
     );
     if (!paid) return;
     if (!paid.automatic) validation({ _form: chargeLockedMessage });
@@ -285,8 +290,9 @@ export async function lockChargeForChange(
         legalEntityId: paid.legal_entity_id,
         paymentId: paid.id,
         number: paid.number,
-        visitId: scope.visitId,
-        registrationNumber: paid.registration_number,
+        sourceModule: paid.source_module,
+        documentId: scope.documentId,
+        documentNumber: paid.document_number,
         date: paid.date,
         value: paid.value,
         stamp,
@@ -309,37 +315,39 @@ export async function legalEntityToday(
     return today?.date ?? nowSql().slice(0, 10);
 }
 
-// Kunjungan yang ditagih beserta baris biaya terbukanya, dikunci untuk Simpan pembayaran: kunci kunjungan lebih dulu,
-// lalu baris biayanya, dengan Nilai tagihan rumus kasir Kuta. restricted adalah jenis bayar yang dikhususkan tipe
-// pasien lain, dari potret kunjungan selesai. version adalah versi tagihan: trigger bump_row_version menaikkannya di
-// setiap update tagihan_kasir (potret kunjungan, dibuka, batal), dan replaceCharges menyentuh baris itu setiap kali
+// Tagihan beserta baris biaya terbukanya, dikunci untuk Simpan pembayaran: kunci tagihan lebih dulu, lalu baris
+// biayanya, dengan Nilai tagihan rumus kasir Kuta. restricted adalah jenis bayar yang dikhususkan tipe pasien lain, dari
+// potret kunjungan selesai. version adalah versi tagihan: trigger bump_row_version menaikkannya di setiap update
+// tagihan_kasir (potret kunjungan, dibuka, batal, potret penjualan), dan replaceCharges menyentuh baris itu setiap kali
 // baris biayanya diganti (charge.events.ts). Pembayaran tidak mengubah tagihan_kasir.
 async function openInvoice(
     db: Database,
     scope: Scope,
-    visitId: string,
+    documentId: string,
     precision: Precision,
 ) {
-    await lockVisit(db, scope.tenantId, visitId);
-    const visit = await db.one(
+    await lockBill(db, scope.tenantId, documentId);
+    const bill = await db.one(
         z.object({
-            registration_number: z.string(),
+            kind: z.enum(['kunjungan', 'penjualan']),
+            source_module: z.string(),
+            document_number: z.string(),
             status: z.string(),
+            buyer_party_id: z.string().nullable(),
             restricted: z.array(z.string()),
             version: z.number(),
         }),
-        `select sumber_nomor as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted, version
+        `select jenis as kind, sumber_module as source_module, sumber_nomor as document_number, status,
+                pembeli_pihak_id as buyer_party_id, to_json(jenis_bayar_dibatasi) as restricted, version
          from tagihan_kasir
-         where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4
-           and status in ('selesai', 'dibuka')`,
-        [scope.tenantId, scope.legalEntityId, source, visitId],
+         where tenant_id = $1 and legal_entity_id = $2 and sumber_dokumen_id = $3 and status in ('selesai', 'dibuka')`,
+        [scope.tenantId, scope.legalEntityId, documentId],
     );
-    if (!visit) return null;
+    if (!bill) return null;
     const paid = await db.one(
         z.object({ id: z.string() }),
-        `select id from kasir where tenant_id = $1 and sumber_module = $2 and sumber_dokumen_id = $3
-           and status = 'diposting'`,
-        [scope.tenantId, source, visitId],
+        "select id from kasir where tenant_id = $1 and sumber_dokumen_id = $2 and status = 'diposting'",
+        [scope.tenantId, documentId],
     );
     const charges = await db.rows(
         chargeSchema,
@@ -349,7 +357,7 @@ async function openInvoice(
          where tenant_id = $1 and tagihan_sumber_dokumen_id = $2 and status = 'terbuka' and deleted_at is null
          order by id
          for update`,
-        [scope.tenantId, visitId],
+        [scope.tenantId, documentId],
     );
     const totals = invoiceTotals(
         charges.map((charge) => ({
@@ -362,7 +370,7 @@ async function openInvoice(
         })),
         precision,
     );
-    return { visit, paid: paid !== undefined, charges, totals };
+    return { bill, paid: paid !== undefined, charges, totals };
 }
 
 // Satu baris kasir_detail: jumlah dalam mata uang lokal (satuan terkecil), dan jumlah, kurs, serta kurs bawaan dalam
@@ -559,13 +567,14 @@ async function checkedDiscounts(
     return lines;
 }
 
-// Tagihan dan pembayaran kunjungan: kasir, baris jenis bayar bukan nol, nilai per kelompok jasa, baris biaya ditagih,
-// dan event billing.invoice.posted.v1. Dipanggil di dalam transaksi yang sudah membuka tagihannya (openInvoice).
+// Tagihan dan pembayaran: kasir, baris jenis bayar bukan nol, nilai per kelompok jasa, baris biaya ditagih, dan event
+// billing.invoice.posted.v2. Dipanggil di dalam transaksi yang sudah membuka tagihannya (openInvoice).
 async function postPayment(
     db: Database,
     posting: Scope & {
-        visitId: string;
-        registrationNumber: string;
+        sourceModule: string;
+        documentId: string;
+        documentNumber: string;
         date: string;
         clerkId: string | null;
         userId: string | null;
@@ -602,8 +611,8 @@ async function postPayment(
         no_bukti: number,
         tanggal: posting.date,
         jam: stamp,
-        sumber_module: source,
-        sumber_dokumen_id: posting.visitId,
+        sumber_module: posting.sourceModule,
+        sumber_dokumen_id: posting.documentId,
         clerk_id: posting.clerkId,
         user_id: posting.userId,
         otomatis: posting.automatic,
@@ -693,9 +702,9 @@ async function postPayment(
         data: {
             payment_id: id,
             payment_number: number,
-            source_module: source,
-            visit_id: posting.visitId,
-            registration_number: posting.registrationNumber,
+            source_module: posting.sourceModule,
+            source_document_id: posting.documentId,
+            source_document_number: posting.documentNumber,
             date: posting.date,
             value: posting.totals.value,
             discount: fromMinor(discount),
@@ -724,7 +733,7 @@ export async function settleAutomatically(
         localCurrencyCode,
     );
     const invoice = await openInvoice(db, input, input.visitId, precision);
-    if (invoice?.visit.status !== 'selesai' || invoice.paid) return;
+    if (invoice?.bill.status !== 'selesai' || invoice.paid) return;
     const method = lookupId(input.paymentMethodId)
         ? await db.one(
               z.object({ id: z.string() }),
@@ -752,7 +761,9 @@ export async function settleAutomatically(
     );
     await postPayment(db, {
         ...input,
-        registrationNumber: invoice.visit.registration_number,
+        sourceModule: invoice.bill.source_module,
+        documentId: input.visitId,
+        documentNumber: invoice.bill.document_number,
         date: await legalEntityToday(db, input),
         clerkId: null,
         userId: actor?.id ?? null,
@@ -765,6 +776,319 @@ export async function settleAutomatically(
         details: [localDetail(method.id, toMinor(invoice.totals.value))],
         discounts: [],
     });
+}
+
+type Cashier = Scope & { userId: string; canChangeRate: boolean };
+
+function paymentInput(body: unknown, documentId: string) {
+    const parsed = paymentInputSchema.safeParse(body);
+    if (!parsed.success || !lookupId(documentId))
+        validation({ _form: 'Isian pembayaran tidak sah.' });
+    return parsed.data;
+}
+
+// Simpan pembayaran: tagihan dan pembayaran dalam satu transaksi, dengan rumus layar Kuta. Simpan ditolak bila versi
+// tagihan berbeda dengan versi yang dikirim, supaya kasir tidak menerima uang untuk total yang tidak ia lihat. Tagihan
+// kunjungan menjalankan pemeriksaan module sebelum bayar (payment.checks.ts); tagihan penjualan tidak, karena tidak ada
+// kunjungan yang ditunggu.
+async function payInvoice(
+    db: Database,
+    cashier: Cashier,
+    documentId: string,
+    input: z.infer<typeof paymentInputSchema>,
+    version: number,
+) {
+    return db.transaction(async () => {
+        const clerk = await paymentClerk(db, cashier);
+        const currency = new Currency(db, cashier.tenantId);
+        const precision = await currency.precision(localCurrencyCode);
+        const amountHint = decimalsHint(precision.amount_decimals);
+        const date = await legalEntityToday(db, cashier);
+        const invoice = await openInvoice(db, cashier, documentId, precision);
+        if (!invoice) abort(404, 'Not Found');
+        const { bill, charges, totals } = invoice;
+        if (bill.status === 'dibuka') validation({ _form: reopenedMessage });
+        if (invoice.paid)
+            coded(
+                409,
+                'already_paid',
+                bill.kind === 'kunjungan'
+                    ? 'Kunjungan ini sudah dibayar.'
+                    : 'Penjualan ini sudah dibayar.',
+            );
+        if (bill.kind === 'kunjungan') {
+            const refusal = await paymentRefusal(db, {
+                tenantId: cashier.tenantId,
+                visitId: documentId,
+            });
+            if (refusal) validation({ _form: refusal });
+        }
+        if (bill.version !== version)
+            coded(409, 'stale_version', billChangedMessage);
+        const restricted = new Set(bill.restricted);
+        // Piutang penjualan tanpa pembeli dari buku alamat tidak punya pemilik. Jenis bayar yang memilih pihaknya sendiri
+        // tetap boleh.
+        const receivableBehaviors = new Set<string>(
+            behaviorsSettledAs('receivable'),
+        );
+        const ownerless = (method: z.infer<typeof methodSchema> | undefined) =>
+            bill.kind === 'penjualan' &&
+            bill.buyer_party_id === null &&
+            method !== undefined &&
+            receivableBehaviors.has(method.perilaku) &&
+            method.pihak !== 'pilih_pihak';
+        const methods = new Map(
+            (
+                await db.rows(
+                    methodSchema,
+                    `select id, perilaku, pihak, wajib_merchan, wajib_referensi, biaya_tambahan, menampung_sisa,
+                            aktif, mata_uang
+                     from jenis_bayar where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null`,
+                    [cashier.tenantId, cashier.legalEntityId],
+                )
+            ).map((method) => [method.id, method]),
+        );
+        const errors: Record<string, string> = {};
+        const received = amountInput(
+            input.received ?? 0,
+            precision.amount_decimals,
+        );
+        if (received === null)
+            errors.received = `Isi uang diterima 0 atau lebih, ${amountHint}.`;
+        const lines = await Promise.all(
+            (input.lines ?? []).map(async (line, index) => {
+                const field = `lines.${index}`;
+                const method = methods.get(line.payment_method_id);
+                // Jenis bayar bermata uang asing: jumlah dalam mata uang itu dengan presisinya, dikali kurs.
+                const code = method?.mata_uang ?? null;
+                const decimals = code
+                    ? (await currency.precision(code)).amount_decimals
+                    : precision.amount_decimals;
+                const amount = amountInput(line.amount, decimals);
+                const surcharge = percentInput(line.surcharge_percent ?? 0);
+                if (
+                    !method?.aktif ||
+                    (method.perilaku === 'tunai' && !code) ||
+                    method.menampung_sisa
+                )
+                    errors[`${field}.payment_method_id`] =
+                        'Pilih jenis bayar dari daftar.';
+                if (amount === null)
+                    errors[`${field}.amount`] =
+                        `Isi jumlah 0 atau lebih, ${decimalsHint(decimals)}.`;
+                else if (restricted.has(line.payment_method_id))
+                    errors[`${field}.amount`] = patientTypeMessage;
+                else if (ownerless(method) && toMinor(amount) !== 0n)
+                    errors[`${field}.payment_method_id`] =
+                        receivableBuyerMessage;
+                const defaultRate = code
+                    ? await currency.findRate(code, date)
+                    : Decimal.of('1');
+                if (!defaultRate && code)
+                    errors[`${field}.amount`] = missingRateMessage(code, date);
+                const typedRate =
+                    code && line.rate !== null && line.rate !== undefined
+                        ? String(line.rate).trim()
+                        : '';
+                const rateText = typedRate
+                    ? amountInput(typedRate, exchangeRateDecimals)
+                    : (defaultRate?.normalized() ?? null);
+                const rate = rateText === null ? null : Decimal.of(rateText);
+                if (
+                    typedRate &&
+                    (rate === null || rate.compare(Decimal.of('0')) <= 0)
+                )
+                    errors[`${field}.rate`] =
+                        `Isi kurs lebih dari 0, ${decimalsHint(exchangeRateDecimals)}.`;
+                else if (
+                    rate &&
+                    defaultRate &&
+                    rate.compare(defaultRate) !== 0 &&
+                    !cashier.canChangeRate
+                )
+                    errors[`${field}.rate`] =
+                        'Kurs hanya bisa diubah oleh pengguna yang berhak mengubah kurs.';
+                if (surcharge === null)
+                    errors[`${field}.surcharge_percent`] = percentHint();
+                else if (toMinor(surcharge) !== 0n && !method?.biaya_tambahan)
+                    errors[`${field}.surcharge_percent`] =
+                        'Biaya tambahan tidak berlaku untuk jenis bayar ini.';
+                const merchant = line.merchant_id?.trim() || null;
+                if (method?.wajib_merchan && !merchant)
+                    errors[`${field}.merchant_id`] = merchantMessage;
+                if (
+                    merchant &&
+                    !(await db.one(
+                        z.object({ id: z.string() }),
+                        `select id from merchan where tenant_id = $1 and legal_entity_id = $2 and id = $3
+                           and aktif and deleted_at is null`,
+                        [
+                            cashier.tenantId,
+                            cashier.legalEntityId,
+                            lookupId(merchant),
+                        ],
+                    ))
+                )
+                    errors[`${field}.merchant_id`] = merchantMessage;
+                const reference = line.reference?.trim() || null;
+                if (method?.wajib_referensi && !reference)
+                    errors[`${field}.reference`] =
+                        'Isi nomor kartu atau nomor transaksi.';
+                const party = line.party_id?.trim() || null;
+                if (
+                    method?.pihak === 'pilih_pihak' &&
+                    !(
+                        party &&
+                        lookupId(party) &&
+                        (await db.one(
+                            z.object({ id: z.string() }),
+                            'select id from parties where tenant_id = $1 and id = $2 and deleted_at is null',
+                            [cashier.tenantId, party],
+                        ))
+                    )
+                )
+                    errors[`${field}.party_id`] = partyMessage;
+                const currencyAmount = amount ?? '0';
+                return {
+                    methodId: line.payment_method_id,
+                    // Jumlah dalam mata uang lokal.
+                    amount:
+                        code && rate
+                            ? toLocalAmount(
+                                  Decimal.of(currencyAmount),
+                                  rate,
+                                  precision,
+                              ).normalized()
+                            : currencyAmount,
+                    currency: code ?? localCurrencyCode,
+                    currencyAmount,
+                    rate: rate?.normalized() ?? '1',
+                    defaultRate: defaultRate?.normalized() ?? '1',
+                    cash: method?.perilaku === 'tunai',
+                    surchargePercent: surcharge ?? '0',
+                    merchant,
+                    reference,
+                    party: method?.pihak === 'pilih_pihak' ? party : null,
+                };
+            }),
+        );
+        const discounts = await checkedDiscounts(db, cashier, {
+            lines: input.discounts ?? [],
+            charges,
+            invoiceValue: totals.value,
+            amountDecimals: precision.amount_decimals,
+            errors,
+        });
+        if (Object.keys(errors).length) validation(errors);
+        const amounts = paymentAmounts({
+            value: toMinor(totals.value),
+            discount: discounts.reduce(
+                (sum, line) => sum + toMinor(line.amount),
+                0n,
+            ),
+            received: toMinor(received ?? '0'),
+            lines: lines.map((line) => ({
+                amount: toMinor(line.amount),
+                surchargePercent: toMinor(line.surchargePercent),
+                cash: line.cash,
+            })),
+            amountDecimals: precision.amount_decimals,
+        });
+        const cashMethod = [...methods.values()].find(
+            (method) =>
+                method.aktif &&
+                method.perilaku === 'tunai' &&
+                !method.mata_uang,
+        );
+        const remainderMethod = [...methods.values()].find(
+            (method) => method.aktif && method.menampung_sisa,
+        );
+        if (amounts.cash !== 0n && !cashMethod)
+            validation({
+                received: 'Belum ada jenis bayar tunai yang aktif.',
+            });
+        if (amounts.cash !== 0n && cashMethod && restricted.has(cashMethod.id))
+            validation({ received: patientTypeMessage });
+        if (
+            amounts.remainder > 0n &&
+            !(input.take_remainder && remainderMethod)
+        )
+            validation({ _form: remainderMessage });
+        if (
+            amounts.remainder > 0n &&
+            remainderMethod &&
+            restricted.has(remainderMethod.id)
+        )
+            validation({ _form: patientTypeMessage });
+        if (amounts.remainder > 0n && ownerless(remainderMethod))
+            validation({ _form: receivableBuyerMessage });
+        // Tunai lokal bisa negatif: kembalian rupiah untuk tunai valuta yang melebihi tagihan.
+        return postPayment(db, {
+            tenantId: cashier.tenantId,
+            legalEntityId: cashier.legalEntityId,
+            sourceModule: bill.source_module,
+            documentId,
+            documentNumber: bill.document_number,
+            date,
+            clerkId: clerk?.id ?? null,
+            userId: cashier.userId,
+            automatic: false,
+            charges,
+            totals,
+            surcharge: amounts.surcharge,
+            received: toMinor(received ?? '0'),
+            change: amounts.change,
+            details: [
+                ...(cashMethod
+                    ? [localDetail(cashMethod.id, amounts.cash)]
+                    : []),
+                ...lines.map((line, index) => ({
+                    methodId: line.methodId,
+                    amount: toMinor(line.amount),
+                    currency: line.currency,
+                    currencyAmount: line.currencyAmount,
+                    rate: line.rate,
+                    defaultRate: line.defaultRate,
+                    merchant: line.merchant,
+                    reference: line.reference,
+                    surchargePercent: line.surchargePercent,
+                    surcharge: amounts.lineSurcharges[index] ?? 0n,
+                    party: line.party,
+                })),
+                ...(remainderMethod && amounts.remainder > 0n
+                    ? [localDetail(remainderMethod.id, amounts.remainder)]
+                    : []),
+            ],
+            discounts,
+        });
+    });
+}
+
+// Simpan pembayaran tagihan dari module, di transaksi module itu, misalnya penjualan obat bebas yang dibayar di loket
+// farmasi. Aturan, pesan, dan clerk sama dengan Form Pembayaran. Module memberikan workspace Core permintaannya
+// (coreWorkspace), karena workspace module hanya memuat izin module itu.
+export async function payBill(
+    db: Database,
+    workspace: Workspace,
+    documentId: string,
+    body: unknown,
+    version: number,
+): Promise<{ id: string; number: string }> {
+    workspace.guard('payment', 'update');
+    return payInvoice(
+        db,
+        {
+            tenantId: workspace.tenantId,
+            legalEntityId: activeLegalEntity(workspace),
+            userId: workspace.userId,
+            canChangeRate: workspace.permissions.has(
+                'core.payment-rate.update',
+            ),
+        },
+        documentId,
+        paymentInput(body, documentId),
+        version,
+    );
 }
 
 export class Payments {
@@ -781,275 +1105,23 @@ export class Payments {
         };
     }
 
-    // Simpan pembayaran: tagihan dan pembayaran kunjungan dalam satu transaksi, dengan rumus layar Kuta. Form mengirim
-    // versi tagihan yang ditampilkannya, dan Simpan ditolak bila biaya kunjungan berubah sesudah form dibuka, supaya
-    // kasir tidak menerima uang untuk total yang tidak ia lihat.
-    async create(request: Request, visitId: string, body: unknown) {
+    // Simpan pembayaran dari Form Pembayaran: versi tagihan yang ditampilkan form dikirim bersama isiannya.
+    async create(request: Request, documentId: string, body: unknown) {
         this.workspace.guard('payment', 'update');
-        const scope = this.scope;
-        const parsed = paymentInputSchema.safeParse(body);
-        if (!parsed.success || !lookupId(visitId))
-            validation({ _form: 'Isian pembayaran tidak sah.' });
-        const input = parsed.data;
+        const input = paymentInput(body, documentId);
         const version = expectedVersion(request, body);
-        const posted = await this.db.transaction(async () => {
-            const clerk = await paymentClerk(this.db, scope);
-            const currency = new Currency(this.db, scope.tenantId);
-            const precision = await currency.precision(localCurrencyCode);
-            const amountHint = decimalsHint(precision.amount_decimals);
-            const date = await legalEntityToday(this.db, scope);
-            const invoice = await openInvoice(
-                this.db,
-                scope,
-                visitId,
-                precision,
-            );
-            if (!invoice) abort(404, 'Not Found');
-            if (invoice.visit.status === 'dibuka')
-                validation({ _form: reopenedMessage });
-            if (invoice.paid)
-                coded(409, 'already_paid', 'Kunjungan ini sudah dibayar.');
-            const refusal = await paymentRefusal(this.db, {
-                tenantId: scope.tenantId,
-                visitId,
-            });
-            if (refusal) validation({ _form: refusal });
-            if (invoice.visit.version !== version)
-                coded(409, 'stale_version', billChangedMessage);
-            const { charges, totals } = invoice;
-            const restricted = new Set(invoice.visit.restricted);
-            const methods = new Map(
-                (
-                    await this.db.rows(
-                        methodSchema,
-                        `select id, perilaku, pihak, wajib_merchan, wajib_referensi, biaya_tambahan, menampung_sisa,
-                                aktif, mata_uang
-                         from jenis_bayar where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null`,
-                        [scope.tenantId, scope.legalEntityId],
-                    )
-                ).map((method) => [method.id, method]),
-            );
-            const errors: Record<string, string> = {};
-            const received = amountInput(
-                input.received ?? 0,
-                precision.amount_decimals,
-            );
-            if (received === null)
-                errors.received = `Isi uang diterima 0 atau lebih, ${amountHint}.`;
-            const lines = await Promise.all(
-                (input.lines ?? []).map(async (line, index) => {
-                    const field = `lines.${index}`;
-                    const method = methods.get(line.payment_method_id);
-                    // Jenis bayar bermata uang asing: jumlah dalam mata uang itu dengan presisinya, dikali kurs.
-                    const code = method?.mata_uang ?? null;
-                    const decimals = code
-                        ? (await currency.precision(code)).amount_decimals
-                        : precision.amount_decimals;
-                    const amount = amountInput(line.amount, decimals);
-                    const surcharge = percentInput(line.surcharge_percent ?? 0);
-                    if (
-                        !method?.aktif ||
-                        (method.perilaku === 'tunai' && !code) ||
-                        method.menampung_sisa
-                    )
-                        errors[`${field}.payment_method_id`] =
-                            'Pilih jenis bayar dari daftar.';
-                    if (amount === null)
-                        errors[`${field}.amount`] =
-                            `Isi jumlah 0 atau lebih, ${decimalsHint(decimals)}.`;
-                    else if (restricted.has(line.payment_method_id))
-                        errors[`${field}.amount`] = patientTypeMessage;
-                    const defaultRate = code
-                        ? await currency.findRate(code, date)
-                        : Decimal.of('1');
-                    if (!defaultRate && code)
-                        errors[`${field}.amount`] = missingRateMessage(
-                            code,
-                            date,
-                        );
-                    const typedRate =
-                        code && line.rate !== null && line.rate !== undefined
-                            ? String(line.rate).trim()
-                            : '';
-                    const rateText = typedRate
-                        ? amountInput(typedRate, exchangeRateDecimals)
-                        : (defaultRate?.normalized() ?? null);
-                    const rate =
-                        rateText === null ? null : Decimal.of(rateText);
-                    if (
-                        typedRate &&
-                        (rate === null || rate.compare(Decimal.of('0')) <= 0)
-                    )
-                        errors[`${field}.rate`] =
-                            `Isi kurs lebih dari 0, ${decimalsHint(exchangeRateDecimals)}.`;
-                    else if (
-                        rate &&
-                        defaultRate &&
-                        rate.compare(defaultRate) !== 0 &&
-                        !this.workspace.permissions.has(
-                            'core.payment-rate.update',
-                        )
-                    )
-                        errors[`${field}.rate`] =
-                            'Kurs hanya bisa diubah oleh pengguna yang berhak mengubah kurs.';
-                    if (surcharge === null)
-                        errors[`${field}.surcharge_percent`] = percentHint();
-                    else if (
-                        toMinor(surcharge) !== 0n &&
-                        !method?.biaya_tambahan
-                    )
-                        errors[`${field}.surcharge_percent`] =
-                            'Biaya tambahan tidak berlaku untuk jenis bayar ini.';
-                    const merchant = line.merchant_id?.trim() || null;
-                    if (method?.wajib_merchan && !merchant)
-                        errors[`${field}.merchant_id`] = merchantMessage;
-                    if (
-                        merchant &&
-                        !(await this.db.one(
-                            z.object({ id: z.string() }),
-                            `select id from merchan where tenant_id = $1 and legal_entity_id = $2 and id = $3
-                               and aktif and deleted_at is null`,
-                            [
-                                scope.tenantId,
-                                scope.legalEntityId,
-                                lookupId(merchant),
-                            ],
-                        ))
-                    )
-                        errors[`${field}.merchant_id`] = merchantMessage;
-                    const reference = line.reference?.trim() || null;
-                    if (method?.wajib_referensi && !reference)
-                        errors[`${field}.reference`] =
-                            'Isi nomor kartu atau nomor transaksi.';
-                    const party = line.party_id?.trim() || null;
-                    if (
-                        method?.pihak === 'pilih_pihak' &&
-                        !(
-                            party &&
-                            lookupId(party) &&
-                            (await this.db.one(
-                                z.object({ id: z.string() }),
-                                'select id from parties where tenant_id = $1 and id = $2 and deleted_at is null',
-                                [scope.tenantId, party],
-                            ))
-                        )
-                    )
-                        errors[`${field}.party_id`] = partyMessage;
-                    const currencyAmount = amount ?? '0';
-                    return {
-                        methodId: line.payment_method_id,
-                        // Jumlah dalam mata uang lokal.
-                        amount:
-                            code && rate
-                                ? toLocalAmount(
-                                      Decimal.of(currencyAmount),
-                                      rate,
-                                      precision,
-                                  ).normalized()
-                                : currencyAmount,
-                        currency: code ?? localCurrencyCode,
-                        currencyAmount,
-                        rate: rate?.normalized() ?? '1',
-                        defaultRate: defaultRate?.normalized() ?? '1',
-                        cash: method?.perilaku === 'tunai',
-                        surchargePercent: surcharge ?? '0',
-                        merchant,
-                        reference,
-                        party: method?.pihak === 'pilih_pihak' ? party : null,
-                    };
-                }),
-            );
-            const discounts = await checkedDiscounts(this.db, scope, {
-                lines: input.discounts ?? [],
-                charges,
-                invoiceValue: totals.value,
-                amountDecimals: precision.amount_decimals,
-                errors,
-            });
-            if (Object.keys(errors).length) validation(errors);
-            const amounts = paymentAmounts({
-                value: toMinor(totals.value),
-                discount: discounts.reduce(
-                    (sum, line) => sum + toMinor(line.amount),
-                    0n,
+        const posted = await payInvoice(
+            this.db,
+            {
+                ...this.scope,
+                canChangeRate: this.workspace.permissions.has(
+                    'core.payment-rate.update',
                 ),
-                received: toMinor(received ?? '0'),
-                lines: lines.map((line) => ({
-                    amount: toMinor(line.amount),
-                    surchargePercent: toMinor(line.surchargePercent),
-                    cash: line.cash,
-                })),
-                amountDecimals: precision.amount_decimals,
-            });
-            const cashMethod = [...methods.values()].find(
-                (method) =>
-                    method.aktif &&
-                    method.perilaku === 'tunai' &&
-                    !method.mata_uang,
-            );
-            const remainderMethod = [...methods.values()].find(
-                (method) => method.aktif && method.menampung_sisa,
-            );
-            if (amounts.cash !== 0n && !cashMethod)
-                validation({
-                    received: 'Belum ada jenis bayar tunai yang aktif.',
-                });
-            if (
-                amounts.cash !== 0n &&
-                cashMethod &&
-                restricted.has(cashMethod.id)
-            )
-                validation({ received: patientTypeMessage });
-            if (
-                amounts.remainder > 0n &&
-                !(input.take_remainder && remainderMethod)
-            )
-                validation({ _form: remainderMessage });
-            if (
-                amounts.remainder > 0n &&
-                remainderMethod &&
-                restricted.has(remainderMethod.id)
-            )
-                validation({ _form: patientTypeMessage });
-            // Tunai lokal bisa negatif: kembalian rupiah untuk tunai valuta yang melebihi tagihan.
-            return postPayment(this.db, {
-                tenantId: scope.tenantId,
-                legalEntityId: scope.legalEntityId,
-                visitId,
-                registrationNumber: invoice.visit.registration_number,
-                date,
-                clerkId: clerk?.id ?? null,
-                userId: scope.userId,
-                automatic: false,
-                charges,
-                totals,
-                surcharge: amounts.surcharge,
-                received: toMinor(received ?? '0'),
-                change: amounts.change,
-                details: [
-                    ...(cashMethod
-                        ? [localDetail(cashMethod.id, amounts.cash)]
-                        : []),
-                    ...lines.map((line, index) => ({
-                        methodId: line.methodId,
-                        amount: toMinor(line.amount),
-                        currency: line.currency,
-                        currencyAmount: line.currencyAmount,
-                        rate: line.rate,
-                        defaultRate: line.defaultRate,
-                        merchant: line.merchant,
-                        reference: line.reference,
-                        surchargePercent: line.surchargePercent,
-                        surcharge: amounts.lineSurcharges[index] ?? 0n,
-                        party: line.party,
-                    })),
-                    ...(remainderMethod && amounts.remainder > 0n
-                        ? [localDetail(remainderMethod.id, amounts.remainder)]
-                        : []),
-                ],
-                discounts,
-            });
-        });
+            },
+            documentId,
+            input,
+            version,
+        );
         return {
             status: 201,
             headers: {},
@@ -1061,7 +1133,7 @@ export class Payments {
     }
 
     // Batal pembayaran (General_payment::cancel Kuta 1): kunci lebih dulu, lalu satu transaksi yang mengisi TglBatal,
-    // BATAL, dan AlasanBatal, membuka lagi baris biaya kunjungan, dan memberi tahu finance. Baris jenis bayar tidak
+    // BATAL, dan AlasanBatal, membuka lagi baris biaya tagihan, dan memberi tahu finance. Baris jenis bayar tidak
     // diubah, jadi kurs dan jumlah valutanya tetap seperti saat dibayar. Sistem lama meminta username dan password
     // penyetuju (ListApprove); di sini pengguna yang masuk sendiri yang memegang izin batal pembayaran, karena semua
     // login lewat SSO dan tidak ada kata sandi untuk diketik ulang (keputusan pemilik produk, 16 November 2026).
@@ -1095,22 +1167,23 @@ export class Payments {
             const header = await this.db.one(
                 z.object({
                     clerk_id: z.string().nullable(),
-                    visit_id: z.string(),
+                    source_module: z.string(),
+                    document_id: z.string(),
+                    document_number: z.string(),
                     number: z.string(),
                     date: z.string(),
                     value: z.string(),
-                    registration_number: z.string(),
                 }),
-                `select k.clerk_id, k.sumber_dokumen_id as visit_id, k.no_bukti as number,
-                        k.tanggal::text as date, trim_scale(k.nilai)::text as value, v.sumber_nomor as registration_number
+                `select k.clerk_id, k.sumber_module as source_module, k.sumber_dokumen_id as document_id,
+                        v.sumber_nomor as document_number, k.no_bukti as number, k.tanggal::text as date,
+                        trim_scale(k.nilai)::text as value
                  from kasir k
-                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                       and v.sumber_dokumen_id = k.sumber_dokumen_id
+                 join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_dokumen_id = k.sumber_dokumen_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],
             );
             if (!header) abort(404, 'Not Found');
-            // Clerk dikunci bersama sebelum kunjungan, urutan yang sama dengan Simpan pembayaran, supaya Clerk End
+            // Clerk dikunci bersama sebelum tagihan, urutan yang sama dengan Simpan pembayaran, supaya Clerk End
             // menunggu batal ini selesai.
             const clerk = header.clerk_id
                 ? await this.db.one(
@@ -1121,7 +1194,7 @@ export class Payments {
                 : null;
             if (clerk && clerk.status !== 'start')
                 validation({ _form: closedClerkMessage });
-            await lockVisit(this.db, scope.tenantId, header.visit_id);
+            await lockBill(this.db, scope.tenantId, header.document_id);
             const cancelled = await this.db.execute(
                 `update kasir set status = 'batal', tgl_batal = $1, alasan_batal = $2, dibatalkan_oleh_user_id = $3,
                                   updated_at = $1
@@ -1141,8 +1214,9 @@ export class Payments {
                 legalEntityId: scope.legalEntityId,
                 paymentId: payment.id,
                 number: header.number,
-                visitId: header.visit_id,
-                registrationNumber: header.registration_number,
+                sourceModule: header.source_module,
+                documentId: header.document_id,
+                documentNumber: header.document_number,
                 date: header.date,
                 value: header.value,
                 stamp,

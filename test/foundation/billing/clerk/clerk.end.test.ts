@@ -158,8 +158,7 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         const holder = await hold((db) =>
             lockChargeForChange(db, {
                 tenantId,
-                sourceModule: 'healthcare',
-                visitId,
+                documentId: visitId,
             }),
         );
         const payment = running(pay(visitId, '100000'));

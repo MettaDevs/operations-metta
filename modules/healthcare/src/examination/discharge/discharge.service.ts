@@ -498,8 +498,7 @@ export class Discharges {
         try {
             await lockChargeForChange(this.db, {
                 tenantId: this.tenantId,
-                sourceModule: moduleId,
-                visitId,
+                documentId: visitId,
             });
         } catch (error) {
             // Pesan kunci kasir menyebut tarif, BHP, dan resep; pengguna yang merujuk perlu tahu jalan keluarnya.

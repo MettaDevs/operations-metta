@@ -154,10 +154,10 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             [visitId],
         );
         expect(billed?.open).toBe(0);
-        const contract = await eventContract('billing.invoice.posted.v1');
+        const contract = await eventContract('billing.invoice.posted.v2');
         const sent = (
-            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v1')
-        ).filter((envelope) => envelope.data.visit_id === visitId);
+            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v2')
+        ).filter((envelope) => envelope.data.source_document_id === visitId);
         expect(sent).toHaveLength(1);
         expect(contract.safeParse(sent[0]).error).toBeUndefined();
         // Kunjungan yang selesai lagi tidak dibayar dua kali.
@@ -191,8 +191,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
             db.transaction(async () => {
                 await lockChargeForChange(db, {
                     tenantId,
-                    sourceModule: 'healthcare',
-                    visitId,
+                    documentId: visitId,
                 });
                 await publishEvent(db, {
                     type: 'pharmacy.dispensing.charges-replaced.v1',

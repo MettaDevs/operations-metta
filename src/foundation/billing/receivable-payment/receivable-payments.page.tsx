@@ -60,7 +60,9 @@ function ReceivablePaymentsPage(): ReactNode {
         query: search.q ?? '',
         getKey: (payment) => payment.id,
     });
-    const text = (value: string) => <DataTableText>{value}</DataTableText>;
+    const text = (value: string | null) => (
+        <DataTableText>{value ?? ''}</DataTableText>
+    );
 
     return (
         <>
@@ -148,7 +150,7 @@ function ReceivablePaymentsPage(): ReactNode {
                             header: 'Nama Pasien',
                             width: 220,
                             cell: (payment) => text(payment.patient_name),
-                            sortValue: (payment) => payment.patient_name,
+                            sortValue: (payment) => payment.patient_name ?? '',
                         },
                         {
                             id: 'patient_type_name',

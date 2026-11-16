@@ -148,7 +148,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             await outboxEnvelopes(
                 pool,
                 tenantId,
-                'billing.credit-memo.posted.v1',
+                'billing.credit-memo.posted.v2',
             )
         ).filter((envelope) => envelope.data.payment_id === paymentId);
 
@@ -370,14 +370,14 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             )),
         ]).toEqual([{ status: 'terbuka', kasir_id: null }]);
 
-        const contract = await eventContract('billing.credit-memo.posted.v1');
+        const contract = await eventContract('billing.credit-memo.posted.v2');
         const sent = await sentFor(payments.cash);
         expect(sent).toHaveLength(1);
         expect(contract.safeParse(sent[0]).error).toBeUndefined();
         expect(sent[0]?.data).toMatchObject({
             credit_memo_id: posted.data.id,
             credit_memo_number: posted.data.number,
-            visit_id: visits.cash,
+            source_document_id: visits.cash,
             value: '175000',
             discount: '0',
             reason: withReason.reason,

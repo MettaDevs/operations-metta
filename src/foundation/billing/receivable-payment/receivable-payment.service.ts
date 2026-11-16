@@ -54,13 +54,16 @@ const numberReference = 'core.receivable-payment-number';
 const zero = Decimal.of('0');
 
 // Pihak piutang menurut pihak jenis bayarnya, dipotret saat bayar. Jenis bayar penjamin pada kunjungan tanpa penjamin,
-// dan jenis bayar tanpa pihak, menjadi piutang pasien.
+// dan jenis bayar tanpa pihak, menjadi piutang pasien kunjungan, atau piutang pembeli penjualan. Simpan pembayaran
+// menolak piutang penjualan yang pembelinya tidak ada di buku alamat (receivableBuyerMessage).
 type ReceivableLine = {
     method_party: PaymentMethodParty;
     party_id: string | null;
     party_name: string | null;
-    patient_id: string;
-    patient_name: string;
+    patient_id: string | null;
+    patient_name: string | null;
+    buyer_party_id: string | null;
+    buyer_party_name: string | null;
     guarantor_id: string | null;
     guarantor_name: string | null;
 };
@@ -70,16 +73,24 @@ type ReceivableParty = {
     name: string;
 };
 
+function billHolder(line: ReceivableLine): ReceivableParty {
+    if (line.patient_id && line.patient_name)
+        return { kind: 'pasien', id: line.patient_id, name: line.patient_name };
+    if (line.buyer_party_id && line.buyer_party_name)
+        return {
+            kind: 'pihak',
+            id: line.buyer_party_id,
+            name: line.buyer_party_name,
+        };
+    throw new Error('Piutang tagihan ini tidak punya pemilik.');
+}
+
 function receivableParty(line: ReceivableLine): ReceivableParty {
-    const patient: ReceivableParty = {
-        kind: 'pasien',
-        id: line.patient_id,
-        name: line.patient_name,
-    };
+    const holder = billHolder(line);
     switch (line.method_party) {
         case 'tidak':
         case 'pasien':
-            return patient;
+            return holder;
         case 'penjamin_kunjungan':
             return line.guarantor_id && line.guarantor_name
                 ? {
@@ -87,7 +98,7 @@ function receivableParty(line: ReceivableLine): ReceivableParty {
                       id: line.guarantor_id,
                       name: line.guarantor_name,
                   }
-                : patient;
+                : holder;
         case 'pilih_pihak':
             // Pembayaran menolak pihak yang tidak ada di buku alamat, jadi namanya selalu ada.
             if (!line.party_name)
@@ -122,13 +133,16 @@ export async function openReceivables(
             ),
             party_id: z.string().nullable(),
             party_name: z.string().nullable(),
-            patient_id: z.string(),
-            patient_name: z.string(),
+            patient_id: z.string().nullable(),
+            patient_name: z.string().nullable(),
+            buyer_party_id: z.string().nullable(),
+            buyer_party_name: z.string().nullable(),
             guarantor_id: z.string().nullable(),
             guarantor_name: z.string().nullable(),
         }),
         `select d.id as detail_id, d.jenis_bayar_id as method_id, d.nilai::text as amount, j.pihak as method_party,
                 d.pihak_id as party_id, p.name as party_name, v.pasien_id as patient_id, v.pasien_nama as patient_name,
+                v.pembeli_pihak_id as buyer_party_id, b.name as buyer_party_name,
                 v.penjamin_id as guarantor_id, v.penjamin_nama as guarantor_name
          from kasir_detail d
          join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
@@ -136,6 +150,7 @@ export async function openReceivables(
          join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
                                and v.sumber_dokumen_id = k.sumber_dokumen_id
          left join parties p on p.tenant_id = d.tenant_id and p.id = d.pihak_id
+         left join parties b on b.tenant_id = v.tenant_id and b.id = v.pembeli_pihak_id
          where d.tenant_id = $1 and d.kasir_id = $2 and d.nilai > 0 and j.perilaku = any($3::text[])
          order by d.id`,
         [
@@ -204,7 +219,7 @@ export async function cancelReceivables(
 const receivableSql = `select * from (
                            select r.id, k.no_bukti as invoice_number, k.tanggal::text as invoice_date,
                                   v.sumber_nomor as registration_number, v.pasien_nrm as patient_medical_record_number,
-                                  v.pasien_nama as patient_name, v.tipe_pasien_nama as patient_type_name,
+                                  coalesce(v.pasien_nama, v.pembeli_nama) as patient_name, v.tipe_pasien_nama as patient_type_name,
                                   r.pihak_nama as party_name, coalesce(j.label_kasir, j.nama) as payment_method_name,
                                   trim_scale(r.nilai)::text as amount, trim_scale(r.nilai - r.sisa)::text as paid,
                                   trim_scale(r.sisa)::text as remaining
@@ -219,7 +234,8 @@ const receivableSql = `select * from (
 const paymentSql = `select * from (
                         select o.id, o.no_bukti as number, o.tanggal::text as date, k.no_bukti as invoice_number,
                                k.tanggal::text as invoice_date, v.sumber_nomor as registration_number,
-                               v.pasien_nrm as patient_medical_record_number, v.pasien_nama as patient_name,
+                               v.pasien_nrm as patient_medical_record_number,
+                               coalesce(v.pasien_nama, v.pembeli_nama) as patient_name,
                                v.tipe_pasien_nama as patient_type_name,
                                coalesce(j.label_kasir, j.nama) as payment_method_name, m.nama as merchant_name,
                                o.referensi as reference, trim_scale(o.biaya_tambahan_persen)::text as surcharge_percent,

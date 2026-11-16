@@ -106,8 +106,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
             db.transaction(() =>
                 lockChargeForChange(db, {
                     tenantId,
-                    sourceModule: 'healthcare',
-                    visitId,
+                    documentId: visitId,
                 }),
             ),
         );
@@ -241,10 +240,12 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
             [visits.first, created.data.id],
         );
         expect(billed).toEqual({ open: 0, billed: 2 });
-        const contract = await eventContract('billing.invoice.posted.v1');
+        const contract = await eventContract('billing.invoice.posted.v2');
         const sent = (
-            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v1')
-        ).filter((envelope) => envelope.data.visit_id === visits.first);
+            await outboxEnvelopes(pool, tenantId, 'billing.invoice.posted.v2')
+        ).filter(
+            (envelope) => envelope.data.source_document_id === visits.first,
+        );
         expect(sent).toHaveLength(1);
         expect(contract.safeParse(sent[0]).error).toBeUndefined();
         expect((await pay(visits.first, { received: '175000' })).status).toBe(
@@ -269,8 +270,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
             db.transaction(async () => {
                 await lockChargeForChange(db, {
                     tenantId,
-                    sourceModule: 'healthcare',
-                    visitId: visits.second,
+                    documentId: visits.second,
                 });
                 pid =
                     (

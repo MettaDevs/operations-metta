@@ -11,6 +11,11 @@ import {
     visitCompleted,
     visitReopened,
 } from './charge/charge.events.ts';
+export {
+    replaceSaleBill,
+    type ChargeGroup,
+    type SaleBill,
+} from './charge/charge.events.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
 import { creditMemoRoutes } from './credit-memo/credit-memo.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';
@@ -33,6 +38,8 @@ export {
     closedClerkMessage,
     lockChargeForChange,
     patientTypeMessage,
+    payBill,
+    receivableBuyerMessage,
 } from './payment/payment.service.ts';
 export {
     automaticPaymentMessage,

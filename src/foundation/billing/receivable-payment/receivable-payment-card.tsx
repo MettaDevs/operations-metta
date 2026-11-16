@@ -154,9 +154,9 @@ export function ReceivablePaymentCard({
         }
     };
 
-    const shown = (label: string, value: string) => (
+    const shown = (label: string, value: string | null) => (
         <FormControl>
-            <Input label={label} value={value} readOnly />
+            <Input label={label} value={value ?? ''} readOnly />
         </FormControl>
     );
     const edited = (

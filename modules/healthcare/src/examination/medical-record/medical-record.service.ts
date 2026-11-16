@@ -59,7 +59,6 @@ import {
     type MedicalRecord,
 } from './medical-record.schema.ts';
 import { lockChargeForChange } from '@core/foundation/billing/index.ts';
-import { moduleId } from '../../module.ts';
 import {
     destinationStatuses,
     recordLockedMessage,
@@ -865,8 +864,7 @@ export class MedicalRecords {
                 if (charged)
                     await lockChargeForChange(this.db, {
                         tenantId: this.workspace.tenantId,
-                        sourceModule: moduleId,
-                        visitId: destination.visit_id,
+                        documentId: destination.visit_id,
                     });
                 await this.orders.writeProcedures(
                     recordId,

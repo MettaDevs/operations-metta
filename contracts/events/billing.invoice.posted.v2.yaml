@@ -1,0 +1,148 @@
+asyncapi: 3.0.0
+info:
+  title: billing.invoice.posted.v2
+  version: 2.0.0
+  description: |
+    Pembayaran kasir disimpan: tagihan sekaligus pembayarannya, seperti satu baris SIMtrKasir sistem lama. Tagihannya
+    kunjungan (`source_module` `healthcare`) atau penjualan tanpa kunjungan dari module penjual, misalnya obat bebas di
+    loket farmasi (`source_module` `pharmacy`). Diterbitkan kasir Core (`src/foundation/billing/payment/`) lewat
+    `publishEvent` di transaksi Simpan yang sama, sesudah baris biaya tagihan ditandai ditagih. Penjualan dibayar di
+    transaksi module penjualnya (`payBill`). Pembayaran otomatis untuk tipe pasien yang lunas otomatis di kasir
+    diterbitkan di transaksi Selesai periksa layanan kesehatan, saat kasir menerima `healthcare.visit.completed.v1`.
+
+    Beda dengan v1: `visit_id` dan `registration_number` diganti `source_document_id` dan `source_document_number`,
+    karena tagihan penjualan tidak punya kunjungan. Untuk tagihan kunjungan isinya sama dengan v1.
+
+    Keadaan sebenarnya, 16 November 2026: hanya diantar di dalam runtime dan belum ada penerima. Layanan kesehatan tidak
+    perlu menandai kunjungan Sudah Bayar, karena kasir yang memegang status itu, dan perubahan biaya sesudah bayar
+    ditolak lewat `lockChargeForChange` milik kasir. Finance menerimanya kelak untuk posting.
+channels:
+  billing.invoice.posted.v2:
+    address: billing.invoice.posted.v2
+    messages:
+      invoicePosted:
+        $ref: '#/components/messages/invoicePosted'
+operations:
+  publishInvoicePosted:
+    action: send
+    channel:
+      $ref: '#/channels/billing.invoice.posted.v2'
+    messages:
+      - $ref: '#/channels/billing.invoice.posted.v2/messages/invoicePosted'
+components:
+  messages:
+    invoicePosted:
+      name: invoicePosted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: billing.invoice.posted.v2
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity kasir.
+        org_unit_id:
+          type: ['null', string]
+          format: uuid
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/invoice'
+    invoice:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          payment_id,
+          payment_number,
+          source_module,
+          source_document_id,
+          source_document_number,
+          date,
+          value,
+          payments,
+        ]
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        payment_number:
+          type: string
+          description: Nomor bukti dari number sequence kasir legal entity itu.
+        source_module:
+          type: string
+          description: Module pemilik dokumen yang ditagih, misalnya `healthcare` atau `pharmacy`.
+        source_document_id:
+            type: string
+            format: uuid
+            description: |
+                Dokumen yang ditagih: id kunjungan untuk tagihan kunjungan, id dokumen penjualan module penjual untuk
+                tagihan penjualan.
+        source_document_number:
+            type: string
+            description: Nomor dokumen yang ditagih, No. Reg kunjungan atau nomor penjualan.
+        date:
+          type: string
+          format: date
+        value:
+          type: string
+          description: Nilai tagihan dalam mata uang lokal tenant, teks desimal.
+        discount:
+          type: string
+          description: |
+            Jumlah diskon kasir (tab Diskon, SIMtrKasirDiscount) dalam mata uang lokal, teks desimal. Field opsional sejak
+            14 November 2026; selalu dikirim kasir, 0 bila tanpa diskon. Jumlah `payments` sama dengan `value` dikurangi
+            `discount`, ditambah biaya tambahan kartu bila ada.
+        payments:
+          type: array
+          description: |
+            Nilai per jenis bayar yang dipakai, tanpa yang nol. Jenis bayar bermata uang asing membawa jumlah valuta dan
+            kurs yang dipakai, supaya finance kelak bisa memposting selisih kurs. Tunai lokal bisa negatif bila
+            kembaliannya untuk tunai valuta.
+          items:
+            type: object
+            additionalProperties: false
+            required: [payment_method_id, amount, currency_code, currency_amount, exchange_rate]
+            properties:
+              payment_method_id:
+                type: string
+                format: uuid
+              amount:
+                type: string
+                description: Jumlah dalam mata uang lokal tenant, teks desimal.
+              currency_code:
+                type: string
+                description: Kode ISO mata uang jenis bayar; mata uang lokal untuk jenis bayar tanpa mata uang asing.
+              currency_amount:
+                type: string
+                description: Jumlah dalam mata uang itu, teks desimal.
+              exchange_rate:
+                type: string
+                description: Nilai satu satuan mata uang itu dalam mata uang lokal; 1 untuk mata uang lokal.
