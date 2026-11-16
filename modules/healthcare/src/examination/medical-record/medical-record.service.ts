@@ -862,8 +862,7 @@ export class MedicalRecords {
                     procedures,
                 );
                 if (charged)
-                    await lockChargeForChange(this.db, {
-                        tenantId: this.workspace.tenantId,
+                    await lockChargeForChange(this.db, this.workspace, {
                         documentId: destination.visit_id,
                     });
                 await this.orders.writeProcedures(

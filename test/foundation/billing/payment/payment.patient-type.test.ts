@@ -21,6 +21,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 type Method = { refusal: string | null; id: string };
 
@@ -183,8 +184,7 @@ describe.skipIf(!process.env.DB_HOST)('billing patient type payments', () => {
         });
         await charges.withDatabase((db) =>
             db.transaction(async () => {
-                await lockChargeForChange(db, {
-                    tenantId,
+                await lockChargeForChange(db, fullAccessViewer(tenantId), {
                     documentId: visitId,
                 });
                 await publishEvent(db, {

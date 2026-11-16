@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { outboxEnvelopes } from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
+    createMember,
+    grantAllOrganizations,
+} from '../../../../../test/support/tenant-fixtures.ts';
+import {
     api,
     createPharmacy,
     inventoryApi,
@@ -341,5 +345,68 @@ describe.skipIf(!process.env.DB_HOST)('returns on an OTC sale', () => {
             ),
             404,
         );
+    });
+
+    // Penolakan membawa jalan keluarnya: yang boleh membuka pembayaran kasir mendapat aksi yang membuka pembayaran itu
+    // (kunci record core.payment, id dokumen sumbernya); yang tidak boleh mendapat nomor pembayarannya di pesan.
+    test('the refusal opens the payment for whoever may read payments, and names the payment number to whoever may not', async () => {
+        const sold = await sell([{ item: paracetamol, quantity: 2 }]);
+        const [payment] = await pool.unsafe<{ no_bukti: string }[]>(
+            `select no_bukti from kasir where sumber_dokumen_id = $1 and status = 'diposting'`,
+            [sold.id],
+        );
+        const lines = new Map([[paracetamol.code, 1]]);
+        const cashierView = await json<{
+            errors: Record<string, string[]>;
+            actions?: unknown;
+        }>(await returnLines(sold.id, lines), 422);
+        expect(cashierView).toMatchObject({
+            errors: { _form: [paidMessage] },
+            actions: [
+                {
+                    kind: 'open',
+                    label: `Buka pembayaran ${payment?.no_bukti}`,
+                    page: 'core.payment',
+                    recordId: sold.id,
+                },
+            ],
+        });
+
+        const pharmacist = await createMember(pool, pharmacy.tenantId, [
+            ...pharmacyDuties,
+            'pharmacy.otc-sale.operate',
+            'pharmacy.dispensing.manage',
+        ]);
+        await grantAllOrganizations(
+            pool,
+            pharmacy.tenantId,
+            pharmacist.membershipId,
+        );
+        const session = browser();
+        await session.login(pharmacist.email, pharmacist.password);
+        const { data } = await json<Returns>(
+            await session.get(`${sales}/${sold.id}/returns`),
+            200,
+        );
+        const pharmacistView = await json<{
+            errors: Record<string, string[]>;
+            actions?: unknown;
+        }>(
+            await session.post(`${sales}/${sold.id}/returns`, {
+                reason: 'Pembeli salah beli',
+                lines: data.returnable.map((row) => ({
+                    dispensing_line_id: row.dispensing_line_id,
+                    batch_id: row.batch?.id ?? null,
+                    quantity: 1,
+                })),
+            }),
+            422,
+        );
+        expect(pharmacistView.errors).toEqual({
+            _form: [
+                `${paidMessage} Minta kasir membatalkan pembayaran ${payment?.no_bukti}.`,
+            ],
+        });
+        expect(pharmacistView.actions).toBeUndefined();
     });
 });

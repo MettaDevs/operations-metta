@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { Workspace } from '../../../platform/access/index.ts';
+import {
+    refuse,
+    type Viewer,
+    type Workspace,
+} from '../../../platform/access/index.ts';
 import { nowSql, type Database } from '../../../platform/database/index.ts';
 import { publishEvent } from '../../../platform/events/index.ts';
 import {
@@ -246,16 +250,19 @@ export const automaticCancelReason =
 
 // Dipanggil module sumber di dalam transaksi yang mengubah atau membatalkan biaya tagihan (Biaya Tindakan, batal
 // kunjungan, obat yang disiapkan, dibatalkan, atau diretur). Tagihan yang dibayar kasir ditolak dengan pesan sistem
-// lama; pembatalannya urusan kasir (kunci BC: batalkan pembayaran dulu). Pembayaran otomatis mengikuti tagihan:
-// pembayaran itu dibatalkan di sini, lalu kunjungan dilunasi lagi saat biayanya yang baru sampai ke kasir, seperti
-// Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli. documentId adalah dokumen sumber tagihan: kunjungan,
-// atau dokumen penjualan module penjual.
+// lama (`message`, bawaannya chargeLockedMessage, di `field`, bawaannya _form); pembatalannya urusan kasir (kunci BC:
+// batalkan pembayaran dulu), jadi penolakannya membawa tombol yang membuka pembayaran itu bagi yang boleh membukanya.
+// Pembayaran otomatis mengikuti tagihan: pembayaran itu dibatalkan di sini, lalu kunjungan dilunasi lagi saat biayanya
+// yang baru sampai ke kasir, seperti Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli. documentId adalah
+// dokumen sumber tagihan: kunjungan, atau dokumen penjualan module penjual.
 export async function lockChargeForChange(
     db: Database,
-    scope: { tenantId: string; documentId: string },
+    viewer: Viewer,
+    change: { documentId: string; message?: string; field?: string },
 ): Promise<void> {
     if (!db.inTransaction)
         throw new Error('lockChargeForChange wajib di dalam transaksi.');
+    const scope = { tenantId: viewer.tenantId, documentId: change.documentId };
     await lockBill(db, scope.tenantId, scope.documentId);
     const paid = await db.one(
         z.object({
@@ -276,7 +283,17 @@ export async function lockChargeForChange(
         [scope.tenantId, scope.documentId],
     );
     if (!paid) return;
-    if (!paid.automatic) validation({ _form: chargeLockedMessage });
+    if (!paid.automatic)
+        await refuse(db, viewer, {
+            message: change.message ?? chargeLockedMessage,
+            field: change.field,
+            open: {
+                page: 'core.payment',
+                recordId: scope.documentId,
+                label: `Buka pembayaran ${paid.number}`,
+            },
+            otherwise: `Minta kasir membatalkan pembayaran ${paid.number}.`,
+        });
     const stamp = nowSql();
     await db.execute(
         `update kasir set status = 'batal', tgl_batal = $1, alasan_batal = $2,

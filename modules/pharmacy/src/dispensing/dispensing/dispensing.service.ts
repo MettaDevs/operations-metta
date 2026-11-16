@@ -27,6 +27,7 @@ import {
     issuedSlices,
     unitConversion,
 } from '@core/foundation/inventory/index.ts';
+import { lockChargeForChange } from '@core/foundation/billing/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
 import {
@@ -40,7 +41,6 @@ import { moduleId } from '../../module.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
 import {
-    lockCharges,
     netLines,
     paidMessage,
     publishDispensingCharges,
@@ -674,8 +674,7 @@ export class Dispensings {
             if (current && current.status !== 'draf') return;
             // Obat yang disiapkan masuk tagihan kunjungan, jadi kunjungan yang sudah dibayar kasir menolaknya.
             if (locked.visit_id)
-                await lockCharges(this.db, {
-                    tenantId: this.scope.tenantId,
+                await lockChargeForChange(this.db, this.workspace, {
                     documentId: locked.visit_id,
                 });
             const hasLines =
@@ -998,8 +997,7 @@ export class Dispensings {
     // dilunasi ulang saat biaya obat yang baru (kosong) sampai di kasir.
     private async reversePreparation(billId: string, visitId: string | null) {
         if (visitId)
-            await lockCharges(this.db, {
-                tenantId: this.scope.tenantId,
+            await lockChargeForChange(this.db, this.workspace, {
                 documentId: visitId,
                 message: paidMessage,
             });

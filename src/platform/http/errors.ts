@@ -1,3 +1,5 @@
+import type { ErrorAction } from '../error-action/index.ts';
+
 export class HttpFailure extends Error {
     constructor(
         readonly status: number,
@@ -12,7 +14,11 @@ export function abort(status: number, message: string): never {
     throw new HttpFailure(status, { message });
 }
 
-export function validation(errors: Record<string, string | string[]>): never {
+// `actions` hanya dibuat `refuse` (src/platform/access/), yang lebih dulu memeriksa pengguna boleh membuka tujuannya.
+export function validation(
+    errors: Record<string, string | string[]>,
+    actions: readonly ErrorAction[] = [],
+): never {
     const normalized = Object.fromEntries(
         Object.entries(errors).map(([field, messages]) => [
             field,
@@ -26,7 +32,11 @@ export function validation(errors: Record<string, string | string[]>): never {
         remaining > 0
             ? `${first} (and ${remaining} more ${remaining === 1 ? 'error' : 'errors'})`
             : first;
-    throw new HttpFailure(422, { message, errors: normalized });
+    throw new HttpFailure(422, {
+        message,
+        errors: normalized,
+        ...(actions.length ? { actions } : {}),
+    });
 }
 
 export const staleMessage =

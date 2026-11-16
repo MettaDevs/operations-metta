@@ -356,7 +356,7 @@ export class DispensingReturns {
             const dispensing = await this.handedOver(true);
             if (!dispensing)
                 validation({ _form: this.definition.notHandedOver });
-            await dispensing.lock();
+            await dispensing.lock(this.workspace);
             const groups = await this.remaining(dispensing.dispensingId);
             const dispensed = await this.dispensingLines(
                 dispensing.dispensingId,
@@ -531,7 +531,7 @@ export class DispensingReturns {
             if (current.status === 'dibatalkan') return;
             if (current.version !== version)
                 coded(409, 'stale_version', staleMessage);
-            await dispensing.lock();
+            await dispensing.lock(this.workspace);
             const stamp = nowSql();
             await this.db.execute(
                 `update retur_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,

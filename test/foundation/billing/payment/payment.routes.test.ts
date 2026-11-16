@@ -22,6 +22,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 // Simpan pembayaran kasir lewat aplikasi sungguhan, diperiksa dengan SQL langsung: clerk wajib, rumus layar Kuta, sisa
 // ke Pasien BON, satu pembayaran per kunjungan, event billing.invoice.posted, kunci perubahan biaya sesudah bayar, dan
@@ -103,8 +104,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
     const lock = (visitId: string) =>
         withDatabase((db) =>
             db.transaction(() =>
-                lockChargeForChange(db, {
-                    tenantId,
+                lockChargeForChange(db, fullAccessViewer(tenantId), {
                     documentId: visitId,
                 }),
             ),
@@ -262,8 +262,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payments', () => {
         const lockTaken = new Promise<void>((resolve) => (taken = resolve));
         const holder = withDatabase((db) =>
             db.transaction(async () => {
-                await lockChargeForChange(db, {
-                    tenantId,
+                await lockChargeForChange(db, fullAccessViewer(tenantId), {
                     documentId: visits.second,
                 });
                 pid =

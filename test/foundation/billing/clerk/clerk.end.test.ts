@@ -17,6 +17,7 @@ import {
     operationsTestApp,
     type Browser,
 } from '../../../support/operations-app.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 type Ended = { data: { transactions: number; system_total: string } };
 
@@ -149,8 +150,7 @@ describe.skipIf(!process.env.DB_HOST)('billing Clerk End and payments', () => {
         const visitId = await visit('100000');
         // Kunci kunjungan ditahan, jadi Simpan pembayaran berhenti sesudah memeriksa clerk-nya.
         const holder = await hold((db) =>
-            lockChargeForChange(db, {
-                tenantId,
+            lockChargeForChange(db, fullAccessViewer(tenantId), {
                 documentId: visitId,
             }),
         );

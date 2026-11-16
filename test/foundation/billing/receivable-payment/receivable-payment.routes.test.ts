@@ -27,6 +27,7 @@ import {
     createMember,
     grantAllOrganizations,
 } from '../../../support/tenant-fixtures.ts';
+import { fullAccessViewer } from '../../../support/viewer.ts';
 
 type Receivable = {
     id: string;
@@ -443,8 +444,7 @@ describe.skipIf(!process.env.DB_HOST)('billing receivable payments', () => {
         const refusal = await charges.withDatabase(async (db) => {
             try {
                 await db.transaction(() =>
-                    lockChargeForChange(db, {
-                        tenantId,
+                    lockChargeForChange(db, fullAccessViewer(tenantId), {
                         documentId: visitId,
                     }),
                 );

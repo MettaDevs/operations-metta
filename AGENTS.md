@@ -90,6 +90,7 @@ Keputusan pemilik produk, 9 November 2026: layar adalah SPA dengan TanStack Rout
     - Menu Core (Sys Admin dan Kasir) ditulis di `src/platform/access/navigation.ts` beserta permission tiap entri, dan disaring di server. Menu module ditulis migration module ke `apps.navigation`; mengubahnya berarti menulis migration baru.
     - Hanya halaman yang sudah ada yang masuk menu, dan test memeriksanya.
     - Pesan berhasil tampil sebagai toast di layar.
+    - Penolakan yang jalan keluarnya ada di record lain membawa tombol yang membuka record itu di atas form, misalnya "Buka pembayaran …" saat retur ditolak karena sudah dibayar. Server menyertakannya lewat `refuse` di `src/platform/access/`, hanya untuk pengguna yang boleh membuka record itu. Rinciannya di skill `actionable-errors` dan [`docs/dev/40-aksi-pada-penolakan.md`](docs/dev/40-aksi-pada-penolakan.md).
 - **Sesi dan CSRF** memakai mekanisme `src/platform/identity/`: cookie sesi, header `X-XSRF-TOKEN` dari cookie `XSRF-TOKEN`, dan `Sec-Fetch-Site`.
     - Data halaman yang dijawab 401 membawa pengguna ke `/login?redirect=<asal>`.
     - Simpan yang gagal karena sesi habis (401 atau 419) menampilkan pesan, dan isian form tetap ada.

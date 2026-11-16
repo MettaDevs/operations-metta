@@ -40,6 +40,12 @@ type Charge = {
 };
 const chargesReplaced = 'pharmacy.dispensing.charges-replaced.v1';
 const paidMessage = 'Data ini sudah melakukan Pembayaran diKasir!';
+// Pengguna test ini tidak memegang izin membaca pembayaran kasir, jadi penolakannya menyebut nomor pembayaran.
+const paidMessageUnopened = expect.stringMatching(
+    new RegExp(
+        `^${RegExp.escape(paidMessage)} Minta kasir membatalkan pembayaran [^ ]+[.]$`,
+    ),
+);
 
 // Obat resep sampai ke tagihan kunjungan di kasir sejak Siapkan, dengan harga yang dibekukan saat Siapkan dan Qty bersih
 // sesudah retur (blok BILLFarmasi GetDetailRincianBiaya). Obat termasuk jasa bernilai 0. Sesudah kasir menerima
@@ -291,7 +297,7 @@ describe.skipIf(!process.env.DB_HOST)(
                         { version: await version(prepared) },
                     ),
                 ),
-            ).toEqual({ _form: [paidMessage] });
+            ).toEqual({ _form: [paidMessageUnopened] });
             const [line] = (
                 await json<{
                     data: {
@@ -324,9 +330,15 @@ describe.skipIf(!process.env.DB_HOST)(
                         },
                     ),
                 ),
-            ).toEqual({ _form: [paidMessage] });
+            ).toEqual({ _form: [paidMessageUnopened] });
             expect(await refused(await prepare(waiting))).toEqual({
-                _form: [chargeLockedMessage],
+                _form: [
+                    expect.stringMatching(
+                        new RegExp(
+                            `^${RegExp.escape(chargeLockedMessage)} Minta kasir membatalkan pembayaran [^ ]+[.]$`,
+                        ),
+                    ),
+                ],
             });
         });
 

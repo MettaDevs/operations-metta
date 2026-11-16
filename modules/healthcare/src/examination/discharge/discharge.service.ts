@@ -10,7 +10,6 @@ import {
 import {
     abort,
     dateSchema,
-    HttpFailure,
     isRecord,
     lookupId,
     validation,
@@ -495,17 +494,12 @@ export class Discharges {
     // menolak kunjungan yang sudah dibayar. Kasir mendapat healthcare.visit.reopened.v1, jadi kunjungan ini keluar dari
     // Daftar Pembayaran sampai poli rujukan Selesai periksa dan kunjungan selesai lagi.
     private async reopen(visitId: string, stamp: string): Promise<void> {
-        try {
-            await lockChargeForChange(this.db, {
-                tenantId: this.tenantId,
-                documentId: visitId,
-            });
-        } catch (error) {
-            // Pesan kunci kasir menyebut tarif, BHP, dan resep; pengguna yang merujuk perlu tahu jalan keluarnya.
-            if (error instanceof HttpFailure)
-                validation({ status: paidReferralMessage });
-            throw error;
-        }
+        // Pesan kunci kasir menyebut tarif, BHP, dan resep; pengguna yang merujuk perlu tahu jalan keluarnya.
+        await lockChargeForChange(this.db, this.workspace, {
+            documentId: visitId,
+            field: 'status',
+            message: paidReferralMessage,
+        });
         await this.db.execute(
             `update sim_tr_registrasi set status = 'diperiksa', selesai_pada = null, updated_at = $3
              where tenant_id = $1 and id = $2`,

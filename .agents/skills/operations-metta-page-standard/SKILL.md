@@ -79,6 +79,7 @@ Keputusan pemilik produk, 12 November 2026: ringkasan kesalahan form ("Periksa N
 - Tingginya dibatasi SDK dan daftarnya bergulir sendiri bila panjang. Ringkas (^) dan sembunyikan (×) tetap berlaku. Klik satu pesan memfokuskan dan menggulir ke isiannya.
 - Goyangan dipicu SDK, bukan halaman. Percobaan Simpan dikenali dari `submit` atau klik tombol `ActionButton action="save"`/`type="submit"` di dialog yang sama. Bila ringkasan sudah tampil saat itu dan hasil Simpan masih membawa kesalahan, ringkasan digoyang sekitar 360 ms dan dibuka lagi bila sedang diringkas. Pengguna yang meminta gerak dikurangi (`prefers-reduced-motion`) mendapat sorotan singkat, bukan goyangan. Memperbaiki isian tidak menggoyangnya.
 - Syaratnya hanya satu: setiap Simpan yang gagal mengisi ulang state error dengan objek baru (`setErrors(caught.errors)`, `setErrors(missing)`), seperti yang sudah dilakukan semua halaman. Simpan yang gagal tanpa mengubah state error tidak terlihat oleh ringkasan.
+- Penolakan yang membawa aksi (`caught.actions`) diteruskan lewat `errorActions` pada `FormErrorHeader`. Ringkasan lalu menampilkan tombol yang membuka record penyebabnya sebagai jendela di atas form. Langkahnya ada di skill [`actionable-errors`](../actionable-errors/SKILL.md).
 
 ## Setelah menyimpan master
 
