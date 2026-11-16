@@ -63,6 +63,7 @@ Nomor berkas dipertahankan dari CoreERP supaya mudah dicocokkan. Nomor yang tida
 | [07-reporting-and-replicas.md](07-reporting-and-replicas.md) | Sumber baca laporan dan konsistensinya |
 | [12-external-module-integration.md](12-external-module-integration.md) | Integrasi sistem luar ke module |
 | [17-healthcare-finance-subledger.md](17-healthcare-finance-subledger.md) | Healthcare sebagai subledger dan posting ke finance |
+| [Integrasi SATUSEHAT Operations Metta](satusehat/README.md) | Alur, endpoint, payload, terminologi, validasi, bukti Sandbox, serta tanggal dan versi sumber |
 | [20-load-and-concurrency-testing.md](20-load-and-concurrency-testing.md) | Gate beban dan kebenaran sebelum module dinyatakan selesai |
 | [25-standar-penjaga-dan-pengujian.md](25-standar-penjaga-dan-pengujian.md) | Syarat sebuah penjaga batas boleh dipercaya |
 | [28-pelaporan-kesalahan.md](28-pelaporan-kesalahan.md) | Pelaporan kesalahan ke Sentry |
