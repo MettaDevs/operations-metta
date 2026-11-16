@@ -40,6 +40,13 @@ const policySchema = z.object({
 });
 const nameTaken = 'Role dengan nama ini sudah ada.';
 
+// Duty yang ikut masuk saat duty pemicunya baru masuk ke sebuah role, sebagai baris duty sendiri yang dapat dicabut.
+// Keputusan pemilik produk, 16 November 2026: kasir bawaannya boleh membatalkan pembayaran (0065). Pendamping hanya
+// ditambah saat pemicunya belum dipegang role itu, jadi pencabutannya tidak dikembalikan pada simpan berikutnya.
+const companionDuties: ReadonlyMap<string, readonly string[]> = new Map([
+    ['core.payment.operate', ['core.payment-cancel.approve']],
+]);
+
 // Kebijakan data milik app yang boleh dipakai tenant.
 export async function tenantDataPolicies(db: Database, tenantId: string) {
     const appIds = await tenantAppIds(db, tenantId);
@@ -238,13 +245,23 @@ export class Roles {
         const tenantId = this.workspace.tenantId;
         const appIds = await tenantAppIds(this.db, tenantId);
         const requested = [...new Set(input.duty_codes)];
-        const duties = await this.db.rows(
-            z.object({ code: z.string() }),
-            `select d.code from security_duties d where d.code in (${ids(appIds.length + 2, requested.length)})
-             and ${tenantDutyClause('d', 1, appIds, 2)}`,
-            [tenantId, ...appIds, ...requested],
+        const candidates = [
+            ...new Set([
+                ...requested,
+                ...requested.flatMap((code) => companionDuties.get(code) ?? []),
+            ]),
+        ];
+        const valid = new Set(
+            (
+                await this.db.rows(
+                    z.object({ code: z.string() }),
+                    `select d.code from security_duties d where d.code in (${ids(appIds.length + 2, candidates.length)})
+                     and ${tenantDutyClause('d', 1, appIds, 2)}`,
+                    [tenantId, ...appIds, ...candidates],
+                )
+            ).map((duty) => duty.code),
         );
-        if (duties.length !== requested.length)
+        if (requested.some((code) => !valid.has(code)))
             validation({
                 duty_codes:
                     'Tanggung jawab harus berasal dari produk yang boleh digunakan tenant.',
@@ -291,11 +308,25 @@ export class Roles {
                         is_active: true,
                     });
                 }
+                const held = new Set(
+                    (
+                        await this.db.rows(
+                            z.object({ duty_code: z.string() }),
+                            'select duty_code from security_role_duties where role_id=$1',
+                            [id],
+                        )
+                    ).map((duty) => duty.duty_code),
+                );
+                const granted = new Set(requested);
+                for (const code of requested)
+                    if (!held.has(code))
+                        for (const companion of companionDuties.get(code) ?? [])
+                            if (valid.has(companion)) granted.add(companion);
                 await this.db.execute(
                     'delete from security_role_duties where role_id=$1',
                     [id],
                 );
-                for (const code of requested)
+                for (const code of granted)
                     await this.db.insert('security_role_duties', {
                         role_id: id,
                         duty_code: code,
