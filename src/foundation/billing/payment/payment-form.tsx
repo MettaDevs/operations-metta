@@ -42,8 +42,8 @@ import { fromMinor, paymentAmounts, toMinor } from './payment.amounts.ts';
 // Jenis bayar bermata uang asing diisi dalam mata uang itu; kursnya bawaan Sys Admin › Kurs hari ini, bisa diubah oleh
 // pemegang izin ubah kurs, dan nilainya dalam mata uang lokal ikut ditampilkan. Kembalian selalu mata uang lokal.
 // Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama, dan menolak isian dengan pesannya.
-// Simpan mengirim versi tagihan yang ditampilkan. Bila biaya kunjungan berubah sesudahnya, server menolak dan form
-// menawarkan Muat ulang, yang membaca tagihan terbaru tanpa membuang isian kasir.
+// Simpan mengirim versi tagihan yang ditampilkan, dari kunjungan atau penjualannya. Bila biayanya berubah sesudahnya,
+// server menolak dan form menawarkan Muat ulang, yang membaca tagihan terbaru tanpa membuang isian kasir.
 
 type Form = ApiBody<'billingVisitShow'>['data'];
 type Method = Form['payment_methods'][number];
@@ -79,7 +79,7 @@ export function PaymentForm({
     reload,
 }: {
     form: Form;
-    // Membaca ulang tagihan kunjungan ini, sesudah Simpan atau saat tagihannya berubah.
+    // Membaca ulang tagihan ini, sesudah Simpan atau saat tagihannya berubah.
     reload: () => Promise<unknown>;
 }): ReactNode {
     const localCash = (method: Method) =>
@@ -172,10 +172,11 @@ export function PaymentForm({
             return;
         setBusy(true);
         try {
+            const bill = form.visit ?? form.sale;
             const { body } = await api.billingPaymentCreate({
-                params: { id: form.visit.id },
+                params: { id: bill.id },
                 body: {
-                    version: form.visit.version,
+                    version: bill.version,
                     received: typed(received),
                     take_remainder: takeRemainder,
                     discounts: discountPayload(discounts),

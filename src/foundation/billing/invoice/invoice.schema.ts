@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 
-// Daftar Pembayaran (KC general_payment datatable): kunjungan selesai di legal entity aktif.
+// Daftar Pembayaran (KC general_payment datatable): tagihan di legal entity aktif, yaitu kunjungan selesai dan penjualan
+// tanpa kunjungan (misalnya obat bebas di loket farmasi). id adalah id dokumen sumber tagihan.
 export const visitRowSchema = z.object({
+    kind: z.literal('visit'),
     id: z.string(),
     registration_number: z.string(),
     date: z.string(),
@@ -13,6 +15,22 @@ export const visitRowSchema = z.object({
     sections: z.string(),
     paid: z.boolean(),
 });
+
+// buyer_name kosong berarti pembeli umum.
+export const saleRowSchema = z.object({
+    kind: z.literal('sale'),
+    id: z.string(),
+    number: z.string(),
+    date: z.string(),
+    sold_at: z.string(),
+    buyer_name: z.string().nullable(),
+    paid: z.boolean(),
+});
+
+export const invoiceRowSchema = z.discriminatedUnion('kind', [
+    visitRowSchema,
+    saleRowSchema,
+]);
 
 export const visitListQuerySchema = listParametersSchema.extend({
     from: z.string().optional(),
@@ -52,7 +70,7 @@ export const chargeRowSchema = z.object({
     ),
 });
 
-export const visitDetailSchema = visitRowSchema.extend({
+export const visitDetailSchema = visitRowSchema.omit({ kind: true }).extend({
     guarantor_name: z.string().nullable(),
     card_number: z.string().nullable(),
     // Jenis bayar yang dikhususkan tipe pasien lain, ditolak untuk kunjungan ini.
@@ -60,3 +78,12 @@ export const visitDetailSchema = visitRowSchema.extend({
     // Versi tagihan yang ditampilkan, dikirim lagi saat Simpan pembayaran.
     version: z.number(),
 });
+
+export const saleDetailSchema = saleRowSchema
+    .omit({ kind: true, paid: true })
+    .extend({
+        buyer_party_id: z.string().nullable(),
+        source_module: z.string(),
+        // Versi tagihan yang ditampilkan, dikirim lagi saat Simpan pembayaran.
+        version: z.number(),
+    });

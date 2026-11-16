@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { Workspace } from '../../../platform/access/index.ts';
-import { isoSql, type Database } from '../../../platform/database/index.ts';
+import {
+    isoSql,
+    jsonObject,
+    type Database,
+} from '../../../platform/database/index.ts';
 import {
     abort,
     incrementalList,
@@ -15,29 +19,37 @@ import {
 import { activeLegalEntity } from '../../inventory/index.ts';
 import {
     chargeRowSchema,
+    invoiceRowSchema,
+    saleDetailSchema,
     visitDetailSchema,
-    visitRowSchema,
 } from './invoice.schema.ts';
 import { invoiceTotals } from './invoice.totals.ts';
 import { creditMemoPreview } from '../credit-memo/credit-memo.service.ts';
 import { paymentHolds } from '../payment/payment.checks.ts';
 import { patientTypeMessage } from '../payment/payment.service.ts';
 
-// Sudah dibayar bila kunjungan punya pembayaran yang tidak batal.
+// Sudah dibayar bila tagihan punya pembayaran yang tidak batal.
 const paidSql = `exists (select 1 from kasir p where p.tenant_id = k.tenant_id and p.sumber_module = k.sumber_module
                                 and p.sumber_dokumen_id = k.sumber_dokumen_id and p.status = 'diposting')`;
 
-const visitSql = `select * from (
-                      select k.sumber_dokumen_id as id, k.sumber_nomor as registration_number, k.tanggal::text as date,
-                             ${isoSql('k.didaftarkan_pada')} as registered_at,
-                             k.pasien_nrm as patient_medical_record_number, k.pasien_nama as patient_name,
-                             k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
-                             ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
-                             to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids, k.version
-                      from tagihan_kasir k
-                      where k.tenant_id = $1 and k.legal_entity_id = $2 and k.jenis = 'kunjungan'
-                        and k.status = 'selesai') visits
-                  where true`;
+// Tagihan kunjungan selesai dan tagihan penjualan dalam satu bentuk baris. Kolom number, name, dan occurred_at dipakai
+// bersama kedua jenis untuk pencarian dan urutan: waktu daftar kunjungan atau waktu penjualan dicatat.
+const billSql = `select * from (
+                     select k.sumber_dokumen_id as id,
+                            case k.jenis when 'kunjungan' then 'visit' else 'sale' end as kind,
+                            k.sumber_nomor as number, k.sumber_nomor as registration_number, k.tanggal::text as date,
+                            ${isoSql('coalesce(k.didaftarkan_pada, k.created_at)')} as occurred_at,
+                            ${isoSql('k.didaftarkan_pada')} as registered_at, ${isoSql('k.created_at')} as sold_at,
+                            coalesce(k.pasien_nama, k.pembeli_nama) as name,
+                            k.pasien_nrm as patient_medical_record_number, k.pasien_nama as patient_name,
+                            k.tipe_pasien_nama as patient_type_name, k.section_nama as sections,
+                            k.pembeli_nama as buyer_name, k.pembeli_pihak_id as buyer_party_id,
+                            k.sumber_module as source_module,
+                            ${paidSql} as paid, k.penjamin_nama as guarantor_name, k.no_kartu as card_number,
+                            to_json(k.jenis_bayar_dibatasi) as restricted_payment_method_ids, k.version
+                     from tagihan_kasir k
+                     where k.tenant_id = $1 and k.legal_entity_id = $2 and k.status = 'selesai') bills
+                 where true`;
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -148,29 +160,21 @@ export class Invoices {
         return { from, to };
     }
 
-    // Daftar Pembayaran: kunjungan selesai dalam rentang tanggal, dengan lencana Belum Bayar, Sudah Bayar, dan Total
-    // atas rentang itu.
+    // Daftar Pembayaran: tagihan kunjungan dan penjualan dalam rentang tanggal, dengan lencana Belum Bayar, Sudah Bayar,
+    // dan Total atas rentang itu.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('payment', 'read');
         const { from, to } = await this.range(parameters);
         const status = parameters.get('status');
-        const base = `${visitSql} and date between $3 and $4`;
+        const base = `${billSql} and date between $3 and $4`;
         const batch = await incrementalList(this.db, {
             query: `${base}${status === 'paid' ? ' and paid' : status === 'unpaid' ? ' and not paid' : ''}`,
             bindings: [this.scope.tenantId, this.scope.legalEntityId, from, to],
             parameters,
-            columns: {
-                registered_at: 'registered_at',
-                registration_number: 'registration_number',
-                patient_name: 'patient_name',
-            },
-            searchColumns: [
-                'registration_number',
-                'patient_medical_record_number',
-                'patient_name',
-            ],
+            columns: { time: 'occurred_at', number: 'number', name: 'name' },
+            searchColumns: ['number', 'patient_medical_record_number', 'name'],
             numericColumns: [],
-            defaultSort: 'registered_at',
+            defaultSort: 'time',
             defaultDirection: 'asc',
         });
         const [counts] = await this.db.rows(
@@ -185,7 +189,7 @@ export class Invoices {
             [this.scope.tenantId, this.scope.legalEntityId, from, to],
         );
         return {
-            data: batch.data.map((row) => visitRowSchema.parse(row)),
+            data: batch.data.map((row) => invoiceRowSchema.parse(row)),
             next_cursor: batch.next_cursor,
             counts: counts ?? { unpaid: 0, paid: 0, total: 0 },
             from,
@@ -195,13 +199,13 @@ export class Invoices {
 
     // Status tunggu Daftar Pembayaran dan header Form Pembayaran, dibaca ulang layar secara berkala: hal yang masih
     // ditunggu kunjungan belum bayar dalam rentang tanggal, dari module yang terpasang (payment.checks.ts). Satu jawaban
-    // untuk semua kunjungan itu, berisi kunjungan yang masih menunggu saja.
+    // untuk semua kunjungan itu, berisi kunjungan yang masih menunggu saja. Penjualan tidak pernah menunggu apa pun.
     async holds(parameters: URLSearchParams) {
         this.workspace.guard('payment', 'read');
         const { from, to } = await this.range(parameters);
         const unpaid = await this.db.rows(
             z.object({ id: z.string() }),
-            `select id from (${visitSql} and date between $3 and $4 and not paid) unpaid`,
+            `select id from (${billSql} and kind = 'visit' and date between $3 and $4 and not paid) unpaid`,
             [this.scope.tenantId, this.scope.legalEntityId, from, to],
         );
         const held = await paymentHolds(this.db, {
@@ -216,17 +220,22 @@ export class Invoices {
         };
     }
 
-    // Form Pembayaran baca-saja: panel Pasien, Rincian Biaya, dan Nilai tagihan dengan rumus kasir Kuta.
-    async show(visitId: string) {
+    // Form Pembayaran baca-saja: panel Pasien untuk kunjungan atau panel Penjualan untuk penjualan, Rincian Biaya, dan
+    // Nilai tagihan dengan rumus kasir Kuta. Tepat satu dari visit dan sale terisi.
+    async show(documentId: string) {
         this.workspace.guard('payment', 'read');
-        const visit = lookupId(visitId)
-            ? await this.db.one(
-                  visitDetailSchema,
-                  `${visitSql} and visits.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, visitId],
-              )
+        const bill = lookupId(documentId)
+            ? await this.db.one(jsonObject, `${billSql} and bills.id = $3`, [
+                  this.scope.tenantId,
+                  this.scope.legalEntityId,
+                  documentId,
+              ])
             : undefined;
-        if (!visit) abort(404, 'Not Found');
+        if (!bill) abort(404, 'Not Found');
+        const header =
+            bill.kind === 'visit'
+                ? { visit: visitDetailSchema.parse(bill), sale: null }
+                : { visit: null, sale: saleDetailSchema.parse(bill) };
         const charges = await this.db.rows(
             chargeRowSchema,
             `select r.id, r.group_biaya as charge_group, r.kelompok_jasa_id as service_group_id,
@@ -244,7 +253,7 @@ export class Invoices {
              from tagihan_kasir_detail r
              where r.tenant_id = $1 and r.legal_entity_id = $2 and r.tagihan_sumber_dokumen_id = $3 and r.deleted_at is null
              order by r.group_biaya, r.kelompok_jasa_urutan nulls last, r.kelompok_jasa_nama, r.tanggal, r.id`,
-            [this.scope.tenantId, this.scope.legalEntityId, visitId],
+            [this.scope.tenantId, this.scope.legalEntityId, documentId],
         );
         const currency = new Currency(this.db, this.scope.tenantId);
         const precision = await currency.precision(localCurrencyCode);
@@ -262,7 +271,7 @@ export class Invoices {
         const options = await paymentOptions(this.db, this.workspace);
         // Jenis bayar yang dikhususkan tipe pasien lain tetap tampil seperti layar lama; refusal membawa pesan yang
         // ditampilkan layar saat jenis bayar itu diisi.
-        const restricted = new Set(visit.restricted_payment_method_ids);
+        const restricted = new Set(header.visit?.restricted_payment_method_ids);
         const paymentMethods = options.payment_methods.map(
             ({ currency_decimals, rate, rate_message, ...method }) => ({
                 ...method,
@@ -359,22 +368,22 @@ export class Invoices {
             [
                 this.scope.tenantId,
                 this.scope.legalEntityId,
-                visitId,
+                documentId,
                 localCurrencyCode,
             ],
         );
-        // Pembayaran kunjungan ini yang sudah dikoreksi nota kredit, ditampilkan baca-saja di atas pembayaran barunya.
+        // Pembayaran tagihan ini yang sudah dikoreksi nota kredit, ditampilkan baca-saja di atas pembayaran barunya.
         const creditMemos = await this.db.rows(
             z.object({ number: z.string(), payment_number: z.string() }),
             `select n.no_bukti as number, k.no_bukti as payment_number
              from nota_kredit n join kasir k on k.tenant_id = n.tenant_id and k.id = n.kasir_id
              where n.tenant_id = $1 and n.legal_entity_id = $2 and k.sumber_dokumen_id = $3
              order by n.jam, n.id`,
-            [this.scope.tenantId, this.scope.legalEntityId, visitId],
+            [this.scope.tenantId, this.scope.legalEntityId, documentId],
         );
         return {
             data: {
-                visit,
+                ...header,
                 charges,
                 totals: {
                     value: totals.value,
