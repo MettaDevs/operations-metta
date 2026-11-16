@@ -639,7 +639,9 @@ function PrescriptionFacts({
                     >
                         {prescription.dispensed_at
                             ? 'Diserahkan farmasi'
-                            : prescriptionStatusLabels[prescription.status]}
+                            : prescription.cancelled_at
+                              ? 'Dibatalkan farmasi'
+                              : prescriptionStatusLabels[prescription.status]}
                     </Badge>
                 </dd>
             </div>
@@ -658,6 +660,19 @@ function PrescriptionFacts({
                         {timeOf(prescription.dispensed_at)}
                         {prescription.dispensing_number
                             ? ` · ${prescription.dispensing_number}`
+                            : ''}
+                    </dd>
+                </div>
+            )}
+            {prescription.cancelled_at && (
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Dibatalkan
+                    </dt>
+                    <dd>
+                        {timeOf(prescription.cancelled_at)}
+                        {prescription.cancel_reason
+                            ? ` · ${prescription.cancel_reason}`
                             : ''}
                     </dd>
                 </div>

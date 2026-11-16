@@ -1,0 +1,122 @@
+asyncapi: 3.0.0
+info:
+  title: pharmacy.prescription.cancelled.v1
+  version: 1.0.0
+  description: |
+    Farmasi membatalkan resep yang tidak diambil pasien, dan resep itu keluar dari antrean farmasi. Diterbitkan module
+    farmasi (`modules/pharmacy`) lewat `publishEvent` di transaksi yang sama dengan pembatalan, jadi gagal sesudahnya
+    membatalkan keduanya, dan Batal resep yang diulang tidak menerbitkan event kedua.
+
+    Padanan sistem lama: `SIMtrResep.Batal = 1`, yang dihitung antrean farmasi sebagai "Tidak Diambil" dan disaring
+    antrean, E-Resep, dan pemeriksaan kasir. Sistem lama tidak punya tombol untuk mengisinya.
+
+    Resep yang sudah disiapkan dibatalkan bersama penyiapannya, di transaksi yang sama: stoknya kembali dan
+    `pharmacy.dispensing.charges-replaced.v1` dengan `lines` kosong mengeluarkan obatnya dari tagihan kasir sebelum
+    event ini terbit. Resep yang obatnya sudah diserahkan tidak bisa dibatalkan; obat yang dikembalikan pasien dicatat
+    lewat retur.
+
+    Keadaan sebenarnya, 14 November 2026:
+    - Event hanya diantar di dalam runtime ke handler module yang terpasang. Belum ada pengirim ke luar runtime, jadi
+      baris `outbox_events` menjadi catatan dan `published_at` tetap kosong.
+    - Sesudah kunjungan dibayar kasir, Batal resep yang sudah disiapkan ditolak di farmasi lewat kunci kasir
+      (`lockChargeForChange`) sampai pembayarannya dibatalkan. Pembayaran otomatis dibatalkan kasir lalu dilunasi ulang
+      dengan biaya yang baru.
+    - Penerima: module layanan kesehatan (`modules/healthcare`), bila terpasang, menandai resep E-Resep-nya dibatalkan
+      beserta waktu dan alasannya. Isi yang tidak cocok dicatat ke log lalu dilewati.
+channels:
+  pharmacy.prescription.cancelled.v1:
+    address: pharmacy.prescription.cancelled.v1
+    messages:
+      prescriptionCancelled:
+        $ref: '#/components/messages/prescriptionCancelled'
+operations:
+  publishPrescriptionCancelled:
+    action: send
+    channel:
+      $ref: '#/channels/pharmacy.prescription.cancelled.v1'
+    messages:
+      - $ref: '#/channels/pharmacy.prescription.cancelled.v1/messages/prescriptionCancelled'
+components:
+  messages:
+    prescriptionCancelled:
+      name: prescriptionCancelled
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          occurred_at,
+          tenant_id,
+          legal_entity_id,
+          org_unit_id,
+          correlation_id,
+          data,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Id baris outbox_events, sekaligus id event untuk penerima yang idempoten.
+        type:
+          const: pharmacy.prescription.cancelled.v1
+        occurred_at:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity resep, sama dengan envelope healthcare.prescription.issued.v1.
+        org_unit_id:
+          type: string
+          format: uuid
+          description: Operating unit kunjungan resep.
+        correlation_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/cancellation'
+    cancellation:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          prescription_id,
+          prescription_number,
+          visit_id,
+          registration_number,
+          cancelled_at,
+          reason,
+        ]
+      properties:
+        prescription_id:
+          type: string
+          format: uuid
+          description: prescription_id dari healthcare.prescription.issued.v1.
+        prescription_number:
+          type: string
+        visit_id:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            visit_id dari healthcare.prescription.issued.v1; kosong untuk resep yang diterima sebelum event itu
+            membawanya.
+        registration_number:
+          type: string
+          description: Nomor registrasi kunjungan resep.
+        cancelled_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Alasan resep dibatalkan, ditulis petugas farmasi.

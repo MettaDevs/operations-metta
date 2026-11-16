@@ -7,6 +7,7 @@ import { publishEvent } from '../../../../../src/platform/events/index.ts';
 import { eventContract } from '../../../../../test/support/event-contracts.ts';
 import { operationsTestApp } from '../../../../../test/support/operations-app.ts';
 import {
+    receiveCancellation,
     receiveDispensing,
     receiveReturn,
 } from '../../../src/examination/medical-record/dispensing.events.ts';
@@ -23,6 +24,8 @@ type Prescription = {
     status: string;
     dispensed_at?: string | null;
     dispensing_number?: string | null;
+    cancelled_at?: string | null;
+    cancel_reason?: string | null;
     lines: {
         drug_id: string | null;
         dispensed_quantity?: string | null;
@@ -33,6 +36,7 @@ type Prescription = {
 const dispensed = 'pharmacy.prescription.dispensed.v1';
 const posted = 'pharmacy.return.posted.v1';
 const reversed = 'pharmacy.return.reversed.v1';
+const cancelled = 'pharmacy.prescription.cancelled.v1';
 
 // E-Resep menampilkan obat yang sudah diserahkan farmasi, dari pharmacy.prescription.dispensed.v1 yang diterbitkan
 // sesuai kontraknya: waktu, nomor penyerahan, dan jumlah per baris. Retur dan pembatalannya (pharmacy.return.posted.v1,
@@ -49,6 +53,8 @@ describe.skipIf(!process.env.DB_HOST)(
         let destination: string;
         let prescription: Prescription;
         let lineIds: { id: string; drug_id: string }[];
+        let drugs: string[];
+        let usageInstructionId: string | undefined;
 
         beforeAll(async () => {
             clinic = await createClinic(pool, browser, 'Klinik Uji Serah');
@@ -65,30 +71,44 @@ describe.skipIf(!process.env.DB_HOST)(
                         201,
                     )
                 ).data.id;
-            const amoxicillin = await drug('AMX');
-            const paracetamol = await drug('PCT');
-            const metadata = await json<{
-                usage_instructions: { id: string }[];
-            }>(
-                await clinic.admin.get(
-                    `${api}/examination/medical-record/metadata`,
-                ),
-                200,
-            );
+            drugs = [await drug('AMX'), await drug('PCT')];
+            usageInstructionId = (
+                await json<{
+                    usage_instructions: { id: string }[];
+                }>(
+                    await clinic.admin.get(
+                        `${api}/examination/medical-record/metadata`,
+                    ),
+                    200,
+                )
+            ).usage_instructions[0]?.id;
+            destination = await sendPrescription();
+            prescription = (await sent())[0]!;
+            lineIds = [
+                ...(await pool.unsafe<{ id: string; drug_id: string }[]>(
+                    `select id, obat_id as drug_id from sim_tr_resep_detail
+                     where resep_id = $1 and deleted_at is null order by urutan`,
+                    [prescription.id],
+                )),
+            ];
+        });
+
+        // Kunjungan baru dengan satu resep dua obat yang dikirim dokter ke farmasi; menjawab tujuan pemeriksaannya.
+        async function sendPrescription(): Promise<string> {
             const visit = await clinic.visit();
-            destination = visit.destinationId;
-            await json(await clinic.start(destination), 200);
+            const target = visit.destinationId;
+            await json(await clinic.start(target), 200);
             const line = (drugId: string) => ({
                 drug_id: drugId,
                 compound: null,
                 quantity: 10,
                 signa: '3x1',
-                usage_instruction_id: metadata.usage_instructions[0]?.id,
+                usage_instruction_id: usageInstructionId,
                 ...clinic.dosage,
                 notes: null,
             });
             await json(
-                await clinic.save(destination, {
+                await clinic.save(target, {
                     anamnesis: {
                         doctor_id: clinic.doctor,
                         nurse_id: null,
@@ -102,16 +122,16 @@ describe.skipIf(!process.env.DB_HOST)(
                         {
                             id: null,
                             notes: null,
-                            lines: [line(amoxicillin), line(paracetamol)],
+                            lines: drugs.map(line),
                         },
                     ],
                 }),
                 200,
             );
-            const record = await clinic.show(destination);
+            const record = await clinic.show(target);
             await json(
                 await clinic.admin.post(
-                    `${api}/examination/destinations/${destination}/prescriptions/send`,
+                    `${api}/examination/destinations/${target}/prescriptions/send`,
                     {
                         version: record.data.version,
                         prescriptions: record.data.prescriptions,
@@ -119,20 +139,13 @@ describe.skipIf(!process.env.DB_HOST)(
                 ),
                 200,
             );
-            prescription = (await sent())[0]!;
-            lineIds = [
-                ...(await pool.unsafe<{ id: string; drug_id: string }[]>(
-                    `select id, obat_id as drug_id from sim_tr_resep_detail
-                     where resep_id = $1 and deleted_at is null order by urutan`,
-                    [prescription.id],
-                )),
-            ];
-        });
+            return target;
+        }
 
-        async function sent() {
+        async function sent(target = destination) {
             return (
                 (
-                    (await clinic.show(destination)).data.prescriptions as
+                    (await clinic.show(target)).data.prescriptions as
                         Prescription[] | undefined
                 )?.filter((row) => row.status === 'dikirim') ?? []
             );
@@ -140,7 +153,11 @@ describe.skipIf(!process.env.DB_HOST)(
 
         // Diterbitkan seperti module farmasi menerbitkannya, lalu diperiksa terhadap berkas kontrak.
         async function publish(
-            type: typeof dispensed | typeof posted | typeof reversed,
+            type:
+                | typeof dispensed
+                | typeof posted
+                | typeof reversed
+                | typeof cancelled,
             data: JsonObject,
         ) {
             const connection = await pool.reserve();
@@ -444,6 +461,59 @@ describe.skipIf(!process.env.DB_HOST)(
                 ['0 TAB', '10 TAB'],
                 ['4 TAB', null],
             ]);
+        });
+
+        test('a prescription the pharmacy cancels shows as cancelled with its reason, and leaves the CPPT', async () => {
+            const target = await sendPrescription();
+            const [waiting] = await sent(target);
+            const data = {
+                prescription_id: waiting?.id ?? '',
+                prescription_number: waiting?.number ?? '',
+                visit_id: null,
+                registration_number: 'REG-1',
+                cancelled_at: '2026-11-14T02:00:00Z',
+                reason: 'Pasien tidak datang mengambil obat',
+            };
+            const envelope = await publish(cancelled, data);
+            const shown = (
+                (await clinic.show(target)).data.prescriptions as Prescription[]
+            ).find((row) => row.id === waiting?.id);
+            expect(shown).toMatchObject({
+                status: 'dibatalkan',
+                cancel_reason: 'Pasien tidak datang mengambil obat',
+            });
+            expect(shown?.cancelled_at).toBe('2026-11-14T02:00:00.000000Z');
+            const cppt = await json<{
+                data: { plan: { prescriptions: unknown[] } };
+            }>(
+                await clinic.admin.get(
+                    `${api}/examination/destinations/${target}/cppt`,
+                ),
+                200,
+            );
+            expect(cppt.data.plan.prescriptions).toEqual([]);
+
+            const connection = await pool.reserve();
+            try {
+                const db = new Database(
+                    connection,
+                    undefined,
+                    Bun.randomUUIDv7(),
+                );
+                await db.transaction(() =>
+                    receiveCancellation(db, {
+                        ...envelope,
+                        data: { ...data, reason: 'Diantar ulang' },
+                    }),
+                );
+            } finally {
+                connection.release();
+            }
+            const [row] = await pool.unsafe<{ reason: string }[]>(
+                'select alasan_batal as reason from sim_tr_resep where id = $1',
+                [waiting?.id ?? ''],
+            );
+            expect(row?.reason).toBe('Pasien tidak datang mengambil obat');
         });
     },
 );

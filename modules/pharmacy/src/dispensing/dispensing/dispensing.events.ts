@@ -156,6 +156,49 @@ export async function publishPrescriptionDispensed(
     });
 }
 
+// Resep dibatalkan farmasi ("Tidak Diambil"), untuk layanan kesehatan. Kontraknya ditulis tangan di
+// contracts/events/pharmacy.prescription.cancelled.v1.yaml. Dipanggil di transaksi Batal resep, sesudah resep ditandai
+// dibatalkan dan sesudah biaya obat penyiapan yang dibatalkan bersamanya diterbitkan.
+export const prescriptionCancelled =
+    `${moduleId}.prescription.cancelled.v1` as const;
+
+export async function publishPrescriptionCancelled(
+    db: Database,
+    scope: { tenantId: string; legalEntityId: string },
+    prescriptionId: string,
+): Promise<void> {
+    const prescription = await db.one(
+        z.object({
+            prescription_id: z.string(),
+            prescription_number: z.string(),
+            visit_id: z.string().nullable(),
+            registration_number: z.string(),
+            cancelled_at: z.string(),
+            reason: z.string(),
+            operating_unit_id: z.string(),
+        }),
+        `select r.resep_sumber_id as prescription_id, r.nomor_resep as prescription_number,
+                r.kunjungan_id as visit_id, r.no_reg as registration_number,
+                to_char(r.dibatalkan_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as cancelled_at, r.alasan_batal as reason,
+                r.operating_unit_id
+         from far_tr_resep r
+         where r.tenant_id = $1 and r.legal_entity_id = $2 and r.id = $3 and r.dibatalkan_pada is not null`,
+        [scope.tenantId, scope.legalEntityId, prescriptionId],
+    );
+    if (!prescription)
+        throw new Error(
+            `Cancelled prescription ${prescriptionId} was not found.`,
+        );
+    const { operating_unit_id: orgUnitId, ...data } = prescription;
+    await publishEvent(db, {
+        type: prescriptionCancelled,
+        tenantId: scope.tenantId,
+        legalEntityId: scope.legalEntityId,
+        orgUnitId,
+        data,
+    });
+}
+
 // Biaya obat satu penyerahan untuk kasir Core, sebagai potret penuh: baris yang masih ditagih dengan Qty bersih sesudah
 // retur (JmlPemakaian - JmlRetur sistem lama), atau kosong bila penyerahan dibatalkan. Harga satuan dan persen diskon
 // dibekukan saat Siapkan. Diterbitkan di transaksi Siapkan, Batal siapkan, retur, dan batal retur. Resep tanpa

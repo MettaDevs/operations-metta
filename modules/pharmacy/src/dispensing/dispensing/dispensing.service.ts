@@ -36,6 +36,7 @@ import {
     lockVisitCharges,
     paidMessage,
     publishDispensingCharges,
+    publishPrescriptionCancelled,
     publishPrescriptionDispensed,
 } from './dispensing.events.ts';
 import {
@@ -43,6 +44,7 @@ import {
     dispensingInputSchema,
     dispensingPriceSchema,
     handOverInputSchema,
+    prescriptionCancelInputSchema,
     versionInputSchema,
     type DispensingLine,
     type DispensingStatus,
@@ -96,6 +98,7 @@ const lockedSchema = z.object({
     price_group_id: z.string().nullable(),
     ktp_patient: z.boolean(),
     visit_id: z.string().nullable(),
+    cancelled: z.boolean(),
 });
 
 const itemLineSchema = z.object({
@@ -129,7 +132,12 @@ const messages = {
     batch_id: 'Pilih batch dari daftar.',
     reason: 'Alasan paling banyak 200 karakter.',
     version: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
+    cancel_reason: 'Isi alasan resep ini dibatalkan.',
 };
+
+const cancelledMessage = 'Resep ini sudah dibatalkan.';
+const handedOverCancelMessage =
+    'Obat resep ini sudah diserahkan, jadi resepnya tidak bisa dibatalkan. Obat yang dikembalikan pasien dicatat lewat Retur.';
 
 type Header = z.infer<typeof dispensingHeaderSchema> & { resep_id: string };
 
@@ -156,6 +164,7 @@ export class Dispensings {
             prepare: has('dispensing.prepare'),
             hand_over: has('dispensing.hand-over'),
             reverse: has('dispensing.reverse'),
+            cancel: has('prescription.cancel'),
         };
     }
 
@@ -338,15 +347,16 @@ export class Dispensings {
         });
     }
 
-    // Baris resep dikunci sebelum penyerahannya dibaca atau diubah. Resep legal entity lain tidak ditemukan.
-    private async lock(prescriptionId: string) {
+    // Baris resep dikunci sebelum penyerahannya dibaca atau diubah. Resep legal entity lain tidak ditemukan, dan resep
+    // yang sudah dibatalkan ditolak kecuali untuk Batal resep sendiri.
+    private async lock(prescriptionId: string, allowCancelled = false) {
         const locked = lookupId(prescriptionId)
             ? await this.db.one(
                   lockedSchema,
                   `select r.id, r.operating_unit_id, u.name as operating_unit_name,
                           ${servingLocationSql('r')} as location_id, r.diterbitkan_pada::text as issued_at,
                           r.kelompok_harga_id as price_group_id, r.pasien_ktp as ktp_patient,
-                          r.kunjungan_id as visit_id
+                          r.kunjungan_id as visit_id, r.dibatalkan_pada is not null as cancelled
                    from far_tr_resep r
                    join organizations u on u.tenant_id = r.tenant_id and u.id = r.operating_unit_id
                    where r.tenant_id = $1 and r.legal_entity_id = $2 and r.id = $3 and r.deleted_at is null
@@ -359,6 +369,8 @@ export class Dispensings {
               )
             : undefined;
         if (!locked) abort(404, 'Not Found');
+        if (locked.cancelled && !allowCancelled)
+            validation({ _form: cancelledMessage });
         return locked;
     }
 
@@ -920,33 +932,81 @@ export class Dispensings {
             ['disiapkan', 'dipanggil'],
             'dibatalkan',
             version,
-            async (billId) => {
-                const visitId = (await this.lock(prescriptionId)).visit_id;
-                if (visitId)
-                    await lockVisitCharges(this.db, {
-                        tenantId: this.scope.tenantId,
-                        visitId,
-                        message: paidMessage,
-                    });
-                const stamp = nowSql();
-                await this.db.execute(
-                    `update bill_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
-                            updated_at = $1
-                     where tenant_id = $3 and id = $4`,
-                    [stamp, this.workspace.userId, this.scope.tenantId, billId],
-                );
-                await reverseItemEntries(
-                    this.db,
-                    {
-                        tenantId: this.scope.tenantId,
-                        legalEntityId: this.scope.legalEntityId,
-                        userId: this.workspace.userId,
-                    },
-                    { type: dispensingSource, id: billId },
-                );
-                await publishDispensingCharges(this.db, this.scope, billId);
-            },
+            async (billId) =>
+                this.reversePreparation(
+                    billId,
+                    (await this.lock(prescriptionId)).visit_id,
+                ),
         );
+    }
+
+    // Kunci kasir lebih dulu: kunjungan yang sudah dibayar menolak, dan pembayaran otomatisnya dibatalkan kasir lalu
+    // dilunasi ulang saat biaya obat yang baru (kosong) sampai di kasir.
+    private async reversePreparation(billId: string, visitId: string | null) {
+        if (visitId)
+            await lockVisitCharges(this.db, {
+                tenantId: this.scope.tenantId,
+                visitId,
+                message: paidMessage,
+            });
+        const stamp = nowSql();
+        await this.db.execute(
+            `update bill_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
+                    updated_at = $1
+             where tenant_id = $3 and id = $4`,
+            [stamp, this.workspace.userId, this.scope.tenantId, billId],
+        );
+        await reverseItemEntries(
+            this.db,
+            {
+                tenantId: this.scope.tenantId,
+                legalEntityId: this.scope.legalEntityId,
+                userId: this.workspace.userId,
+            },
+            { type: dispensingSource, id: billId },
+        );
+        await publishDispensingCharges(this.db, this.scope, billId);
+    }
+
+    // Batal resep ("Tidak Diambil" di antrean sistem lama): resep keluar dari antrean. Resep yang sudah disiapkan
+    // dibatalkan bersama penyiapannya, jadi stoknya kembali dan obatnya keluar dari tagihan kasir; draf penyerahan
+    // dibiarkan karena belum memposting apa pun. Obat yang sudah diserahkan dikembalikan lewat retur, bukan di sini.
+    // Permintaan yang diulang sesudah resep dibatalkan tidak menulis apa pun.
+    async cancelPrescription(prescriptionId: string, body: unknown) {
+        this.workspace.guard('prescription', 'cancel');
+        const data = parseInput(prescriptionCancelInputSchema, body, {
+            reason: messages.cancel_reason,
+            version: messages.version,
+        });
+        const reason = data.reason.trim();
+        if (!reason) validation({ reason: messages.cancel_reason });
+        if (reason.length > 200) validation({ reason: messages.reason });
+        await this.db.transaction(async () => {
+            const locked = await this.lock(prescriptionId, true);
+            if (locked.cancelled) return;
+            const current = await this.active(locked.id);
+            if (current?.status === 'diserahkan')
+                validation({ _form: handedOverCancelMessage });
+            if ((current?.version ?? null) !== data.version)
+                coded(409, 'stale_version', staleMessage);
+            if (current && current.status !== 'draf')
+                await this.reversePreparation(current.id, locked.visit_id);
+            const stamp = nowSql();
+            await this.db.execute(
+                `update far_tr_resep set dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2, alasan_batal = $3,
+                        updated_at = $1
+                 where tenant_id = $4 and id = $5`,
+                [
+                    stamp,
+                    this.workspace.userId,
+                    reason,
+                    this.scope.tenantId,
+                    locked.id,
+                ],
+            );
+            await publishPrescriptionCancelled(this.db, this.scope, locked.id);
+        });
+        return this.show(prescriptionId);
     }
 
     // Batch yang masih punya stok untuk satu barang di satu lokasi, kedaluwarsa terdekat lebih dulu.

@@ -10,7 +10,9 @@ import { procedureRoutes } from './clinical/procedure/procedure.routes.ts';
 import { cpptRoutes } from './examination/cppt/cppt.routes.ts';
 import { dischargeRoutes } from './examination/discharge/discharge.routes.ts';
 import {
+    prescriptionCancelled,
     prescriptionDispensed,
+    receiveCancellation,
     receiveDispensing,
     receiveReturn,
     returnPosted,
@@ -67,4 +69,5 @@ export function registerHealthcareEventHandlers(): void {
     onEvent(prescriptionDispensed, moduleId, receiveDispensing);
     onEvent(returnPosted, moduleId, receiveReturn);
     onEvent(returnReversed, moduleId, receiveReturn);
+    onEvent(prescriptionCancelled, moduleId, receiveCancellation);
 }

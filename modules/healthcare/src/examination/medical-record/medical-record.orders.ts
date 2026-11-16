@@ -256,6 +256,8 @@ const savedPrescriptionSchema = z.object({
     sent_at: z.string().nullable(),
     dispensed_at: z.string().nullable(),
     dispensing_number: z.string().nullable(),
+    cancelled_at: z.string().nullable(),
+    cancel_reason: z.string().nullable(),
     doctor_name: z.string().nullable(),
     nurse_name: z.string().nullable(),
     notes: z.string().nullable(),
@@ -618,6 +620,7 @@ export class ExaminationOrders {
             `select r.id, r.nomor as number, r.status,
                     ${isoSql('r.dikirim_pada')} as sent_at, ${isoSql('r.diserahkan_pada')} as dispensed_at,
                     r.nomor_penyerahan as dispensing_number,
+                    ${isoSql('r.dibatalkan_pada')} as cancelled_at, r.alasan_batal as cancel_reason,
                     dp.name as doctor_name, np.name as nurse_name, r.catatan as notes
              from sim_tr_resep r
              left join sim_m_nakes dn on dn.tenant_id = r.tenant_id and dn.id = r.dokter_id

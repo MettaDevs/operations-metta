@@ -74,6 +74,16 @@ export function PrescriptionFacts({
             {prescription.notes && (
                 <Fact label="Catatan dokter">{prescription.notes}</Fact>
             )}
+            {prescription.cancelled_at && (
+                <>
+                    <Fact label="Dibatalkan">
+                        {dateTimeText(prescription.cancelled_at)}
+                    </Fact>
+                    <Fact label="Alasan batal">
+                        {prescription.cancel_reason}
+                    </Fact>
+                </>
+            )}
         </dl>
     );
 }

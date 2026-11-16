@@ -44,8 +44,10 @@ const rowSql = `select * from (
                             where d.tenant_id = r.tenant_id and d.resep_id = r.id and d.barang_id is not null
                               and d.deleted_at is null) as item_count,
                            (r.diterbitkan_pada at time zone 'UTC' at time zone e.timezone)::date::text as issued_date,
-                           case when b.status is null or b.status = 'draf' then 'menunggu' else b.status end
+                           case when r.dibatalkan_pada is not null then 'dibatalkan'
+                                when b.status is null or b.status = 'draf' then 'menunggu' else b.status end
                                as queue_status,
+                           ${isoSql('r.dibatalkan_pada')} as cancelled_at, r.alasan_batal as cancel_reason,
                            b.status as dispensing_status, b.nomor as dispensing_number,
                            b.version as dispensing_version, ${isoSql('b.dipanggil_pada')} as called_at,
                            ${isoSql('b.diserahkan_pada')} as handed_over_at
@@ -124,11 +126,13 @@ export class Prescriptions {
              group by queue_status`,
             bindings,
         );
+        // Tanpa status, resep yang dibatalkan tidak ikut: ia sudah keluar dari antrean.
         const status = z
             .enum(queueStatuses)
             .safeParse(parameters.get('status'));
         if (status.success)
             filter += ` and queue_status = $${bindings.push(status.data)}`;
+        else filter += " and queue_status <> 'dibatalkan'";
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,

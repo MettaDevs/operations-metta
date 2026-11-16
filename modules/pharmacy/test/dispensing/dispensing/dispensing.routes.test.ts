@@ -948,6 +948,7 @@ describe.skipIf(!process.env.DB_HOST)('dispensing', () => {
             { status: 'disiapkan', total: 1 },
             { status: 'dipanggil', total: 0 },
             { status: 'diserahkan', total: 0 },
+            { status: 'dibatalkan', total: 0 },
         ]);
         const prepared = await json<{ data: { id: string }[] }>(
             await pharmacy.admin.get(

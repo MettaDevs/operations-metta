@@ -96,11 +96,13 @@ const locationSchema = z.object({
     name: z.string(),
 });
 // Status resep di antrean: menunggu (belum disiapkan, termasuk yang drafnya sudah disimpan), lalu status penyerahannya.
+// Resep yang dibatalkan farmasi keluar dari antrean dan hanya tampil bila disaring.
 export const queueStatuses = [
     'menunggu',
     'disiapkan',
     'dipanggil',
     'diserahkan',
+    'dibatalkan',
 ] as const;
 export type QueueStatus = (typeof queueStatuses)[number];
 
@@ -127,6 +129,8 @@ export const prescriptionRowSchema = z.object({
     dispensing_version: z.number().nullable(),
     called_at: z.string().nullable(),
     handed_over_at: z.string().nullable(),
+    cancelled_at: z.string().nullable(),
+    cancel_reason: z.string().nullable(),
 });
 
 export const prescriptionLineSchema = z.object({

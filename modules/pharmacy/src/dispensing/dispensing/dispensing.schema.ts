@@ -110,3 +110,10 @@ export const handOverInputSchema = z.object({
     receiver_name: z.string().nullable().optional(),
     version: z.number(),
 });
+
+// Batal resep. version adalah versi penyerahan aktif yang dilihat layar, atau null bila resep belum punya penyerahan,
+// supaya resep yang disiapkan orang lain sesudah layar dimuat tidak ikut dibatalkan tanpa terlihat.
+export const prescriptionCancelInputSchema = z.object({
+    reason: z.string(),
+    version: z.number().nullable(),
+});

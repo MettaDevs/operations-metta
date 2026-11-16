@@ -38,7 +38,8 @@ import { ageText, clockText, durationText } from './prescription-display.tsx';
 
 // Antrean resep farmasi. Lokasi dipilih sekali per perangkat, karena komputer farmasi berada di satu lokasi: farmasi
 // biasa dan farmasi pusling hanya beda lokasi, diatur di Lokasi layanan resep. Bawaannya resep yang menunggu disiapkan;
-// penghitung status memindahkan daftar ke resep yang sudah disiapkan, dipanggil, atau diserahkan.
+// penghitung status memindahkan daftar ke resep yang sudah disiapkan, dipanggil, atau diserahkan. Resep yang dibatalkan
+// tidak masuk Semua, seperti "Tidak Diambil" di antrean sistem lama, dan punya penghitungnya sendiri.
 
 const route = getRouteApi('/_app/pharmacy/dispensing/prescriptions');
 type Row = ApiBody<'pharmacyPrescriptionList'>['data'][number];
@@ -52,16 +53,22 @@ const queueStatuses = [
     'disiapkan',
     'dipanggil',
     'diserahkan',
+    'dibatalkan',
 ] as const satisfies readonly QueueStatus[];
 const counterStatuses: (QueueStatus | typeof EVERY)[] = [
-    ...queueStatuses,
+    'menunggu',
+    'disiapkan',
+    'dipanggil',
+    'diserahkan',
     EVERY,
+    'dibatalkan',
 ];
 const statusLabels = {
     menunggu: 'Menunggu',
     disiapkan: 'Disiapkan',
     dipanggil: 'Dipanggil',
     diserahkan: 'Diserahkan',
+    dibatalkan: 'Dibatalkan',
 } as const satisfies Record<QueueStatus, string>;
 const searchSchema = z.object({
     q: z.string().max(200).optional(),
@@ -103,7 +110,11 @@ function Counters({
         if (!counts) return '…';
         const value =
             status === EVERY
-                ? counts.reduce((sum, row) => sum + row.total, 0)
+                ? counts.reduce(
+                      (sum, row) =>
+                          row.status === 'dibatalkan' ? sum : sum + row.total,
+                      0,
+                  )
                 : (counts.find((row) => row.status === status)?.total ?? 0);
         return value.toLocaleString('id-ID');
     };
@@ -566,6 +577,9 @@ function PrescriptionsPage(): ReactNode {
                                 cell: (row) => (
                                     <StatusBadge
                                         status={row.dispensing_status}
+                                        cancelled={
+                                            row.queue_status === 'dibatalkan'
+                                        }
                                     />
                                 ),
                             },
