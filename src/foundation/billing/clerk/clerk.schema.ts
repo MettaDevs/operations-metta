@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 
 // Clerk (SIMtrClerk sistem lama): sesi kas satu kasir di legal entity aktif. status `start` sampai Clerk End, lalu
-// `end`. Angka ditulis sebagai teks desimal, terisi saat Clerk End.
+// `end`. Angka ditulis sebagai teks desimal, terisi saat Clerk End. transactions dan system_total adalah penjualan;
+// pembayaran hutang (pelunasan bon dan piutang) dihitung terpisah di receivable_payments dan receivable_payment_total,
+// walau uangnya ikut jumlah sistem jenis bayarnya.
 export const clerkRowSchema = z.object({
     id: z.string(),
     code: z.string(),
@@ -16,6 +18,8 @@ export const clerkRowSchema = z.object({
     system_total: z.string(),
     clerk_total: z.string(),
     difference_total: z.string(),
+    receivable_payments: z.number(),
+    receivable_payment_total: z.string(),
     version: z.number(),
 });
 

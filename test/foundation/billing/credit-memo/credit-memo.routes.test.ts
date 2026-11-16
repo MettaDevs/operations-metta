@@ -491,11 +491,16 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
             system(methods.TUN),
             system(methods.KRT),
         ]).toEqual([3, '-250000', '-150000', '-100000']);
-        // Clerk asal pembayaran yang dikoreksi tidak berubah.
-        const [origin] = await pool.unsafe<{ jumlah_transaksi: number }[]>(
-            'select jumlah_transaksi from clerk where id = $1',
+        // Clerk asal pembayaran yang dikoreksi tidak berubah: tiga pembayaran, dan pelunasan bon dihitung terpisah.
+        const [origin] = await pool.unsafe<
+            { jumlah_transaksi: number; jumlah_pembayaran_hutang: number }[]
+        >(
+            'select jumlah_transaksi, jumlah_pembayaran_hutang from clerk where id = $1',
             [endedClerkId],
         );
-        expect(origin?.jumlah_transaksi).toBe(4);
+        expect(origin).toEqual({
+            jumlah_transaksi: 3,
+            jumlah_pembayaran_hutang: 1,
+        });
     });
 });
