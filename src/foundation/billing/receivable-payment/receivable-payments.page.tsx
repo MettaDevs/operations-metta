@@ -36,6 +36,7 @@ function ReceivablePaymentsPage(): ReactNode {
     const navigate = route.useNavigate();
     const [open, setOpen] = useState<ReceivablePayment | 'new' | null>(null);
     const [canPay, setCanPay] = useState(false);
+    const [canCancel, setCanCancel] = useState(false);
     const loader = useCallback<ListLoader<ReceivablePayment>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.billingReceivablePaymentList(
@@ -51,6 +52,7 @@ function ReceivablePaymentsPage(): ReactNode {
                 { signal },
             );
             setCanPay(body.can_pay);
+            setCanCancel(body.can_cancel);
             return { items: body.data, nextCursor: body.next_cursor };
         },
         [],
@@ -207,6 +209,7 @@ function ReceivablePaymentsPage(): ReactNode {
                             }
                             record={open === 'new' ? null : open}
                             canPay={canPay}
+                            canCancel={canCancel}
                             onSaved={(payment) => {
                                 setOpen(payment);
                                 list.reload();

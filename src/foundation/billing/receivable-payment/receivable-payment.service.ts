@@ -327,6 +327,7 @@ export class ReceivablePayments {
             ),
             next_cursor: batch.next_cursor,
             can_pay: this.workspace.permissions.has('core.payment.update'),
+            can_cancel: this.workspace.permissions.has('core.payment.cancel'),
         };
     }
 
@@ -558,7 +559,7 @@ export class ReceivablePayments {
     // Piutang dikunci sebelum diperiksa, jadi pelunasan baru tidak bisa disimpan di tengahnya. Sisa piutang kembali
     // bertambah, dan piutangnya terbuka lagi.
     async cancel(request: Request, id: string, body: unknown) {
-        this.workspace.guard('payment', 'update');
+        this.workspace.guard('payment', 'cancel');
         const scope = this.scope;
         const parsed = receivablePaymentCancelInputSchema.safeParse(body);
         if (!parsed.success)
