@@ -45,4 +45,3 @@ Di persediaan klinik, konversi yang dipakai adalah isi kemasan per barang, misal
 ## Lihat juga
 
 - [Number sequence](14-number-sequences.md)
-- [Kalender fiskal](15-fiscal-calendars.md)

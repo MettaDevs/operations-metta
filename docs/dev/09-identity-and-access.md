@@ -25,7 +25,7 @@ Repo ini tidak punya layar membuat pengguna, undangan, atau penyiapan MFA. `Memb
 
 - **Kata sandi.** `POST /login` di `session.ts`. Percobaan dibatasi per email dan alamat IP. Pengguna tanpa kata sandi ditolak dengan pesan yang sama dengan kata sandi salah.
 - **SSO.** Alur tiga kaki di [SSO](32-sso.md).
-- **MFA.** Login kata sandi menjawab `two_factor: true` bila akun punya MFA yang sudah dikonfirmasi, dan sesi belum masuk. Langkah memasukkan kode MFA belum dipindah ke repo ini.
+- **MFA bersifat opsional.** Akun tanpa MFA masuk dengan kata sandi saja. Bila akun punya MFA yang sudah dikonfirmasi, login kata sandi menjawab `two_factor: true` dan sesi belum masuk. Langkah memasukkan kode MFA belum dipindah ke repo ini.
 - **Ganti kata sandi wajib.** Pengguna yang `must_change_password`-nya terisi ditolak 423 di setiap API sampai menggantinya.
 
 Sesi, cookie, dan CSRF dijelaskan di [Cache dan sesi](36-cache-and-sessions.md).

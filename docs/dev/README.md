@@ -41,8 +41,7 @@ Nomor berkas dipertahankan dari CoreERP supaya mudah dicocokkan. Nomor yang tida
 
 | Dokumen | Isi |
 | --- | --- |
-| [14-number-sequences.md](14-number-sequences.md) | Number sequence pola F&O: reference, scope, reset fiskal, penerbitan di dalam transaksi |
-| [15-fiscal-calendars.md](15-fiscal-calendars.md) | Kalender fiskal dan kalender kerja |
+| [14-number-sequences.md](14-number-sequences.md) | Number sequence pola F&O: reference, scope, reset, penerbitan di dalam transaksi |
 | [16-units-of-measure.md](16-units-of-measure.md) | Satuan dan konversi |
 | [24-global-address-book.md](24-global-address-book.md) | Buku alamat: party, alamat, kontak, vendor |
 | [37-funding-sources.md](37-funding-sources.md) | Sumber dana |
@@ -81,6 +80,7 @@ Nomor berkas dipertahankan dari CoreERP supaya mudah dicocokkan. Nomor yang tida
 | 22 CI/CD polyrepo | Pemeriksaan yang berlaku ada di `AGENTS.md` dan `.github/workflows/ci.yml`. |
 | 27 UI modul di dalam shell | Bentuk Inertia. Layar di repo ini diatur bagian *Layar* `AGENTS.md` dan [`docs/design-system/`](../design-system/index.md). |
 | 29 Alur rilis, 30 Registry Harbor, 31 admin.erp | Milik control plane, di repo [control-plane-metta](https://github.com/MettaDevs/control-plane-metta). |
+| 15 Kalender fiskal | Tidak dipakai di repo ini. Tabel baseline-nya ada, tetapi tidak ada yang menulisnya. |
 | 38 Tahun rencana | Belum ada kode yang memakainya di repo ini. |
 | 39 Pindah ke Bun + Elysia | Tetap di [CoreERP](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/39-pindah-ke-bun-elysia.md), sebagai catatan keputusan dan angka yang diukur. Angka runtime ada di skill `operations-metta-bun-elysia`. |
 

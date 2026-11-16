@@ -90,7 +90,7 @@ Never derive a later state from an earlier state:
 - A catalog entry is not proof that the module is installed for a tenant. A module in the Core runtime has no container and no database of its own; what must exist is the migration record (`schema_migrations`, written by `src/migrate.ts` per owner) and the installation row for that tenant.
 - `active` or `trial` entitlement cannot drive UI labelled "installed".
 
-No code in this repository reads or writes `core_module_installations` yet; the table comes from the baseline. A module runs in this process: if Core is up and the module is installed, the module is up. There is no separate "ready" state.
+`installModule` in `src/platform/environment/install-module.service.ts` writes `core_module_installations` after the module migration succeeds, and the Shell launcher (`src/platform/access/shell.routes.ts`) reads it. A module runs in this process: if Core is up and the module is installed, the module is up. There is no separate "ready" state.
 
 ## Required workflow
 
@@ -115,7 +115,7 @@ The chain `role → duty → privilege → permission → entry point` has to su
 - Privilege codes must differ from permission codes. Reject a declaration that reuses one.
 - `access_level` is declared, never derived. Splitting it out of a permission code string (`…archive` → access level `archive`) invents levels that do not exist.
 - Valid access levels are exactly `read`, `update`, `create`, `correct`, `delete`, and `invoke`. Delete-lifecycle actions (`archive`, `void`, `retire`) use `delete`; a service operation with no CRUD meaning uses `invoke`.
-- In CoreERP these declarations lived in the module manifest (`app.yaml` plus `manifest/`) and travelled with the release. This repository has no manifest yet; the catalog rows came from the CoreERP baseline. Where a module declares new security objects here is not decided: ask the product owner before creating a place.
+- In CoreERP these declarations lived in the module manifest (`app.yaml` plus `manifest/`) and travelled with the release. This repository has no manifest: Core and each module write their security catalog rows in their own migrations (`INSERT ... ON CONFLICT DO NOTHING`), for example `modules/healthcare/database/migrations/0001_patient.sql`.
 
 #### Security role hierarchy
 
@@ -125,16 +125,15 @@ Security objects are **declared with the code** and travel with it. Tenants comp
 
 ### Number sequence decision gate
 
-Automatic numbers exist only for transaction documents and main masters searched by code (`AGENTS.md`, Kode dan nomor dokumen). Before adding or changing a number reference, its configuration, or a caller of the issuer:
+A number exists only when it is genuinely needed: transaction documents and main masters searched by code (`AGENTS.md`, Kode dan nomor dokumen). A prefix is optional. Before adding or changing a number reference, its configuration, or a caller of the issuer:
 
 1. Confirm the owning module, reference code, and allowed tenant/legal-entity/operating-unit scopes.
 2. Confirm whether the reference is non-continuous, continuous, or allows manual values; reject continuous plus manual.
 3. Confirm reset-period, format segments, counter limit, and whether preallocation is enabled. Preallocation must always be durable rows in the tenant database; never cache a counter or a number range in process memory, because several Bun processes and instances serve the same tenant. Non-continuous preallocates a block per scope. Continuous may also preallocate, but only as durable rows in the pool that stay individually accounted for, so a gap is impossible.
-4. Confirm the reset period explicitly: `never`, `calendar_year`, `fiscal_year`, or `fiscal_period`. A reset period other than `never` requires a format segment that varies with that period.
-5. Fiscal reset requires a legal entity in context, because the fiscal calendar belongs to the legal entity and never to an operating unit. Legal-entity scope resolves it from the scope itself. Operating-unit scope is allowed, but the caller must supply the legal entity per request — an operating unit is deliberately shared across legal entities, so it cannot imply one — and that legal entity becomes part of the counter's scope key. Tenant scope cannot use fiscal reset: it names no organization, so the caller's argument would be the only thing deciding the counter's identity.
-6. Anything that splits a counter belongs in the scope key, never only in the period key. The uniqueness index is bounded by period, so a fact that varies the period while the scope key stays constant lets one declared scope hold two counters and issue the same document number twice without the database noticing.
-7. A module calls `NumberIssuer` from `src/foundation/number-sequence/` and never reads or writes the counter, pool, issue, or reservation tables itself. Sharing the connection is the point — it lets a number be issued inside the document's own transaction, so a failed document leaves no gap. `NumberIssuer.issue` serves non-continuous references only; continuous reserve/confirm has not been ported.
-8. If any of those choices are absent from the request, recommend the smallest safe setting and ask before changing code or documentation as if it were settled.
+4. Confirm the reset period explicitly: `never` or `calendar_year`. A reset period other than `never` requires a format segment that varies with that period. The issuer also knows fiscal resets, but fiscal calendars are not in use (owner decision, 16 November 2026), so do not choose them.
+5. Anything that splits a counter belongs in the scope key, never only in the period key. The uniqueness index is bounded by period, so a fact that varies the period while the scope key stays constant lets one declared scope hold two counters and issue the same document number twice without the database noticing.
+6. A module calls `NumberIssuer` from `src/foundation/number-sequence/` and never reads or writes the counter, pool, issue, or reservation tables itself. Sharing the connection is the point — it lets a number be issued inside the document's own transaction, so a failed document leaves no gap. Continuous references issue from the pool inside the same transaction, or use `reserve`/`confirm`/`cancel` when the number must be shown before saving.
+7. If any of those choices are absent from the request, recommend the smallest safe setting and ask before changing code or documentation as if it were settled.
 
 ### Data policy decision gate
 
@@ -172,7 +171,7 @@ Outbound integration (`internal/v1` feeds, signed push) is for systems outside t
 
 A contract is the promise a module makes to code it does not control. It is not documentation of the code, and it is not optional once an endpoint or event crosses the runtime boundary.
 
-This repository has no contract files yet. Where they go is fixed (`AGENTS.md`, Susunan repo): `contracts/internal/` for procedures control-plane-metta calls (`*.internal.routes.ts`), `contracts/integration/<domain>/` for outside systems (`*.integration.routes.ts`), `contracts/events/` for events. `bun run new-feature ... --audience internal|integration` creates those route files empty until Core has their authentication.
+Event contracts exist in `contracts/events/`; internal and integration contracts do not exist yet. Where they go is fixed (`AGENTS.md`, Susunan repo): `contracts/internal/` for procedures control-plane-metta calls (`*.internal.routes.ts`), `contracts/integration/<domain>/` for outside systems (`*.integration.routes.ts`), `contracts/events/` for events. `bun run new-feature ... --audience internal|integration` creates those route files empty until Core has their authentication.
 
 Before adding or changing anything reachable from outside the runtime — any `internal/v1` procedure, any published event, any webhook, any signed payload:
 
