@@ -251,6 +251,9 @@ export const prescriptionSchema = z.object({
     // Waktu dan nomor penyerahan dari farmasi; hanya dibaca.
     dispensed_at: text.optional(),
     dispensing_number: text.optional(),
+    // Waktu dan alasan farmasi membatalkan resep yang tidak diambil pasien; hanya dibaca.
+    cancelled_at: text.optional(),
+    cancel_reason: text.optional(),
     doctor_name: text,
     nurse_name: text,
     notes: text,

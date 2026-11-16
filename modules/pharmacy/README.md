@@ -59,6 +59,17 @@ Satu penyerahan aktif (`bill_farmasi`) per resep, dibuka dari antrean. Polanya p
 | Serahkan      | Waktu, penyerah, dan penerima obat dicatat; apoteker diisi penyerah bila kosong.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Batal siapkan | Hanya sebelum diserahkan. Stok kembali lewat `reverseItemEntries`, penyerahan ditutup sebagai dibatalkan, dan resep kembali menunggu. Siapkan berikutnya membuat penyerahan baru dengan isian yang sama, karena kunci posting kartu gudang penyerahan lama sudah terpakai (sama dengan batal posting dokumen persediaan Core).                                                                                                                                                                                              |
 
+## Batal resep
+
+Resep yang tidak diambil pasien dibatalkan dari kartu resepnya (**Batalkan resep**, `POST .../prescriptions/{id}/cancel` dengan alasan dan versi penyerahan aktif, atau `null` bila belum ada). Padanannya `SIMtrResep.Batal` sistem lama, yang dihitung antrean lama sebagai "Tidak Diambil" dan disaring antrean, E-Resep, dan pemeriksaan kasir. Sistem lama tidak punya tombol untuk mengisinya: Kuta 1 tidak punya satu pun resep batal dari 13.326, dan 12 resep batal di salinan lain diisi di luar aplikasi. Yang ada di kode sistem lama adalah hapus resep oleh poli sebelum realisasi ("Resep tidak bisa dihapus, karena sudah realisasi") dan kunci kasir Seroja. Di sini pembatalan milik farmasi, karena resep yang sudah dikirim tidak bisa diubah dokter.
+
+- **Siapa.** Pemegang izin `pharmacy.prescription.cancel`, yang ada di duty apoteker (`pharmacy.dispensing.manage`) bersama Batal siapkan.
+- **Kapan.** Selama obatnya belum diserahkan. Resep yang menunggu (termasuk yang drafnya sudah disimpan) langsung dibatalkan; drafnya dibiarkan karena belum memposting apa pun. Resep yang sudah disiapkan atau dipanggil dibatalkan bersama penyiapannya di transaksi yang sama, persis seperti Batal siapkan. Obat yang sudah diserahkan ditolak, karena pengembaliannya dicatat lewat retur.
+- **Stok dan tagihan.** Hanya penyiapan yang memposting stok, jadi hanya resep yang sudah disiapkan yang stoknya kembali. Obatnya keluar dari tagihan kasir lewat `pharmacy.dispensing.charges-replaced.v1` dengan `lines` kosong.
+- **Kunci kasir.** Sesudah kunjungan dibayar kasir, Batal resep yang sudah disiapkan ditolak dengan pesan lama "Data ini sudah melakukan Pembayaran diKasir!" sampai pembayarannya dibatalkan; pembayaran otomatis dibatalkan kasir lalu dilunasi ulang. Resep yang belum disiapkan tidak punya baris di tagihan, jadi pembatalannya tidak mengubah apa pun yang sudah dibayar dan tidak dikunci.
+- **Sesudahnya.** Resep keluar dari antrean: tidak ikut Semua, hanya tampil di penghitung Dibatalkan, dan semua langkah penyerahan menolaknya dengan "Resep ini sudah dibatalkan.". Kartu resep menampilkan waktu dan alasan batal. Permintaan yang diulang tidak menulis apa pun.
+- **Event.** `pharmacy.prescription.cancelled.v1` (kontrak `contracts/events/pharmacy.prescription.cancelled.v1.yaml`) terbit di transaksi yang sama. Penerimanya module layanan kesehatan: E-Resep menampilkan resepnya dibatalkan beserta waktu dan alasan.
+
 Setiap perubahan mengunci baris resep (`for update`), jadi Siapkan yang ditekan beberapa orang bersamaan memposting sekali; indeks unik kunci posting kartu gudang menjadi penjaga terakhir. Batch yang diambil dibaca dari kartu gudang lewat `issuedSlices` Core, bukan disalin ke tabel farmasi.
 
 Apoteker dan asisten adalah pengguna tenant (`users`), dipilih dengan namanya. Di Kuta 1 keduanya dipilih di setiap penyerahan (`Pharmacy_id`, `Pharmacy_assistant_id`; 6 apoteker dan 7 asisten dalam 12.177 penyerahan, 425 di antaranya orang yang sama), jadi di sini keduanya boleh dipilih, dan terisi otomatis dari pengguna yang menyiapkan dan menyerahkan bila dibiarkan kosong.
@@ -102,13 +113,13 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                                   |
-| ----------------------------- | --------------------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                   |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                          |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, dan retur (apoteker)       |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat, dan harga obat  |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat, dan harga obat |
+| Duty                          | Isi                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                             |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                    |
+| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep (apoteker) |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep, golongan obat, data obat, dan harga obat            |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep, golongan obat, data obat, dan harga obat           |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
@@ -118,5 +129,5 @@ Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). 
 - Layar antrean di TV (display board).
 - Obat bebas tanpa resep (OTC) dan resep luar. Di Kuta 1 keduanya hampir tidak dipakai (2 dan 0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
 - Tagihan; menyusul lewat billing/kasir di Foundation, yang membaca harga yang sudah disalin ke baris penyerahan.
-- Mengganti obat resep dengan obat lain (Item Substitution BC) dan menutup resep yang tidak pernah diambil pasien.
+- Mengganti obat resep dengan obat lain (Item Substitution BC).
 - Cetak etiket dan kuitansi; menunggu mesin cetak.

@@ -29,6 +29,7 @@ import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+    Ban,
     HandHeart,
     Megaphone,
     PackageCheck,
@@ -56,6 +57,7 @@ import {
     ReturnsSection,
     useCanReturn,
 } from '../dispensing-return/dispensing-returns.tsx';
+import { PrescriptionCancelDialog } from './prescription-cancel-dialog.tsx';
 import {
     DispensingLines,
     type LineDraft,
@@ -75,14 +77,21 @@ export const statusLabels = {
     dibatalkan: 'Dibatalkan',
 } as const satisfies Record<DispensingStatus, string>;
 
+// Resep yang dibatalkan farmasi tampil Dibatalkan, apa pun status drafnya.
 export function StatusBadge({
     status,
+    cancelled = false,
 }: {
     status: DispensingStatus | null;
+    cancelled?: boolean;
 }): ReactNode {
     return (
         <Badge variant={status === 'diserahkan' ? 'secondary' : 'outline'}>
-            {status === null ? 'Menunggu' : statusLabels[status]}
+            {cancelled
+                ? 'Dibatalkan'
+                : status === null
+                  ? 'Menunggu'
+                  : statusLabels[status]}
         </Badge>
     );
 }
@@ -267,8 +276,11 @@ function DispensingForm({
     const { prescription, dispensing } = view.data;
     const { permissions } = view;
     const status = dispensing?.status ?? null;
+    const cancelled = prescription.queue_status === 'dibatalkan';
     const editing =
-        (status === null || status === 'draf') && permissions.prepare;
+        (status === null || status === 'draf') &&
+        permissions.prepare &&
+        !cancelled;
     const prepared = status !== null && status !== 'draf';
     const [draft, setDraft] = useState<Draft>(() => draftOf(view.data));
     const [receiver, setReceiver] = useState({ byPatient: true, name: '' });
@@ -277,6 +289,7 @@ function DispensingForm({
     const [message, setMessage] = useState<string | null>(null);
     const [action, setAction] = useState<Action>('save');
     const [returning, setReturning] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
     const returnContent = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const canReturn = useCanReturn(
@@ -302,7 +315,7 @@ function DispensingForm({
         recordTitle: (
             <span className="inline-flex flex-wrap items-center gap-2">
                 {`${prescription.prescription_number} · ${prescription.patient_name}`}
-                <StatusBadge status={status} />
+                <StatusBadge status={status} cancelled={cancelled} />
             </span>
         ),
         editing,
@@ -577,6 +590,24 @@ function DispensingForm({
                             Batal siapkan
                         </Button>
                     )}
+                    {!cancelled &&
+                        status !== 'diserahkan' &&
+                        permissions.cancel && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={busy || dirty}
+                                title={
+                                    dirty
+                                        ? 'Perubahan yang belum disimpan perlu disimpan atau dibatalkan dulu.'
+                                        : 'Keluarkan resep yang tidak diambil pasien dari antrean.'
+                                }
+                                onClick={() => setCancelling(true)}
+                            >
+                                <Ban aria-hidden="true" />
+                                Batalkan resep
+                            </Button>
+                        )}
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
@@ -828,6 +859,18 @@ function DispensingForm({
                     </CollapsibleSectionGroup>
                 </PageDialogBody>
                 {confirmation}
+                {cancelling && (
+                    <PrescriptionCancelDialog
+                        prescription={prescription}
+                        dispensingVersion={dispensing?.version ?? null}
+                        prepared={prepared}
+                        onClose={() => setCancelling(false)}
+                        onCancelled={(next) => {
+                            setCancelling(false);
+                            onSaved(next);
+                        }}
+                    />
+                )}
             </form>
             {returning && (
                 <PageDialog

@@ -10,6 +10,7 @@ import { moduleId, moduleWorkspace } from '../../module.ts';
 import type {
     dispensingInputSchema,
     handOverInputSchema,
+    prescriptionCancelInputSchema,
     versionInputSchema,
 } from './dispensing.schema.ts';
 import { Dispensings } from './dispensing.service.ts';
@@ -95,6 +96,15 @@ export function dispensingRoutes() {
                     await (
                         await dispensings(context, input.body)
                     ).cancelPreparation(input.params.id, input.body),
+                ),
+            ),
+        pharmacyPrescriptionCancel: route('POST', '/prescriptions/{id}/cancel')
+            .input(record<z.input<typeof prescriptionCancelInputSchema>>())
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await dispensings(context, input.body)
+                    ).cancelPrescription(input.params.id, input.body),
                 ),
             ),
         pharmacyBatchLookup: route('GET', '/lookups/batches')

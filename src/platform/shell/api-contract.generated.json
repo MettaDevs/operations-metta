@@ -4711,6 +4711,18 @@
             }
         }
     },
+    "pharmacyPrescriptionCancel": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/pharmacy/v1/prescriptions/{id}/cancel",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pharmacyBatchLookup": {
         "~orpc": {
             "errorMap": {},

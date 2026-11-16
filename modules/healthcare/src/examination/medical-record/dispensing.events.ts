@@ -46,6 +46,17 @@ const returnSchema = z.object({
     ),
 });
 
+// Resep dibatalkan farmasi karena tidak diambil pasien (pharmacy.prescription.cancelled.v1). Yang dibaca di sini
+// hanya resepnya, waktu, dan alasannya.
+export const prescriptionCancelled =
+    'pharmacy.prescription.cancelled.v1' as const;
+
+const cancelledSchema = z.object({
+    prescription_id: idSchema,
+    cancelled_at: z.iso.datetime(),
+    reason: z.string().min(1).max(200),
+});
+
 function skip(envelope: EventEnvelope, reason: string, fields: string[] = []) {
     process.stderr.write(
         JSON.stringify({
@@ -157,4 +168,46 @@ export async function receiveReturn(
                 line.prescription_line_id,
             ],
         );
+}
+
+// Resep yang dikirim dan belum diserahkan menjadi dibatalkan, seperti SIMtrResep.Batal sistem lama; E-Resep
+// menampilkannya beserta waktu dan alasannya, dan CPPT tidak lagi memuatnya. Berjalan di transaksi Batal resep milik
+// farmasi, jadi isi yang tidak cocok dicatat ke log lalu dilewati, tidak dilempar.
+export async function receiveCancellation(
+    db: Database,
+    envelope: EventEnvelope,
+): Promise<void> {
+    const parsed = cancelledSchema.safeParse(envelope.data);
+    if (!parsed.success) {
+        skip(
+            envelope,
+            'invalid-payload',
+            parsed.error.issues.map((issue) => issue.path.join('.')),
+        );
+        return;
+    }
+    const data = parsed.data;
+    const prescription = await db.one(
+        z.object({ id: z.string() }),
+        `select id from sim_tr_resep
+         where tenant_id = $1 and id = $2 and status = 'dikirim' and diserahkan_pada is null
+           and deleted_at is null`,
+        [envelope.tenant_id, data.prescription_id],
+    );
+    if (!prescription) {
+        skip(envelope, 'unknown-waiting-prescription');
+        return;
+    }
+    if (await alreadyProcessed(db, 'sim_processed_events', envelope)) return;
+    await db.execute(
+        `update sim_tr_resep set status = 'dibatalkan', dibatalkan_pada = $1, alasan_batal = $2, updated_at = $3
+         where tenant_id = $4 and id = $5`,
+        [
+            data.cancelled_at.replace('T', ' ').replace(/(\.\d+)?Z$/, ''),
+            data.reason,
+            nowSql(),
+            envelope.tenant_id,
+            prescription.id,
+        ],
+    );
 }
