@@ -163,7 +163,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             >(
                 `select jenis_biaya_kode as kode, trim_scale(qty)::text as qty, trim_scale(nilai)::text as nilai, status
                  from tagihan_kasir_detail
-                 where tenant_id = $1 and kunjungan_id = $2 and deleted_at is null
+                 where tenant_id = $1 and tagihan_sumber_dokumen_id = $2 and deleted_at is null
                  order by jenis_biaya_kode`,
                 [clinic.tenantId, visitId],
             )),
@@ -591,7 +591,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
                     (select count(*)::int from tagihan_kasir_detail_komponen c
                      where c.tagihan_kasir_detail_id = r.id and c.deleted_at is null) as komponen,
                     r.deleted_at is null as live
-             from tagihan_kasir_detail r where r.tenant_id = $1 and r.kunjungan_id = $2
+             from tagihan_kasir_detail r where r.tenant_id = $1 and r.tagihan_sumber_dokumen_id = $2
              order by r.deleted_at nulls first, r.jenis_biaya_kode`,
             [clinic.tenantId, visitId],
         );
@@ -741,7 +741,7 @@ describe.skipIf(!process.env.DB_HOST)('examination procedure charges', () => {
             'core.payment-cancel.approve',
         ]);
         const [payment] = await pool.unsafe<{ id: string; version: number }[]>(
-            "select id, version from kasir where tenant_id = $1 and kunjungan_id = $2 and status = 'diposting'",
+            "select id, version from kasir where tenant_id = $1 and sumber_dokumen_id = $2 and status = 'diposting'",
             [clinic.tenantId, visitId],
         );
         await json(

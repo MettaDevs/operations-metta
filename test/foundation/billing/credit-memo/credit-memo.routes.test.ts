@@ -275,7 +275,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
 
     test('an automatic payment belongs to no clerk, so it is cancelled instead', async () => {
         const [automatic] = await pool.unsafe<{ id: string }[]>(
-            "select id from kasir where kunjungan_id = $1 and status = 'diposting'",
+            "select id from kasir where sumber_dokumen_id = $1 and status = 'diposting'",
             [visits.automatic],
         );
         expect(await refused(await creditMemo(automatic!.id))).toEqual({
@@ -378,7 +378,7 @@ describe.skipIf(!process.env.DB_HOST)('billing credit memo', () => {
         expect(credited?.status).toBe('dikreditkan');
         expect([
             ...(await pool.unsafe<{ status: string; kasir_id: null }[]>(
-                'select status, kasir_id from tagihan_kasir_detail where kunjungan_id = $1',
+                'select status, kasir_id from tagihan_kasir_detail where tagihan_sumber_dokumen_id = $1',
                 [visits.cash],
             )),
         ]).toEqual([{ status: 'terbuka', kasir_id: null }]);

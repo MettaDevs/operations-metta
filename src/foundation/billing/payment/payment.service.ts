@@ -289,11 +289,11 @@ export async function lockChargeForChange(
             registration_number: z.string(),
         }),
         `select k.id, k.otomatis as automatic, k.legal_entity_id, k.no_bukti as number, k.tanggal::text as date,
-                trim_scale(k.nilai)::text as value, v.no_reg as registration_number
+                trim_scale(k.nilai)::text as value, v.sumber_nomor as registration_number
          from kasir k
          join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                               and v.kunjungan_id = k.kunjungan_id
-         where k.tenant_id = $1 and k.sumber_module = $2 and k.kunjungan_id = $3 and k.status = 'diposting'`,
+                               and v.sumber_dokumen_id = k.sumber_dokumen_id
+         where k.tenant_id = $1 and k.sumber_module = $2 and k.sumber_dokumen_id = $3 and k.status = 'diposting'`,
         [scope.tenantId, scope.sourceModule, scope.visitId],
     );
     if (!paid) return;
@@ -354,16 +354,16 @@ async function openInvoice(
             restricted: z.array(z.string()),
             version: z.number(),
         }),
-        `select no_reg as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted, version
+        `select sumber_nomor as registration_number, status, to_json(jenis_bayar_dibatasi) as restricted, version
          from tagihan_kasir
-         where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and kunjungan_id = $4
+         where tenant_id = $1 and legal_entity_id = $2 and sumber_module = $3 and sumber_dokumen_id = $4
            and status in ('selesai', 'dibuka')`,
         [scope.tenantId, scope.legalEntityId, source, visitId],
     );
     if (!visit) return null;
     const paid = await db.one(
         z.object({ id: z.string() }),
-        `select id from kasir where tenant_id = $1 and sumber_module = $2 and kunjungan_id = $3
+        `select id from kasir where tenant_id = $1 and sumber_module = $2 and sumber_dokumen_id = $3
            and status = 'diposting'`,
         [scope.tenantId, source, visitId],
     );
@@ -372,7 +372,7 @@ async function openInvoice(
         `select id, jenis_biaya_id, jenis_biaya_nama, dokter_id, dokter_nama, kelompok_jasa_id, kelompok_jasa_nama,
                 qty::text, nilai::text, harga_orig::text, disc::text, hext::text
          from tagihan_kasir_detail
-         where tenant_id = $1 and kunjungan_id = $2 and status = 'terbuka' and deleted_at is null
+         where tenant_id = $1 and tagihan_sumber_dokumen_id = $2 and status = 'terbuka' and deleted_at is null
          order by id
          for update`,
         [scope.tenantId, visitId],
@@ -629,7 +629,7 @@ async function postPayment(
         tanggal: posting.date,
         jam: stamp,
         sumber_module: source,
-        kunjungan_id: posting.visitId,
+        sumber_dokumen_id: posting.visitId,
         clerk_id: posting.clerkId,
         user_id: posting.userId,
         otomatis: posting.automatic,
@@ -1136,11 +1136,11 @@ export class Payments {
                     value: z.string(),
                     registration_number: z.string(),
                 }),
-                `select k.clerk_id, k.kunjungan_id as visit_id, k.no_bukti as number,
-                        k.tanggal::text as date, trim_scale(k.nilai)::text as value, v.no_reg as registration_number
+                `select k.clerk_id, k.sumber_dokumen_id as visit_id, k.no_bukti as number,
+                        k.tanggal::text as date, trim_scale(k.nilai)::text as value, v.sumber_nomor as registration_number
                  from kasir k
                  join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                       and v.kunjungan_id = k.kunjungan_id
+                                       and v.sumber_dokumen_id = k.sumber_dokumen_id
                  where k.tenant_id = $1 and k.id = $2`,
                 [scope.tenantId, payment.id],
             );

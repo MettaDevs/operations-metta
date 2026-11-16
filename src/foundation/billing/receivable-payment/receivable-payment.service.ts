@@ -134,7 +134,7 @@ export async function openReceivables(
          join kasir k on k.tenant_id = d.tenant_id and k.id = d.kasir_id
          join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
          join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                               and v.kunjungan_id = k.kunjungan_id
+                               and v.sumber_dokumen_id = k.sumber_dokumen_id
          left join parties p on p.tenant_id = d.tenant_id and p.id = d.pihak_id
          where d.tenant_id = $1 and d.kasir_id = $2 and d.nilai > 0 and j.perilaku = any($3::text[])
          order by d.id`,
@@ -203,7 +203,7 @@ export async function cancelReceivables(
 
 const receivableSql = `select * from (
                            select r.id, k.no_bukti as invoice_number, k.tanggal::text as invoice_date,
-                                  v.no_reg as registration_number, v.pasien_nrm as patient_medical_record_number,
+                                  v.sumber_nomor as registration_number, v.pasien_nrm as patient_medical_record_number,
                                   v.pasien_nama as patient_name, v.tipe_pasien_nama as patient_type_name,
                                   r.pihak_nama as party_name, coalesce(j.label_kasir, j.nama) as payment_method_name,
                                   trim_scale(r.nilai)::text as amount, trim_scale(r.nilai - r.sisa)::text as paid,
@@ -211,14 +211,14 @@ const receivableSql = `select * from (
                            from piutang r
                            join kasir k on k.tenant_id = r.tenant_id and k.id = r.kasir_id
                            join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                                 and v.kunjungan_id = k.kunjungan_id
+                                                 and v.sumber_dokumen_id = k.sumber_dokumen_id
                            join jenis_bayar j on j.tenant_id = r.tenant_id and j.id = r.jenis_bayar_id
                            where r.tenant_id = $1 and r.legal_entity_id = $2 and r.status = 'terbuka') receivables
                        where true`;
 
 const paymentSql = `select * from (
                         select o.id, o.no_bukti as number, o.tanggal::text as date, k.no_bukti as invoice_number,
-                               k.tanggal::text as invoice_date, v.no_reg as registration_number,
+                               k.tanggal::text as invoice_date, v.sumber_nomor as registration_number,
                                v.pasien_nrm as patient_medical_record_number, v.pasien_nama as patient_name,
                                v.tipe_pasien_nama as patient_type_name,
                                coalesce(j.label_kasir, j.nama) as payment_method_name, m.nama as merchant_name,
@@ -234,7 +234,7 @@ const paymentSql = `select * from (
                         join piutang r on r.tenant_id = o.tenant_id and r.id = o.piutang_id
                         join kasir k on k.tenant_id = r.tenant_id and k.id = r.kasir_id
                         join tagihan_kasir v on v.tenant_id = k.tenant_id and v.sumber_module = k.sumber_module
-                                              and v.kunjungan_id = k.kunjungan_id
+                                              and v.sumber_dokumen_id = k.sumber_dokumen_id
                         join jenis_bayar j on j.tenant_id = o.tenant_id and j.id = o.jenis_bayar_id
                         left join merchan m on m.tenant_id = o.tenant_id and m.id = o.merchan_id
                         join users u on u.id = o.user_id

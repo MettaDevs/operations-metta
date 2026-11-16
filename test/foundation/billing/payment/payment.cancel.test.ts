@@ -263,7 +263,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
 
     test('an approved cancel records TglBatal, BATAL, and AlasanBatal, opens the charge lines, releases the change lock, and tells finance once', async () => {
         const [payment] = await pool.unsafe<Payment[]>(
-            "select id, version, no_bukti as number from kasir where kunjungan_id = $1 and status = 'diposting'",
+            "select id, version, no_bukti as number from kasir where sumber_dokumen_id = $1 and status = 'diposting'",
             [visits.local],
         );
         if (!payment) throw new Error('The visit is not paid.');
@@ -291,7 +291,7 @@ describe.skipIf(!process.env.DB_HOST)('billing payment cancel', () => {
         });
         expect([
             ...(await pool.unsafe<{ status: string; kasir_id: null }[]>(
-                'select status, kasir_id from tagihan_kasir_detail where kunjungan_id = $1',
+                'select status, kasir_id from tagihan_kasir_detail where tagihan_sumber_dokumen_id = $1',
                 [visits.local],
             )),
         ]).toEqual([{ status: 'terbuka', kasir_id: null }]);
