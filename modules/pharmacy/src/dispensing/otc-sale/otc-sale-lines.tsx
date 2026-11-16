@@ -14,6 +14,7 @@ import { Select } from '@operations-metta/ui/select';
 import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api, type ApiBody } from '@core/platform/shell/index.ts';
+import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
 import {
     BatchLookup,
     type PickedBatch,
@@ -114,6 +115,7 @@ export function OtcSaleLines({
     locationId,
     priced,
     pricesCurrent,
+    fees,
     total,
     errors,
     portalContainer,
@@ -124,6 +126,8 @@ export function OtcSaleLines({
     // Harga per kunci baris, dari quote terakhir.
     priced: Map<string, QuotedLine>;
     pricesCurrent: boolean;
+    // Biaya resep dari quote terakhir.
+    fees: { name: string; amount: string }[];
     total: string | null;
     errors: Record<string, string[]>;
     portalContainer: RefObject<HTMLElement | null>;
@@ -298,15 +302,20 @@ export function OtcSaleLines({
             }
             emptyMessage="Belum ada obat. Pilih Tambah untuk menambahkan baris."
             footer={
-                <div className="flex justify-end gap-6 text-base font-semibold">
-                    <span>Total</span>
-                    <span
-                        className={
-                            pricesCurrent ? undefined : 'text-muted-foreground'
-                        }
-                    >
-                        {total === null ? '-' : displayNumber(total)}
-                    </span>
+                <div className="space-y-2">
+                    <FeeLines fees={fees} muted={!pricesCurrent} />
+                    <div className="flex justify-end gap-6 text-base font-semibold">
+                        <span>Total</span>
+                        <span
+                            className={
+                                pricesCurrent
+                                    ? undefined
+                                    : 'text-muted-foreground'
+                            }
+                        >
+                            {total === null ? '-' : displayNumber(total)}
+                        </span>
+                    </div>
                 </div>
             }
             columns={columns}

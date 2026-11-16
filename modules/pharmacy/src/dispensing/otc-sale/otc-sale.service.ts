@@ -44,6 +44,15 @@ import {
 import { Decimal } from '@core/platform/money/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
+import type { BilledFee } from '../dispensing-fee/dispensing-fee.schema.ts';
+import {
+    billedFees,
+    chargeFees,
+    feeName,
+    feeRates,
+    freezeFees,
+    plannedFees,
+} from '../dispensing-fee/dispensing-fee.service.ts';
 import { moduleId } from '../../module.ts';
 import {
     dispensingNumberReference,
@@ -86,7 +95,11 @@ const locationNotAllowedMessage =
 // Bagian isian yang sama di quote dan Simpan dan bayar; baris quote tidak membawa batch.
 type SaleShape = Pick<
     z.output<typeof otcSaleInputSchema>,
-    'location_id' | 'price_group_id' | 'ktp_patient' | 'lines'
+    | 'location_id'
+    | 'price_group_id'
+    | 'ktp_patient'
+    | 'without_prescription'
+    | 'lines'
 >;
 
 type SaleLine = {
@@ -103,6 +116,7 @@ type CheckedSale = {
     location: SaleLocation;
     priceGroupId: string | null;
     ktpPatient: boolean;
+    withoutPrescription: boolean;
     lines: SaleLine[];
 };
 
@@ -165,19 +179,37 @@ const lineAmount = (line: NetLine, precision: Precision) =>
           ).groups.get(null) ?? '0')
         : '0';
 
-const saleTotal = (lines: NetLine[], precision: Precision) =>
+// Biaya racik dan resep menjadi baris tagihan Qty 1 tanpa diskon.
+const feeCharge = (fee: { amount: string }) => saleCharge('1', fee.amount, '0');
+
+const saleTotal = (
+    lines: NetLine[],
+    fees: { amount: string }[],
+    precision: Precision,
+) =>
     invoiceTotals(
-        lines
-            .filter((line) => line.kept)
-            .map((line) =>
-                saleCharge(
-                    line.net_quantity,
-                    line.unit_price,
-                    line.discount_percent,
+        [
+            ...lines
+                .filter((line) => line.kept)
+                .map((line) =>
+                    saleCharge(
+                        line.net_quantity,
+                        line.unit_price,
+                        line.discount_percent,
+                    ),
                 ),
-            ),
+            ...fees.map(feeCharge),
+        ],
         precision,
     ).value;
+
+const keptIds = (lines: NetLine[]) =>
+    new Set(lines.filter((line) => line.kept).map((line) => line.line_id));
+
+const shownFee = ({
+    dispensing_id: _,
+    ...fee
+}: BilledFee & { dispensing_id: string }): BilledFee => fee;
 
 // Tagihan penjualan kasir dari penjualan yang tersimpan: baris dengan Qty bersih sesudah retur yang masih berlaku, dan
 // baris yang habis diretur keluar dari tagihan. Dipanggil di transaksi Simpan dan bayar, retur, dan Batal retur.
@@ -202,6 +234,7 @@ export async function replaceOtcSaleBill(
         [scope.tenantId, scope.legalEntityId, billId],
     );
     if (!sale) throw new Error(`OTC sale ${billId} was not found.`);
+    const lines = await netLines(db, scope.tenantId, [billId]);
     return replaceSaleBill(db, {
         tenantId: scope.tenantId,
         legalEntityId: scope.legalEntityId,
@@ -212,7 +245,7 @@ export async function replaceOtcSaleBill(
         date: sale.date,
         buyer: { partyId: sale.buyer_party_id, name: sale.buyer_name },
         group: 'OBAT',
-        lines: (await netLines(db, scope.tenantId, [billId]))
+        lines: lines
             .filter((line) => line.kept)
             .map((line) => ({
                 lineId: line.line_id,
@@ -221,6 +254,9 @@ export async function replaceOtcSaleBill(
                 unitPrice: line.unit_price,
                 discountPercent: line.discount_percent,
             })),
+        fees: chargeFees(
+            await billedFees(db, scope.tenantId, [billId], keptIds(lines)),
+        ),
     });
 }
 
@@ -358,6 +394,11 @@ export class OtcSales {
                     discount_percent: quantityText(price.discountPercent),
                     amount,
                 })),
+                fees: priced.fees.map(({ kind, name, amount }) => ({
+                    kind,
+                    name,
+                    amount,
+                })),
                 total: priced.total,
             },
         };
@@ -416,6 +457,7 @@ export class OtcSales {
                 diserahkan_pada: stamp,
                 diserahkan_oleh_user_id: userId,
                 termasuk_jasa: false,
+                tanpa_resep: sale.withoutPrescription,
                 kelompok_harga_id: sale.priceGroupId,
                 pasien_ktp: sale.ktpPatient,
                 pembeli_pihak_id: buyer.partyId,
@@ -452,6 +494,18 @@ export class OtcSales {
                     created_at: stamp,
                     updated_at: stamp,
                 });
+            await freezeFees(
+                this.db,
+                scope,
+                billId,
+                priced.fees.map((fee) => ({
+                    ...fee,
+                    lineId:
+                        fee.lineId === null
+                            ? null
+                            : (lines[Number(fee.lineId)]?.id ?? null),
+                })),
+            );
             await postItemLines(
                 this.db,
                 {
@@ -530,12 +584,19 @@ export class OtcSales {
             this.scope.tenantId,
             rows.map((row) => row.id),
         );
+        const fees = await billedFees(
+            this.db,
+            this.scope.tenantId,
+            rows.map((row) => row.id),
+            keptIds(lines),
+        );
         const precision = await this.precision();
         return {
             data: rows.map((row) => ({
                 ...row,
                 total: saleTotal(
                     lines.filter((line) => line.dispensing_id === row.id),
+                    fees.filter((fee) => fee.dispensing_id === row.id),
                     precision,
                 ),
                 paid: paid.has(row.id),
@@ -552,9 +613,10 @@ export class OtcSales {
             ? await this.db.one(
                   saleRowSchema.extend({
                       ktp_patient: z.boolean(),
+                      without_prescription: z.boolean(),
                       price_group: reference.nullable(),
                   }),
-                  `select sales.*, h.pasien_ktp as ktp_patient,
+                  `select sales.*, h.pasien_ktp as ktp_patient, h.tanpa_resep as without_prescription,
                           case when g.id is null then null
                                else json_build_object('id', g.id, 'code', g.kode, 'name', g.nama) end as price_group
                    from (${saleRowSql} and id = $3) sales
@@ -565,12 +627,16 @@ export class OtcSales {
             : undefined;
         if (!sale) abort(404, 'Not Found');
         const lines = await netLines(this.db, scope.tenantId, [sale.id]);
+        const fees = (
+            await billedFees(this.db, scope.tenantId, [sale.id], keptIds(lines))
+        ).map(shownFee);
         const paid = await paidDocuments(this.db, scope.tenantId, [sale.id]);
         const precision = await this.precision();
         return {
             data: {
                 ...sale,
-                total: saleTotal(lines, precision),
+                total: saleTotal(lines, fees, precision),
+                fees,
                 paid: paid.has(sale.id),
                 lines: lines.map((line) => ({
                     line_id: line.line_id,
@@ -727,6 +793,7 @@ export class OtcSales {
             location,
             priceGroupId,
             ktpPatient: data.ktp_patient ?? true,
+            withoutPrescription: data.without_prescription ?? true,
             lines,
         };
     }
@@ -771,9 +838,31 @@ export class OtcSales {
                 invoiceTotals([charge(entry)], precision).groups.get(null) ??
                 '0',
         }));
+        // Penjualan obat bebas tidak punya racikan, jadi hanya biaya resep yang mungkin. lineId adalah urutan baris.
+        const fees = plannedFees(
+            await feeRates(this.db, this.scope, {
+                locationId: sale.location.id,
+                priceGroupId: sale.priceGroupId,
+            }),
+            sale.lines.map((_, index) => ({
+                lineId: String(index),
+                compound: null,
+            })),
+            sale.withoutPrescription,
+        ).map((fee) => ({
+            ...fee,
+            name: feeName(fee.kind, {
+                compound: fee.compound,
+                itemName: sale.lines[Number(fee.lineId)]?.item.name ?? null,
+            }),
+        }));
         return {
             lines,
-            total: invoiceTotals(lines.map(charge), precision).value,
+            fees,
+            total: invoiceTotals(
+                [...lines.map(charge), ...fees.map(feeCharge)],
+                precision,
+            ).value,
         };
     }
 }

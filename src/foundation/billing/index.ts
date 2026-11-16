@@ -13,6 +13,7 @@ import {
 } from './charge/charge.events.ts';
 export {
     replaceSaleBill,
+    type ChargeFee,
     type ChargeGroup,
     type SaleBill,
 } from './charge/charge.events.ts';

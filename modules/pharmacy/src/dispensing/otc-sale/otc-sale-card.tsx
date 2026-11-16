@@ -24,6 +24,7 @@ import {
     useCanReturn,
     type ReturnTarget,
 } from '../dispensing-return/dispensing-returns.tsx';
+import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
 import { dateTimeText, Fact } from '../prescription/prescription-display.tsx';
 
 type Sale = ApiBody<'pharmacyOtcSaleShow'>['data'];
@@ -146,6 +147,9 @@ export function OtcSaleCard({
                             <Fact label="Pembeli ber-KTP">
                                 {sale.ktp_patient ? 'Ya' : 'Tidak'}
                             </Fact>
+                            <Fact label="Tanpa resep">
+                                {sale.without_prescription ? 'Ya' : 'Tidak'}
+                            </Fact>
                             <Fact label="Total ditagih">
                                 {displayNumber(sale.total)}
                             </Fact>
@@ -156,6 +160,9 @@ export function OtcSaleCard({
                     </CollapsibleSection>
                     <CollapsibleSection value="lines" title="Obat">
                         <SaleLines lines={sale.lines} />
+                        <div className="mt-3">
+                            <FeeLines fees={sale.fees} />
+                        </div>
                     </CollapsibleSection>
                     <CollapsibleSection value="returns" title="Retur">
                         <ReturnsSection target={target} onReversed={changed} />

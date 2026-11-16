@@ -76,7 +76,10 @@ export class ServiceLocations {
         if (
             !this.workspace.permissions.has('pharmacy.service-location.read') &&
             !this.workspace.permissions.has('pharmacy.prescription.read') &&
-            !this.workspace.permissions.has('pharmacy.otc-sale-location.read')
+            !this.workspace.permissions.has(
+                'pharmacy.otc-sale-location.read',
+            ) &&
+            !this.workspace.permissions.has('pharmacy.dispensing-fee.read')
         )
             abort(403, 'Tidak diizinkan.');
     }

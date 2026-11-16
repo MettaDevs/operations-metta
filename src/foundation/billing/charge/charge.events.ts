@@ -50,6 +50,36 @@ const chargesSchema = z.object({
     ),
 });
 
+// Biaya racik atau biaya resep farmasi: satu baris tagihan Qty 1 dengan Nilai biayanya. fee_id adalah baris setelan
+// biayanya, yang menjadi jenis biaya baris itu.
+const feeSchema = z.object({
+    line_id: z.string(),
+    fee_id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    amount: z.string(),
+});
+export type ChargeFee = z.infer<typeof feeSchema>;
+
+const feeLine = (
+    fee: ChargeFee,
+    date: string,
+    includesService: boolean,
+): ChargeLine => ({
+    lineId: fee.line_id,
+    values: {
+        jenis_biaya_id: fee.fee_id,
+        jenis_biaya_kode: fee.code,
+        jenis_biaya_nama: fee.name,
+        qty: '1',
+        nilai: includesService ? '0' : fee.amount,
+        harga_orig: fee.amount,
+        disc: '0',
+        tanggal: date,
+    },
+    components: [],
+});
+
 // Potret baris obat satu penyerahan farmasi. includes_service: obat termasuk jasa (IncludeJasa sistem lama), jadi
 // nilainya 0 di tagihan walau harganya tetap tercatat.
 const pharmacyChargesSchema = z.object({
@@ -70,6 +100,8 @@ const pharmacyChargesSchema = z.object({
             discount_percent: z.string(),
         }),
     ),
+    // Field opsional sejak 16 November 2026: biaya racik dan biaya resep yang dibekukan farmasi.
+    fees: z.array(feeSchema).optional(),
 });
 
 const visitSchema = z.object({
@@ -295,20 +327,25 @@ export async function receivePharmacyCharges(
             documentId: data.dispensing_id,
             billDocumentId: data.visit_id,
             group: 'OBAT',
-            lines: data.lines.map((line) => ({
-                lineId: line.line_id,
-                values: {
-                    jenis_biaya_id: line.item.id,
-                    jenis_biaya_kode: line.item.code,
-                    jenis_biaya_nama: line.item.name,
-                    qty: line.quantity,
-                    nilai: data.includes_service ? '0' : line.unit_price,
-                    harga_orig: line.unit_price,
-                    disc: line.discount_percent,
-                    tanggal: data.date,
-                },
-                components: [],
-            })),
+            lines: [
+                ...data.lines.map((line) => ({
+                    lineId: line.line_id,
+                    values: {
+                        jenis_biaya_id: line.item.id,
+                        jenis_biaya_kode: line.item.code,
+                        jenis_biaya_nama: line.item.name,
+                        qty: line.quantity,
+                        nilai: data.includes_service ? '0' : line.unit_price,
+                        harga_orig: line.unit_price,
+                        disc: line.discount_percent,
+                        tanggal: data.date,
+                    },
+                    components: [],
+                })),
+                ...(data.fees ?? []).map((fee) =>
+                    feeLine(fee, data.date, data.includes_service),
+                ),
+            ],
         },
     );
 }
@@ -452,6 +489,7 @@ export type SaleBill = {
         unitPrice: string;
         discountPercent: string;
     }[];
+    fees: ChargeFee[];
 };
 
 export async function replaceSaleBill(
@@ -505,20 +543,23 @@ export async function replaceSaleBill(
             documentId: sale.documentId,
             billDocumentId: sale.documentId,
             group: sale.group,
-            lines: sale.lines.map((line) => ({
-                lineId: line.lineId,
-                values: {
-                    jenis_biaya_id: line.item.id,
-                    jenis_biaya_kode: line.item.code,
-                    jenis_biaya_nama: line.item.name,
-                    qty: line.quantity,
-                    nilai: line.unitPrice,
-                    harga_orig: line.unitPrice,
-                    disc: line.discountPercent,
-                    tanggal: sale.date,
-                },
-                components: [],
-            })),
+            lines: [
+                ...sale.lines.map((line) => ({
+                    lineId: line.lineId,
+                    values: {
+                        jenis_biaya_id: line.item.id,
+                        jenis_biaya_kode: line.item.code,
+                        jenis_biaya_nama: line.item.name,
+                        qty: line.quantity,
+                        nilai: line.unitPrice,
+                        harga_orig: line.unitPrice,
+                        disc: line.discountPercent,
+                        tanggal: sale.date,
+                    },
+                    components: [],
+                })),
+                ...sale.fees.map((fee) => feeLine(fee, sale.date, false)),
+            ],
         },
     );
     const bill = await db.one(

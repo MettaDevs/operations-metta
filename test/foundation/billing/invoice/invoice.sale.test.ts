@@ -67,6 +67,7 @@ describe.skipIf(!process.env.DB_HOST)(
             date: '2026-11-13',
             buyer: { partyId: null, name: buyer },
             group: 'OBAT',
+            fees: [],
             lines: [
                 {
                     lineId: Bun.randomUUIDv7(),

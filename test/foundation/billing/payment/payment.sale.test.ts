@@ -63,6 +63,7 @@ describe.skipIf(!process.env.DB_HOST)('billing sale bills', () => {
         date: '2026-11-16',
         buyer,
         group: 'OBAT',
+        fees: [],
         lines: [
             {
                 lineId: Bun.randomUUIDv7(),
