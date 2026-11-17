@@ -13,6 +13,7 @@ import {
     screenshot,
     waitFor,
     waitForText,
+    type Locator,
     type Page,
 } from './browser.ts';
 import { environmentDatabase, evidenceDir, psql, type Run } from './stack.ts';
@@ -79,18 +80,22 @@ async function closeExtraTabs(run: Run) {
             );
 }
 
-async function printedPdf(
+export async function printedPdf(
     page: Page,
     run: Run,
-    button: string,
+    button: string | Locator,
     file: string,
 ): Promise<{ text: string; widthPt: number; heightPt: number }> {
+    const target: Locator =
+        typeof button === 'string'
+            ? { role: 'button', name: button, exact: true }
+            : button;
     await evaluate(page, hookBlobs);
-    await click(page, { role: 'button', name: button, exact: true });
+    await click(page, target);
     const started = Date.now();
     while (!(await evaluate(page, 'window.__verifyBlobs.length > 0'))) {
         if (Date.now() - started > 60_000)
-            throw new Error(`PDF ${button} tidak terbuka dalam 60 detik.`);
+            throw new Error(`PDF ${target.name} tidak terbuka dalam 60 detik.`);
         await Bun.sleep(250);
     }
     const encoded = z.string().parse(await evaluate(page, readLastBlob));
