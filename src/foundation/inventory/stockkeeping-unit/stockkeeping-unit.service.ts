@@ -31,7 +31,9 @@ const rowSql = `select * from (
                     select k.id, k.barang_id as item_id,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            trim_scale(k.stok_minimum)::text as minimum_quantity,
-                           trim_scale(k.stok_maksimum)::text as maximum_quantity, k.version,
+                           trim_scale(k.stok_maksimum)::text as maximum_quantity,
+                           k.kebijakan_pesan_ulang as reordering_policy,
+                           trim_scale(k.jumlah_pesan_ulang)::text as reorder_quantity, k.version,
                            l.kode as location_code
                     from gd_m_barang_lokasi k
                     join gd_m_lokasi l on l.tenant_id = k.tenant_id and l.id = k.lokasi_id
@@ -44,6 +46,8 @@ const messages = {
     location_id: 'Pilih lokasi dari daftar.',
     minimum_quantity: `Isi stok minimum 0 atau lebih, ${quantityHint}.`,
     maximum_quantity: `Isi stok maksimum 0 atau lebih, ${quantityHint}.`,
+    reordering_policy: 'Pilih cara pesan ulang dari daftar.',
+    reorder_quantity: `Isi jumlah pesan ulang lebih dari 0, ${quantityHint}.`,
 };
 
 const storedSchema = z.object({ id: z.string(), item_id: z.string() });
@@ -152,10 +156,14 @@ export class StockkeepingUnits {
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
         const minimum = level(data.minimum_quantity);
         const maximum = level(data.maximum_quantity);
+        const reorder = level(data.reorder_quantity);
+        const policy = data.reordering_policy ?? null;
         if (minimum === 'invalid')
             errors.minimum_quantity = messages.minimum_quantity;
         if (maximum === 'invalid')
             errors.maximum_quantity = messages.maximum_quantity;
+        if (reorder === 'invalid' || reorder === 0n)
+            errors.reorder_quantity = messages.reorder_quantity;
         if (minimum === null && maximum === null)
             errors.minimum_quantity =
                 'Isi stok minimum, stok maksimum, atau keduanya.';
@@ -166,10 +174,39 @@ export class StockkeepingUnits {
         )
             errors.maximum_quantity =
                 'Stok maksimum tidak boleh lebih kecil dari stok minimum.';
+        // Syarat kebijakan dari codeunit "Inventory Profile Offsetting" BC: Fixed Reorder Qty. menolak Reorder Quantity
+        // kosong, dan Maximum Qty. menolak Maximum Inventory yang tidak di atas Reorder Point.
+        if (policy !== null && minimum === null)
+            errors.minimum_quantity =
+                'Isi stok minimum. Saran pesan dibuat saat stok sampai di angka ini.';
+        switch (policy) {
+            case null:
+                break;
+            case 'jumlah_tetap':
+                if (reorder === null)
+                    errors.reorder_quantity =
+                        'Isi jumlah pesan ulang untuk cara pesan jumlah tetap.';
+                break;
+            case 'maksimum':
+                if (maximum === null)
+                    errors.maximum_quantity =
+                        'Isi stok maksimum untuk cara pesan sampai stok maksimum.';
+                else if (typeof minimum === 'bigint' && maximum === minimum)
+                    errors.maximum_quantity =
+                        'Stok maksimum harus lebih besar dari stok minimum untuk cara pesan sampai stok maksimum.';
+                break;
+            default: {
+                const unknown: never = policy;
+                throw new Error(
+                    `Unknown reordering policy: ${String(unknown)}`,
+                );
+            }
+        }
         if (
             Object.keys(errors).length ||
             minimum === 'invalid' ||
-            maximum === 'invalid'
+            maximum === 'invalid' ||
+            reorder === 'invalid'
         )
             validation(errors);
         return {
@@ -177,6 +214,8 @@ export class StockkeepingUnits {
             locationId: data.location_id,
             minimum: numeric(minimum),
             maximum: numeric(maximum),
+            policy,
+            reorder: numeric(reorder),
         };
     }
 
@@ -202,6 +241,8 @@ export class StockkeepingUnits {
                 lokasi_id: data.locationId,
                 stok_minimum: data.minimum,
                 stok_maksimum: data.maximum,
+                kebijakan_pesan_ulang: data.policy,
+                jumlah_pesan_ulang: data.reorder,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -219,7 +260,8 @@ export class StockkeepingUnits {
         let updated = 0;
         try {
             updated = await this.db.execute(
-                `update gd_m_barang_lokasi set lokasi_id = $1, stok_minimum = $2, stok_maksimum = $3, updated_at = $4
+                `update gd_m_barang_lokasi set lokasi_id = $1, stok_minimum = $2, stok_maksimum = $3,
+                        kebijakan_pesan_ulang = $8, jumlah_pesan_ulang = $9, updated_at = $4
                  where tenant_id = $5 and id = $6 and version = $7 and deleted_at is null`,
                 [
                     data.locationId,
@@ -229,6 +271,8 @@ export class StockkeepingUnits {
                     this.scope.tenantId,
                     current.id,
                     expectedVersion(request, body),
+                    data.policy,
+                    data.reorder,
                 ],
             );
         } catch (error) {

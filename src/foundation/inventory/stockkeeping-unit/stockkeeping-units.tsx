@@ -2,6 +2,7 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
+import { Select } from '@operations-metta/ui/select';
 import {
     PageDialog,
     PageDialogBody,
@@ -29,11 +30,24 @@ import type { Item } from '../item/item-lookup.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 
-// Stok minimum dan maksimum barang per lokasi (Stockkeeping Unit di BC) sebagai bagian kartu barang. Setiap baris
-// disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC.
+// Stok minimum dan maksimum barang per lokasi (Stockkeeping Unit di BC) beserta cara pesan ulangnya, sebagai bagian
+// kartu barang. Setiap baris disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC.
 
 type Level = ApiBody<'inventoryStockkeepingUnitList'>['data'][number];
+type Policy = NonNullable<Level['reordering_policy']>;
 type Errors = Record<string, string[]>;
+
+const notPlanned = 'tidak';
+const policyLabels: Record<Policy, string> = {
+    jumlah_tetap: 'Jumlah tetap',
+    maksimum: 'Sampai stok maksimum',
+};
+const policyItems = [
+    { value: notPlanned, label: 'Tidak dihitung' },
+    ...Object.entries(policyLabels).map(([value, label]) => ({ value, label })),
+];
+const policyOf = (value: string | null): Policy | null =>
+    value === 'jumlah_tetap' || value === 'maksimum' ? value : null;
 
 const numberFormat =
     'Tulis angka seperti 12.500 atau 1,5. Titik untuk ribuan, koma untuk desimal.';
@@ -60,11 +74,17 @@ function LevelCard({
         maximum: level?.maximum_quantity
             ? displayNumber(level.maximum_quantity)
             : '',
+        policy: level?.reordering_policy ?? null,
+        reorder: level?.reorder_quantity
+            ? displayNumber(level.reorder_quantity)
+            : '',
     };
     const [form, setForm] = useState<{
         location: Reference | null;
         minimum: string;
         maximum: string;
+        policy: Policy | null;
+        reorder: string;
     }>(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -96,6 +116,8 @@ function LevelCard({
             location_id: form.location?.id ?? '',
             minimum_quantity: amount('minimum_quantity', form.minimum),
             maximum_quantity: amount('maximum_quantity', form.maximum),
+            reordering_policy: form.policy,
+            reorder_quantity: amount('reorder_quantity', form.reorder),
         };
         setMessage(null);
         if (Object.keys(found).length) {
@@ -236,7 +258,7 @@ function LevelCard({
                         />
                         <FormControl
                             error={errors.minimum_quantity?.[0]}
-                            hint={`Batas bawah stok di lokasi ini dalam ${item.base_unit.code}. Boleh kosong bila hanya stok maksimum yang diatur.`}
+                            hint={`Batas bawah stok di lokasi ini dalam ${item.base_unit.code}. Hitung saran di Permintaan pembelian menyarankan pesan bila stok tersedia sampai di angka ini atau di bawahnya.`}
                         >
                             <Input
                                 label={`Stok minimum (${item.base_unit.code})`}
@@ -266,6 +288,53 @@ function LevelCard({
                                     setForm({
                                         ...form,
                                         maximum: event.target.value,
+                                    })
+                                }
+                            />
+                        </FormControl>
+                        <FormControl
+                            error={errors.reordering_policy?.[0]}
+                            hint="Jumlah tetap memesan jumlah pesan ulang, diulang sampai stok di atas stok minimum. Sampai stok maksimum memesan selisih stok tersedia dengan stok maksimum. Tidak dihitung berarti Hitung saran melewati barang ini di lokasi ini."
+                        >
+                            {editing ? (
+                                <Select
+                                    label="Cara pesan ulang"
+                                    items={policyItems}
+                                    value={form.policy ?? notPlanned}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            policy: policyOf(value),
+                                        })
+                                    }
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Cara pesan ulang"
+                                    readOnly
+                                    value={
+                                        form.policy
+                                            ? policyLabels[form.policy]
+                                            : 'Tidak dihitung'
+                                    }
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl
+                            error={errors.reorder_quantity?.[0]}
+                            hint={`Jumlah sekali pesan dalam ${item.base_unit.code}, dipakai cara pesan jumlah tetap.`}
+                        >
+                            <Input
+                                label={`Jumlah pesan ulang (${item.base_unit.code})`}
+                                inputMode="decimal"
+                                data-error-field="reorder_quantity"
+                                value={form.reorder}
+                                readOnly={!editing}
+                                onChange={(event) =>
+                                    setForm({
+                                        ...form,
+                                        reorder: event.target.value,
                                     })
                                 }
                             />
@@ -363,6 +432,31 @@ export function StockkeepingUnits({ item }: { item: Item | null }): ReactNode {
                             <DataTableText>
                                 {row.maximum_quantity
                                     ? displayNumber(row.maximum_quantity)
+                                    : ''}
+                            </DataTableText>
+                        ),
+                    },
+                    {
+                        id: 'policy',
+                        header: 'Cara pesan ulang',
+                        width: 180,
+                        cell: (row) => (
+                            <DataTableText>
+                                {row.reordering_policy
+                                    ? policyLabels[row.reordering_policy]
+                                    : ''}
+                            </DataTableText>
+                        ),
+                    },
+                    {
+                        id: 'reorder',
+                        header: 'Jumlah pesan ulang',
+                        width: 150,
+                        align: 'right',
+                        cell: (row) => (
+                            <DataTableText>
+                                {row.reorder_quantity
+                                    ? displayNumber(row.reorder_quantity)
                                     : ''}
                             </DataTableText>
                         ),
