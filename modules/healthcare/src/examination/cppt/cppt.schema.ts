@@ -52,7 +52,8 @@ export const cpptSchema = z.object({
     // P: terapi, tindakan, dan resep. Resep yang sudah diserahkan farmasi ditulis sebagai "Obat Direalisasi" sistem lama
     // (BILLFarmasiDetail.JmlObat - JmlRetur): obat yang dipegang pasien, yaitu yang diserahkan dikurangi yang diretur,
     // dan obat yang habis diretur tidak ditulis. Resep yang belum diserahkan, misalnya di klinik tanpa module farmasi,
-    // ditulis seperti yang diresepkan beserta statusnya.
+    // ditulis seperti yang diresepkan beserta statusnya. substitute_name adalah obat pengganti yang diserahkan farmasi,
+    // disalin dari pharmacy.prescription.dispensed.v1 (healthcare 0056).
     plan: z.object({
         drug_therapy: text,
         non_drug_therapy: text,
@@ -68,6 +69,7 @@ export const cpptSchema = z.object({
                     z.object({
                         compound: number,
                         drug_name: text,
+                        substitute_name: text,
                         quantity: text,
                         requested_quantity: number,
                         signa: text,
