@@ -129,8 +129,9 @@ Kolom dan rumusnya dari prosedur `SIMPUS_LPLPO` sistem lama: stok awal, penerima
 
 - Stok awal adalah jumlah kartu gudang sebelum periode. Prosedur lama hanya membaca baris saldo awal (`JTransaksi_ID` 500) di hari pertama periode.
 - Barang yang punya stok tanpa gerak tetap tercetak. Prosedur lama hanya memuat barang yang bergerak.
-- Permintaan adalah permintaan pembelian lokasi itu yang dibuat dalam periode, menurut zona waktu legal entity. Prosedur lama menjumlah permintaan semua lokasi.
-- Pemberian per sumber dana (B_Pusat, B_Prov, APBD, Program, Lainnya) tidak ikut. Prosedur lama memilihnya dari id subkategori yang ditulis mati. Kartu gudang sudah membawa sumber dana, jadi kolom itu bisa ditambahkan sebagai field bila diminta.
+- Permintaan adalah permintaan pembelian lokasi itu yang dibuat dalam periode, menurut zona waktu legal entity. Prosedur lama menjumlah permintaan semua lokasi. Amprah antarlokasi sengaja tidak ikut, sama dengan prosedur lama: lembar permintaan LPLPO ditujukan ke pemasok di luar klinik, misalnya instalasi farmasi kabupaten, bukan ke gudang sendiri.
+- Penerimaan dirinci per sumber dana di field `received_by_funding_source` (Penerimaan per sumber dana): satu baris per sumber dana yang tercatat di kartu gudang penerimaan itu, berisi nama dari master Sumber dana legal entity dan jumlahnya. Penerimaan tanpa sumber dana, misalnya penyesuaian, menjadi "Tanpa sumber dana". Jumlah rinciannya sama dengan kolom Penerimaan. Prosedur lama memecahnya ke kolom B_Pusat, B_Prov, APBD, Program, dan Lainnya dari id subkategori yang ditulis mati; di sini tidak ada nama atau id sumber dana di kode.
+- Layout bawaan menulis rincian itu dalam satu kolom ("Dana APBD 40, Dana BLUD 25"), bukan satu kolom per sumber dana. Sumber dana berbeda per legal entity, dan layout Word mesin ini hanya bisa mengulang baris tabel, tidak menambah kolom per data. Klinik yang sumber dananya tetap bisa mengunggah layout sendiri.
 
 BC tidak punya LPLPO. Padanan terdekatnya report "Inventory Valuation" (1001) dengan saringan lokasi: stok awal, bertambah, berkurang, dan stok akhir per barang dalam periode. Kolom permintaan tidak punya padanan di report itu.
 
