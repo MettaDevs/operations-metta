@@ -35,6 +35,8 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                 host?: string;
                 // Body application/x-www-form-urlencoded, misalnya logout token dari penyedia SSO.
                 form?: Record<string, string>;
+                // Body multipart/form-data, misalnya unggah layout cetak. Content-Type beserta boundary-nya ditulis Request.
+                multipart?: FormData;
             } = {},
         ): Promise<Response> {
             const xsrf = cookies.get('XSRF-TOKEN');
@@ -43,7 +45,8 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                     method,
                     headers: {
                         accept: 'application/json',
-                        ...(options.body === undefined
+                        ...(options.body === undefined ||
+                        options.multipart !== undefined
                             ? {}
                             : { 'content-type': 'application/json' }),
                         ...(options.form === undefined
@@ -67,11 +70,12 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                         ...options.headers,
                     },
                     body:
-                        options.form !== undefined
+                        options.multipart ??
+                        (options.form !== undefined
                             ? new URLSearchParams(options.form).toString()
                             : options.body === undefined
                               ? undefined
-                              : JSON.stringify(options.body),
+                              : JSON.stringify(options.body)),
                 }),
                 address,
             );
@@ -94,6 +98,8 @@ export function operationsTestApp(environment: Record<string, string> = {}) {
                 request('DELETE', path, { body }),
             put: (path: string, body: unknown) =>
                 request('PUT', path, { body }),
+            upload: (path: string, form: FormData) =>
+                request('POST', path, { multipart: form }),
             // Layar login tidak memuat data apa pun sebelum POST /login, jadi belum ada cookie XSRF-TOKEN. Peramban
             // mengirim Sec-Fetch-Site same-origin, dan pemeriksaan CSRF di identity menerimanya.
             async login(email: string, password: string) {

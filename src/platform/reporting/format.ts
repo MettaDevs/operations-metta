@@ -193,16 +193,37 @@ export function templateView(
     return view;
 }
 
-// Setiap tag yang boleh dipakai layout, dari field yang sama dengan templateView: `<key>`, `<key>_words` untuk uang
-// dengan huruf, `<key>_date` dan `<key>_time` untuk waktu, dan `#<lines>` untuk perulangan baris.
-export function fieldTags(fields: Fields, prefix = ''): string[] {
+// Setiap tag yang boleh dipakai layout beserta artinya, dari field yang sama dengan templateView: `<key>`,
+// `<key>_words` untuk uang dengan huruf, `<key>_date` dan `<key>_time` untuk waktu, dan daftar baris beserta isinya.
+// Layar Layout cetak menampilkannya untuk penulis layout; pemeriksaan unggahan memakai tag-nya.
+export function fieldCatalog(
+    fields: Fields,
+    prefix = '',
+    parent = '',
+): { tag: string; label: string }[] {
     return Object.entries(fields).flatMap(([key, spec]) => {
-        const name = prefix + key;
+        const tag = prefix + key;
+        const label = parent ? `${parent} › ${spec.label}` : spec.label;
         if (spec.kind === 'lines')
-            return [name, ...fieldTags(spec.fields, `${name}.`)];
-        if (spec.kind === 'money' && spec.words) return [name, `${name}_words`];
+            return [
+                { tag, label: `${label} (daftar baris)` },
+                ...fieldCatalog(spec.fields, `${tag}.`, label),
+            ];
+        if (spec.kind === 'money' && spec.words)
+            return [
+                { tag, label },
+                { tag: `${tag}_words`, label: `${label}, dengan huruf` },
+            ];
         if (spec.kind === 'datetime')
-            return [name, `${name}_date`, `${name}_time`];
-        return [name];
+            return [
+                { tag, label },
+                { tag: `${tag}_date`, label: `${label}, tanggal saja` },
+                { tag: `${tag}_time`, label: `${label}, jam saja` },
+            ];
+        return [{ tag, label }];
     });
+}
+
+export function fieldTags(fields: Fields, prefix = ''): string[] {
+    return fieldCatalog(fields, prefix).map((entry) => entry.tag);
 }

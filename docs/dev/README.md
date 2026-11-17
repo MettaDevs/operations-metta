@@ -51,7 +51,7 @@ Nomor berkas dipertahankan dari CoreERP supaya mudah dicocokkan. Nomor yang tida
 | Dokumen | Isi |
 | --- | --- |
 | [21-visual-workflow-engine.md](21-visual-workflow-engine.md) | Engine alur dan inbox persetujuan |
-| [23-document-rendering.md](23-document-rendering.md) | Dokumen cetak dan laporan lewat mesin template |
+| [23-document-rendering.md](23-document-rendering.md) | Mesin cetak Core: dataset, layout Word per legal entity, kop surat, PDF lewat Gotenberg, dan kontrak laporan tabel |
 | [35-analitik.md](35-analitik.md) | Engine analitik |
 
 ### Module, integrasi, dan pengujian

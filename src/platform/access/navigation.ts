@@ -167,6 +167,25 @@ export const sysAdminArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'reporting',
+            label: 'Cetak',
+            icon: 'file-text',
+            items: [
+                {
+                    id: 'report-layouts',
+                    label: 'Layout cetak',
+                    href: '/sysadmin/reporting/report-layouts',
+                    permission: 'core.report-layout.read',
+                },
+                {
+                    id: 'letterheads',
+                    label: 'Kop surat',
+                    href: '/sysadmin/reporting/letterheads',
+                    permission: 'core.report-layout.read',
+                },
+            ],
+        },
+        {
             id: 'data-sharing',
             label: 'Data sharing',
             icon: 'share-2',

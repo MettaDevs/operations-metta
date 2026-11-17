@@ -56,7 +56,7 @@ async function harness() {
             query +
                 label(query.startsWith('update cache') ? second : first) +
                 (query.includes('in ($1,$2)') ? label(second) : '') +
-                (query.includes('set_config') ? ` ${first}` : ''),
+                (query.includes('set_config') ? ` ${String(first)}` : ''),
         );
         let rows: unknown[] = [];
         let count = 0;

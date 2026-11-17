@@ -1,84 +1,129 @@
-# Dokumen cetak, layout, dan ekspor
+# Dokumen cetak, layout, dan laporan
 
-> **Status di repo ini:** belum dipindah. Tidak ada mesin cetak, layout, antrean ekspor, atau layanan render PDF. Tabelnya, antara lain `print_identities`, `report_layouts`, `report_layout_defaults`, `report_exports`, `report_presets`, dan `report_last_used_options`, ada di `database/migrations/0001_coreerp_baseline.sql`, tetapi belum ada kode yang membacanya. Acuan perilaku: [`docs/dev/23-document-rendering.md`](https://github.com/MettaDevs/coreERP/blob/main/docs/dev/23-document-rendering.md) dan `apps/core/app/Platform/Reporting/` di [repo CoreERP](https://github.com/MettaDevs/coreERP).
+Setiap dokumen cetak di repo ini lahir dari satu mesin di Core, `src/platform/reporting/`: pemilik data mendaftarkan dataset dan layout bawaannya, mesin mengisi layout Word, membuat PDF lewat renderer, dan menyajikannya ke satu komponen cetak di layar. Cara menambah dokumen ada di skill [`report-engine`](../../.agents/skills/report-engine/SKILL.md). Halaman ini menyimpan alasannya.
 
-Halaman ini menyimpan aturan desain mesin cetak CoreERP yang tetap berlaku untuk repo ini, supaya mesin yang kelak dibangun di sini tidak mengulang keputusan yang sudah dibayar mahal.
+Desainnya pindahan mesin CoreERP, `apps/core/app/Platform/Reporting/` di [repo CoreERP](https://github.com/MettaDevs/coreERP), dengan cacatnya diperbaiki. Bagian [Yang berbeda dari CoreERP](#yang-berbeda-dari-coreerp) mencatat perbaikannya.
 
 ## Semua cetakan dan laporan lewat satu mesin template
 
 Keputusan pemilik produk, 13 November 2026: laporan berupa template di mesin laporan dan cetak tersendiri, bukan layar dengan kolom dan query yang ditulis mati. Migration `0030_inventory_report_names.sql` mencatat akibatnya: LPLPO tidak lagi menjadi layar tetap.
 
-Akibatnya untuk pekerjaan hari ini:
-
-- Jangan membuat view cetak, rute cetak, CSS cetak, atau tombol Cetak di layar mana pun. Cetakan seperti rekam medis, kwitansi, surat, dan label menunggu mesinnya.
-- Jangan membuat halaman laporan dengan kolom dan query tetap. Catat kebutuhannya sebagai kebutuhan mesin laporan.
+- Jangan membuat view cetak, rute cetak, CSS cetak, atau tombol Cetak yang menulis logika cetak di layar mana pun. Layar memasang `PrintAction` dengan kode laporan dan id record-nya, tidak lebih.
+- Jangan membuat halaman laporan dengan kolom dan query tetap. Catat kebutuhannya sebagai laporan tabel di mesin ini.
 - Layar tanya-jawab data, misalnya **Stok per lokasi** di `src/foundation/inventory/stock-by-location/`, bukan laporan. Layar itu padanan halaman daftar BC seperti Items by Location, dan tetap layar biasa.
 
 ## Model yang ditiru: Business Central
 
-Dynamics 365 punya dua model. F&O memakai Electronic Reporting: data model abstrak, model mapping, konfigurasi format berversi, dan penyuntingan template yang menuntut SharePoint dan Office 365. Business Central jauh lebih kecil: satu report adalah dataset yang ditentukan developer, dan dataset itu dipakai banyak layout Word atau Excel yang boleh diubah pengguna tanpa rilis.
+Dynamics 365 punya dua model. F&O memakai Electronic Reporting: data model abstrak, model mapping, konfigurasi format berversi, dan penyuntingan template yang menuntut SharePoint dan Office 365. Business Central jauh lebih kecil: satu report adalah dataset yang ditentukan developer, dan dataset itu dipakai banyak layout Word atau Excel yang boleh diubah pengguna tanpa rilis ([Report Layout Selection](https://learn.microsoft.com/en-us/dynamics365/business-central/ui-how-change-report-layout), [Custom Report Layouts](https://learn.microsoft.com/en-us/dynamics365/business-central/ui-manage-report-layouts)).
 
-CoreERP mengambil model BC, dengan satu ide dari F&O: dataset adalah kontrak yang stabil, bukan tabel mentah. Alasannya tetap berlaku di sini:
+Repo ini mengambil model BC, dengan satu ide dari F&O: dataset adalah kontrak yang stabil, bukan tabel mentah.
 
 - Skalanya sepadan dengan BC. Electronic Reporting adalah framework tersendiri yang butuh tim untuk merawatnya.
 - On-prem tidak boleh bergantung pada Office 365. Pengguna menyunting `.docx` di Word lokal lalu mengunggahnya.
-- Yang berbeda antarklinik adalah tampilan, bukan data. Dengan dataset yang sama, setiap tenant boleh mengunggah layout-nya sendiri tanpa developer menulis ulang apa pun.
+- Yang berbeda antarklinik adalah tampilan, bukan data. Dengan dataset yang sama, setiap legal entity boleh mengunggah layout-nya sendiri tanpa developer menulis ulang apa pun.
 
 ## Core memegang mesinnya, pemilik data memegang datasetnya
 
-Mesin cetak milik Core, sama seperti number sequence. Bila mesinnya disalin ke setiap module, salinan itu perlahan saling menyimpang, dan admin tenant mendapat satu halaman pengaturan layout per module.
-
-| Lapis | Padanan BC | Pemilik |
+| Lapis | Padanan BC | Di repo ini |
 | --- | --- | --- |
-| Dataset | Report dataset | Pemilik data: Core atau module |
-| Katalog laporan | Report object | Dibaca dari definisi dataset, bukan ditulis di tempat kedua |
-| Layout bawaan | Extension layout | Ikut rilis pemilik dataset |
-| Layout unggahan | User-defined layout | Tenant, opsional per legal entity |
-| Layout default | Report Selections | Tenant per legal entity; legal entity mengalahkan tenant |
-| Antrean ekspor dan hasilnya | Report scheduling | Core |
-| Render PDF | Report rendering | Infrastruktur Core, tanpa status dan tanpa tenant |
-| Identitas cetak: nama kop, baris induk, footer, logo | Company Information | Tenant per legal entity atau operating unit |
+| Dataset | Report dataset | `defineReport` di folder fitur pemilik data, misalnya `payment-receipt.report.ts` dan `drug-label.report.ts` |
+| Katalog laporan | Report object | `reportCatalog([...])` di `src/main.ts`, dirakit dari laporan yang di-export Core dan module |
+| Layout bawaan | Extension layout | `layouts` pada definisi laporan, ditulis dengan `wordDocument` |
+| Layout unggahan | User-defined layout | `report_layouts`, per legal entity, isi berkas di kolom `isi` |
+| Layout yang dipakai | Report Layout Selection | `report_layout_defaults`, satu per legal entity dan laporan |
+| Render PDF | Report rendering | Gotenberg di `RENDERER_URL`, tanpa status dan tanpa tenant |
+| Identitas cetak | Company Information | `print_identities` per legal entity atau unit kerja, Sys Admin › Kop surat |
 
 Batas yang mengikat setiap pemilik dataset:
 
-- **Dataset dokumen diminta kepada pemilik datanya.** Pemilik menegakkan permission dan scope organisasi pengguna persis seperti di layarnya, lalu menyerahkan data yang sudah disaring. Core boleh membaca tabel module, tetapi isi dokumen dan siapa boleh mencetak record mana milik module, dan memintanya membuat semua itu satu sumber dengan layarnya. Konteks pengguna dikirim sebagai argumen, bukan dibaca dari request, karena ekspor berjalan di worker tanpa sesi. Izin diperiksa dua kali: Core memeriksa boleh menjalankan laporan, pemilik data memeriksa boleh membaca datanya.
-- **Katalog laporan dibaca dari definisi dataset.** CoreERP pernah menulis laporan juga di manifest, dan kedua sumber itu menyimpang: laporan yang terlewat tampil di pratinjau lalu menjawab 404 saat dicetak.
+- **Dataset dibuat pemilik datanya, lewat service yang juga dipakai layarnya.** `load` farmasi memanggil `Dispensings.show`, yang sudah menegakkan izin dan scope seperti di layar penyerahan. Core tidak membaca tabel module dan tidak menulis ulang aturan siapa boleh membaca record mana. `check:boundaries` menolak nama tabel module di `src/`.
+- **Izin cetak adalah izin baca record asalnya.** Tidak ada izin cetak tersendiri: siapa yang boleh membuka record boleh mencetaknya. Mesin memeriksa `permission` laporan di tempat kerja pemilik dataset, lalu dataset memeriksanya lagi lewat service-nya.
+- **Laporan module yang belum terpasang tidak dikenal.** Mesin membaca `core_module_installations`, sama dengan `onEvent`; laporan `core` selalu ada.
+- **Katalog dibaca dari definisi dataset, satu tempat.** CoreERP menulis laporan juga di manifest, dan kedua sumber itu menyimpang. Di sini katalog adalah nilai di `src/main.ts`, dan proses gagal mulai bila sebuah laporan salah bentuk: kode ganda, izin di luar module pemiliknya, contoh data yang tidak sesuai field, atau layout bawaan yang memakai tag tidak dikenal. Test memuat `src/main.ts`, jadi CI ikut gagal.
+
+## Field dataset: arti, bukan rupa
+
+Dataset menyatakan arti tiap nilai (`field.text`, `field.money`, `field.date`, `field.datetime`, `field.quantity`, `field.flag`, `field.lines` untuk baris yang boleh bersarang). Rupanya milik mesin, padanan `AutoFormatType` BC:
+
+- **Uang** dibulatkan ke presisi mata uang tenant (`currency_precisions`), sumber yang sama dengan `roundAmount`. `field.money(label, { words: true })` menambah tag `<key>_words` berisi terbilang.
+- **Pemisah angka, nama bulan, dan terbilang mengikuti bahasa layout.** Bahasa melekat pada layout (`id` atau `en`), bukan pada pengguna, karena klinik yang melayani wisatawan mencetak dokumen yang sama dalam dua bahasa.
+- **Waktu disimpan UTC dan ditulis menurut zona waktu legal entity dokumen** (`legal_entities.timezone`), beserta nama zonanya: WIB, WITA, WIT. Tanggal tanpa jam tidak pernah digeser zona.
+- **Nilai yang tidak sesuai field-nya menggagalkan cetak**, tidak dicetak kosong. Dokumen yang salah lebih mahal daripada pesan error.
+
+Organisasi dokumen datang dari record, bukan dari tempat kerja pengguna. Dataset mengembalikan legal entity dan unit kerja record-nya, dan kop, zona waktu, serta layout ikut itu. Mesin menolak record dari legal entity lain dengan 404.
 
 ## Identitas cetak bukan bagian layout
 
-Nama, logo, dan footer kop disimpan sebagai data per legal entity, dengan operating unit boleh punya identitas sendiri. Saat mencetak, identitas yang paling spesifik dipakai. Alamat dan kontak tidak disimpan di identitas cetak. Keduanya dibaca dari buku alamat organisasi, `src/platform/address-book/`, supaya satu alamat kantor tidak diubah di dua tempat.
+Nama tampil, baris induk, NPWP, nomor izin, dan catatan kaki disimpan per legal entity, dengan unit kerja boleh punya kop sendiri. Saat mencetak, kop unit kerja yang menerbitkan dokumen dipakai, kalau tidak ada kop legal entity-nya, kalau tidak ada juga cukup nama legal entity. Alamat, telepon, dan email tidak disimpan di kop. Ketiganya dibaca dari buku alamat organisasi, `src/platform/address-book/`, supaya satu alamat kantor tidak diubah di dua tempat.
 
-Logo adalah daftar berposisi, bukan satu gambar, karena kop instansi pemerintah memuat lambang daerah di kiri dan logo instansi di kanan. Logo hanya PNG atau JPEG. Akibatnya mengganti logo atau footer tidak pernah menyentuh layout.
+Logo belum dipasang dari kop. Layout per legal entity membawa gambarnya sendiri di dalam berkas Word.
 
-## Layout adalah data tenant
+## Layout adalah data legal entity
 
-Tenant boleh mengunggah, mengganti, dan mengarsipkan layout tanpa rilis. Yang dikunci hanya kode laporan, karena layout tersimpan dan riwayat ekspor merujuknya. Layout bawaan tidak pernah disunting di tempat: pengguna mengunduhnya, mengubahnya, lalu mengunggahnya sebagai layout baru. Hak mengelola layout terpisah dari hak mencetak, jadi tenant dapat memberi hak cetak tanpa memberi hak mengganti kop.
+- **Layout bawaan ditulis sebagai kode**, dengan `wordDocument` di `src/platform/reporting/docx.ts`, bukan berkas `.docx` biner. Diff-nya terbaca di review, dan tag-nya diperiksa saat proses mulai. Klinik yang ingin rupa lain mengunduhnya sebagai Word dari Sys Admin › Layout cetak.
+- **Unggahan disimpan di database lingkungan**, kolom `report_layouts.isi`. Image runtime tidak punya volume tulis, dan database lingkungan sudah terpisah per tenant dan sudah dicadangkan. Berkasnya paling besar 2 MB.
+- **Baris layout tidak pernah diubah isinya.** Mengganti layout berarti mengunggah baris baru lalu memilihnya. Unggahan berkas yang sama untuk laporan dan legal entity yang sama menemukan baris yang sudah ada.
+- **Pilihan layout dibaca ulang setiap cetak.** Pilihan yang menunjuk layout terhapus atau layout bawaan yang sudah tidak ada jatuh ke layout bawaan pertama, jadi tidak ada pilihan yang perlu diselaraskan saat layout dihapus.
+- **Ukuran kertas milik dokumen Word itu sendiri** (setelan halaman), dibaca saat unggah untuk ditampilkan. A4, etiket 96 × 200 mm, dan struk 76 mm hanyalah layout dengan setelan halaman berbeda.
+- **Mengelola layout butuh dua izin**: `core.report-layout.update` dan izin baca dokumen laporannya. Pengelola layout farmasi tidak bisa mengganti kuitansi kasir.
 
 ## Cara layout membaca dataset
 
-- Placeholder `${kode}` mengambil satu nilai. Baris tabel Word atau baris Excel yang memuat placeholder berawalan nama tabel dataset digandakan per baris.
-- **Uang, angka, persen, tanggal, dan waktu dikirim mentah dan diformat mesin.** Dataset hanya menyatakan jenis nilainya, padanan `AutoFormatType` BC. Word dan PDF mendapat teks berformat, Excel mendapat angka atau tanggal asli supaya dapat dijumlah dan diurutkan. Presisi uang dibaca dari presisi mata uang tenant, sumber yang sama dengan `roundAmount` di `src/foundation/currency/`.
-- **Waktu dikirim dalam UTC** dan ditulis menurut zona waktu pengguna yang mencetak, beserta nama zonanya.
-- **Placeholder tak dikenal dikosongkan.** Dokumen yang sampai ke pihak luar tidak boleh memuat `${...}`. Saat unggah, placeholder yang tidak ada di dataset dilaporkan sebagai peringatan.
-- **Dokumen bermakro ditolak saat unggah.** Yang diperiksa isi berkasnya, bukan ekstensinya.
+Tag memakai sintaks [docxtemplater](https://docxtemplater.com/docs/tag-types/):
 
-## Ekspor berjalan di latar belakang
+- `{number}` mengambil satu nilai; `{letterhead.name}` dan `{printed.at}` diisi mesin untuk setiap laporan.
+- `{#services}…{/services}` mengulang isi untuk setiap baris. Bila tag pembuka dan penutup ada di satu baris tabel Word, baris tabel itu yang diulang. Baris bersarang, misalnya komposisi racikan di dalam etiket, ditulis dengan cara yang sama.
+- `{#cancelled}…{/cancelled}` hanya tampil bila nilainya ada; `{^cancelled}…{/cancelled}` sebaliknya. Paragraf yang hanya berisi tag pembuka atau penutup hilang dari kertas.
+- `{$no}`, `{$first}`, dan `{$last}` tersedia di dalam perulangan.
+- Baris baru di dalam nilai teks menjadi baris baru di Word.
 
-Permintaan cetak dijawab `202` dengan baris ekspor `queued`, lalu worker mengambil dataset, mengisi layout, mengubah format, dan menyimpan berkas. Pengguna tidak menunggu di layar.
+Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil gambar dari luar dokumen, sintaks tag-nya rusak, atau memakai tag yang tidak dikenal laporannya. Tag tak dikenal ditolak, bukan diperingatkan: di kertas ia tercetak kosong tanpa ada yang tahu.
 
-- Hak pengguna diperiksa ulang saat job berjalan, bukan dibekukan saat permintaan dibuat. Pencabutan hak di antaranya langsung berlaku.
-- Database yang menjamin satu baris antrean hanya diambil satu worker. Baris `running` punya masa sewa, supaya ekspor yang ditinggal worker mati tetap diselesaikan dan satu ekspor tidak dikerjakan dua worker.
-- Kegagalan yang pasti berulang, misalnya layout salah susun atau hak dicabut, langsung `failed` dengan pesan yang jelas. Yang diulang, dengan batas jumlah percobaan, adalah gangguan sesaat, misalnya layanan PDF yang terlambat menjawab, dan worker yang mati di tengah ekspor.
-- Ekspor aktif per pengguna dan jumlah baris dataset dibatasi, supaya satu permintaan tidak menguasai worker.
-- Hasil ekspor punya masa simpan dan dihapus sesudahnya. Dokumen selalu dapat dibuat ulang dari data dan layout terbaru.
-- Layanan render berjalan tanpa jalan keluar ke internet, supaya dokumen unggahan tenant tidak dapat memancingnya mengambil sumber dari luar.
+## Cetak dokumen berjalan sinkron
 
-## Yang tidak dipindah
+`GET /api/v1/reports/{code}/records/{id}?format=pdf|docx&layout=` menjawab berkasnya langsung. Mengisi layout butuh 3 sampai 5 ms, dan konversi PDF median 317 sampai 372 ms setelah LibreOffice hangat (diukur dengan Gotenberg 8.36 di laptop pengembang; tabel di bagian Renderer). Antrean, penyimpanan hasil, dan polling seperti CoreERP tidak sepadan untuk satu dokumen.
 
-- Nama kelas, command, dan paket PHP: `ModuleReportProvider`, `TypedSheetWriter`, OpenSpout, PhpSpreadsheet, `queue:work`, dan setelan `COREERP_REPORTING_*`.
-- `CustomEvent('coreerp:print')` dari layar module ke Shell. Cara layar di repo ini meminta cetak belum diputuskan.
-- Container renderer CoreERP berbasis Gotenberg dan LibreOffice. Pilihan engine render di repo ini belum diputuskan.
-- Fitur laporan CoreERP yang lebih jauh, misalnya opsi terakhir, preset, filter tambahan per kolom, Excel data saja, dan ekspor daftar di layar. Rinciannya di halaman CoreERP.
+- Renderer yang tidak diisi atau tidak menjawab dijawab `503` berkode `renderer_unavailable`. `PrintAction` lalu menawarkan unduh Word, karena berkas Word tetap bisa dibuat tanpa renderer.
+- LibreOffice butuh sekitar 13 detik untuk konversi pertamanya. Gotenberg dijalankan dengan `--libreoffice-auto-start`, supaya waktu itu habis saat container mulai, bukan pada klik cetak pertama. `RENDERER_TIMEOUT_SECONDS` (bawaan 30) menutup sisanya.
+- Satu cetak memegang koneksi database request-nya selama konversi.
+
+## Renderer: Gotenberg di samping runtime
+
+PDF dibuat LibreOffice di dalam [Gotenberg](https://gotenberg.dev/), container terpisah dari runtime. Image runtime tetap `oven/bun` slim; memasang LibreOffice di dalamnya menambah ratusan megabyte ke setiap proses runtime dan worker, dan setiap konversi akan menyalakan LibreOffice dari nol.
+
+| | Terukur |
+| --- | --- |
+| Image | `gotenberg/gotenberg:8.36.0`, 2,41 GB |
+| Memori | 12 MB sebelum konversi pertama, 159 MB sesudah 12 konversi, sekitar 285 MB sesudah 100-an konversi |
+| Konversi kuitansi A4 dan etiket | median 317 sampai 372 ms; pertama 13,3 detik tanpa auto-start; sesekali sekitar 1,4 detik saat LibreOffice dinyalakan ulang (`--libreoffice-restart-after`) |
+| Isi layout di runtime | median 2,8 ms (etiket) dan 3,5 ms (kuitansi); memori runtime tidak bertambah sesudah 600 kali isi |
+
+- **Satu Gotenberg per host runtime**, tanpa status dan tanpa tenant. Di SaaS dev ia service `ops-renderer` di `deploy/saas-dev/compose.yaml` repo control-plane-metta, dengan `RENDERER_URL` diisi ke ops-app.
+- **Tanpa jalan keluar ke internet**, supaya dokumen unggahan tenant tidak dapat memancingnya mengambil sumber dari luar.
+- **On-prem** butuh container yang sama di compose server klien. Selama belum ada, cetak di server itu hanya bisa berupa Word.
+- **Laptop** memakai container yang sama lewat Docker; `bun scripts/verify.ts up` menyalakannya per run.
+
+## Laporan tabel: kontrak, belum dibangun
+
+Laporan tabel, misalnya daftar penjualan atau kartu stok, memakai field yang sama tanpa `field.lines`: satu baris dataset satu baris laporan. Bedanya dengan dokumen:
+
+- Parameter laporan (periode, lokasi) dinyatakan sebagai schema zod, sumber validasi dan tipe untuk layar pemilihnya.
+- Baris dialirkan per halaman, bukan dimuat sekaligus.
+- Layout-nya `.xlsx`. Angka dan tanggal masuk sel sebagai nilai asli, supaya bisa dijumlah dan diurutkan.
+- Daftar besar berjalan lewat antrean `report_exports` di worker, dengan hak pengguna diperiksa ulang saat job berjalan, masa sewa per baris antrean, dan hasil yang punya masa simpan.
+
+Bagian ini dibangun saat laporan tabel pertama diminta.
+
+## Yang berbeda dari CoreERP
+
+- Baris bersarang (`field.lines` di dalam `field.lines`). CoreERP hanya mengenal tabel datar.
+- Baris baru di teks menjadi baris baru di Word. Di CoreERP kop berbaris banyak tercetak sebagai spasi.
+- Bahasa per layout dan terbilang. CoreERP menulis mati `id` dan rupiah.
+- Cetak dokumen sinkron. CoreERP mengantrekan setiap cetak, termasuk satu kuitansi.
+- Tag tak dikenal ditolak saat unggah. CoreERP hanya memperingatkan, lalu mencetaknya kosong.
+- Layout unggahan tidak diubah di tempat. CoreERP menimpa berkasnya, sehingga ekspor yang sedang antre ikut berubah.
+- Izin mengelola layout per laporan. CoreERP memakai satu izin untuk seluruh tenant.
+- Katalog di kode dan diperiksa saat mulai. CoreERP menyalin katalog ke tabel `app_reports`, yang di sini dibiarkan tanpa pembaca.
 
 ## Lihat juga
 

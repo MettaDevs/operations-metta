@@ -28,7 +28,12 @@ export {
     type PartyDraftDetails,
 } from './party-addresses.tsx';
 export { PasswordInput } from './password-input.tsx';
-export { PrintAction } from './print-action.tsx';
+export {
+    download,
+    fetchFile,
+    openInTab,
+    PrintAction,
+} from './print-action.tsx';
 export { ssoErrorMessage } from './sso-messages.ts';
 export { useAppearance } from './use-appearance.ts';
 export { useUnsavedChangesGuard } from './use-unsaved-changes-guard.tsx';

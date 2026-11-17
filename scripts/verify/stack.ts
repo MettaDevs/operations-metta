@@ -64,6 +64,8 @@ const runSchema = z.object({
     dir: z.string(),
     container: z.string(),
     dbPort: z.number(),
+    // Gotenberg milik run ini, pembuat PDF dokumen cetak. 0 pada run lama yang belum menyalakannya.
+    rendererPort: z.number().default(0),
     appPort: z.number(),
     cdpPort: z.number(),
     appKey: z.string(),
@@ -158,8 +160,14 @@ export function runEnv(run: Run): Record<string, string> {
         PORT: String(run.appPort),
         SESSION_BACKEND: 'database',
         CLIENT_DIR: join(run.dir, 'client'),
+        ...(run.rendererPort
+            ? { RENDERER_URL: `http://127.0.0.1:${run.rendererPort}` }
+            : {}),
     };
 }
+
+export const rendererImage = 'gotenberg/gotenberg:8.36.0';
+const rendererContainer = (run: Run) => `${run.container}-renderer`;
 
 export function isAlive(pid: number | undefined): boolean {
     if (pid === undefined) return false;
@@ -289,6 +297,7 @@ export async function up(): Promise<Run> {
         dir,
         container: `ops-verify-${runId}`,
         dbPort: 0,
+        rendererPort: 0,
         appPort,
         cdpPort: freePort(),
         appKey: `base64:${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64')}`,
@@ -320,6 +329,34 @@ export async function up(): Promise<Run> {
                 'postgres:17',
             ],
             { quiet: true },
+        );
+        // Gotenberg menyala bersamaan dengan PostgreSQL; start dingin LibreOffice terjadi saat container mulai
+        // (--libreoffice-auto-start), bukan pada klik cetak pertama.
+        exec(
+            [
+                'docker',
+                'run',
+                '-d',
+                '--name',
+                rendererContainer(state),
+                '--label',
+                'operations-metta-verify=1',
+                '-p',
+                '127.0.0.1::3000',
+                rendererImage,
+                'gotenberg',
+                '--libreoffice-auto-start=true',
+                '--chromium-disable-routes=true',
+                '--api-timeout=60s',
+            ],
+            { quiet: true },
+        );
+        state.rendererPort = Number(
+            /:(\d+)\s*$/m.exec(
+                exec(['docker', 'port', rendererContainer(state), '3000/tcp'], {
+                    quiet: true,
+                }),
+            )?.[1] ?? 0,
         );
         const mapping = exec(['docker', 'port', state.container, '5432/tcp'], {
             quiet: true,
@@ -413,10 +450,13 @@ export async function up(): Promise<Run> {
 export function down(state: Run): void {
     killTree(state.serverPid);
     killTree(state.browserPid);
-    Bun.spawnSync(['docker', 'rm', '-f', '-v', state.container], {
-        stdout: 'ignore',
-        stderr: 'ignore',
-    });
+    Bun.spawnSync(
+        ['docker', 'rm', '-f', '-v', state.container, rendererContainer(state)],
+        {
+            stdout: 'ignore',
+            stderr: 'ignore',
+        },
+    );
     rmSync(join(state.dir, 'browser-profile'), {
         recursive: true,
         force: true,

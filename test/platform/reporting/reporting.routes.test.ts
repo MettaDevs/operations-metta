@@ -1,30 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import PizZip from 'pizzip';
 import { extractText, getDocumentProxy } from 'unpdf';
-import {
-    registerBillingEventHandlers,
-    replaceSaleBill,
-} from '../../../src/foundation/billing/index.ts';
-import { Database } from '../../../src/platform/database/index.ts';
-import { createBillingBusiness, json } from '../../support/billing-fixtures.ts';
+import { json } from '../../support/billing-fixtures.ts';
 import {
     operationsTestApp,
     type Browser,
 } from '../../support/operations-app.ts';
+import { documentText, paidReceipt } from '../../support/receipt-fixture.ts';
 import {
     createMember,
     createTenant,
     grantAllOrganizations,
-    setCurrencyPrecision,
 } from '../../support/tenant-fixtures.ts';
-
-function documentText(docx: Uint8Array): string {
-    const xml = new PizZip(docx).file('word/document.xml')?.asText() ?? '';
-    return xml
-        .replaceAll(/<\/w:p>/g, '\n')
-        .replaceAll(/<[^>]+>/g, '')
-        .replaceAll(/[ \t]+/g, ' ');
-}
 
 // Mesin cetak lewat dokumen pertamanya, kuitansi kasir: dataset disaring tenant dan legal entity, izin baca pembayaran
 // adalah izin cetaknya, kop dari identitas cetak legal entity, angka dari presisi mata uang tenant, bahasa dari layout,
@@ -37,121 +23,16 @@ describe.skipIf(!process.env.DB_HOST)('report printing', () => {
         await close();
         await offline.close();
     });
-    let tenantId: string;
+    let receiptFixture: Awaited<ReturnType<typeof paidReceipt>>;
     let cashier: Browser;
     let paymentId: string;
     let paymentNumber: string;
     const receipt = (id = paymentId, query = 'format=docx') =>
         `/api/v1/reports/core.payment-receipt/records/${id}?${query}`;
 
-    async function login(
-        app: Pick<typeof offline, 'pool' | 'browser'>,
-        duties: string[],
-        tenant = tenantId,
-    ) {
-        const member = await createMember(app.pool, tenant, duties);
-        await grantAllOrganizations(app.pool, tenant, member.membershipId);
-        const session = app.browser();
-        await session.login(member.email, member.password);
-        return session;
-    }
-
     beforeAll(async () => {
-        registerBillingEventHandlers();
-        const business = await createBillingBusiness(
-            pool,
-            browser,
-            'Klinik Uji Cetak',
-            [
-                'core.billing-setup.manage',
-                'core.clerk.operate',
-                'core.payment.operate',
-            ],
-        );
-        tenantId = business.tenantId;
-        cashier = business.admin;
-        await setCurrencyPrecision(pool, tenantId, {
-            amount_decimals: 0,
-            unit_amount_decimals: 2,
-            invoice_rounding_precision: '1',
-            invoice_rounding_type: 'nearest',
-        });
-        await pool.unsafe(
-            `update legal_entities set timezone = 'Asia/Makassar' where organization_id = $1`,
-            [business.legalEntityId],
-        );
-        await pool.unsafe(
-            `insert into print_identities (id, tenant_id, organization_id, display_name, parent_lines, tax_id,
-                                           registration_id, footer_text, logos, created_at, updated_at)
-             values ($1, $2, $3, 'Klinik Pratama Uji', '["Yayasan Sehat Uji"]', '01.234.567.8-901.000',
-                     'Izin 123/2026', 'Terima kasih atas kunjungan Anda', '[]', now(), now())`,
-            [Bun.randomUUIDv7(), tenantId, business.legalEntityId],
-        );
-        await json(
-            await cashier.post('/api/v1/billing/payment-methods', {
-                code: 'TUN',
-                name: 'Tunai',
-                behavior: 'tunai',
-                counted_at_close: true,
-            }),
-            201,
-        );
-        await json(await cashier.post('/api/v1/billing/clerks/start', {}), 201);
-        const documentId = Bun.randomUUIDv7();
-        const connection = await pool.reserve();
-        let version: number;
-        try {
-            const db = new Database(connection, undefined, Bun.randomUUIDv7());
-            ({ version } = await db.transaction(() =>
-                replaceSaleBill(db, {
-                    tenantId,
-                    legalEntityId: business.legalEntityId,
-                    operatingUnitId: null,
-                    module: 'pharmacy',
-                    documentId,
-                    number: 'OTC-0001',
-                    date: '2026-11-16',
-                    buyer: { partyId: null, name: 'Budi Contoh' },
-                    group: 'OBAT',
-                    fees: [],
-                    lines: [
-                        {
-                            lineId: Bun.randomUUIDv7(),
-                            item: {
-                                id: Bun.randomUUIDv7(),
-                                code: 'PCT',
-                                name: 'Parasetamol',
-                            },
-                            quantity: '10',
-                            unitPrice: '1500',
-                            discountPercent: '0',
-                        },
-                        {
-                            lineId: Bun.randomUUIDv7(),
-                            item: {
-                                id: Bun.randomUUIDv7(),
-                                code: 'VTC',
-                                name: 'Vitamin C',
-                            },
-                            quantity: '2',
-                            unitPrice: '5000',
-                            discountPercent: '10',
-                        },
-                    ],
-                }),
-            ));
-        } finally {
-            connection.release();
-        }
-        const paid = await json<{ data: { id: string; number: string } }>(
-            await cashier.post(
-                `/api/v1/billing/visits/${documentId}/payments`,
-                { version, received: '50000' },
-            ),
-            201,
-        );
-        paymentId = paid.data.id;
-        paymentNumber = paid.data.number;
+        receiptFixture = await paidReceipt(pool, browser, 'Klinik Uji Cetak');
+        ({ cashier, paymentId, paymentNumber } = receiptFixture);
     });
 
     test('the receipt carries the payment, the amounts in the tenant precision, the words, and the legal entity letterhead', async () => {
@@ -213,16 +94,21 @@ describe.skipIf(!process.env.DB_HOST)('report printing', () => {
     });
 
     test('printing needs the read permission of the payment, and another tenant cannot find it', async () => {
-        const stranger = await login({ pool, browser }, [
+        const stranger = await receiptFixture.member([
             'core.organization.manage',
         ]);
         expect((await stranger.get(receipt())).status).toBe(403);
         const otherTenant = await createTenant(pool, 'Tenant lain');
-        const outsider = await login(
-            { pool, browser },
-            ['core.payment.inquire'],
+        const outsiderMember = await createMember(pool, otherTenant, [
+            'core.payment.inquire',
+        ]);
+        await grantAllOrganizations(
+            pool,
             otherTenant,
+            outsiderMember.membershipId,
         );
+        const outsider = browser();
+        await outsider.login(outsiderMember.email, outsiderMember.password);
         expect((await outsider.get(receipt())).status).toBe(404);
         expect(
             (
@@ -244,7 +130,10 @@ describe.skipIf(!process.env.DB_HOST)('report printing', () => {
     });
 
     test('without a renderer the PDF is refused with a code the screen turns into a Word download', async () => {
-        const reader = await login(offline, ['core.payment.inquire']);
+        const reader = await receiptFixture.member(
+            ['core.payment.inquire'],
+            offline,
+        );
         const response = await reader.get(receipt(paymentId, 'format=pdf'));
         expect(response.status).toBe(503);
         expect(await response.json()).toMatchObject({
