@@ -1,0 +1,52 @@
+import { z } from 'zod';
+import { listParametersSchema } from '../../../platform/http/index.ts';
+
+// Baris yang belum menjadi order, dan baris yang sudah.
+export const requisitionStatuses = ['terbuka', 'diproses'] as const;
+
+const reference = z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+});
+const amount = z.union([z.number(), z.string()]);
+
+export const requisitionInputSchema = z.object({
+    location_id: z.string(),
+    item_id: z.string(),
+    // Kosong berarti satuan beli barang.
+    unit_id: z.string().nullable().optional(),
+    quantity: amount,
+    due_date: z.string(),
+    description: z.string().nullable().optional(),
+    // Tiga isian petugas pembelian: Vendor No., Direct Unit Cost, dan Accept Action Message di BC.
+    vendor_id: z.string().nullable().optional(),
+    unit_cost: amount.nullable().optional(),
+    accepted: z.boolean().optional(),
+    version: z.number().optional(),
+});
+
+export const carryOutInputSchema = z.object({ order_date: z.string() });
+
+export const requisitionRowSchema = z.object({
+    id: z.string(),
+    location: reference,
+    item: reference.extend({ base_unit: z.string() }),
+    unit: reference,
+    quantity_per_unit: z.string(),
+    quantity: z.string(),
+    due_date: z.string(),
+    description: z.string().nullable(),
+    requested_by: z.string().nullable(),
+    vendor: z
+        .object({ id: z.string(), number: z.string(), name: z.string() })
+        .nullable(),
+    unit_cost: z.string().nullable(),
+    accepted: z.boolean(),
+    order: z.object({ id: z.string(), number: z.string() }).nullable(),
+    version: z.number(),
+});
+
+export const requisitionListQuerySchema = listParametersSchema.extend({
+    status: z.enum(requisitionStatuses).optional(),
+});
