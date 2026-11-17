@@ -759,14 +759,7 @@ export class OtcSales {
             : [];
         if (!location) errors.location_id = locationNotAllowedMessage;
         else
-            await requireLocationAccess(
-                this.db,
-                this.workspace,
-                [location.id],
-                {
-                    field: 'location_id',
-                },
-            );
+            await requireLocationAccess(this.db, this.workspace, [location.id]);
         const defaultPriceGroupId = location?.price_group?.id ?? null;
         const priceGroupId =
             data.price_group_id === undefined

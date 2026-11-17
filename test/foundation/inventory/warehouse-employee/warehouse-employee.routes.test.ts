@@ -185,9 +185,12 @@ describe.skipIf(!process.env.DB_HOST)('warehouse employees', () => {
             }),
             422,
         );
-        expect(created.errors.location_id?.[0]).toBe(
-            'Lokasi GUDANG Lokasi GUDANG hanya untuk petugasnya, dan Anda belum terdaftar sebagai petugas di sana.',
-        );
+        // Penolakan petugas lokasi bukan isian yang salah, jadi tidak menempel ke field mana pun.
+        expect(created.errors).toEqual({
+            _form: [
+                'Lokasi GUDANG Lokasi GUDANG hanya untuk petugasnya, dan Anda belum terdaftar sebagai petugas di sana.',
+            ],
+        });
     });
 
     test('a refused user who may open locations gets a button to its employees', async () => {
@@ -251,7 +254,8 @@ describe.skipIf(!process.env.DB_HOST)('warehouse employees', () => {
             }),
             422,
         );
-        expect(ship.errors.from_location_id?.[0]).toContain(
+        expect(Object.keys(ship.errors)).toEqual(['_form']);
+        expect(ship.errors._form?.[0]).toContain(
             'Lokasi GUDANG Lokasi GUDANG hanya untuk petugasnya',
         );
         const elsewhere = await json<Refusal>(

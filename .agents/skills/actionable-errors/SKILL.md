@@ -19,12 +19,13 @@ Jangan dipakai untuk:
 
 ## Di server
 
-1. Tolak lewat `refuse(db, viewer, { message, field?, open: { page, recordId, label }, otherwise })` dari `@core/platform/access/index.ts`. `viewer` adalah `Workspace` service.
+1. Tolak lewat `refuse(db, viewer, { message, open: { page, recordId, label }, otherwise })` dari `@core/platform/access/index.ts`. `viewer` adalah `Workspace` service.
 2. `label` menyebut tindakan dan nomornya, misalnya `Buka pembayaran ${number}`. `otherwise` menyebut nomor yang sama untuk pengguna tanpa izin, misalnya `Minta kasir membatalkan pembayaran ${number}.`
 3. Jangan menyebut kode izin. `refuse` memeriksa `<page>.read`, karena kunci record sama dengan securable halamannya.
 4. Jangan memanggil `validation(errors, actions)` dengan aksi buatan sendiri, karena pemeriksaan izinnya terlewat.
-5. Jangan menangkap penolakan lalu menulis ulang pesannya, karena aksinya ikut hilang. Kirim pesan khusus sebagai data ke fungsi yang menolak, seperti `lockChargeForChange(db, workspace, { documentId, message, field })`.
-6. Test perilakunya lewat route: pengguna yang berhak mendapat `actions`, dan pengguna yang tidak berhak mendapat nomor di pesan tanpa `actions`. Contohnya ada di `modules/pharmacy/test/dispensing/dispensing-return/dispensing-return.otc-sale.test.ts`.
+5. Jangan menangkap penolakan lalu menulis ulang pesannya, karena aksinya ikut hilang. Kirim pesan khusus sebagai data ke fungsi yang menolak, seperti `lockChargeForChange(db, workspace, { documentId, message })`.
+6. Penolakan tidak menempel ke field. `refuse` selalu menulis `_form`, karena tidak ada isian yang salah; field akan membuat kotak error meminta pengguna memperbaiki isian.
+7. Test perilakunya lewat route: pengguna yang berhak mendapat `actions`, dan pengguna yang tidak berhak mendapat nomor di pesan tanpa `actions`. Contohnya ada di `modules/pharmacy/test/dispensing/dispensing-return/dispensing-return.otc-sale.test.ts`.
 
 ## Halaman tujuan baru
 

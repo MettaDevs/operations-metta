@@ -1158,12 +1158,9 @@ export class TransferOrders {
     async ship(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'ship');
         const current = await this.header(id);
-        await requireLocationAccess(
-            this.db,
-            this.workspace,
-            [current.from_location.id],
-            { field: 'from_location_id' },
-        );
+        await requireLocationAccess(this.db, this.workspace, [
+            current.from_location.id,
+        ]);
         const postingDate = this.postingDate(body);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {
@@ -1318,12 +1315,9 @@ export class TransferOrders {
     async receive(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'receive');
         const current = await this.header(id);
-        await requireLocationAccess(
-            this.db,
-            this.workspace,
-            [current.to_location.id],
-            { field: 'to_location_id' },
-        );
+        await requireLocationAccess(this.db, this.workspace, [
+            current.to_location.id,
+        ]);
         const postingDate = this.postingDate(body);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {

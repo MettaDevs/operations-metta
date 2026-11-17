@@ -497,7 +497,6 @@ export class Discharges {
         // Pesan kunci kasir menyebut tarif, BHP, dan resep; pengguna yang merujuk perlu tahu jalan keluarnya.
         await lockChargeForChange(this.db, this.workspace, {
             documentId: visitId,
-            field: 'status',
             message: paidReferralMessage,
         });
         await this.db.execute(

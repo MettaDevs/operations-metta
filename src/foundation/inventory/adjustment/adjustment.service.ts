@@ -332,14 +332,7 @@ export class Adjustments {
             errors.location_id =
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
         else
-            await requireLocationAccess(
-                this.db,
-                this.workspace,
-                [location.id],
-                {
-                    field: 'location_id',
-                },
-            );
+            await requireLocationAccess(this.db, this.workspace, [location.id]);
         if (!(await exists(this.db, 'gd_m_alasan', this.scope, data.reason_id)))
             errors.reason_id = messages.reason_id;
         const unitCostDecimals = unitAmountDecimals(

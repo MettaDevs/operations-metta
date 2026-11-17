@@ -250,7 +250,7 @@ export const automaticCancelReason =
 
 // Dipanggil module sumber di dalam transaksi yang mengubah atau membatalkan biaya tagihan (Biaya Tindakan, batal
 // kunjungan, obat yang disiapkan, dibatalkan, atau diretur). Tagihan yang dibayar kasir ditolak dengan pesan sistem
-// lama (`message`, bawaannya chargeLockedMessage, di `field`, bawaannya _form); pembatalannya urusan kasir (kunci BC:
+// lama (`message`, bawaannya chargeLockedMessage); pembatalannya urusan kasir (kunci BC:
 // batalkan pembayaran dulu), jadi penolakannya membawa tombol yang membuka pembayaran itu bagi yang boleh membukanya.
 // Pembayaran otomatis mengikuti tagihan: pembayaran itu dibatalkan di sini, lalu kunjungan dilunasi lagi saat biayanya
 // yang baru sampai ke kasir, seperti Seroja yang menulis ulang pembayaran BPJS di setiap Simpan poli. documentId adalah
@@ -258,7 +258,7 @@ export const automaticCancelReason =
 export async function lockChargeForChange(
     db: Database,
     viewer: Viewer,
-    change: { documentId: string; message?: string; field?: string },
+    change: { documentId: string; message?: string },
 ): Promise<void> {
     if (!db.inTransaction)
         throw new Error('lockChargeForChange wajib di dalam transaksi.');
@@ -286,7 +286,6 @@ export async function lockChargeForChange(
     if (!paid.automatic)
         await refuse(db, viewer, {
             message: change.message ?? chargeLockedMessage,
-            field: change.field,
             open: {
                 page: 'core.payment',
                 recordId: scope.documentId,

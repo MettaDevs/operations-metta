@@ -333,14 +333,7 @@ export class StockCounts {
     private async chosenLocation(id: string) {
         const location = await this.activeLocation(id);
         if (location && !location.transit)
-            await requireLocationAccess(
-                this.db,
-                this.workspace,
-                [location.id],
-                {
-                    field: 'location_id',
-                },
-            );
+            await requireLocationAccess(this.db, this.workspace, [location.id]);
         return location;
     }
 

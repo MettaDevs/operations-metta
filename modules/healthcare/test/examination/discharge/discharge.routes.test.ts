@@ -569,7 +569,7 @@ describe.skipIf(!process.env.DB_HOST)('examination discharge status', () => {
                     practice_schedule_id: clinic.dentalSchedule,
                 }),
             ),
-        ).toEqual({ status: [paidUnopened] });
+        ).toEqual({ _form: [paidUnopened] });
         expect(await visit()).toEqual({ status: 'selesai', finished: true });
         expect(
             (await discharge(destinationId)).internal_referrals,
