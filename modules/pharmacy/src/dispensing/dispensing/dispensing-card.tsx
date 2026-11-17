@@ -45,6 +45,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ErrorAction,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
@@ -577,6 +578,13 @@ function DispensingForm({
                             <HandHeart aria-hidden="true" />
                             Serahkan
                         </Button>
+                    )}
+                    {prepared && !cancelled && (
+                        <PrintAction
+                            report="pharmacy.drug-label"
+                            recordId={view.data.prescription.id}
+                            label="Etiket"
+                        />
                     )}
                     {status === 'diserahkan' && canReturn && (
                         <Button

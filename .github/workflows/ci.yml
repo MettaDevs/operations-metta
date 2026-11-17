@@ -176,7 +176,7 @@ jobs:
         run: bun run migrate
 
       - name: Print documents through Gotenberg
-        run: bun test test/platform/reporting
+        run: bun test test/platform/reporting .report.test.ts
 
   # Ruleset main mewajibkan status bernama `check`; job ini meneruskan hasil job di atas ke nama itu.
   check:
