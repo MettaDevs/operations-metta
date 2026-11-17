@@ -98,11 +98,15 @@ export const loadVendors = async (
     );
     return { items: body.data, nextCursor: body.next_cursor };
 };
+// Dokumen pembelian mengubah stok lokasinya, jadi lokasi khusus petugas hanya ditawarkan kepada petugasnya.
 export const loadLocations = async (
     query: { q: string; cursor?: string },
     signal: AbortSignal,
 ) => {
-    const { body } = await api.inventoryLocationList({ query }, { signal });
+    const { body } = await api.inventoryLocationList(
+        { query: { ...query, accessible: 'true' } },
+        { signal },
+    );
     return { items: body.data, nextCursor: body.next_cursor };
 };
 export const loadItems = async (

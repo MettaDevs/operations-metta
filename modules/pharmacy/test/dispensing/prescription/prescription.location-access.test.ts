@@ -147,6 +147,20 @@ describe.skipIf(!process.env.DB_HOST)('prescription queue per location', () => {
         ).toBe(404);
     });
 
+    test('the dispensing location picker offers the employee only the locations they may work at', async () => {
+        const codes = async (session: Browser, query: string) =>
+            (
+                await json<{ data: { code: string }[] }>(
+                    await session.get(`${api}/lookups/locations${query}`),
+                    200,
+                )
+            ).data
+                .map((row) => row.code)
+                .sort();
+        expect(await codes(clerk, '?accessible=true')).toEqual(['PUSLING']);
+        expect(await codes(clerk, '')).toEqual(['FARMASI', 'PUSLING']);
+    });
+
     test('preparing a prescription served elsewhere is refused with the location named', async () => {
         const refusal = await json<Refusal>(
             await clerk.post(

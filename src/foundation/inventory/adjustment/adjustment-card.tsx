@@ -637,6 +637,7 @@ function AdjustmentForm({
                                     />
                                 </FormControl>
                                 <LocationLookup
+                                    accessible
                                     label="Lokasi"
                                     required
                                     transit={false}

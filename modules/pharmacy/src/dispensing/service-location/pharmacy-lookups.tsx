@@ -15,23 +15,37 @@ import { api } from '@core/platform/shell/index.ts';
 // Pilihan lokasi stok, operating unit, section asal, dan batch untuk layar farmasi. Semuanya master milik Core, dikenal
 // dari resep, atau lahir dari stok masuk, jadi tidak ada Baru di sini: lokasi dibuat di Persediaan Core.
 
-const loadLocations = async ({ query, cursor, signal }: LookupRequest) => {
-    const { body } = await api.pharmacyLocationLookup(
-        { query: { q: query, ...(cursor ? { cursor } : {}) } },
-        { signal },
-    );
-    return { items: body.data, nextCursor: body.next_cursor };
-};
+const locationsWhere =
+    (accessible: boolean) =>
+    async ({ query, cursor, signal }: LookupRequest) => {
+        const { body } = await api.pharmacyLocationLookup(
+            {
+                query: {
+                    q: query,
+                    ...(accessible ? { accessible: 'true' as const } : {}),
+                    ...(cursor ? { cursor } : {}),
+                },
+            },
+            { signal },
+        );
+        return { items: body.data, nextCursor: body.next_cursor };
+    };
+const loadLocations = locationsWhere(false);
+const loadAccessibleLocations = locationsWhere(true);
 
 export const locationLabel = (location: Reference) =>
     `${location.code} · ${location.name}`;
 
-export function LocationLookup(props: MasterLookupProps<Reference>): ReactNode {
+// accessible menyembunyikan lokasi khusus petugas yang pengguna bukan petugasnya, untuk layar yang mengubah stok.
+export function LocationLookup({
+    accessible,
+    ...props
+}: MasterLookupProps<Reference> & { accessible?: boolean }): ReactNode {
     return (
         <MasterLookup
             {...props}
             noun="Lokasi"
-            load={loadLocations}
+            load={accessible ? loadAccessibleLocations : loadLocations}
             display={locationLabel}
             columns={[codeColumn(), nameColumn(220)]}
         />
