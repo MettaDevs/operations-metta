@@ -54,7 +54,12 @@ import {
     currencyRoutes,
     exchangeRateRoutes,
 } from './foundation/currency/index.ts';
-import { inventoryRoutes } from './foundation/inventory/index.ts';
+import {
+    inventoryRoutes,
+    transferOrderReport,
+    transferReceiptReport,
+    transferShipmentReport,
+} from './foundation/inventory/index.ts';
 import { pricingRoutes } from './foundation/pricing/index.ts';
 import { purchasingRoutes } from './foundation/purchasing/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
@@ -103,7 +108,13 @@ function valkeySessions(config: Config): ValkeySessions | null {
 
 // Semua dokumen cetak dan laporan, dirakit dari laporan yang di-export Core dan module. Laporan yang salah bentuk
 // menggagalkan proses saat mulai.
-export const reports = reportCatalog([paymentReceiptReport, drugLabelReport]);
+export const reports = reportCatalog([
+    paymentReceiptReport,
+    drugLabelReport,
+    transferOrderReport,
+    transferShipmentReport,
+    transferReceiptReport,
+]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
 // ditulis scripts/generate-client.ts ke kontrak yang dibaca klien itu.

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Database } from '../database/index.ts';
-import { cell, paragraph, when, type Block, type Table } from './docx.ts';
+import { cell, paragraph, type Block, type Table } from './docx.ts';
 import { field, type Values } from './report.ts';
 
 // Penanda tangan dokumen (pejabat yang "mengetahui" atau "menyetujui"), Sys Admin › Kop surat. Padanan Officials di
@@ -56,44 +56,63 @@ export async function signers(
 export type SignatureParty = { caption: string; name: string };
 
 // Kotak tanda tangan layout bawaan: satu kolom per pihak yang mengerjakan dokumen (nama dari dataset), lalu penanda
-// tangan dari Kop surat di bawahnya, satu blok per orang. Blok penanda tangan hilang bila organisasinya belum
-// mengisinya, jadi dokumen tetap rapi tanpa pengaturan apa pun.
+// tangan dari Kop surat di bawahnya, satu baris tabel per orang. Setiap kotak satu baris tabel yang tidak boleh
+// terbelah, supaya tanda tangan dan namanya tidak terpisah halaman. Baris penanda tangan hilang bila organisasinya
+// belum mengisinya, jadi dokumen tetap rapi tanpa pengaturan apa pun.
 export function signatureBlocks(
     parties: SignatureParty[],
     caption: { dated: string; signers: string },
 ): Block[] {
     const space = 36;
-    const table: Table = {
+    const parts: Table = {
         kind: 'table',
         widths: parties.map(() => 1),
         borders: 'none',
         rows: [
             {
+                cantSplit: true,
                 cells: parties.map((party) =>
-                    cell(party.caption, { align: 'center' }),
+                    cell([
+                        paragraph(party.caption, {
+                            align: 'center',
+                            spaceAfter: space,
+                        }),
+                        paragraph(`( ${party.name} )`, { align: 'center' }),
+                    ]),
                 ),
             },
+        ],
+    };
+    const officials: Table = {
+        kind: 'table',
+        widths: [1],
+        borders: 'none',
+        rows: [
             {
-                cells: parties.map(() => cell('', { spaceAfter: space })),
-            },
-            {
-                cells: parties.map((party) =>
-                    cell(`( ${party.name} )`, { align: 'center' }),
-                ),
+                cantSplit: true,
+                cells: [
+                    cell([
+                        paragraph(
+                            `{#signers}{#$first}${caption.signers}{/$first}`,
+                            { align: 'center' },
+                        ),
+                        paragraph('{title}', {
+                            align: 'center',
+                            spaceAfter: space,
+                        }),
+                        paragraph('{name}', { align: 'center', bold: true }),
+                        paragraph('{id_number}{/signers}', {
+                            align: 'center',
+                            spaceAfter: 6,
+                        }),
+                    ]),
+                ],
             },
         ],
     };
     return [
         paragraph(caption.dated, { align: 'right', spaceAfter: 6 }),
-        table,
-        ...when('signers', [
-            paragraph('', { spaceAfter: 6 }),
-            paragraph(caption.signers, { align: 'center' }),
-            paragraph('{title}', { align: 'center', spaceAfter: space }),
-            paragraph('{name}', { align: 'center', bold: true }),
-            ...when('id_number', [
-                paragraph('{id_number}', { align: 'center' }),
-            ]),
-        ]),
+        parts,
+        officials,
     ];
 }

@@ -33,6 +33,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import {
@@ -925,6 +926,13 @@ export function TransferOrderCard({
                             action="archive"
                             disabled={busy}
                             onClick={() => void remove()}
+                        />
+                    )}
+                    {order && (
+                        <PrintAction
+                            report="core.transfer-order"
+                            recordId={order.id}
+                            label="Permintaan"
                         />
                     )}
                 </PageDialogToolbar>

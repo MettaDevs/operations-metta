@@ -83,3 +83,8 @@ export function inventoryRoutes() {
         ...stockByLocationRoutes(),
     };
 }
+export { transferOrderReport } from './transfer/transfer-order.report.ts';
+export {
+    transferReceiptReport,
+    transferShipmentReport,
+} from './transfer/posted-transfer.report.ts';
