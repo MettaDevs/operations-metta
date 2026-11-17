@@ -19,6 +19,7 @@ import { drugClassRoutes } from './drug/drug-class/drug-class.routes.ts';
 import { drugPriceRoutes } from './drug/drug-price/drug-price.routes.ts';
 import { drugRoutes } from './drug/drug/drug.routes.ts';
 import { gradingGroupRoutes } from './drug/grading-group/grading-group.routes.ts';
+import { itemSubstitutionRoutes } from './drug/item-substitution/item-substitution.routes.ts';
 import { moduleId } from './module.ts';
 import { otcSaleRoutes } from './dispensing/otc-sale/otc-sale.routes.ts';
 import { otcSaleLocationRoutes } from './dispensing/otc-sale-location/otc-sale-location.routes.ts';
@@ -32,6 +33,7 @@ export function pharmacyRoutes() {
         ...serviceLocationRoutes(),
         ...drugClassRoutes(),
         ...drugRoutes(),
+        ...itemSubstitutionRoutes(),
         ...gradingGroupRoutes(),
         ...drugPriceRoutes(),
         ...otcSaleRoutes(),

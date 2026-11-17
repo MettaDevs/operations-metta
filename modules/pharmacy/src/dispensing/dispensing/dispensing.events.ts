@@ -73,6 +73,18 @@ export async function publishPrescriptionDispensed(
             prescribed_quantity: z.string(),
             quantity: z.string(),
             reason: z.string().nullable(),
+            substitution: z
+                .object({
+                    prescribed_item: reference,
+                    consent: z.string(),
+                    reason: z.string(),
+                    substituted_at: z.string(),
+                    substituted_by: z.object({
+                        id: z.string(),
+                        name: z.string(),
+                    }),
+                })
+                .nullable(),
         }),
         `select d.id, rd.baris_sumber_id as prescription_line_id,
                 json_build_object('id', b.id, 'code', b.kode, 'name', b.nama) as item,
@@ -84,10 +96,17 @@ export async function publishPrescriptionDispensed(
                      then json_build_object('id', bs.id, 'code', bs.kode, 'name', bs.nama)
                      else json_build_object('id', rd.satuan_id, 'code', rd.kode_satuan, 'name', rd.nama_satuan)
                 end as prescribed_unit,
-                rd.jumlah::text as prescribed_quantity, d.jumlah::text as quantity, d.alasan as reason
+                rd.jumlah::text as prescribed_quantity, d.jumlah::text as quantity, d.alasan as reason,
+                case when o.id is null then null else json_build_object(
+                    'prescribed_item', json_build_object('id', o.id, 'code', o.kode, 'name', o.nama),
+                    'consent', d.persetujuan_ganti, 'reason', d.alasan_ganti,
+                    'substituted_at', to_char(d.diganti_pada, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                    'substituted_by', (select json_build_object('id', u.id, 'name', u.name) from users u
+                                       where u.id = d.diganti_oleh_user_id)) end as substitution
          from bill_farmasi_detail d
          join far_tr_resep_detail rd on rd.tenant_id = d.tenant_id and rd.id = d.resep_detail_id
          join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
+         left join gd_m_barang o on o.tenant_id = d.tenant_id and o.id = d.barang_resep_id
          join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
          join gd_m_satuan bs on bs.tenant_id = b.tenant_id and bs.id = b.satuan_dasar_id
          where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null
@@ -148,6 +167,7 @@ export async function publishPrescriptionDispensed(
                     ),
                     quantity: text(fromNumeric(line.quantity, quantityScale)),
                     reason: line.reason,
+                    substitution: line.substitution,
                     batches: [...batches.values()].map((batch) => ({
                         ...batch,
                         quantity: text(batch.quantity),

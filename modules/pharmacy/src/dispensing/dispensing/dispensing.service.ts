@@ -36,6 +36,7 @@ import {
 } from '@core/foundation/currency/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
+import { substitutesOf } from '../../drug/item-substitution/item-substitution.service.ts';
 import {
     billedFees,
     feeRates,
@@ -71,6 +72,8 @@ import {
     dispensingPriceSchema,
     handOverInputSchema,
     prescriptionCancelInputSchema,
+    substitutionConsents,
+    substitutionSchema,
     versionInputSchema,
     type DispensingLine,
     type DispensingStatus,
@@ -134,6 +137,8 @@ const itemLineSchema = z.object({
     id: z.string(),
     order: z.number(),
     item_id: z.string(),
+    item_code: z.string(),
+    item_name: z.string(),
     quantity: z.string(),
     unit_id: z.string(),
     unit_code: z.string(),
@@ -160,11 +165,24 @@ const messages = {
     unit_id: 'Pilih satuan obat ini dari daftar.',
     batch_id: 'Pilih batch dari daftar.',
     reason: 'Alasan paling banyak 200 karakter.',
+    item_id: 'Pilih obat pengganti dari daftar obat pengganti obat resep ini.',
+    substitution_consent: 'Pilih siapa yang menyetujui obat ini diganti.',
+    substitution_reason:
+        'Tulis alasan obat resep diganti, misalnya stok habis.',
     version: 'Muat ulang resep ini, lalu ulangi perubahanmu.',
     cancel_reason: 'Isi alasan resep ini dibatalkan.',
 };
 
 const cancelledMessage = 'Resep ini sudah dibatalkan.';
+const substituteForbiddenMessage =
+    'Hanya apoteker yang boleh mengganti obat resep dengan obat pengganti.';
+
+type Substitution = {
+    consent: (typeof substitutionConsents)[number];
+    reason: string;
+};
+const consentOf = (value: string | null | undefined) =>
+    substitutionConsents.find((consent) => consent === value) ?? null;
 const handedOverCancelMessage =
     'Obat resep ini sudah diserahkan, jadi resepnya tidak bisa dibatalkan. Obat yang dikembalikan pasien dicatat lewat Retur.';
 
@@ -194,6 +212,7 @@ export class Dispensings {
             hand_over: has('dispensing.hand-over'),
             reverse: has('dispensing.reverse'),
             cancel: has('prescription.cancel'),
+            substitute: has('dispensing.substitute'),
             override_price: canOverridePrice(this.workspace),
         };
     }
@@ -213,11 +232,13 @@ export class Dispensings {
             [this.scope.tenantId, prescription.id],
         );
         const location = active?.location ?? prescription.location;
+        const lines = await this.lines(prescription.id, active);
         const itemIds = [
             ...new Set(
-                prescription.lines.flatMap((line) =>
-                    line.item ? [line.item.id] : [],
-                ),
+                lines.flatMap((line) => [
+                    line.item.id,
+                    ...line.item_options.map((option) => option.item.id),
+                ]),
             ),
         ];
         const stock = new Map<string, bigint>();
@@ -236,7 +257,7 @@ export class Dispensings {
             data: {
                 prescription,
                 dispensing: active ? this.withoutPrescription(active) : null,
-                lines: await this.lines(prescription.id, active),
+                lines,
                 fees: active ? await this.fees(active.id) : [],
                 cancelled,
                 stock: itemIds.map((itemId) => ({
@@ -278,7 +299,8 @@ export class Dispensings {
     private async itemLines(prescriptionId: string) {
         return this.db.rows(
             itemLineSchema,
-            `select d.id, d.urutan as "order", d.barang_id as item_id, d.jumlah::text as quantity,
+            `select d.id, d.urutan as "order", d.barang_id as item_id, b.kode as item_code, b.nama as item_name,
+                    d.jumlah::text as quantity,
                     coalesce(d.satuan_id, b.satuan_dasar_id) as unit_id, coalesce(d.kode_satuan, s.kode) as unit_code,
                     coalesce(d.nama_satuan, s.nama) as unit_name, d.konversi::text as conversion
              from far_tr_resep_detail d
@@ -312,6 +334,12 @@ export class Dispensings {
                   z.object({
                       id: z.string(),
                       prescription_line_id: z.string(),
+                      item: z.object({
+                          id: z.string(),
+                          code: z.string(),
+                          name: z.string(),
+                      }),
+                      substitution: substitutionSchema.nullable(),
                       quantity: z.string(),
                       unit: z.object({
                           id: z.string(),
@@ -330,6 +358,12 @@ export class Dispensings {
                           .nullable(),
                   }),
                   `select d.id, d.resep_detail_id as prescription_line_id, d.jumlah::text as quantity,
+                          json_build_object('id', i.id, 'code', i.kode, 'name', i.nama) as item,
+                          case when d.barang_resep_id is null then null else json_build_object(
+                              'prescribed_item', json_build_object('id', o.id, 'code', o.kode, 'name', o.nama),
+                              'consent', d.persetujuan_ganti, 'reason', d.alasan_ganti,
+                              'by', (select u.name from users u where u.id = d.diganti_oleh_user_id),
+                              'at', ${isoSql('d.diganti_pada')}) end as substitution,
                           json_build_object('id', s.id, 'code', s.kode, 'name', s.nama) as unit,
                           d.konversi::text as conversion, d.alasan as reason,
                           case when d.harga_satuan is null then null else json_build_object(
@@ -345,6 +379,8 @@ export class Dispensings {
                           case when t.id is null then null else json_build_object(
                               'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end as batch
                    from bill_farmasi_detail d
+                   join gd_m_barang i on i.tenant_id = d.tenant_id and i.id = d.barang_id
+                   left join gd_m_barang o on o.tenant_id = d.tenant_id and o.id = d.barang_resep_id
                    join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
                    left join gd_m_batch t on t.tenant_id = d.tenant_id and t.id = d.batch_id
                    where d.tenant_id = $1 and d.bill_farmasi_id = $2 and d.deleted_at is null`,
@@ -362,16 +398,59 @@ export class Dispensings {
                   })
                 : [];
         const itemLines = await this.itemLines(prescriptionId);
-        const units = await itemUnits(
-            this.db,
-            this.scope,
-            itemLines.map((line) => line.item_id),
-        );
+        const editable = !active || active.status === 'draf';
+        const substitutes = editable
+            ? await substitutesOf(
+                  this.db,
+                  this.scope,
+                  itemLines.map((line) => line.item_id),
+              )
+            : new Map<string, never[]>();
+        const units = await itemUnits(this.db, this.scope, [
+            ...itemLines.map((line) => line.item_id),
+            ...stored.map((line) => line.item.id),
+            ...[...substitutes.values()].flat().map((item) => item.id),
+        ]);
         return itemLines.map((line) => {
             const saved = byLine.get(line.id);
+            const item = saved?.item ?? {
+                id: line.item_id,
+                code: line.item_code,
+                name: line.item_name,
+            };
+            const prescribed = {
+                id: line.item_id,
+                code: line.item_code,
+                name: line.item_name,
+            };
+            const alternatives = substitutes.get(line.item_id) ?? [];
             return {
                 id: active ? (saved?.id ?? null) : null,
                 prescription_line_id: line.id,
+                item,
+                substitution:
+                    saved?.substitution && !active
+                        ? { ...saved.substitution, by: null, at: null }
+                        : (saved?.substitution ?? null),
+                item_options:
+                    editable && (alternatives.length || saved?.substitution)
+                        ? [
+                              {
+                                  item: prescribed,
+                                  is_prescribed: true,
+                                  notes: null,
+                                  units: units.get(prescribed.id) ?? [],
+                              },
+                              ...alternatives.map(
+                                  ({ notes, ...substitute }) => ({
+                                      item: substitute,
+                                      is_prescribed: false,
+                                      notes,
+                                      units: units.get(substitute.id) ?? [],
+                                  }),
+                              ),
+                          ]
+                        : [],
                 quantity: quantityText(
                     quantityOf(saved?.quantity ?? line.quantity),
                 ),
@@ -383,7 +462,7 @@ export class Dispensings {
                 quantity_per_unit: quantityText(
                     quantityOf(saved?.conversion ?? line.conversion),
                 ),
-                units: units.get(line.item_id) ?? [],
+                units: units.get(item.id) ?? [],
                 batch: saved?.batch ?? null,
                 reason: saved?.reason ?? null,
                 // Usulan dari penyerahan yang dibatalkan tidak membawa harganya: Siapkan berikutnya menghitung ulang.
@@ -440,34 +519,71 @@ export class Dispensings {
     }
 
     // Satuan baris penyerahan, seperti satuan baris pengiriman BC yang bawaannya satuan baris pesanan. Satuan resep
-    // memakai isi yang disalin saat resep diterima; satuan lain harus satuan barang itu sendiri, dengan isinya sekarang.
+    // untuk obat resep memakai isi yang disalin saat resep diterima; satuan lain, dan setiap satuan obat pengganti, harus
+    // satuan barang yang diserahkan itu sendiri, dengan isinya sekarang.
     private async dispensingUnit(
         raw: string | null | undefined,
         source: ItemLine,
+        itemId: string,
     ): Promise<LineUnit | null> {
         const unitId = raw || source.unit_id;
-        if (unitId === source.unit_id) return prescribedUnit(source);
+        if (itemId === source.item_id && unitId === source.unit_id)
+            return prescribedUnit(source);
         const conversion = lookupId(unitId)
-            ? await unitConversion(this.db, this.scope, source.item_id, unitId)
+            ? await unitConversion(this.db, this.scope, itemId, unitId)
             : null;
         return conversion === null
             ? null
             : { unitId, quantityPerUnit: conversion };
     }
 
+    // Penggantian yang sudah tersimpan di penyerahan aktif, per baris resep. Mengirim ulang penggantian yang sama (obat,
+    // persetujuan, dan alasan) tidak dihitung mengganti lagi, jadi asisten tetap bisa menyimpan draf yang sudah diganti
+    // apoteker, juga bila obat penggantinya sudah dihapus dari daftar.
+    private async storedSubstitutions(prescriptionId: string) {
+        return new Map(
+            (
+                await this.db.rows(
+                    z.object({
+                        prescription_line_id: z.string(),
+                        item_id: z.string(),
+                        consent: z.string(),
+                        reason: z.string(),
+                    }),
+                    `select d.resep_detail_id as prescription_line_id, d.barang_id as item_id,
+                            d.persetujuan_ganti as consent, d.alasan_ganti as reason
+                     from bill_farmasi_detail d
+                     join bill_farmasi h on h.tenant_id = d.tenant_id and h.id = d.bill_farmasi_id
+                     where d.tenant_id = $1 and h.resep_id = $2 and h.status <> 'dibatalkan' and h.deleted_at is null
+                       and d.deleted_at is null and d.barang_resep_id is not null`,
+                    [this.scope.tenantId, prescriptionId],
+                )
+            ).map((row) => [row.prescription_line_id, row]),
+        );
+    }
+
     // Isian draf: satu baris per obat resep, jumlah 0 sampai jumlah resep (dibandingkan dalam satuan dasar), alasan
-    // wajib bila kurang dari resep, batch milik barang itu, lokasi milik legal entity ini, apoteker dan asisten anggota
-    // tenant.
+    // wajib bila kurang dari resep, batch milik barang yang diserahkan, lokasi milik legal entity ini, apoteker dan
+    // asisten anggota tenant. Obat yang diserahkan boleh obat pengganti obat resep (Item Substitution BC) dengan
+    // persetujuan dan alasannya; satu satuan dasar obat pengganti menggantikan satu satuan dasar obat resep.
     private async checked(prescriptionId: string, body: unknown) {
         const data = parseInput(dispensingInputSchema, body, messages);
         const errors: Record<string, string> = {};
         const itemLines = await this.itemLines(prescriptionId);
         const prescribed = new Map(itemLines.map((line) => [line.id, line]));
+        const storedSubstitutions =
+            await this.storedSubstitutions(prescriptionId);
+        const substitutes = await substitutesOf(
+            this.db,
+            this.scope,
+            itemLines.map((line) => line.item_id),
+        );
         const seen = new Set<string>();
         const lines: {
             prescriptionLineId: string;
             order: number;
             itemId: string;
+            substitution: Substitution | null;
             quantity: bigint;
             unit: LineUnit;
             batchId: string | null;
@@ -482,11 +598,47 @@ export class Dispensings {
                 continue;
             }
             seen.add(source.id);
+            const itemId = line.item_id || source.item_id;
+            let substitution: Substitution | null = null;
+            if (itemId !== source.item_id) {
+                const consent = consentOf(line.substitution_consent);
+                const substitutionReason =
+                    line.substitution_reason?.trim() ?? '';
+                if (!consent)
+                    errors[`${field}.substitution_consent`] =
+                        messages.substitution_consent;
+                if (!substitutionReason)
+                    errors[`${field}.substitution_reason`] =
+                        messages.substitution_reason;
+                else if (substitutionReason.length > 200)
+                    errors[`${field}.substitution_reason`] = messages.reason;
+                const stored = storedSubstitutions.get(source.id);
+                const unchanged =
+                    stored?.item_id === itemId &&
+                    stored.consent === consent &&
+                    stored.reason === substitutionReason;
+                if (!unchanged) {
+                    if (!this.permissions().substitute)
+                        abort(403, substituteForbiddenMessage);
+                    if (
+                        !substitutes
+                            .get(source.item_id)
+                            ?.some((substitute) => substitute.id === itemId)
+                    )
+                        errors[`${field}.item_id`] = messages.item_id;
+                }
+                if (consent && substitutionReason)
+                    substitution = { consent, reason: substitutionReason };
+            }
             const ordered = exactBase(
                 quantityOf(source.quantity),
                 prescribedUnit(source),
             );
-            const unit = await this.dispensingUnit(line.unit_id, source);
+            const unit = await this.dispensingUnit(
+                line.unit_id,
+                source,
+                itemId,
+            );
             if (!unit) errors[`${field}.unit_id`] = messages.unit_id;
             const quantity = decimalInput(line.quantity);
             const dispensed =
@@ -521,7 +673,7 @@ export class Dispensings {
                             this.scope.tenantId,
                             this.scope.legalEntityId,
                             batchId,
-                            source.item_id,
+                            itemId,
                         ],
                     ))
                 )
@@ -530,7 +682,8 @@ export class Dispensings {
             lines.push({
                 prescriptionLineId: source.id,
                 order: source.order,
-                itemId: source.item_id,
+                itemId,
+                substitution,
                 quantity: quantity ?? 0n,
                 unit: unit ?? prescribedUnit(source),
                 batchId,
@@ -639,10 +792,29 @@ export class Dispensings {
                 'update far_tr_resep set lokasi_id = $1, updated_at = $2 where tenant_id = $3 and id = $4',
                 [input.locationId, stamp, this.scope.tenantId, locked.id],
             );
+        const prescribedItems = new Map(
+            (await this.itemLines(locked.id)).map((line) => [
+                line.id,
+                line.item_id,
+            ]),
+        );
         for (const line of input.lines) {
+            const originalItemId = line.substitution
+                ? (prescribedItems.get(line.prescriptionLineId) ?? null)
+                : null;
+            // Waktu dan pengguna yang mengganti tetap milik penggantian pertama selama obat, persetujuan, dan alasannya
+            // sama.
             const updated = await this.db.execute(
                 `update bill_farmasi_detail set jumlah = $1, satuan_id = $2, konversi = $3, batch_id = $4, alasan = $5,
-                        updated_at = $6
+                        updated_at = $6, barang_id = $10::uuid, barang_resep_id = $11::uuid, persetujuan_ganti = $12::text,
+                        alasan_ganti = $13::text,
+                        diganti_pada = case when $11::uuid is null then null
+                            when barang_id = $10::uuid and persetujuan_ganti = $12::text and alasan_ganti = $13::text then diganti_pada
+                            else $6 end,
+                        diganti_oleh_user_id = case when $11::uuid is null then null
+                            when barang_id = $10::uuid and persetujuan_ganti = $12::text and alasan_ganti = $13::text
+                                then diganti_oleh_user_id
+                            else $14::uuid end
                  where tenant_id = $7 and bill_farmasi_id = $8 and resep_detail_id = $9 and deleted_at is null`,
                 [
                     toNumeric(line.quantity, quantityScale),
@@ -654,6 +826,11 @@ export class Dispensings {
                     this.scope.tenantId,
                     billId,
                     line.prescriptionLineId,
+                    line.itemId,
+                    originalItemId,
+                    line.substitution?.consent ?? null,
+                    line.substitution?.reason ?? null,
+                    this.workspace.userId,
                 ],
             );
             if (!updated)
@@ -673,6 +850,13 @@ export class Dispensings {
                     ),
                     batch_id: line.batchId,
                     alasan: line.reason,
+                    barang_resep_id: originalItemId,
+                    persetujuan_ganti: line.substitution?.consent ?? null,
+                    alasan_ganti: line.substitution?.reason ?? null,
+                    diganti_pada: line.substitution ? stamp : null,
+                    diganti_oleh_user_id: line.substitution
+                        ? this.workspace.userId
+                        : null,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -731,6 +915,7 @@ export class Dispensings {
                         prescriptionLineId: line.id,
                         order: line.order,
                         itemId: line.item_id,
+                        substitution: null,
                         quantity: quantityOf(line.quantity),
                         unit: prescribedUnit(line),
                         batchId: null,

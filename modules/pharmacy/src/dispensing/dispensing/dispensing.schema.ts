@@ -65,15 +65,47 @@ export const dispensingPriceSchema = z.object({
     changed: priceChangeSchema,
 });
 
+// Siapa yang menyetujui obat resep diganti: Permenkes 68/2010 Pasal 7, "atas persetujuan dokter dan/atau pasien".
+export const substitutionConsents = [
+    'dokter',
+    'pasien',
+    'dokter_dan_pasien',
+] as const;
+
+const unitOption = reference.extend({ quantity_per_unit: z.string() });
+
+// Obat resep yang diganti obat pengganti (Originally Ordered No. BC). by dan at kosong pada usulan dari penyerahan yang
+// dibatalkan, karena penggantiannya baru tercatat saat disimpan lagi.
+export const substitutionSchema = z.object({
+    prescribed_item: reference,
+    consent: z.enum(substitutionConsents),
+    reason: z.string(),
+    by: z.string().nullable(),
+    at: z.string().nullable(),
+});
+
 // Baris penyerahan untuk satu baris obat resep. id kosong berarti usulan untuk penyerahan yang belum disimpan: jumlah
 // dan satuan resep, batch diambil otomatis. taken: batch yang benar-benar diambil saat disiapkan, dari kartu gudang.
+// item adalah obat yang diserahkan, dan units satuan obat itu. item_options: obat yang boleh diserahkan untuk baris
+// ini selama belum disiapkan, obat resep lebih dulu lalu obat penggantinya; kosong bila obat resep tidak punya
+// pengganti atau sesudah disiapkan.
 export const dispensingLineSchema = z.object({
     id: z.string().nullable(),
     prescription_line_id: z.string(),
+    item: reference,
+    substitution: substitutionSchema.nullable(),
+    item_options: z.array(
+        z.object({
+            item: reference,
+            is_prescribed: z.boolean(),
+            notes: z.string().nullable(),
+            units: z.array(unitOption),
+        }),
+    ),
     quantity: z.string(),
     unit: reference,
     quantity_per_unit: z.string(),
-    units: z.array(reference.extend({ quantity_per_unit: z.string() })),
+    units: z.array(unitOption),
     batch: batch.nullable(),
     reason: z.string().nullable(),
     // Kosong selama baris belum disiapkan.
@@ -97,6 +129,11 @@ export const dispensingInputSchema = z.object({
         .array(
             z.object({
                 prescription_line_id: z.string(),
+                // Obat yang diserahkan; kosong berarti obat resep. Obat lain wajib obat pengganti obat resep, dengan
+                // persetujuan dan alasannya.
+                item_id: z.string().nullable().optional(),
+                substitution_consent: z.string().nullable().optional(),
+                substitution_reason: z.string().nullable().optional(),
                 quantity: z.union([z.string(), z.number()]),
                 // Kosong berarti satuan resep.
                 unit_id: z.string().nullable().optional(),

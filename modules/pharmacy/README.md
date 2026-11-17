@@ -21,6 +21,7 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 | `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                                              |
 | `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode                             |
 | `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                                                |
+| `far_m_obat_pengganti`   | Obat yang boleh menggantikan sebuah obat saat resep disiapkan, satu arah per baris (Item Substitution BC)                                 |
 | `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                                             |
 | `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, Patient KTP, dan rentang harga dasar (SIMmGradingHargaObat)                     |
 | `far_m_parameter`        | Yatim sejak 0008: desimal harga satuan obat pindah ke setelan keuangan Core                                                               |
@@ -30,7 +31,7 @@ Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILL
 | `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                                                   |
 | `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                                                |
 | `bill_farmasi`           | Penyerahan obat satu resep, atau satu penjualan obat bebas tanpa resep: nomor, status, lokasi, orang, dan waktu                           |
-| `bill_farmasi_detail`    | Satu baris per obat: jumlah diserahkan, satuan, batch pilihan, alasan bila kurang dari resep, harga hitungan dan yang dipakai             |
+| `bill_farmasi_detail`    | Satu baris per obat: obat yang diserahkan, obat resep bila diganti, jumlah, satuan, batch, alasan, harga hitungan dan yang dipakai        |
 | `bill_farmasi_biaya`     | Biaya racik (per racikan) dan biaya resep (per obat tunggal) yang dibekukan saat Siapkan atau Simpan dan bayar, hitungan dan yang dipakai |
 | `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                                                       |
 | `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                                                |
@@ -62,6 +63,20 @@ Satu penyerahan aktif (`bill_farmasi`) per resep, dibuka dari antrean. Polanya p
 | Serahkan      | Waktu, penyerah, dan penerima obat dicatat; apoteker diisi penyerah bila kosong.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Batal siapkan | Hanya sebelum diserahkan. Stok kembali lewat `reverseItemEntries`, penyerahan ditutup sebagai dibatalkan, dan resep kembali menunggu. Siapkan berikutnya membuat penyerahan baru dengan isian yang sama, karena kunci posting kartu gudang penyerahan lama sudah terpakai (sama dengan batal posting dokumen persediaan Core).                                                                                                                                                                                              |
 
+## Ganti obat resep
+
+Apoteker boleh menyerahkan obat lain sebagai ganti obat yang ditulis dokter, misalnya generik dengan zat aktif yang sama saat obat resep habis. Polanya Item Substitution Business Central: daftar obat pengganti per barang (tabel 5715), dan baris penjualan yang diganti lewat `ItemSubstGet` menyimpan obat aslinya di Originally Ordered No. (`0021_item_substitution.sql`).
+
+- **Sistem lama** tidak mencatat penggantian. Petugas menghapus baris obat resep lalu menambah obat lain di form penyerahan, jadi obat yang ditulis dokter dan alasannya hilang. Di Kuta 1, 192 dari 36.947 penyerahan resep menyerahkan obat yang tidak ada di resepnya sebagai ganti obat resep. Master nama generik (`SIMmNamaGenerik`, `SIMdBarangGenerik`) ada, tetapi tidak satu pun barang dipasangkan dengannya.
+- **Obat pengganti** diisi sebagai data di kartu data obat farmasi (Setup › Data obat, bagian Obat pengganti, API `/drugs/{id}/substitutions`), dengan izin yang sama dengan data obat. Satu baris satu arah; saklar **Berlaku dua arah** (Interchangeable BC, bawaan hidup) juga mencatat arah sebaliknya bila belum ada. Delete menghapus satu arah saja, secara lunak, dan penyerahan yang sudah memakainya tidak berubah. Barang yang dihapus atau diblokir tidak ditawarkan saat Siapkan.
+- **Saat Siapkan** baris obat yang punya pengganti menampilkan tombol **Ganti obat**. Jendelanya menampilkan obat resep dan obat penggantinya beserta stok di lokasi penyiapan; obat pengganti wajib diisi siapa yang menyetujui (dokter, pasien, atau keduanya) dan alasannya. Pilihan itu tersimpan saat Simpan atau Siapkan, dan bisa dikembalikan ke obat resep selama belum disiapkan. Satuan baris pindah ke satuan obat pengganti (satuan yang sama bila obat pengganti memilikinya), batch pilihan dikosongkan, dan jumlahnya tetap.
+- **Jumlah.** Satu satuan dasar obat pengganti menggantikan satu satuan dasar obat resep, jadi jumlah yang diserahkan tetap dibatasi jumlah resep dalam satuan dasar. Obat yang kekuatannya berbeda tidak dicatat sebagai pengganti.
+- **Yang tercatat.** `bill_farmasi_detail.barang_id` adalah obat yang diserahkan; `barang_resep_id`, `persetujuan_ganti`, `alasan_ganti`, `diganti_pada`, dan `diganti_oleh_user_id` diisi bersama bila obatnya diganti, dan constraint menolak catatan yang tidak lengkap. Waktu dan pengguna tetap milik penggantian pertama selama obat, persetujuan, dan alasannya tidak berubah. Baris resep (`far_tr_resep_detail`) tidak pernah diubah, jadi resep dokter tetap seperti yang ditulis.
+- **Stok, harga, kasir, retur, dan etiket** memakai obat yang diserahkan tanpa kode tambahan, karena semuanya sudah membaca `bill_farmasi_detail.barang_id`: stok keluar obat pengganti, harga dihitung dari grading obat pengganti, baris kasir lewat `pharmacy.dispensing.charges-replaced.v1` menyebut obat pengganti, retur mengembalikan obat pengganti, dan etiket mencetak nama obat pengganti.
+- **Izin.** Mengganti obat butuh `pharmacy.dispensing.substitute`, yang ada di duty apoteker (`pharmacy.dispensing.manage`) dan tidak di duty asisten (`pharmacy.dispensing.prepare`). Dasarnya Permenkes 68/2010 Pasal 7 dan PP 51/2009 Pasal 24 huruf b: apoteker dapat mengganti obat merek dagang dengan generik yang sama komponen aktifnya, atau merek dagang lain, atas persetujuan dokter dan/atau pasien. Berbeda dengan ubah harga (#212), izin ini ikut ke role pemilik dan role yang sudah memegang duty apoteker, karena penggantian adalah pekerjaan apoteker sehari-hari dan tidak mengubah harga di luar grading. Asisten tetap bisa menyimpan draf yang sudah diganti apoteker selama penggantiannya tidak diubah; mengubah atau membuat penggantian dijawab 403.
+- **Persetujuan dokter tidak diwajibkan sistem.** Regulasi menerima persetujuan dokter atau pasien, jadi pilihan pasien saja sah, dan tidak ada langkah persetujuan dokter di aplikasi.
+- **Layanan kesehatan.** `pharmacy.prescription.dispensed.v1` membawa `substitution` per baris (obat resep, persetujuan, alasan, waktu, dan pengguna) sebagai field opsional, dan `item` tetap obat yang diserahkan. Penerima di layanan kesehatan belum membacanya, jadi E-Resep masih menampilkan jumlah yang diserahkan di bawah nama obat resep.
+
 ## Batal resep
 
 Resep yang tidak diambil pasien dibatalkan dari kartu resepnya (**Batalkan resep**, `POST .../prescriptions/{id}/cancel` dengan alasan dan versi penyerahan aktif, atau `null` bila belum ada). Padanannya `SIMtrResep.Batal` sistem lama, yang dihitung antrean lama sebagai "Tidak Diambil" dan disaring antrean, E-Resep, dan pemeriksaan kasir. Sistem lama tidak punya tombol untuk mengisinya: Kuta 1 tidak punya satu pun resep batal dari 13.326, dan 12 resep batal di salinan lain diisi di luar aplikasi. Yang ada di kode sistem lama adalah hapus resep oleh poli sebelum realisasi ("Resep tidak bisa dihapus, karena sudah realisasi") dan kunci kasir Seroja. Di sini pembatalan milik farmasi, karena resep yang sudah dikirim tidak bisa diubah dokter.
@@ -77,7 +92,7 @@ Setiap perubahan mengunci baris resep (`for update`), jadi Siapkan yang ditekan 
 
 Apoteker dan asisten adalah pengguna tenant (`users`), dipilih dengan namanya. Di Kuta 1 keduanya dipilih di setiap penyerahan (`Pharmacy_id`, `Pharmacy_assistant_id`; 6 apoteker dan 7 asisten dalam 12.177 penyerahan, 425 di antaranya orang yang sama), jadi di sini keduanya boleh dipilih, dan terisi otomatis dari pengguna yang menyiapkan dan menyerahkan bila dibiarkan kosong.
 
-Serahkan juga mencatat siapa yang menerima obat (`0011_dispensing_receiver.sql`): pasien sendiri (`diterima_pasien`), atau orang lain beserta namanya (`nama_penerima`). Pilihan penerima wajib saat Serahkan, dan namanya wajib bila penerimanya orang lain. Aksi Serahkan ke pasien di antrean mencatat pasien sebagai penerima; obat yang diambil orang lain diserahkan dari kartu resepnya. Sistem lama tidak mencatat penerima; kolom ini ditambahkan karena MedicationDispense SATUSEHAT membutuhkannya. Waktu siap, waktu serah, dan apoteker yang juga dibutuhkannya sudah tercatat, dan obat tidak pernah diganti karena penyerahan tidak bisa mengganti obat resep. Pemetaan lengkapnya ada di kepala migration itu.
+Serahkan juga mencatat siapa yang menerima obat (`0011_dispensing_receiver.sql`): pasien sendiri (`diterima_pasien`), atau orang lain beserta namanya (`nama_penerima`). Pilihan penerima wajib saat Serahkan, dan namanya wajib bila penerimanya orang lain. Aksi Serahkan ke pasien di antrean mencatat pasien sebagai penerima; obat yang diambil orang lain diserahkan dari kartu resepnya. Sistem lama tidak mencatat penerima; kolom ini ditambahkan karena MedicationDispense SATUSEHAT membutuhkannya. Waktu siap, waktu serah, dan apoteker yang juga dibutuhkannya sudah tercatat. Obat yang diganti (`substitution` MedicationDispense) tercatat sejak `0021_item_substitution.sql`, bagian [Ganti obat resep](#ganti-obat-resep). Pemetaan lengkapnya ada di kepala migration itu.
 
 ## Kasir menunggu resep
 
@@ -173,15 +188,15 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 ## Hak akses
 
-| Duty                          | Isi                                                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                                                                   |
-| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                                                          |
-| `pharmacy.dispensing.manage`  | Siapkan, panggil, serahkan, batal siapkan, retur, dan batalkan resep; retur penjualan obat bebas (apoteker)           |
-| `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya), lihat daftar penjualan                     |
-| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat  |
-| `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat |
-| `pharmacy.line-price.manage`  | Ubah harga obat, diskon, dan biaya racik atau resep per baris; tidak dipegang role mana pun secara bawaan             |
+| Duty                          | Isi                                                                                                                     |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `pharmacy.dispensing.inquire` | Lihat antrean resep                                                                                                     |
+| `pharmacy.dispensing.prepare` | Siapkan dan panggil resep (asisten apoteker)                                                                            |
+| `pharmacy.dispensing.manage`  | Siapkan, ganti obat, panggil, serahkan, batal siapkan, retur, dan batalkan resep; retur penjualan obat bebas (apoteker) |
+| `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya), lihat daftar penjualan                       |
+| `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat    |
+| `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat   |
+| `pharmacy.line-price.manage`  | Ubah harga obat, diskon, dan biaya racik atau resep per baris; tidak dipegang role mana pun secara bawaan               |
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`), kecuali `pharmacy.line-price.manage`. Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
@@ -191,5 +206,6 @@ Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`), 
 - Layar antrean di TV (display board).
 - Resep luar. Di Kuta 1 hampir tidak dipakai (0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
 - Tagihan; menyusul lewat billing/kasir di Foundation, yang membaca harga yang sudah disalin ke baris penyerahan.
-- Mengganti obat resep dengan obat lain (Item Substitution BC).
+- E-Resep di layanan kesehatan menampilkan obat pengganti yang diserahkan (`substitution` di `pharmacy.prescription.dispensed.v1` sudah terbit).
+- Obat pengganti pada penjualan obat bebas, dan obat pengganti dengan syarat (Substitution Condition BC).
 - Cetak etiket dan kuitansi; menunggu mesin cetak.

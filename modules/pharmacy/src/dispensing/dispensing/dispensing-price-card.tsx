@@ -50,18 +50,12 @@ export function DispensingPriceCard({
     onDone: (next: View | null) => void;
 }): ReactNode {
     const { prescription, dispensing } = view.data;
-    const names = new Map(
-        prescription.lines.map((line) => [
-            line.id,
-            line.item ? `${line.item.code} · ${line.item.name}` : '',
-        ]),
-    );
     const lines: PricedLine[] = view.data.lines.flatMap((line) =>
         line.id && line.price
             ? [
                   {
                       id: line.id,
-                      name: names.get(line.prescription_line_id) ?? '',
+                      name: `${line.item.code} · ${line.item.name}`,
                       quantity: line.quantity,
                       unitCode: line.unit.code,
                       computedUnitPrice: line.price.computed_unit_price,
