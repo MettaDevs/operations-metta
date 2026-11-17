@@ -41,7 +41,6 @@ export {
     chargeLockedMessage,
     closedClerkMessage,
     documentPayment,
-    type DocumentPayment,
     lockChargeForChange,
     paidDocuments,
     patientTypeMessage,

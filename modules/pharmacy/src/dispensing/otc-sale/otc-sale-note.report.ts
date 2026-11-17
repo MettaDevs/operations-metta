@@ -12,11 +12,10 @@ import { moduleWorkspace } from '../../module.ts';
 import { otcSaleNoteLayouts } from './otc-sale-note.layout.ts';
 import { OtcSales } from './otc-sale.service.ts';
 
-// Nota penjualan obat bebas, pola posted Sales Invoice BC (laporan Standard Sales - Invoice): penjual dari kop surat,
-// nomor, waktu, lokasi, pembeli, baris obat dengan jumlah, harga satuan, diskon, dan nilai, biaya resep, total dengan
-// terbilang, lalu pembayaran kasir. Baris dan total dibaca lewat kartu penjualan yang juga dipakai layar, jadi angkanya
-// sama dengan yang ditagih kasir sesudah retur. Pembayaran dibaca dari kasir Core lewat documentPayment, bukan dari
-// tabelnya. Belum ada PPN: tagihan kasir tidak membawa pajak.
+// Nota penjualan obat bebas, pola posted Sales Invoice BC (laporan Standard Sales - Invoice). Baris dan total dibaca
+// lewat kartu penjualan yang juga dipakai layar, jadi angkanya sama dengan yang ditagih kasir sesudah retur.
+// Pembayaran dibaca dari kasir Core lewat documentPayment, bukan dari tabelnya. Belum ada PPN: tagihan kasir tidak
+// membawa pajak.
 export const otcSaleNoteFields = {
     number: field.text('Nomor penjualan'),
     sold_at: field.datetime('Waktu penjualan'),
