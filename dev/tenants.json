@@ -51,7 +51,6 @@
                 {
                     "name": "Petugas farmasi pusling (contoh)",
                     "duties": [
-                        "healthcare.patient.inquire",
                         "pharmacy.dispensing.manage",
                         "core.inventory-transfer.manage"
                     ]
@@ -67,40 +66,46 @@
                     "email": "petugas.pusat@klinik-contoh.test",
                     "password": "dev-petugas-contoh-saja",
                     "role": "Petugas pendaftaran (contoh)",
-                    "unit": "KCS-01",
-                    "policy": "healthcare.patient-unit"
+                    "scope": {
+                        "unit": "KCS-01",
+                        "policy": "healthcare.patient-unit"
+                    }
                 },
                 {
                     "name": "Petugas Sehat Cabang",
                     "email": "petugas.cabang@klinik-contoh.test",
                     "password": "dev-petugas-contoh-saja",
                     "role": "Petugas pendaftaran (contoh)",
-                    "unit": "KCS-02",
-                    "policy": "healthcare.patient-unit"
+                    "scope": {
+                        "unit": "KCS-02",
+                        "policy": "healthcare.patient-unit"
+                    }
                 },
                 {
                     "name": "Petugas Dua Utara",
                     "email": "petugas.utara@klinik-contoh.test",
                     "password": "dev-petugas-contoh-saja",
                     "role": "Petugas pendaftaran (contoh)",
-                    "unit": "KCD-01",
-                    "policy": "healthcare.patient-unit"
+                    "scope": {
+                        "unit": "KCD-01",
+                        "policy": "healthcare.patient-unit"
+                    }
                 },
                 {
                     "name": "Petugas Dua Selatan",
                     "email": "petugas.selatan@klinik-contoh.test",
                     "password": "dev-petugas-contoh-saja",
                     "role": "Petugas pendaftaran (contoh)",
-                    "unit": "KCD-02",
-                    "policy": "healthcare.patient-unit"
+                    "scope": {
+                        "unit": "KCD-02",
+                        "policy": "healthcare.patient-unit"
+                    }
                 },
                 {
                     "name": "Petugas Farmasi Pusling",
                     "email": "petugas.pusling@klinik-contoh.test",
                     "password": "dev-petugas-contoh-saja",
-                    "role": "Petugas farmasi pusling (contoh)",
-                    "unit": "KCS-01",
-                    "policy": "healthcare.patient-unit"
+                    "role": "Petugas farmasi pusling (contoh)"
                 }
             ],
             "pricing": {
