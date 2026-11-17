@@ -189,18 +189,24 @@ function PrescriptionsPage(): ReactNode {
     );
     const closeCard = () => setSearch({ prescription: undefined }, false);
     const leaveGuard = useUnsavedChangesGuard(dirty, closeCard);
-    // Lokasi yang diingat perangkat ini bila masih boleh dipakai pengguna, kalau tidak lokasi bawaannya di Petugas
-    // lokasi.
+    // Lokasi yang diingat perangkat ini bila masih boleh dipakai pengguna. Saat antrean pertama dibuka tanpa lokasi itu,
+    // lokasi bawaan pengguna di Petugas lokasi; sesudahnya Semua lokasi tetap pilihan pengguna.
     const places = metadata.data;
+    const placed = useRef(false);
     useEffect(() => {
-        if (location !== undefined || !places) return;
+        if (!places) return;
+        const opening = !placed.current;
+        placed.current = true;
+        if (location !== undefined) return;
         const remembered = readPlace();
         const place =
             remembered &&
             (remembered === NONE ||
                 places.locations.some((option) => option.id === remembered))
                 ? remembered
-                : places.default_location_id;
+                : opening
+                  ? places.default_location_id
+                  : null;
         if (place) setSearch({ location: place });
     }, [location, places, setSearch]);
     const loader = useCallback<ListLoader<Row>>(
