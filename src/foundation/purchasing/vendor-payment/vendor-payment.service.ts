@@ -70,14 +70,10 @@ const rowSql = `select * from (
                     where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null) payments
                 where true`;
 
-// Jenis bayar yang uangnya sudah di tangan klinik, tunai atau di rekening; penjamin, piutang, dan beban tidak bisa
-// dipakai membayar vendor.
 const paymentMethodSql = `select id, kode as code, nama as name from jenis_bayar
                           where tenant_id = $1 and legal_entity_id = $2 and perilaku = any($3::text[]) and aktif
                             and deleted_at is null`;
 
-// Entri faktur vendor itu yang masih terbuka. on_drafts = jumlah yang sudah ada di draf pembayaran lain, supaya dua draf
-// tidak membayar sisa yang sama, seperti Applies-to ID yang hanya dipegang satu baris jurnal di BC.
 const openEntriesSql = `
     select e.id as entry_id, e.faktur_id as invoice_id, e.nomor_dokumen as document_number,
            e.no_faktur_vendor as vendor_invoice_number, e.tanggal::text as posting_date,
@@ -117,11 +113,7 @@ const lockedLineSchema = z.object({
     document_number: z.string(),
 });
 
-// Pembayaran ke vendor: Payment Journal BC yang diterapkan ke entri utang vendor (Apply Entries, Applies-to ID). Baris
-// diambil dari entri faktur yang masih terbuka, jumlahnya bawaan sisa dan boleh sebagian. Posting menulis satu entri
-// pembayaran bernilai negatif, mengurangi sisa entri faktur, dan menutup entri yang lunas. Batal posting mengikuti
-// Unapply lalu Reverse: sisa kembali, entri faktur terbuka lagi, dan entri pembatalan menutup entri pembayarannya. Belum
-// ada buku besar, jadi tidak ada jurnal kas atau bank.
+// Pembayaran ke vendor: Payment Journal BC yang diterapkan ke entri utang vendor (Apply Entries, Applies-to ID).
 export class VendorPayments {
     constructor(
         private readonly db: Database,
@@ -188,7 +180,6 @@ export class VendorPayments {
         };
     }
 
-    // Cara bayar yang bisa dipilih di kartu pembayaran.
     async paymentMethods() {
         this.workspace.guard('vendor-payment', 'read');
         return {
@@ -243,8 +234,7 @@ export class VendorPayments {
         };
     }
 
-    // Ambil utang terbuka (Apply Vendor Entries): entri faktur vendor itu yang masih punya sisa, dari jatuh tempo paling
-    // awal.
+    // Apply Vendor Entries.
     async openEntries(parameters: URLSearchParams) {
         this.workspace.guard('vendor-payment', 'read');
         const vendorId = parameters.get('vendor_id') ?? '';
@@ -552,8 +542,6 @@ export class VendorPayments {
         return { status: 204, headers: {}, body: undefined };
     }
 
-    // Status berpindah dengan compare-and-set di transaksi yang sama dengan postingnya. Permintaan yang diulang setelah
-    // pembayaran sampai di status tujuan tidak menulis apa pun dan menjawab pembayaran yang sama.
     private async transition(
         id: string,
         version: number,
@@ -597,8 +585,6 @@ export class VendorPayments {
         return coded(409, 'stale_version', staleMessage);
     }
 
-    // Entri faktur yang dibayar, dikunci dengan urutan tetap supaya dua posting yang membayar faktur yang sama tidak saling
-    // menunggu.
     private async lockedLines(paymentId: string) {
         return this.db.rows(
             lockedLineSchema,
@@ -614,9 +600,7 @@ export class VendorPayments {
         );
     }
 
-    // Seperti posting Payment Journal dengan Applies-to ID (codeunit "Gen. Jnl.-Post Line", ApplyVendLedgEntry): vendor
-    // tidak diblokir, setiap baris membayar entri faktur vendor yang sama yang masih punya sisa sebesar itu, dan tanggal
-    // bayar tidak sebelum tanggal posting faktur. Lalu satu entri pembayaran ditulis dan sisa entri faktur berkurang.
+    // Posting Payment Journal dengan Applies-to ID (codeunit "Gen. Jnl.-Post Line", ApplyVendLedgEntry).
     async post(request: Request, id: string, body: unknown) {
         this.workspace.guard('vendor-payment', 'post');
         const current = await this.header(id);
@@ -698,10 +682,8 @@ export class VendorPayments {
         };
     }
 
-    // Batal posting, seperti Unapply Entries lalu Reverse Transaction di BC: ditolak bila salah satu faktur yang dibayarnya
-    // sudah dibayar lagi oleh pembayaran yang diposting sesudahnya (UnapplyAllPostedAfterThisEntryErr di codeunit 227
-    // "VendEntry-Apply Posted Entries"). Sisa kembali ke entri faktur, yang terbuka lagi, dan entri pembatalan menutup
-    // entri pembayarannya.
+    // Unapply Entries lalu Reverse Transaction di BC (UnapplyAllPostedAfterThisEntryErr, codeunit 227
+    // "VendEntry-Apply Posted Entries").
     async reverse(request: Request, id: string, body: unknown) {
         this.workspace.guard('vendor-payment', 'reverse');
         const current = await this.header(id);
@@ -789,8 +771,7 @@ export class VendorPayments {
     }
 }
 
-// Pembayaran terakhir yang membayar sebuah entri faktur, untuk menolak Batal posting faktur yang sudah dibayar
-// (TestIfInvoiceIsPaid di codeunit "Correct Posted Purch. Invoice") dengan tombol yang membuka pembayaran itu.
+// TestIfInvoiceIsPaid di codeunit "Correct Posted Purch. Invoice".
 export async function refusePaidEntry(
     db: Database,
     workspace: Workspace,

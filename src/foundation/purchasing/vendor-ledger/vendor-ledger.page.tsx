@@ -34,9 +34,7 @@ import {
     type VendorPaymentPermissions,
 } from '../vendor-payment/vendor-payment-card.tsx';
 
-// Utang vendor (Vendor Ledger Entries di BC): faktur pembelian yang sudah diposting dan belum lunas, dari jatuh tempo
-// paling awal. Entri yang sudah ditutup, termasuk pembayaran, tampil bila diminta, dan setiap faktur membuka pembayaran
-// yang membayarnya.
+// Utang vendor (Vendor Ledger Entries di BC).
 
 const route = getRouteApi('/_app/sysadmin/purchasing/vendor-ledger');
 type Row = ApiBody<'purchasingVendorLedgerList'>['data'][number];

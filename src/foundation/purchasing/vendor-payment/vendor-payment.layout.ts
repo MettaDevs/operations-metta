@@ -4,8 +4,6 @@ import {
     type BuiltinLayout,
 } from '../../../platform/reporting/index.ts';
 
-// Layout bawaan bukti pembayaran ke vendor: faktur yang dibayar beserta jumlahnya, ditandatangani petugas yang membayar
-// dan vendor yang menerima.
 function a4(): Uint8Array {
     return inventoryDocument({
         title: 'BUKTI PEMBAYARAN KE VENDOR',

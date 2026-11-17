@@ -1,23 +1,7 @@
--- Pembayaran ke vendor (src/foundation/purchasing/vendor-payment/), pola Business Central: Payment Journal yang
--- diterapkan ke Vendor Ledger Entry lewat Applies-to ID, lalu Unapply dan Reverse untuk membatalkannya. Belum ada buku
--- besar, jadi posting tidak menulis jurnal kas atau bank; ia menulis entri pembayaran di utang vendor dan mengurangi sisa
--- entri faktur yang dibayarnya.
---
--- Di sistem lama Adapotek menandai lunas 181.382 penerimaan (StatusBayar, TanggalBayar, TipePembayaran Tunai atau
--- Transfer, dan Bank berupa teks bebas: Mandiri atau BCA). Satu tanda lunas per penerimaan, tanpa bayar sebagian.
---
--- 1. Pembayaran dan barisnya.
--- 2. Entri utang vendor menerima entri pembayaran dan pembatalannya.
--- 3. Reference nomor pembayaran per legal entity.
--- 4. Trigger versi, aktor, dan change log.
--- 5. Katalog izin.
+-- Pembayaran ke vendor: Payment Journal BC yang diterapkan ke Vendor Ledger Entry lewat Applies-to ID, lalu Unapply
+-- dan Reverse.
 
--- 1. Pembayaran ------------------------------------------------------------------------------------------------------
-
--- tanggal adalah Posting Date. jenis_bayar_id adalah Payment Method Code; hanya jenis bayar yang uangnya sudah di tangan
--- klinik (tunai dan non tunai) yang bisa dipakai membayar. bank teks bebas seperti kolom Bank sistem lama, karena Core
--- belum punya master rekening bank (Bank Account BC). no_referensi adalah External Document No., misalnya nomor bukti
--- transfer.
+-- tanggal adalah Posting Date, jenis_bayar_id adalah Payment Method Code, no_referensi adalah External Document No.
 CREATE TABLE public.ap_tr_pembayaran (
     id uuid NOT NULL,
     tenant_id uuid NOT NULL,
@@ -57,8 +41,7 @@ CREATE UNIQUE INDEX ap_tr_pembayaran_nomor_unique
 CREATE INDEX ap_tr_pembayaran_vendor_index
     ON public.ap_tr_pembayaran USING btree (tenant_id, vendor_id) WHERE (deleted_at IS NULL);
 
--- Satu baris per entri utang yang dibayar (Applies-to ID dengan Amount to Apply). Baris pembayaran yang diposting adalah
--- catatan penerapannya: batal posting mengembalikan jumlah baris ke sisa entri itu.
+-- Applies-to ID dengan Amount to Apply.
 CREATE TABLE public.ap_tr_pembayaran_detail (
     id uuid NOT NULL,
     tenant_id uuid NOT NULL,
@@ -88,11 +71,7 @@ CREATE UNIQUE INDEX ap_tr_pembayaran_detail_entri_unique
 CREATE INDEX ap_tr_pembayaran_detail_entri_utang_index
     ON public.ap_tr_pembayaran_detail USING btree (tenant_id, entri_utang_id) WHERE (deleted_at IS NULL);
 
--- 2. Entri utang vendor ----------------------------------------------------------------------------------------------
-
--- Entri pembayaran bernilai negatif dan langsung ditutup, karena seluruh jumlahnya diterapkan ke entri faktur di
--- barisnya. Batal posting pembayaran menulis entri pembatalan_pembayaran bernilai positif yang menutupnya, seperti
--- Reverse Transaction di BC sesudah Unapply. Entri faktur merujuk fakturnya, entri pembayaran merujuk pembayarannya.
+-- pembatalan_pembayaran adalah Reverse Transaction BC sesudah Unapply.
 ALTER TABLE public.ap_tr_entri_utang
     DROP CONSTRAINT ap_tr_entri_utang_jenis_check,
     ALTER COLUMN jenis TYPE character varying(25),
@@ -110,11 +89,8 @@ ALTER TABLE public.ap_tr_entri_utang
         OR (jenis = 'pembayaran' AND pembayaran_id IS NOT NULL AND faktur_id IS NULL AND jumlah < 0 AND sisa = 0)
         OR (jenis = 'pembatalan_pembayaran' AND pembayaran_id IS NOT NULL AND faktur_id IS NULL
             AND jumlah > 0 AND sisa = 0));
--- Satu entri pembayaran dan satu pembatalannya per pembayaran: posting yang diulang tidak menulis entri kedua.
 CREATE UNIQUE INDEX ap_tr_entri_utang_pembayaran_unique
     ON public.ap_tr_entri_utang USING btree (tenant_id, pembayaran_id, jenis) WHERE (pembayaran_id IS NOT NULL);
-
--- 3. Reference nomor -----------------------------------------------------------------------------------------------
 
 INSERT INTO public.app_number_sequence_references (id, app_id, code, name, allowed_scopes, default_prefix,
                                                   default_settings, default_per_legal_entity,
@@ -139,8 +115,6 @@ WHERE r.code = 'core.vendor-payment-number'
   AND NOT EXISTS (SELECT 1 FROM public.tenant_number_sequences s
                   WHERE s.tenant_id = l.tenant_id AND s.reference_id = r.id
                     AND s.scope_type = 'legal_entity' AND s.legal_entity_id = l.organization_id);
-
--- 4. Trigger versi, aktor, dan change log ----------------------------------------------------------------------------
 
 DO $$
 DECLARE
@@ -167,10 +141,6 @@ FROM (VALUES ('ap_tr_pembayaran', 'Pembayaran ke vendor'),
 WHERE NOT EXISTS (SELECT 1 FROM public.change_log_setup_tables s
                   WHERE s.tenant_id IS NULL AND s.table_name = t.table_name);
 
--- 5. Katalog izin ----------------------------------------------------------------------------------------------------
-
--- Pola faktur pembelian: lihat, ubah draf, posting, dan batal posting sebagai izin terpisah. Kedua duty ikut melihat
--- faktur dan utang vendor, karena baris pembayaran adalah entri utang dan membuka fakturnya.
 INSERT INTO public.app_entry_points (code, app_id, name, type, created_at, updated_at)
 VALUES ('core.vendor-payment.form', 'core', 'Layar pembayaran ke vendor', 'form',
         now() AT TIME ZONE 'utc', now() AT TIME ZONE 'utc')

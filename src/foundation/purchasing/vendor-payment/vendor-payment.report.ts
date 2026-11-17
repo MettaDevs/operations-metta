@@ -12,7 +12,6 @@ import {
 } from '../../../platform/reporting/index.ts';
 import { vendorPaymentLayouts } from './vendor-payment.layout.ts';
 
-// Bukti pembayaran ke vendor: faktur yang dibayar dan jumlahnya, untuk diserahkan bersama uang atau bukti transfer.
 export const vendorPaymentFields = {
     number: field.text('Nomor pembayaran'),
     posting_date: field.date('Tanggal bayar'),

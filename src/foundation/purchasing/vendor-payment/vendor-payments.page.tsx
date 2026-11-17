@@ -32,8 +32,7 @@ import {
     type VendorPaymentPermissions,
 } from './vendor-payment-card.tsx';
 
-// Pembayaran ke vendor (Payment Journal BC yang diterapkan ke utang vendor): draf, diposting, atau dibatalkan
-// postingnya.
+// Pembayaran ke vendor (Payment Journal BC).
 
 const route = getRouteApi('/_app/sysadmin/purchasing/vendor-payments');
 type Row = ApiBody<'purchasingVendorPaymentList'>['data'][number];
@@ -48,7 +47,6 @@ function VendorPaymentsPage(): ReactNode {
     const navigate = route.useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState<VendorPayment | 'new' | null>(null);
-    // Kartu dipasang ulang hanya saat dokumen lain dibuka; menyimpan atau memposting tetap di kartu yang sama.
     const [opened, setOpened] = useState(0);
     const openCard = (target: VendorPayment | 'new') => {
         setOpened((count) => count + 1);
@@ -260,7 +258,6 @@ function VendorPaymentsPage(): ReactNode {
     );
 }
 
-// Pembayaran yang dibuka dari kotak error atau dari Utang vendor.
 function VendorPaymentRecord({ id }: { id: string }): ReactNode {
     const { data } = useSuspenseQuery(
         orpc.purchasingVendorPaymentShow.queryOptions({

@@ -57,10 +57,6 @@ const duties = [
     'core.billing-setup.manage',
 ];
 
-// Pembayaran ke vendor diterapkan ke entri utang faktur (Applies-to ID BC): bayar sebagian mengurangi sisa, bayar sisanya
-// menutup entri, dua draf tidak membayar sisa yang sama, batal posting membuka entri lagi, faktur yang sudah dibayar
-// tidak bisa dibatalkan postingnya, dan pembayaran yang lebih awal tidak bisa dibatalkan selama pembayaran sesudahnya
-// masih diposting. Isi database diperiksa dengan SQL.
 describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -119,7 +115,6 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
         });
     });
 
-    // Faktur diposting senilai 100.000 (10 BOX x 10.000) dengan tanggal posting 2026-11-06.
     async function postedInvoice() {
         const draft = await created<Receipt>(receipts, {
             vendor_id: vendor.id,

@@ -911,9 +911,7 @@ export class PurchaseInvoices {
         };
     }
 
-    // Batal posting, seperti Cancel pada Posted Purchase Invoice (codeunit "Correct Posted Purch. Invoice"): ditolak bila
-    // utangnya sudah dibayar sebagian atau lunas, dengan tombol yang membuka pembayarannya. Entri pembatalan menutup entri
-    // fakturnya, jumlah difakturkan di baris penerimaan berkurang lagi, dan nomor faktur vendor bisa dicatat ulang.
+    // Batal posting, seperti Cancel pada Posted Purchase Invoice (codeunit "Correct Posted Purch. Invoice").
     async reverse(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-invoice', 'reverse');
         const current = await this.header(id);

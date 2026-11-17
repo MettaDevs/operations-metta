@@ -8,10 +8,6 @@ import { vendorLedgerRoutes } from './vendor-ledger/vendor-ledger.routes.ts';
 import { vendorPaymentRoutes } from './vendor-payment/vendor-payment.routes.ts';
 import { vendorRoutes } from './vendor/vendor.routes.ts';
 
-// Pembelian Core: vendor beserta termin pembayarannya, permintaan pembelian, purchase order, penerimaan barang dari
-// vendor, retur ke vendor atas penerimaan itu, faktur pembelian atas barang yang diterima, utang vendor dari faktur yang
-// diposting, dan pembayaran ke vendor yang melunasi utang itu. Penerimaan dan retur memposting stok lewat mesin posting
-// persediaan (src/foundation/inventory/).
 export function purchasingRoutes() {
     return {
         ...vendorRoutes(),

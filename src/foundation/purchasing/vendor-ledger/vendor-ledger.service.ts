@@ -32,9 +32,7 @@ const rowSql = `select * from (
                     where e.tenant_id = $1 and e.legal_entity_id = $2) entries
                 where true`;
 
-// Entri utang vendor (Vendor Ledger Entries di BC): satu entri per faktur pembelian dan per pembayaran ke vendor yang
-// diposting, ditambah entri pembatalannya. Bawaannya hanya yang masih terbuka, diurutkan dari jatuh tempo paling awal,
-// supaya utang yang paling mendesak dibayar tampil lebih dulu. Entri faktur membawa pembayaran yang membayarnya.
+// Entri utang vendor (Vendor Ledger Entries di BC).
 export class VendorLedger {
     constructor(
         private readonly db: Database,

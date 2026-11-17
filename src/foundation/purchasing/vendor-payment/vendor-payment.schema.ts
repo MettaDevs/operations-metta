@@ -50,7 +50,6 @@ export const vendorPaymentRowSchema = z.object({
     version: z.number(),
 });
 
-// Entri faktur yang dibayar baris ini, dengan sisanya sekarang. Sesudah posting, sisa itu sudah dikurangi baris ini.
 export const vendorPaymentLineRowSchema = z.object({
     id: z.string(),
     line_no: z.number(),
@@ -71,12 +70,10 @@ export const vendorPaymentListQuerySchema = listParametersSchema.extend({
 
 export const openEntriesQuerySchema = z.object({
     vendor_id: z.string(),
-    // Pembayaran yang sedang diubah: barisnya sendiri tidak mengurangi sisa.
     payment_id: z.string().optional(),
 });
 
-// Entri faktur yang masih terbuka untuk Ambil utang terbuka (Apply Entries). on_drafts = jumlah di draf pembayaran lain;
-// open = sisa dikurangi on_drafts, bawaan jumlah baris yang diambil.
+// Apply Entries.
 export const openEntryChoiceSchema = z.object({
     entry_id: z.string(),
     invoice_id: z.string(),

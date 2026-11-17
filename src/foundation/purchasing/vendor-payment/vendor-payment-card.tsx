@@ -101,8 +101,7 @@ function linesOf(payment: VendorPayment | null): Line[] {
     }));
 }
 
-// Kartu pembayaran ke vendor (Payment Journal yang diterapkan ke Vendor Ledger Entries di BC). Baris diambil dari utang
-// vendor yang masih terbuka; jumlah bawaannya sisa utang dan boleh dikurangi untuk bayar sebagian.
+// Kartu pembayaran ke vendor (Payment Journal yang diterapkan ke Vendor Ledger Entries di BC).
 export function VendorPaymentCard({
     payment: initial,
     permissions,
