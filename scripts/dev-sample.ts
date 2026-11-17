@@ -247,9 +247,11 @@ export const sampleSchema = z.object({
             email: z.string(),
             password: z.string().min(12),
             role: z.string(),
-            // Nomor unit tempat petugas bekerja; batas datanya unit itu di legal entity pemiliknya.
-            unit: z.string(),
-            policy: z.string(),
+            // Batas data petugas: unit tempat ia bekerja (nomor unit) di legal entity pemiliknya, untuk kebijakan data
+            // yang dipakai role-nya. Role tanpa kebijakan data tidak punya batas dan berlaku di seluruh organisasi.
+            scope: z
+                .object({ unit: z.string(), policy: z.string() })
+                .optional(),
         }),
     ),
     // Kelompok harga Core, ditunjuk tipe pasien lewat kodenya, dan komponen biaya selain komponen bawaan tenant.
@@ -448,7 +450,7 @@ async function seedOrganizations(
         },
     ]);
     for (const person of options.sample.staff) {
-        const unit = required(units, person.unit, 'Unit');
+        const unit = person.scope && required(units, person.scope.unit, 'Unit');
         let membershipId = await membership(person.email);
         if (!membershipId) {
             const userId = Bun.randomUUIDv7();
@@ -471,14 +473,17 @@ async function seedOrganizations(
         await assign(membershipId, [
             {
                 role_id: required(roles, person.role, 'Role'),
-                policy_scopes: [
-                    {
-                        policy_code: person.policy,
-                        legal_entity_id: unit.legalEntity,
-                        organization_id: unit.id,
-                        include_descendants: false,
-                    },
-                ],
+                policy_scopes:
+                    person.scope && unit
+                        ? [
+                              {
+                                  policy_code: person.scope.policy,
+                                  legal_entity_id: unit.legalEntity,
+                                  organization_id: unit.id,
+                                  include_descendants: false,
+                              },
+                          ]
+                        : [],
             },
         ]);
     }

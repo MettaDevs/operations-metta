@@ -625,7 +625,7 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
         await saved(await publish(versionId));
 
         const member = await createMember(pool, tenantId, [
-            'core.organization.inquire',
+            'core.calendar.inquire',
         ]);
         const [assignment] = await pool.unsafe(
             'select id from role_assignments where membership_id = $1',
@@ -635,9 +635,11 @@ describe.skipIf(!process.env.DB_HOST)('organization hierarchy', () => {
             'select hierarchy_id from organization_hierarchy_versions where id = $1',
             [versionId],
         );
+        // Kebijakan ini harus melindungi izin role anggota, karena role yang tidak dipakai kebijakan mana pun berlaku di
+        // seluruh organisasi. Izinnya izin kalender, yang tidak dipakai test lain untuk menguji kebijakan data.
         await pool.unsafe(
             `insert into app_data_policies (code, app_id, name, protected_permissions, allows_descendants, created_at, updated_at)
-             values ('uji.kebijakan', 'core', 'Kebijakan uji', '[]', true, now(), now())
+             values ('uji.kebijakan', 'core', 'Kebijakan uji', '["core.calendar.read"]', true, now(), now())
              on conflict (code) do nothing`,
         );
         await pool.unsafe(

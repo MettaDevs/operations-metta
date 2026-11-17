@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { Database } from '../database/index.ts';
 import { abort, validation } from '../http/index.ts';
 import type { Session } from '../identity/index.ts';
+import { roleDataPolicyCodes } from './role.service.ts';
+import { activeAssignmentSql } from './security.service.ts';
 
 const membershipSchema = z.object({ id: z.string(), tenant_id: z.string() });
 const organizationSchema = z.object({
@@ -127,14 +129,34 @@ export class Workspace {
         return policies;
     }
 
+    // Role tanpa kebijakan data berlaku di seluruh organisasi, jadi satu penugasan role seperti itu membuka semua
+    // organisasi tenant sebagai tempat kerja. Baris yang dilindungi kebijakan data tetap disaring hibahnya sendiri.
+    private static async holdsUnboundedRole(
+        db: Database,
+        membership: Membership,
+    ): Promise<boolean> {
+        const assigned = await db.rows(
+            z.object({ role_id: z.string() }),
+            `select a.role_id from role_assignments a join roles r on r.id=a.role_id and r.is_active=true where a.membership_id=$1 and ${activeAssignmentSql}`,
+            [membership.id],
+        );
+        if (!assigned.length) return false;
+        const policies = await roleDataPolicyCodes(
+            db,
+            membership.tenant_id,
+            assigned.map((row) => row.role_id),
+        );
+        return [...policies.values()].some((codes) => !codes.length);
+    }
+
     private static async organizations(
         db: Database,
         membership: Membership,
         policies: Map<string, Policy>,
     ): Promise<Organization[]> {
-        const all = [...policies.values()].some(
-            (policy) => policy.kind === 'all',
-        );
+        const all =
+            [...policies.values()].some((policy) => policy.kind === 'all') ||
+            (await this.holdsUnboundedRole(db, membership));
         const ids = [
             ...new Set(
                 [...policies.values()].flatMap((policy) =>

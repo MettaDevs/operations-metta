@@ -44,7 +44,7 @@ Bentuk tabelnya ada di `database/migrations/0001_coreerp_baseline.sql` dan perub
 2. keanggotaan aktif, dibatasi ke tenant pemilik alamat lingkungan;
 3. permission module itu lewat rantai role, termasuk role turunan;
 4. batas data penugasan role untuk satu kode kebijakan data, termasuk turunan organisasi menurut versi hierarchy yang tercatat pada batas itu;
-5. legal entity dan operating unit aktif dari sesi, bila masih terjangkau.
+5. legal entity dan operating unit aktif dari sesi, bila masih terjangkau. Organisasi terjangkau adalah organisasi dari batas data penugasan, atau seluruh organisasi tenant bila anggota memegang satu role yang tidak dipakai kebijakan data mana pun. Petugas farmasi di tenant tanpa layanan kesehatan termasuk di sini, karena farmasi tidak menyatakan kebijakan data.
 
 Hasilnya dipakai lewat method berikut:
 
