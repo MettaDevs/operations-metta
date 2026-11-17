@@ -24,4 +24,4 @@ Prasyarat: tempat kerja `PT Klinik Contoh Sehat · Klinik Sehat Pusat`, mengikut
 
 - Periode bawaan adalah bulan berjalan. Data contoh diposting pada tanggal `dev:setup` berjalan, jadi angka di atas hanya berlaku untuk bulan itu.
 - Cetakan mengabaikan saringan Batch dan Jenis di layar: kartu stok selalu memuat semua gerak barang itu di lokasi itu.
-- Lokasi yang hanya untuk petugasnya ditolak dengan pesan dan tombol ke petugas lokasi, sama dengan layar dokumen gudang.
+- Lokasi yang hanya untuk petugasnya tidak ditawarkan di pilihan Lokasi, gerak stoknya tidak ikut tampil tanpa saringan lokasi, dan alamat yang menyebut lokasi itu ditolak dengan pesan dan tombol ke petugas lokasi. Admin data contoh belum menjadi petugas di mana pun, jadi menandai GUDANG Khusus petugas lokasi menyembunyikannya dari admin sampai admin didaftarkan di Petugas lokasi. Stok per lokasi mengikuti aturan yang sama.

@@ -18,6 +18,7 @@ export const locationRowSchema = z.object({
 export const locationListQuerySchema = listParametersSchema.extend({
     operating_unit_id: z.string().optional(),
     transit: z.enum(['true', 'false']).optional(),
+    accessible: z.enum(['true']).optional(),
 });
 
 export const operatingUnitRowSchema = z.object({

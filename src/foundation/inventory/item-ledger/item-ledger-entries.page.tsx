@@ -544,6 +544,7 @@ function ItemLedgerEntriesPage(): ReactNode {
                                         onCreate={() => setCreating('item')}
                                     />
                                     <LocationLookup
+                                        accessible
                                         label="Lokasi"
                                         field="location"
                                         value={location}

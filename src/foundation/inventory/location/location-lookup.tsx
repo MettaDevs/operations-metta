@@ -15,11 +15,15 @@ type OperatingUnitRow =
 export type OperatingUnit = OperatingUnitRow & { code: string };
 
 // Lokasi tampil dengan kodenya, karena gudang dan apotek dikenal dari kodenya. transit false menyembunyikan lokasi
-// transit, yang hanya dipakai mutasi.
+// transit, yang hanya dipakai mutasi. accessible menyembunyikan lokasi khusus petugas yang pengguna bukan petugasnya.
 export function LocationLookup({
     transit,
+    accessible,
     ...props
-}: MasterLookupProps<Location> & { transit?: boolean }): ReactNode {
+}: MasterLookupProps<Location> & {
+    transit?: boolean;
+    accessible?: boolean;
+}): ReactNode {
     const load = useCallback(
         async ({ query, cursor, signal }: LookupRequest) => {
             const { body } = await api.inventoryLocationList(
@@ -29,6 +33,7 @@ export function LocationLookup({
                         ...(transit === undefined
                             ? {}
                             : { transit: transit ? 'true' : 'false' }),
+                        ...(accessible ? { accessible: 'true' } : {}),
                         ...(cursor ? { cursor } : {}),
                     },
                 },
@@ -40,7 +45,7 @@ export function LocationLookup({
                 canCreate: body.can_manage,
             };
         },
-        [transit],
+        [transit, accessible],
     );
     return (
         <MasterLookup
