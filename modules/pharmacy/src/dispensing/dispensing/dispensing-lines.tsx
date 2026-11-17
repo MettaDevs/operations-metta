@@ -1,3 +1,4 @@
+import { Button } from '@operations-metta/ui/button';
 import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
@@ -7,6 +8,7 @@ import { FormControl } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 import { Select } from '@operations-metta/ui/select';
+import { useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import {
     BatchLookup,
@@ -19,6 +21,7 @@ import {
     type Prescription,
     type PrescriptionLine,
 } from '../prescription/prescription-facts.tsx';
+import { SubstituteDialog } from './substitute-dialog.tsx';
 
 export type Taken = {
     batch_number: string | null;
@@ -27,6 +30,35 @@ export type Taken = {
 };
 
 export type UnitOption = Reference & { quantity_per_unit: string };
+
+export const substitutionConsents = [
+    'dokter',
+    'pasien',
+    'dokter_dan_pasien',
+] as const;
+export type SubstitutionConsent = (typeof substitutionConsents)[number];
+
+export const consentLabels = {
+    dokter: 'Dokter',
+    pasien: 'Pasien',
+    dokter_dan_pasien: 'Dokter dan pasien',
+} as const satisfies Record<SubstitutionConsent, string>;
+
+// Obat yang boleh diserahkan untuk satu baris resep: obat resep dan obat penggantinya, masing-masing dengan satuannya.
+export type ItemOption = {
+    item: Reference;
+    is_prescribed: boolean;
+    notes: string | null;
+    units: UnitOption[];
+};
+
+// Penggantian obat resep pada baris ini. by dan at kosong sampai penggantiannya tersimpan.
+export type LineSubstitution = {
+    consent: SubstitutionConsent;
+    reason: string;
+    by: string | null;
+    at: string | null;
+};
 
 // Harga yang disalin ke baris saat disiapkan; kosong selama belum disiapkan. computed_* adalah hitungan sistem, dan
 // changed mencatat siapa yang mengubah harganya dan alasannya.
@@ -68,6 +100,9 @@ function PriceText({
 // dikirim.
 export type LineDraft = {
     prescriptionLineId: string;
+    item: Reference;
+    units: UnitOption[];
+    substitution: LineSubstitution | null;
     quantity: string;
     unit: UnitOption;
     batch: PickedBatch | null;
@@ -116,7 +151,8 @@ export function DispensingLines({
     prepared,
     errors,
     stock,
-    units,
+    options,
+    canSubstitute,
     locationId,
     portalContainer,
 }: {
@@ -127,10 +163,12 @@ export function DispensingLines({
     prepared: boolean;
     errors: Record<string, string[]>;
     stock: Map<string, string>;
-    units: Map<string, UnitOption[]>;
+    options: Map<string, ItemOption[]>;
+    canSubstitute: boolean;
     locationId: string | null;
     portalContainer: RefObject<HTMLElement | null>;
 }): ReactNode {
+    const [substituting, setSubstituting] = useState<string | null>(null);
     const content = editing ? 'control' : 'text';
     const field = (index: number, name: string) => `lines.${index}.${name}`;
     const error = (index: number | null, name: string) =>
@@ -153,21 +191,39 @@ export function DispensingLines({
             ),
         );
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
-    const baseCode = (line: PrescriptionLine) =>
-        units.get(line.id)?.[0]?.code ?? '';
-    const choices = (draft: LineDraft): UnitOption[] => {
-        const options = units.get(draft.prescriptionLineId) ?? [];
-        return options.some((unit) => unit.id === draft.unit.id)
-            ? options
-            : [draft.unit, ...options];
+    const baseCode = (draft: LineDraft | null) => draft?.units[0]?.code ?? '';
+    const choices = (draft: LineDraft): UnitOption[] =>
+        draft.units.some((unit) => unit.id === draft.unit.id)
+            ? draft.units
+            : [draft.unit, ...draft.units];
+    const itemOptions = (draft: LineDraft): ItemOption[] => {
+        const listed = options.get(draft.prescriptionLineId) ?? [];
+        return !listed.length ||
+            listed.some((option) => option.item.id === draft.item.id)
+            ? listed
+            : [
+                  ...listed,
+                  {
+                      item: draft.item,
+                      is_prescribed: false,
+                      notes: null,
+                      units: draft.units,
+                  },
+              ];
     };
+    const open = substituting
+        ? lines.find((line) => line.prescriptionLineId === substituting)
+        : undefined;
+    const openLine = open
+        ? prescription.lines.find((line) => line.id === open.prescriptionLineId)
+        : undefined;
 
     const columns: DataTableColumn<Row>[] = [
         {
             id: 'item',
             header: 'Obat',
             minWidth: 260,
-            cell: ({ line }) =>
+            cell: ({ line, draft, index }) =>
                 isCompoundHeader(line) ? (
                     <DataTableText multiline>
                         <span className="block font-medium">
@@ -188,6 +244,57 @@ export function DispensingLines({
                         >
                             {`${line.item?.code ?? ''} · ${line.item?.name ?? ''}`}
                         </span>
+                        {draft?.substitution && (
+                            <SubstitutionText
+                                draft={draft}
+                                indented={line.compound !== null}
+                            />
+                        )}
+                        {index !== null &&
+                            [
+                                'item_id',
+                                'substitution_consent',
+                                'substitution_reason',
+                            ]
+                                .map((name) => error(index, name))
+                                .filter(Boolean)
+                                .map((message) => (
+                                    <span
+                                        key={message}
+                                        role="alert"
+                                        data-error-field={field(
+                                            index,
+                                            'item_id',
+                                        )}
+                                        className="block text-xs text-destructive"
+                                    >
+                                        {message}
+                                    </span>
+                                ))}
+                        {editing &&
+                            canSubstitute &&
+                            draft &&
+                            itemOptions(draft).length > 1 && (
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    size="sm"
+                                    className={
+                                        line.compound !== null
+                                            ? 'h-auto py-0 ps-4'
+                                            : 'h-auto px-0 py-0'
+                                    }
+                                    onClick={() =>
+                                        setSubstituting(
+                                            draft.prescriptionLineId,
+                                        )
+                                    }
+                                >
+                                    {draft.substitution
+                                        ? 'Ubah obat pengganti'
+                                        : 'Ganti obat'}
+                                </Button>
+                            )}
                         {instructionText(line) && (
                             <span
                                 className={
@@ -221,10 +328,10 @@ export function DispensingLines({
             header: 'Stok di lokasi',
             width: 110,
             align: 'right',
-            cell: ({ line }) =>
-                line.item
+            cell: ({ draft }) =>
+                draft
                     ? text(
-                          `${displayNumber(stock.get(line.item.id) ?? '0')} ${baseCode(line)}`,
+                          `${displayNumber(stock.get(draft.item.id) ?? '0')} ${baseCode(draft)}`,
                       )
                     : null,
         });
@@ -298,12 +405,12 @@ export function DispensingLines({
                 draft === null || !line.item ? null : prepared ? (
                     <TakenBatches
                         taken={draft.taken}
-                        baseCode={baseCode(line)}
+                        baseCode={baseCode(draft)}
                     />
                 ) : editing ? (
                     <BatchLookup
                         hint="Boleh dikosongkan: batch diambil otomatis saat disiapkan, menurut cara pengambilan lokasi ini (kedaluwarsa terdekat lebih dulu). Bila caranya Pilih batch manual, batch wajib dipilih."
-                        itemId={line.item.id}
+                        itemId={draft.item.id}
                         locationId={locationId}
                         field={field(index ?? 0, 'batch_id')}
                         value={draft.batch}
@@ -385,18 +492,97 @@ export function DispensingLines({
     });
 
     return (
-        <DocumentLines
-            title="Obat"
-            data={rows}
-            getRowKey={(row) => row.line.id}
-            getRowLabel={(row) =>
-                row.line.item?.name ?? `Racikan ${row.line.compound ?? ''}`
-            }
-            showRowNumbers
-            readOnly={!editing}
-            portalContainer={portalContainer}
-            emptyMessage="Resep ini tidak berisi obat."
-            columns={columns}
-        />
+        <>
+            <DocumentLines
+                title="Obat"
+                data={rows}
+                getRowKey={(row) => row.line.id}
+                getRowLabel={(row) =>
+                    row.line.item?.name ?? `Racikan ${row.line.compound ?? ''}`
+                }
+                showRowNumbers
+                readOnly={!editing}
+                portalContainer={portalContainer}
+                emptyMessage="Resep ini tidak berisi obat."
+                columns={columns}
+            />
+            {open && (
+                <SubstituteDialog
+                    prescribedName={openLine?.item?.name ?? ''}
+                    options={itemOptions(open)}
+                    current={{
+                        itemId: open.item.id,
+                        consent: open.substitution?.consent ?? null,
+                        reason: open.substitution?.reason ?? '',
+                    }}
+                    stock={stock}
+                    onClose={() => setSubstituting(null)}
+                    onApply={({ option, consent, reason }) => {
+                        setSubstituting(null);
+                        const sameItem = option.item.id === open.item.id;
+                        const unit = sameItem
+                            ? open.unit
+                            : (option.units.find(
+                                  (candidate) => candidate.id === open.unit.id,
+                              ) ??
+                              option.units[0] ??
+                              open.unit);
+                        update(open.prescriptionLineId, {
+                            item: option.item,
+                            units: option.units,
+                            unit,
+                            batch: sameItem ? open.batch : null,
+                            substitution:
+                                option.is_prescribed || !consent
+                                    ? null
+                                    : sameItem &&
+                                        open.substitution?.consent ===
+                                            consent &&
+                                        open.substitution.reason === reason
+                                      ? open.substitution
+                                      : { consent, reason, by: null, at: null },
+                        });
+                    }}
+                />
+            )}
+        </>
+    );
+}
+
+// Obat pengganti yang diserahkan di bawah obat resep, dengan yang menyetujui dan alasannya.
+function SubstitutionText({
+    draft,
+    indented,
+}: {
+    draft: LineDraft;
+    indented: boolean;
+}): ReactNode {
+    const substitution = draft.substitution;
+    if (!substitution) return null;
+    return (
+        <>
+            <span
+                className={
+                    indented ? 'block ps-4 font-medium' : 'block font-medium'
+                }
+            >
+                {`Diganti ${draft.item.code} · ${draft.item.name}`}
+            </span>
+            <span
+                className={
+                    indented
+                        ? 'block ps-4 text-xs text-muted-foreground'
+                        : 'block text-xs text-muted-foreground'
+                }
+            >
+                {[
+                    `Disetujui ${consentLabels[substitution.consent].toLowerCase()}`,
+                    substitution.reason,
+                    substitution.by,
+                ]
+                    .filter(Boolean)
+                    .join(' · ')}
+            </span>
+        </>
     );
 }

@@ -75,7 +75,11 @@ async function drugLabels(
         const given = dispensed.get(line.id);
         const taken = given?.taken[0];
         const label: Label = {
-            name: line.item?.name ?? line.dosage_form?.name ?? null,
+            name:
+                given?.item.name ??
+                line.item?.name ??
+                line.dosage_form?.name ??
+                null,
             quantity:
                 given?.quantity ?? line.quantity ?? line.requested_quantity,
             unit: given?.unit.name ?? line.unit?.name ?? null,

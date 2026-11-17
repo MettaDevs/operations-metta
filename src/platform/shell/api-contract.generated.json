@@ -5059,6 +5059,42 @@
             }
         }
     },
+    "pharmacyItemSubstitutionList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/modules/pharmacy/v1/drugs/{id}/substitutions",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyItemSubstitutionCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/pharmacy/v1/drugs/{id}/substitutions",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "pharmacyItemSubstitutionDelete": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "DELETE",
+                "path": "/api/modules/pharmacy/v1/drugs/{id}/substitutions/{substitutionId}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pharmacyGradingGroupList": {
         "~orpc": {
             "errorMap": {},

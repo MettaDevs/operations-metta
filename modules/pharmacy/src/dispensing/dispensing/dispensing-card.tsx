@@ -65,8 +65,8 @@ import { DispensingPriceCard } from './dispensing-price-card.tsx';
 import { PrescriptionCancelDialog } from './prescription-cancel-dialog.tsx';
 import {
     DispensingLines,
+    type ItemOption,
     type LineDraft,
-    type UnitOption,
 } from './dispensing-lines.tsx';
 
 type View = ApiBody<'pharmacyDispensingShow'>;
@@ -116,6 +116,9 @@ const draftOf = (view: View['data']): Draft => ({
     assistant: view.dispensing?.assistant ?? null,
     lines: view.lines.map((line) => ({
         prescriptionLineId: line.prescription_line_id,
+        item: line.item,
+        units: line.units,
+        substitution: line.substitution,
         quantity: displayNumber(line.quantity),
         unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         batch: line.batch,
@@ -334,8 +337,11 @@ function DispensingForm({
     const stock = new Map(
         view.data.stock.map((row) => [row.item_id, row.quantity]),
     );
-    const units = new Map<string, UnitOption[]>(
-        view.data.lines.map((line) => [line.prescription_line_id, line.units]),
+    const itemOptions = new Map<string, ItemOption[]>(
+        view.data.lines.map((line) => [
+            line.prescription_line_id,
+            line.item_options,
+        ]),
     );
 
     const run = async (next: Action, request: () => Promise<View>) => {
@@ -367,6 +373,9 @@ function DispensingForm({
                 invalid[`lines.${index}.quantity`] = [numberFormat];
             return {
                 prescription_line_id: line.prescriptionLineId,
+                item_id: line.item.id,
+                substitution_consent: line.substitution?.consent ?? null,
+                substitution_reason: line.substitution?.reason ?? null,
                 quantity: quantity ?? line.quantity,
                 unit_id: line.unit.id,
                 batch_id: line.batch?.id ?? null,
@@ -861,7 +870,8 @@ function DispensingForm({
                                     prepared={prepared}
                                     errors={errors}
                                     stock={stock}
-                                    units={units}
+                                    options={itemOptions}
+                                    canSubstitute={permissions.substitute}
                                     locationId={draft.location?.id ?? null}
                                     portalContainer={portalContainer}
                                 />

@@ -143,6 +143,13 @@ components:
         terbit, jadi opsional; penerbit selalu mengisinya. Pesan yang belum membawanya ditulis dalam satuan dasar:
         `unit` adalah satuan dasar barang, `base_quantity` sama dengan `quantity`, dan `prescribed_unit` sama dengan
         `unit`.
+
+        `item` adalah obat yang diserahkan. Bila apoteker menggantinya dengan obat pengganti saat Siapkan,
+        `substitution` membawa obat yang ditulis dokter (`prescribed_item`), siapa yang menyetujui, alasan, waktu, dan
+        pengguna yang mengganti; jumlah resep tetap dalam satuan obat resep, dan satu satuan dasar obat pengganti
+        menggantikan satu satuan dasar obat resep. Field ini ditambahkan sesudah versi ini terbit, jadi opsional;
+        penerbit selalu mengisinya, dengan `null` bila obatnya tidak diganti. Pesan yang belum membawanya berarti obat
+        tidak diganti.
       required:
         [
           prescription_line_id,
@@ -190,6 +197,30 @@ components:
           description: Batch yang diambil dari stok, jumlahnya dalam satuan dasar; kosong bila tidak ada yang diserahkan.
           items:
             $ref: '#/components/schemas/batch'
+        substitution:
+          description: Obat resep yang diganti obat pengganti; `null` bila obat yang diserahkan obat resep.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/substitution'
+    substitution:
+      type: object
+      additionalProperties: false
+      required: [prescribed_item, consent, reason, substituted_at, substituted_by]
+      properties:
+        prescribed_item:
+          $ref: '#/components/schemas/reference'
+        consent:
+          type: string
+          enum: [dokter, pasien, dokter_dan_pasien]
+          description: Yang menyetujui penggantian (Permenkes 68/2010 Pasal 7, persetujuan dokter dan/atau pasien).
+        reason:
+          type: string
+          maxLength: 200
+        substituted_at:
+          type: string
+          format: date-time
+        substituted_by:
+          $ref: '#/components/schemas/person'
     batch:
       type: object
       additionalProperties: false

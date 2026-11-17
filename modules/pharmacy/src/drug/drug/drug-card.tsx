@@ -30,6 +30,7 @@ import {
 import { DrugClassCard } from '../drug-class/drug-class-card.tsx';
 import { GradingGroupCard } from '../grading-group/grading-group-card.tsx';
 import { GradingGroupLookup } from '../grading-group/grading-group-lookup.tsx';
+import { ItemSubstitutions } from '../item-substitution/item-substitutions.tsx';
 
 export type Drug = ApiBody<'pharmacyDrugList'>['data'][number];
 
@@ -277,6 +278,11 @@ export function DrugCard({
                                 })),
                         )}
                     </FormGrid>
+                    <ItemSubstitutions
+                        itemId={drug.id}
+                        canManage={canManage}
+                        portalContainer={portalContainer}
+                    />
                 </PageDialogBody>
             </form>
             {creating === 'class' && (
