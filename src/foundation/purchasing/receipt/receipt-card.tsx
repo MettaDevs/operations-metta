@@ -431,7 +431,7 @@ export function ReceiptCard({
     const control = editable ? ('control' as const) : ('text' as const);
     // Penerimaan dari purchase order: vendor, lokasi, dan barangnya milik order; petugas hanya mengubah jumlah yang
     // datang, batch, kedaluwarsa, dan sumber dana, atau menghapus baris yang belum datang.
-    const fromOrder = receipt?.order !== null && receipt?.order !== undefined;
+    const fromOrder = Boolean(receipt?.order);
 
     // Kartu vendor baru berada di luar form dokumen: event submit dari portal ikut naik ke induk React-nya.
     return (
