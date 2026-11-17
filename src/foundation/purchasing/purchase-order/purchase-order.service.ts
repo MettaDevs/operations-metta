@@ -396,7 +396,20 @@ export class PurchaseOrders {
                         jumlah = $5, harga_satuan = $6, diskon_persen = $7, tarif_ppn = $8,
                         tanggal_diharapkan = $9, updated_at = $10
                  where tenant_id = $11 and id = $12`,
-                [...Object.values(values), stamp, this.scope.tenantId, line.id],
+                [
+                    values.urutan,
+                    values.barang_id,
+                    values.satuan_id,
+                    values.konversi,
+                    values.jumlah,
+                    values.harga_satuan,
+                    values.diskon_persen,
+                    values.tarif_ppn,
+                    values.tanggal_diharapkan,
+                    stamp,
+                    this.scope.tenantId,
+                    line.id,
+                ],
             );
         }
         for (const id of existing.keys())
