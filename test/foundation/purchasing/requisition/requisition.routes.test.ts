@@ -699,3 +699,193 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
         ).toBe(403);
     });
 });
+
+// Amprah yang belum selesai ikut dihitung, pola Transfer Line di "Inventory Profile Offsetting" BC: yang belum diterima
+// peminta, termasuk yang masih di lokasi transit, menambah stok peminta, dan yang belum dikirim pemasok menguranginya.
+describe.skipIf(!process.env.DB_HOST)(
+    'reorder suggestions with transfers',
+    () => {
+        if (!process.env.DB_HOST) return;
+        const { pool, browser, close } = operationsTestApp();
+        afterAll(close);
+
+        const transfers = '/api/v1/inventory/transfer-orders';
+        let business: Business;
+        let warehouse: { id: string };
+        let pharmacy: { id: string };
+        let item: { id: string };
+        let order: { id: string; version: number; lines: { id: string }[] };
+
+        const calculate = async () =>
+            (
+                await json<{ data: Counts }>(
+                    await business.admin.post(`${path}/calculate-plan`, {
+                        due_date: '2026-11-25',
+                    }),
+                    200,
+                )
+            ).data;
+        const suggested = async () => [
+            ...(await pool.unsafe<{ location: string; quantity: string }[]>(
+                `select l.kode as location, trim_scale(r.jumlah)::text as quantity
+                 from bl_tr_permintaan r join gd_m_lokasi l on l.id = r.lokasi_id
+                 where r.tenant_id = $1 and r.deleted_at is null and r.saran = 'baru'
+                 order by l.kode`,
+                [business.tenantId],
+            )),
+        ];
+        const settle = async (response: Promise<Response>) => {
+            order = (await json<{ data: typeof order }>(await response, 200))
+                .data;
+        };
+        const act = (action: string, body: Record<string, unknown> = {}) =>
+            settle(
+                business.admin.post(`${transfers}/${order.id}/${action}`, {
+                    version: order.version,
+                    ...body,
+                }),
+            );
+
+        beforeAll(async () => {
+            business = await createBusiness(
+                pool,
+                browser,
+                'Klinik Uji Saran Amprah',
+                [
+                    ...inventoryDuties,
+                    'core.vendor.manage',
+                    'core.purchase-receipt.manage',
+                    'core.purchase-requisition.manage',
+                    'core.inventory-transfer.manage',
+                ],
+            );
+            warehouse = await business.location('GUDANG', {
+                transfer_mode: 'kirim_terima',
+            });
+            pharmacy = await business.location('FARMASI');
+            await business.location('TRANSIT', { is_transit: true });
+            item = await business.item('OBAT');
+            const vendor = (
+                await json<{ data: Reference }>(
+                    await business.admin.post('/api/v1/purchasing/vendors', {
+                        name: 'PBF Saran Amprah',
+                    }),
+                    201,
+                )
+            ).data;
+            const receipt = (
+                await json<{ data: { id: string; version: number } }>(
+                    await business.admin.post('/api/v1/purchasing/receipts', {
+                        vendor_id: vendor.id,
+                        location_id: warehouse.id,
+                        posting_date: '2026-11-01',
+                        lines: [
+                            { item_id: item.id, quantity: 30, unit_cost: 500 },
+                        ],
+                    }),
+                    201,
+                )
+            ).data;
+            await json(
+                await business.admin.post(
+                    `/api/v1/purchasing/receipts/${receipt.id}/post`,
+                    { version: receipt.version },
+                ),
+                200,
+            );
+            for (const [location, minimum, maximum] of [
+                [warehouse, 20, 100],
+                [pharmacy, 10, 40],
+            ] as const)
+                await json(
+                    await business.admin.post(
+                        '/api/v1/inventory/stockkeeping-units',
+                        {
+                            item_id: item.id,
+                            location_id: location.id,
+                            reordering_policy: 'maksimum',
+                            minimum_quantity: minimum,
+                            maximum_quantity: maximum,
+                        },
+                    ),
+                    201,
+                );
+        });
+
+        test('without an amprah the empty pharmacy is suggested and the stocked warehouse is not', async () => {
+            expect(await calculate()).toEqual({
+                created: 1,
+                updated: 0,
+                removed: 0,
+            });
+            expect(await suggested()).toEqual([
+                { location: 'FARMASI', quantity: '40' },
+            ]);
+        });
+
+        test('a draft amprah moves supply from the warehouse to the pharmacy', async () => {
+            order = (
+                await json<{ data: typeof order }>(
+                    await business.admin.post(transfers, {
+                        posting_date: '2026-11-10',
+                        from_location_id: warehouse.id,
+                        to_location_id: pharmacy.id,
+                        lines: [
+                            {
+                                item_id: item.id,
+                                unit_id: business.uom.id,
+                                quantity: 12,
+                            },
+                        ],
+                    }),
+                    201,
+                )
+            ).data;
+            expect(await calculate()).toEqual({
+                created: 1,
+                updated: 0,
+                removed: 1,
+            });
+            expect(await suggested()).toEqual([
+                { location: 'GUDANG', quantity: '82' },
+            ]);
+        });
+
+        test('shipping part into transit and receiving it leaves the plan as it was', async () => {
+            await act('submit');
+            await settle(
+                business.admin.patch(`${transfers}/${order.id}/quantities`, {
+                    version: order.version,
+                    lines: [{ id: order.lines[0]?.id, quantity_to_ship: 5 }],
+                }),
+            );
+            await act('ship', { posting_date: '2026-11-11' });
+            expect(await calculate()).toEqual({
+                created: 0,
+                updated: 0,
+                removed: 0,
+            });
+            await act('receive', { posting_date: '2026-11-12' });
+            expect(await calculate()).toEqual({
+                created: 0,
+                updated: 0,
+                removed: 0,
+            });
+            expect(await suggested()).toEqual([
+                { location: 'GUDANG', quantity: '82' },
+            ]);
+        });
+
+        test('closing the amprah drops what was never shipped', async () => {
+            await act('close');
+            expect(await calculate()).toEqual({
+                created: 1,
+                updated: 0,
+                removed: 1,
+            });
+            expect(await suggested()).toEqual([
+                { location: 'FARMASI', quantity: '35' },
+            ]);
+        });
+    },
+);
