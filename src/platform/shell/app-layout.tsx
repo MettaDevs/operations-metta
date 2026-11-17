@@ -56,7 +56,7 @@ export function AppLayout(): ReactNode {
                 uninstalledApps={shell.uninstalled_apps}
                 style={sidebarStyle}
             />
-            <SidebarInset className="h-svh min-w-0 overflow-hidden bg-muted/30 py-2 pr-2 pl-0">
+            <SidebarInset className="h-svh min-w-0 overflow-hidden bg-muted/30 p-2">
                 <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-background shadow-sm">
                     <AppSidebarHeader shell={shell} isScrolled={isScrolled} />
                     <div

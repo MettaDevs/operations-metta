@@ -9,7 +9,7 @@ Bingkai aplikasi milik Core: rail ikon, panel submenu, header, dan area kerja te
   - item setinggi minimum `rail-item-height`: ikon 16px dalam kotak berpadding 4px, lalu label `nav-rail` (10px) yang membungkus;
   - footer versi produk 10px `muted-foreground`.
 - **Panel submenu** (lebar `sidebar-width` dikurangi `rail-width`): judul `nav-heading` setinggi `nav-header-height`; item `nav-item` setinggi minimum `nav-item-height`, padding `space-1` × `space-2`, ikon 14px opsional.
-- **Area kerja**: berjarak `space-2` dari atas, kanan, dan bawah; radius `radius-shell`, border, `shadow-sm`, latar `background`. Di dalamnya header (tinggi minimum 48px: tombol menu ponsel, breadcrumb, pencarian, notifikasi, akun) lalu area konten berlatar `surface-shell`.
+- **Area kerja**: berjarak `space-2` dari setiap sisi; radius `radius-shell`, border, `shadow-sm`, latar `background`. Di dalamnya header (tinggi minimum 48px: tombol menu ponsel, breadcrumb, pencarian, notifikasi, akun) lalu area konten berlatar `surface-shell`.
 - **Lapisan kartu**: wadah tak terlihat yang menutupi area konten; PageDialog dirender di sini sehingga header Shell tetap hidup.
 
 ## Keadaan navigasi
