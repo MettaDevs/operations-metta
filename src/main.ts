@@ -8,6 +8,7 @@ import {
     registerHealthcareEventHandlers,
 } from '../modules/healthcare/src/index.ts';
 import {
+    drugLabelReport,
     pharmacyRoutes,
     registerPharmacyEventHandlers,
 } from '../modules/pharmacy/src/index.ts';
@@ -102,7 +103,7 @@ function valkeySessions(config: Config): ValkeySessions | null {
 
 // Semua dokumen cetak dan laporan, dirakit dari laporan yang di-export Core dan module. Laporan yang salah bentuk
 // menggagalkan proses saat mulai.
-export const reports = reportCatalog([paymentReceiptReport]);
+export const reports = reportCatalog([paymentReceiptReport, drugLabelReport]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
 // ditulis scripts/generate-client.ts ke kontrak yang dibaca klien itu.

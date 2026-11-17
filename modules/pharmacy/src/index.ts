@@ -51,3 +51,6 @@ export function registerPharmacyEventHandlers(): void {
     onBeforePayment(moduleId, waitingPrescriptionRefusal);
     onPaymentHolds(moduleId, waitingPrescriptionHolds);
 }
+
+// Dokumen cetak farmasi, dirakit src/main.ts ke katalog laporan Core.
+export { drugLabelReport } from './dispensing/dispensing/drug-label.report.ts';
