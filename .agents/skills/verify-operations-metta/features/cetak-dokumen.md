@@ -37,3 +37,36 @@ Prasyarat:
 - Tombol `Unggah layout` punya nama yang sama dengan judul bagiannya; pakai `--nth 1`.
 - Kop memakai identitas unit kerja yang menerbitkan dokumen, lalu legal entity-nya, lalu nama legal entity. Data contoh belum mengisi kop, jadi kuitansi menulis `PT Klinik Contoh Sehat`.
 - Run lama yang dinyalakan sebelum renderer ditambahkan tidak punya Gotenberg: `down` lalu `up` lagi.
+
+## Dokumen persediaan dan pembelian
+
+Sembilan dokumen gudang dicetak dari kartunya masing-masing lewat tombol cetak yang sama: permintaan barang (amprah), mutasi, penerimaan mutasi, penerimaan barang, retur ke vendor, lembar hitung dan hasil opname, serta penyesuaian stok. Pejabat yang mengetahui dokumen diisi di tabel Penanda tangan pada kartu Kop surat.
+
+### Sub-features
+
+- `kop-penanda-tangan` menambah penanda tangan (jabatan, nama, nomor di bawah nama) pada kop legal entity.
+- `cetak-amprah`, `cetak-mutasi`, `cetak-penerimaan-mutasi` mencetak dokumen amprah dan postingnya; mutasi dan penerimaan A4 mendatar dengan batch dan kedaluwarsa.
+- `cetak-penerimaan-barang` dan `cetak-retur-vendor` mencetak penerimaan PNR dan retur RPB-nya.
+- `cetak-opname` mencetak lembar hitung (dengan stok tercatat atau hitung buta) dan hasil opname.
+- `cetak-penyesuaian` mencetak penyesuaian draf dan terposting; yang terposting membawa batch yang diambil posting.
+
+### How to get to it (user POV)
+
+- Sys Admin › Persediaan › Amprah, Mutasi, Penerimaan mutasi, Opname stok, Penyesuaian stok: menu `Tindakan untuk <nomor>` › `Buka`, lalu tombol `Permintaan`, `Mutasi`, `Penerimaan`, `Lembar hitung`, `Hasil opname`, atau `Penyesuaian` di toolbar kartu.
+- Sys Admin › Pembelian › Penerimaan barang: tombol `Penerimaan` di toolbar kartu. Retur ke vendor dicetak dari kolom `Surat retur` di bagian Retur ke vendor kartu itu.
+- Sys Admin › Cetak › Kop surat: tabel `Penanda tangan` di kartu organisasi.
+
+### Driving it with verify.ts
+
+Prasyarat: tempat kerja `PT Klinik Contoh Sehat · Klinik Sehat Pusat`, mengikuti [pendaftaran kunjungan](./pendaftaran-kunjungan.md). Data contoh punya `AMP-00000001`, `AMP-00000002`, `MUT-00000001`, `MUT-00000002`, dan `PNR-00000001`; opname, penyesuaian, dan penerimaan mutasi dibuat di layar.
+
+- **Penanda tangan.** `go sysadmin/reporting/letterheads`, `click button "Tindakan untuk PT Klinik Contoh Sehat"`, `click menuitem Buka --exact`, `click button Tambah --exact`, `fill textbox Jabatan "Kepala Klinik"`, `fill textbox Nama "<nama>" --nth 1`, `fill textbox "Nomor di bawah nama" "NIP <nomor>"`, `click button Simpan --exact`. Satu baris lahir di `penanda_tangan_cetak`.
+- **Simpan PDF.** `bun scripts/verify.ts pdf button <label tombol> <nama berkas> --exact` mengklik tombol cetak, menyimpan PDF ke `evidence/<nama berkas>.pdf`, lalu mencetak ukuran kertas dan teksnya. Untuk layout lain, buka menunya dulu (`click button "Pilihan lembar hitung"`), lalu `pdf menuitem "Lembar hitung buta" <nama berkas>`.
+- **Penerimaan mutasi.** Data contoh hanya punya mutasi langsung. Buat lokasi transit (`Lokasi` › `Baru`, switch `Lokasi transit`, operating unit `KCS-01`), ubah `Cara mutasi` lokasi `GUDANG` menjadi `Kirim lalu terima`, lalu buat amprah `PUSLING` dari `GUDANG` lewat `TRANSIT`, `Ajukan`, `Post kirim`, dan `Post terima`.
+- **Opname.** `Opname stok` › `Baru`, pilih lokasi `Farmasi`, `Hitung baris`, tombol `Hitung`, `Simpan`, cetak `Lembar hitung`, isi `Dihitung, baris N`, `Selesai hitung`, `Post`, lalu cetak `Hasil opname`.
+
+### Gotchas
+
+- Isian lokasi dan barang adalah lookup: ketik kodenya dengan `fill combobox`, lalu `click text <KODE> --exact`. Klik nama saja bisa mengenai teks lain di layar.
+- Isian `Nama` di kartu Kop surat bertabrakan dengan `Nama di kop`; pakai `--nth 1`.
+- Kotak tanda tangan tidak terbelah, jadi blok penanda tangan bisa pindah ke halaman berikutnya pada dokumen panjang.

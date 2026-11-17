@@ -90,6 +90,29 @@ Tag memakai sintaks [docxtemplater](https://docxtemplater.com/docs/tag-types/):
 
 Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil gambar dari luar dokumen, sintaks tag-nya rusak, atau memakai tag yang tidak dikenal laporannya. Tag tak dikenal ditolak, bukan diperingatkan: di kertas ia tercetak kosong tanpa ada yang tahu.
 
+## Dokumen yang sudah terdaftar
+
+| Kode | Dokumen | Padanan BC | Tombol di layar |
+| --- | --- | --- | --- |
+| `core.payment-receipt` | Kuitansi pembayaran | Posted Sales Invoice | Kasir › Pembayaran |
+| `pharmacy.drug-label` | Etiket obat | Tidak ada | Farmasi › kartu penyerahan |
+| `core.transfer-order` | Permintaan barang (amprah) | Transfer Order (5703) | Sys Admin › Persediaan › Amprah |
+| `core.transfer-shipment` | Mutasi barang | Transfer Shipment (5704) | Sys Admin › Persediaan › Mutasi, dan riwayat posting amprah |
+| `core.transfer-receipt` | Penerimaan mutasi | Transfer Receipt (5705) | Sys Admin › Persediaan › Penerimaan mutasi |
+| `core.purchase-receipt` | Penerimaan barang | Purchase - Receipt (408) | Sys Admin › Pembelian › Penerimaan barang |
+| `core.purchase-return` | Retur ke vendor | Purchase - Return Shipment (6636) | Bagian Retur ke vendor di kartu penerimaan |
+| `core.stock-count-sheet` | Lembar hitung opname | Phys. Inventory List (722) | Sys Admin › Persediaan › Opname stok |
+| `core.stock-count-result` | Hasil opname | Posted Phys. Invt. Order Diff. (5876) | Sys Admin › Persediaan › Opname stok |
+| `core.inventory-adjustment` | Penyesuaian stok | Item Journal dengan Reason Code | Sys Admin › Persediaan › Penyesuaian stok |
+
+Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocument` di `src/foundation/inventory/document-layout.ts`: kop, keterangan dokumen, tabel baris, jumlah, dan kotak tanda tangan. Bentuknya mengikuti dataset BC, bukan form puskesmas lama:
+
+- **Satu baris per batch.** Mutasi, penerimaan, retur, opname, dan penyesuaian terposting mencetak setiap batch beserta kedaluwarsanya, karena serah terima obat diperiksa per batch.
+- **Petugas dari posting.** Pengirim, penerima, penghitung, dan petugas penyesuaian adalah pengguna yang memposting. Pihak di luar sistem, misalnya vendor atau penerima di lokasi lain, mendapat garis kosong untuk ditulis tangan.
+- **Tanpa jenis dokumen terpisah.** Berita acara serah terima adalah mutasi yang ditandatangani dua pihak. Berita acara pemusnahan adalah penyesuaian beralasan pemusnahan dengan kolom saksi.
+- **Penyesuaian terposting dicetak dari kartu gudang.** Batch stok keluar baru dipilih saat posting, jadi baris draf dan baris terposting bisa berbeda.
+- **Hitung buta.** Lembar hitung punya layout tanpa stok tercatat, seperti opsi Show Qty. (Calculated) di BC.
+
 ## Cetak dokumen berjalan sinkron
 
 `GET /api/v1/reports/{code}/records/{id}?format=pdf|docx&layout=` menjawab berkasnya langsung. Mengisi layout butuh 3 sampai 5 ms, dan konversi PDF median 317 sampai 372 ms setelah LibreOffice hangat (diukur dengan Gotenberg 8.36 di laptop pengembang; tabel di bagian Renderer). Antrean, penyimpanan hasil, dan polling seperti CoreERP tidak sepadan untuk satu dokumen.
