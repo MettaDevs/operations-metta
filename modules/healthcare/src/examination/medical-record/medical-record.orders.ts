@@ -293,6 +293,8 @@ const savedLineSchema = z.object({
     notes: z.string().nullable(),
     dispensed: z.string().nullable(),
     returned: z.string().nullable(),
+    substitute_name: z.string().nullable(),
+    substitution_reason: z.string().nullable(),
 });
 type SavedLine = z.infer<typeof savedLineSchema>;
 
@@ -645,6 +647,7 @@ export class ExaminationOrders {
                     d.rute_id as route_id, d.lama_hari as duration_days, d.dtd,
                     d.bentuk_sediaan_id as dosage_form_id, d.keterangan as notes,
                     d.jumlah_diserahkan::text as dispensed, d.jumlah_diretur::text as returned,
+                    d.nama_obat_diserahkan as substitute_name, d.alasan_ganti as substitution_reason,
                     d.diagnosa_id as diagnosis_id, dg.icd10_id as diagnosis_icd10_id
              from sim_tr_resep_detail d
              left join sim_tr_pemeriksaan_diagnosa dg on dg.tenant_id = d.tenant_id and dg.id = d.diagnosa_id
@@ -735,6 +738,8 @@ export class ExaminationOrders {
                                   ),
                         returned_quantity:
                             returned === null ? null : shown(returned),
+                        substitute_name: line.substitute_name,
+                        substitution_reason: line.substitution_reason,
                     };
                 }),
             });
