@@ -155,6 +155,7 @@ export function reportingRoutes(catalog: ReportCatalog) {
                     await new Letterheads(
                         context.db,
                         await coreWorkspace(context),
+                        catalog,
                     ).list(),
                 ),
         ),
@@ -169,6 +170,7 @@ export function reportingRoutes(catalog: ReportCatalog) {
                     await new Letterheads(
                         context.db,
                         await coreWorkspace(context, input.body),
+                        catalog,
                     ).save(input.params.id, input.body),
                 ),
             ),

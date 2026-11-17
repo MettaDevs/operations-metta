@@ -58,6 +58,17 @@ Nama tampil, baris induk, NPWP, nomor izin, dan catatan kaki disimpan per legal 
 
 Logo belum dipasang dari kop. Layout per legal entity membawa gambarnya sendiri di dalam berkas Word.
 
+### Penanda tangan dokumen
+
+Dokumen gudang dan farmasi di Indonesia ditutup kotak tanda tangan: petugas yang mengerjakan dokumen, lalu pejabat yang mengetahui, misalnya kepala puskesmas atau apoteker penanggung jawab, beserta NIP atau nomor izinnya. Sistem lama menulis nama dan NIP pejabat itu mati di template.
+
+Keduanya diperlakukan berbeda:
+
+- **Petugas adalah data dokumennya.** Pengirim, penerima, penghitung, dan pembuat dokumen adalah pengguna yang memposting atau mengajukan dokumen itu, dan dataset mengirim namanya sebagai field biasa. Business Central melakukan hal yang sama: dokumen terposting mencatat pengguna yang memposting, dan perhitungan fisik mencatat Person Responsible.
+- **Pejabat adalah data organisasi.** Tabel `penanda_tangan_cetak` menyimpan jabatan, nama, dan nomor di bawah nama per legal entity atau unit kerja, diisi di Sys Admin › Kop surat. Padanannya [Officials](https://learn.microsoft.com/en-us/dynamics365/finance/localizations/europe/emea-set-up-signers-for-printing-forms) di Dynamics 365 Finance, yang juga menyimpan penanda tangan per legal entity dan per jenis dokumen. Business Central W1 tidak punya padanannya.
+
+Mesin mengisi tag `{#signers}{title} {name} {id_number}{/signers}` untuk setiap laporan, dengan urutan pilihan yang sama dengan kop: penanda tangan unit kerja dokumen bila ada, kalau tidak milik legal entity-nya. Penanda tangan yang dibatasi ke satu laporan hanya tercetak di laporan itu. Nomor di bawah nama dicetak apa adanya, jadi "NIP 1980…" dan "SIPA 503/…" sama-sama tertulis benar tanpa label di layout. Tanpa baris penanda tangan, blok itu hilang dari kertas. Layout bawaan memasangnya lewat `signatureBlocks` di `src/platform/reporting/signers.ts`.
+
 ## Layout adalah data legal entity
 
 - **Layout bawaan ditulis sebagai kode**, dengan `wordDocument` di `src/platform/reporting/docx.ts`, bukan berkas `.docx` biner. Diff-nya terbaca di review, dan tag-nya diperiksa saat proses mulai. Klinik yang ingin rupa lain mengunduhnya sebagai Word dari Sys Admin › Layout cetak.

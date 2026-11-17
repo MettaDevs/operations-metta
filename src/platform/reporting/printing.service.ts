@@ -15,6 +15,7 @@ import {
 } from './layouts.service.ts';
 import { convertToPdf, RenderFailure } from './pdf.ts';
 import type { DocumentReport, Language, ReportRecord } from './report.ts';
+import { signerFields, signers } from './signers.ts';
 
 export const outputFormats = ['pdf', 'docx'] as const;
 export type OutputFormat = (typeof outputFormats)[number];
@@ -198,6 +199,7 @@ export class Printing {
                         ...fieldCatalog(report.fields),
                         ...fieldCatalog(letterheadFields, 'letterhead.'),
                         ...fieldCatalog(printedFields, 'printed.'),
+                        ...fieldCatalog(signerFields),
                     ],
                     layouts: await this.layoutsOf(report, workspace).list(),
                 })),
@@ -302,6 +304,17 @@ export class Printing {
         );
         const view = {
             ...templateView(report.fields, record.values, documentLocale),
+            ...templateView(
+                signerFields,
+                await signers(
+                    db,
+                    workspace.tenantId,
+                    report.code,
+                    record.legalEntityId,
+                    record.operatingUnitId,
+                ),
+                documentLocale,
+            ),
             letterhead: templateView(
                 letterheadFields,
                 await letterhead(
