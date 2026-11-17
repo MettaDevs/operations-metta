@@ -111,7 +111,7 @@ function orderUnit(plan: Plan, base: bigint) {
         plan.purchase_unit_id && plan.purchase_conversion
             ? fromNumeric(plan.purchase_conversion, quantityScale)
             : null;
-    if (plan.purchase_unit_id && conversion && (base * one) % conversion === 0n)
+    if (plan.purchase_unit_id && conversion && base % conversion === 0n)
         return {
             unitId: plan.purchase_unit_id,
             conversion,

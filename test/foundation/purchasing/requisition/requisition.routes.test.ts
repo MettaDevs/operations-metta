@@ -890,8 +890,6 @@ describe.skipIf(!process.env.DB_HOST)(
     },
 );
 
-// Saran memakai satuan beli hanya bila jumlahnya habis dibagi isi satuan beli; selain itu satuan dasar, karena jumlah
-// barang tidak pernah dibulatkan. Angkanya dari laporan di aplikasi: BOX isi 100, stok 340, minimum 400, maksimum 1000.
 describe.skipIf(!process.env.DB_HOST)(
     'reorder suggestions in whole purchase units',
     () => {
