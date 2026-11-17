@@ -23,7 +23,15 @@ import { warehouseEmployeeRoutes } from './warehouse-employee/warehouse-employee
 // createItem, updateItem, dan deleteItem di transaksi yang sama dengan baris perluasannya.
 // Lokasi yang ditandai khusus petugas hanya terbuka bagi petugasnya (Warehouse Employee BC). Setiap dokumen stok, di Core
 // maupun di module, menyaring daftarnya lewat allowedLocationsSql dan menolak tindakannya lewat requireLocationAccess.
-export { activeLegalEntity, exists, parseInput } from './inventory.service.ts';
+export {
+    activeLegalEntity,
+    codeAndName,
+    codeAndNameMessages,
+    exists,
+    inUse,
+    parseInput,
+    violates,
+} from './inventory.service.ts';
 export {
     allowedLocationsSql,
     defaultLocation,

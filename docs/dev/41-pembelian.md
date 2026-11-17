@@ -26,7 +26,26 @@ Tabel `bl_tr_order` dan `bl_tr_order_detail`, nama dari `BL_trOrder` dan `BL_trO
 - **Baris.** Barang, satuan (kosong berarti satuan beli barang), jumlah, harga satuan, diskon, dan PPN. Aturan isiannya `checkPriceLine` di `purchase-line.service.ts`, yang juga dipakai penerimaan, dan nilai baris dihitung `lineAmountSql` di berkas yang sama. Layar memakai hitungan yang sama di `purchase-lines.tsx`.
 - **Nomor.** Reference `core.purchase-order-number`, satu sequence per legal entity, awalan `PO-`.
 - **Cetak.** Laporan `core.purchase-order` lewat mesin cetak Core. Order yang belum dirilis tercetak dengan tanda BELUM DIRILIS.
-- **Yang belum ada.** Termin pembayaran dan jatuh tempo tidak ikut, karena tidak pernah dipakai di data lama dan hutang usaha menunggu finance. Posting faktur pembelian juga belum ada.
+- **Termin pembayaran.** Order membawa termin dari vendor, seperti Payment Terms Code yang disalin dari kartu vendor di BC, dan boleh diganti selama order terbuka. Rinciannya di [Termin pembayaran](#termin-pembayaran).
+
+## Termin pembayaran
+
+Tabel `termin_pembayaran`, padanan Payment Terms BC (`python D:\Kerja\bc-tools\bc.py table "Payment Terms"`). Layarnya Pembelian › Setup › Termin pembayaran.
+
+Data lama tidak punya master termin. Kolom `Term_Pembayaran` di order dan penerimaan tidak pernah diisi, tetapi penerimaan menyimpan jatuh temponya sendiri (`Tgl_JatuhTempo`):
+
+| Database lama | Penerimaan aktif | Jatuh tempo bukan hari terima | Selisih hari terbanyak |
+| ------------- | ---------------: | ----------------------------: | ---------------------- |
+| Adapotek      |          187.624 |                       151.526 | 30, 29, 21, 28, 20, 14 |
+| Penta         |               15 |                             8 |                        |
+| Seroja        |               41 |                             0 |                        |
+| Kuta 1        |               99 |                             0 |                        |
+
+- **Isian.** Kode pendek yang diketik pengguna (Code), keterangan (Description), dan jumlah hari sampai jatuh tempo. BC memakai rumus tanggal (Due Date Calculation, misalnya `1M+CM`); di sini cukup jumlah hari, karena data lama hanya mengenal selisih hari. Diskon bayar cepat (Discount Date Calculation, Discount %) tidak ikut, karena tidak ada di data lama.
+- **Jatuh tempo** = tanggal faktur vendor + jumlah hari, seperti `"Due Date" := CalcDate(PaymentTerms."Due Date Calculation", "Document Date")` di Purchase Header. Tanpa termin, jatuh tempo sama dengan tanggal faktur vendor.
+- **Vendor dan order.** Vendor membawa termin bawaan. Order baru mengambilnya bila termin tidak dikirim, termasuk order dari Buat purchase order. Memilih vendor lain di layar order mengganti terminnya dengan termin vendor itu.
+- **Izin.** Termin dikelola duty `core.vendor.manage`, karena di BC termin dipilih di kartu vendor. Duty lihat vendor dan duty purchase order ikut melihatnya.
+- **Hapus.** Ditolak selama termin masih menjadi bawaan vendor atau dipakai purchase order. Kodenya boleh dipakai lagi sesudah dihapus.
 
 ## Penerimaan dari purchase order
 

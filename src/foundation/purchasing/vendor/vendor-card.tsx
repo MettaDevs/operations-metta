@@ -17,6 +17,11 @@ import {
     FormErrorHeader,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
+import {
+    paymentTermsChoice,
+    PaymentTermsLookup,
+    paymentTermsText,
+} from '../payment-terms/payment-terms-lookup.tsx';
 
 export type Vendor = ApiBody<'purchasingVendorList'>['data'][number];
 type Errors = Record<string, string[]>;
@@ -47,6 +52,7 @@ export function VendorCard({
         name: vendor?.name ?? '',
         tax_number: vendor?.tax_number ?? '',
         status: vendor?.status ?? 'active',
+        payment_terms: vendor?.payment_terms ?? null,
     };
     const [form, setForm] = useState(blank);
     const [busy, setBusy] = useState(false);
@@ -67,6 +73,7 @@ export function VendorCard({
             name: form.name,
             tax_number: form.tax_number || null,
             status: form.status,
+            payment_terms_id: form.payment_terms?.id ?? null,
         };
         try {
             const { body: saved } = vendor
@@ -158,6 +165,30 @@ export function VendorCard({
                             }
                         />
                     </FormControl>
+                    {editing ? (
+                        <PaymentTermsLookup
+                            label="Termin pembayaran"
+                            field="payment_terms_id"
+                            value={form.payment_terms}
+                            onChange={(terms) =>
+                                setForm({
+                                    ...form,
+                                    payment_terms: paymentTermsChoice(terms),
+                                })
+                            }
+                            error={errors.payment_terms_id?.[0]}
+                            hint="Disalin ke purchase order dan faktur pembelian baru dari vendor ini, dan boleh diganti di dokumen itu."
+                            portalContainer={portalContainer}
+                        />
+                    ) : (
+                        <FormControl>
+                            <Input
+                                label="Termin pembayaran"
+                                readOnly
+                                value={paymentTermsText(form.payment_terms)}
+                            />
+                        </FormControl>
+                    )}
                     <FormControl
                         error={errors.status?.[0]}
                         hint="Vendor nonaktif tidak bisa dipilih di penerimaan baru."

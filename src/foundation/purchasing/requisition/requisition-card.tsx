@@ -440,6 +440,7 @@ export function RequisitionCard({
                                         ? {
                                               ...form.vendor,
                                               tax_number: null,
+                                              payment_terms: null,
                                               status: 'active',
                                               version: 0,
                                           }

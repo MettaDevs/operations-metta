@@ -17,6 +17,10 @@ import {
 import { activeLegalEntity, parseInput } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
+    paymentTermsJson,
+    paymentTermsOf,
+} from '../payment-terms/payment-terms.service.ts';
+import {
     vendorInputSchema,
     vendorRowSchema,
     vendorStatuses,
@@ -25,9 +29,11 @@ import {
 const numberReference = 'core.vendor-number';
 
 const rowSql = `select * from (
-                    select v.id, v.number, p.name, v.tax_number, v.status, v.version, v.party_id
+                    select v.id, v.number, p.name, v.tax_number, v.status, v.version, v.party_id,
+                           ${paymentTermsJson('t')} as payment_terms
                     from vendors v
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
+                    left join termin_pembayaran t on t.tenant_id = v.tenant_id and t.id = v.termin_pembayaran_id
                     where v.tenant_id = $1 and v.legal_entity_id = $2) vendors
                 where true`;
 
@@ -35,6 +41,7 @@ const messages = {
     name: 'Isi nama vendor.',
     tax_number: 'Isi NPWP paling banyak 32 karakter.',
     status: 'Pilih status aktif atau nonaktif.',
+    payment_terms_id: 'Pilih termin pembayaran dari daftar.',
 };
 
 // Vendor (Vendor di BC) per legal entity. Identitasnya party organisasi di buku alamat, dengan peran vendor; nomornya
@@ -98,7 +105,7 @@ export class Vendors {
         return vendorRowSchema.parse(await this.stored(id));
     }
 
-    private checked(body: unknown) {
+    private async checked(body: unknown) {
         const data = parseInput(vendorInputSchema, body, messages);
         const errors: Record<string, string> = {};
         const name = data.name.trim();
@@ -108,13 +115,28 @@ export class Vendors {
         const taxNumber = data.tax_number?.trim() || null;
         if (taxNumber && taxNumber.length > 32)
             errors.tax_number = messages.tax_number;
+        const terms = await paymentTermsOf(
+            this.db,
+            this.scope,
+            data.payment_terms_id,
+        );
+        if (terms === null) errors.payment_terms_id = messages.payment_terms_id;
         if (Object.keys(errors).length) validation(errors);
-        return { name, taxNumber, status: data.status ?? 'active' };
+        return {
+            name,
+            taxNumber,
+            status: data.status ?? 'active',
+            // Tidak dikirim berarti termin yang sudah ada tetap dipakai.
+            paymentTermsId:
+                data.payment_terms_id === undefined
+                    ? undefined
+                    : (terms?.id ?? null),
+        };
     }
 
     async create(body: unknown) {
         this.workspace.guard('vendor', 'update');
-        const data = this.checked(body);
+        const data = await this.checked(body);
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
             const partyId = await new Parties(
@@ -149,6 +171,7 @@ export class Vendors {
                 number,
                 tax_number: data.taxNumber,
                 status: data.status,
+                termin_pembayaran_id: data.paymentTermsId ?? null,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -160,12 +183,13 @@ export class Vendors {
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('vendor', 'update');
         const current = await this.stored(id);
-        const data = this.checked(body);
+        const data = await this.checked(body);
         const version = expectedVersion(request, body);
         let updated = 0;
         await this.db.transaction(async () => {
             updated = await this.db.execute(
-                `update vendors set tax_number = $1, status = $2, updated_at = $3
+                `update vendors set tax_number = $1, status = $2, updated_at = $3,
+                        termin_pembayaran_id = case when $8 then $9::uuid else termin_pembayaran_id end
                  where tenant_id = $4 and legal_entity_id = $5 and id = $6 and version = $7`,
                 [
                     data.taxNumber,
@@ -175,6 +199,8 @@ export class Vendors {
                     this.scope.legalEntityId,
                     current.id,
                     version,
+                    data.paymentTermsId !== undefined,
+                    data.paymentTermsId ?? null,
                 ],
             );
             if (!updated) return;

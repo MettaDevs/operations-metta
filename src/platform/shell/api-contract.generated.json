@@ -2457,6 +2457,54 @@
             }
         }
     },
+    "purchasingPaymentTermsList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/purchasing/payment-terms",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "purchasingPaymentTermsCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/payment-terms",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "purchasingPaymentTermsUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/v1/purchasing/payment-terms/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "purchasingPaymentTermsDelete": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "DELETE",
+                "path": "/api/v1/purchasing/payment-terms/{id}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingRequisitionList": {
         "~orpc": {
             "errorMap": {},

@@ -55,6 +55,12 @@ import {
     type Receipt,
     type ReceiptPermissions,
 } from '../receipt/receipt-card.tsx';
+import {
+    paymentTermsChoice,
+    PaymentTermsLookup,
+    paymentTermsText,
+    type PaymentTermsChoice,
+} from '../payment-terms/payment-terms-lookup.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
 
 export type PurchaseOrder = ApiBody<'purchasingOrderShow'>['data'];
@@ -82,6 +88,7 @@ type Header = {
     expected_receipt_date: string;
     description: string;
     prices_including_vat: boolean;
+    payment_terms: PaymentTermsChoice | null;
 };
 
 export const purchaseOrderStatusLabels: Record<
@@ -101,6 +108,7 @@ function headerOf(order: PurchaseOrder | null): Header {
         expected_receipt_date: order?.expected_receipt_date ?? '',
         description: order?.description ?? '',
         prices_including_vat: order?.prices_including_vat ?? false,
+        payment_terms: order?.payment_terms ?? null,
     };
 }
 
@@ -201,6 +209,7 @@ export function PurchaseOrderCard({
         expected_receipt_date: header.expected_receipt_date || null,
         description: header.description || null,
         prices_including_vat: header.prices_including_vat,
+        payment_terms_id: header.payment_terms?.id ?? null,
         lines: lines.map((line) => ({
             id: line.id,
             item_id: line.item?.id ?? '',
@@ -520,6 +529,7 @@ export function PurchaseOrderCard({
                                             ? {
                                                   ...header.vendor,
                                                   tax_number: null,
+                                                  payment_terms: null,
                                                   status: 'active',
                                                   version: 0,
                                               }
@@ -527,7 +537,11 @@ export function PurchaseOrderCard({
                                     }
                                     displayValue={header.vendor?.name ?? ''}
                                     onValueChange={(vendor) =>
-                                        setHeader({ ...header, vendor })
+                                        setHeader({
+                                            ...header,
+                                            vendor,
+                                            payment_terms: vendor.payment_terms,
+                                        })
                                     }
                                     getItemValue={(vendor) => vendor.id}
                                     getItemLabel={(vendor) => vendor.name}
@@ -726,6 +740,33 @@ export function PurchaseOrderCard({
                                 </FieldLabel>
                             </Field>
                         </FormControl>
+                        {editable ? (
+                            <PaymentTermsLookup
+                                label="Termin pembayaran"
+                                field="payment_terms_id"
+                                value={header.payment_terms}
+                                onChange={(terms) =>
+                                    setHeader({
+                                        ...header,
+                                        payment_terms:
+                                            paymentTermsChoice(terms),
+                                    })
+                                }
+                                error={error('payment_terms_id')}
+                                hint="Diisi dari termin vendor saat vendor dipilih. Jatuh tempo dihitung di faktur pembelian dari tanggal faktur vendor."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <FormControl>
+                                <Input
+                                    label="Termin pembayaran"
+                                    readOnly
+                                    value={paymentTermsText(
+                                        header.payment_terms,
+                                    )}
+                                />
+                            </FormControl>
+                        )}
                         <FormControl error={error('description')}>
                             <Input
                                 label="Keterangan"
