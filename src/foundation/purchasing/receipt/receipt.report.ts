@@ -13,7 +13,7 @@ import {
 } from '../../../platform/reporting/index.ts';
 import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import { receiptLayouts } from './receipt.layout.ts';
-import { lineAmountSql } from './receipt.service.ts';
+import { lineAmountSql } from '../purchase-line.service.ts';
 
 // Penerimaan barang dari vendor, padanan Purchase - Receipt Business Central dengan harga seperti form penerimaan
 // puskesmas: vendor dan nomor dokumennya, lokasi, batch dan kedaluwarsa per baris, sumber dana, diskon, PPN, dan total

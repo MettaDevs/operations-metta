@@ -17,34 +17,27 @@ import {
 } from '../../../platform/http/index.ts';
 import {
     activeLegalEntity,
-    baseQuantity,
-    decimalInput,
-    defaultUnit,
     exists,
-    fromNumeric,
     allowedLocationsSql,
     parseInput,
     postItemLines,
-    quantityHint,
     quantityScale,
     raiseBasePrices,
     requireLocationAccess,
     reverseItemEntries,
     toNumeric,
-    unitConversion,
-    unitCostInput,
 } from '../../inventory/index.ts';
-import {
-    decimalsHint,
-    percentHint,
-    percentInput,
-} from '../../../platform/money/index.ts';
 import {
     Currency,
     localCurrencyCode,
     unitAmountDecimals,
 } from '../../currency/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
+import {
+    checkPriceLine,
+    lineAmountSql,
+    type PriceLine,
+} from '../purchase-line.service.ts';
 import { firstReturnNumber } from '../purchase-return/purchase-return.service.ts';
 import {
     receiptBasePrices,
@@ -60,8 +53,6 @@ import {
 } from './receipt.schema.ts';
 
 const numberReference = 'core.purchase-receipt-number';
-const one = 10n ** BigInt(quantityScale);
-const hundredPercent = 100n * one;
 
 // Dua perpindahan status yang sah, beserta kolom yang mencatat kapan dan oleh siapa.
 const transitions = {
@@ -77,27 +68,14 @@ const transitions = {
     },
 } as const;
 
-type LineDraft = {
+type LineDraft = PriceLine & {
     id: string | null;
-    itemId: string;
-    unitId: string;
-    conversion: bigint;
-    quantity: bigint;
-    unitCost: bigint;
-    discountPercent: bigint;
-    vatPercent: bigint;
     batchNumber: string | null;
     expiry: string | null;
     fundingSourceId: string | null;
     programId: string | null;
     budgetYear: number | null;
 };
-
-// Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke presisi jumlah mata uang lokal;
-// amountDecimals bilangan bulat 0 sampai 4 dari setelan mata uang, bukan isian pengguna. PPN dokumen = jumlah nilai
-// baris x tarif PPN / 100, dibulatkan sekali, seperti Pajak = subtotal x persen PPN / 100 di layar lama.
-export const lineAmountSql = (alias: string, amountDecimals: number) =>
-    `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
 
 const rowSql = (amountDecimals: number) => `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
@@ -358,61 +336,13 @@ export class Receipts {
             const fail = (name: string, message: string) => {
                 errors[`${field}.${name}`] = message;
             };
-            if (
-                !(await exists(
-                    this.db,
-                    'gd_m_barang',
-                    this.scope,
-                    line.item_id,
-                ))
-            )
-                fail('item_id', messages.item_id);
-            // Seperti baris pembelian BC yang mengisi Unit of Measure Code dari Purch. Unit of Measure barang.
-            const unit = line.unit_id
-                ? {
-                      unitId: line.unit_id,
-                      conversion: await unitConversion(
-                          this.db,
-                          this.scope,
-                          line.item_id,
-                          line.unit_id,
-                      ),
-                  }
-                : await defaultUnit(
-                      this.db,
-                      this.scope,
-                      line.item_id,
-                      'purchase',
-                  );
-            const conversion = unit?.conversion ?? null;
-            if (conversion === null) fail('unit_id', messages.unit_id);
-            const quantity = decimalInput(line.quantity);
-            if (quantity === null || quantity <= 0n)
-                fail('quantity', `Isi jumlah lebih dari 0, ${quantityHint}.`);
-            else if (
-                conversion !== null &&
-                baseQuantity(quantity, conversion) === null
-            )
-                fail(
-                    'quantity',
-                    `Jumlah ini dalam satuan dasar harus ${quantityHint} dan tidak terlalu besar. Ubah jumlah atau satuannya.`,
-                );
-            const unitCost = unitCostInput(line.unit_cost, unitCostDecimals);
-            if (unitCost === null)
-                fail(
-                    'unit_cost',
-                    `Isi harga satuan 0 atau lebih, ${decimalsHint(unitCostDecimals)}.`,
-                );
-            const discount =
-                line.discount_percent === null ||
-                line.discount_percent === undefined ||
-                line.discount_percent === ''
-                    ? 0n
-                    : decimalInput(line.discount_percent);
-            if (discount === null || discount < 0n || discount > hundredPercent)
-                fail('discount_percent', messages.discount_percent);
-            const vat = percentInput(line.vat_percent || 0);
-            if (vat === null) fail('vat_percent', percentHint());
+            const price = await checkPriceLine(
+                this.db,
+                this.scope,
+                line,
+                unitCostDecimals,
+                fail,
+            );
             const batchNumber = line.batch_number?.trim().toUpperCase() || null;
             if (batchNumber && batchNumber.length > 50)
                 fail('batch_number', 'Nomor batch paling banyak 50 karakter.');
@@ -456,13 +386,7 @@ export class Receipts {
                 fail('budget_year', messages.budget_year);
             lines.push({
                 id: line.id ?? null,
-                itemId: line.item_id,
-                unitId: unit?.unitId ?? '',
-                conversion: conversion ?? one,
-                quantity: quantity ?? 0n,
-                unitCost: unitCost ?? 0n,
-                discountPercent: discount ?? 0n,
-                vatPercent: vat === null ? 0n : fromNumeric(vat, quantityScale),
+                ...price,
                 batchNumber,
                 expiry,
                 fundingSourceId,

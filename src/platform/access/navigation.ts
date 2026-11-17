@@ -335,6 +335,12 @@ export const sysAdminArea: NavigationAreaEntry = {
             icon: 'truck',
             items: [
                 {
+                    id: 'orders',
+                    label: 'Purchase order',
+                    href: '/sysadmin/purchasing/orders',
+                    permission: 'core.purchase-order.read',
+                },
+                {
                     id: 'receipts',
                     label: 'Penerimaan barang',
                     href: '/sysadmin/purchasing/receipts',

@@ -65,6 +65,7 @@ import {
 } from './foundation/inventory/index.ts';
 import { pricingRoutes } from './foundation/pricing/index.ts';
 import {
+    purchaseOrderReport,
     purchaseReturnReport,
     purchasingRoutes,
     receiptReport,
@@ -121,6 +122,7 @@ export const reports = reportCatalog([
     transferOrderReport,
     transferShipmentReport,
     transferReceiptReport,
+    purchaseOrderReport,
     receiptReport,
     purchaseReturnReport,
     stockCountSheetReport,
