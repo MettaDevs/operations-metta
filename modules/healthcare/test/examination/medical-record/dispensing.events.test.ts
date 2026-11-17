@@ -30,6 +30,8 @@ type Prescription = {
         drug_id: string | null;
         dispensed_quantity?: string | null;
         returned_quantity?: string | null;
+        substitute_name?: string | null;
+        substitution_reason?: string | null;
     }[];
 };
 
@@ -190,6 +192,7 @@ describe.skipIf(!process.env.DB_HOST)(
                 pharmacist: string;
                 assistant: string | null;
             } = { pharmacist: Bun.randomUUIDv7(), assistant: null },
+            substitute?: { id: string; name: string },
         ) {
             const data = {
                 dispensing_id: Bun.randomUUIDv7(),
@@ -208,12 +211,33 @@ describe.skipIf(!process.env.DB_HOST)(
                     : null,
                 lines: lineIds.map((line, index) => ({
                     prescription_line_id: line.id,
-                    item: { id: line.drug_id, code: 'X', name: 'Obat' },
+                    item:
+                        index === 0 && substitute
+                            ? { ...substitute, code: 'GEN' }
+                            : { id: line.drug_id, code: 'X', name: 'Obat' },
                     unit: { id: clinic.unitTab, code: 'TAB', name: 'Tablet' },
                     prescribed_quantity: '10',
                     quantity: quantities[index] ?? '0',
                     reason: quantities[index] === '10' ? null : 'Stok habis',
                     batches: [],
+                    ...(index === 0 && substitute
+                        ? {
+                              substitution: {
+                                  prescribed_item: {
+                                      id: line.drug_id,
+                                      code: 'X',
+                                      name: 'Obat',
+                                  },
+                                  consent: 'pasien',
+                                  reason: 'Stok obat resep habis',
+                                  substituted_at: '2026-11-13T03:10:00Z',
+                                  substituted_by: {
+                                      id: Bun.randomUUIDv7(),
+                                      name: 'Apoteker Uji',
+                                  },
+                              },
+                          }
+                        : { substitution: null }),
                 })),
             };
             return publish(dispensed, data);
@@ -307,6 +331,34 @@ describe.skipIf(!process.env.DB_HOST)(
             expect(shown?.lines.map((line) => line.dispensed_quantity)).toEqual(
                 ['10 TAB', '4 TAB'],
             );
+        });
+
+        test('a line the pharmacy substituted shows the drug handed over under the drug the doctor wrote', async () => {
+            await hand(prescription.id, ['10', '4'], undefined, {
+                id: Bun.randomUUIDv7(),
+                name: 'Obat Generik Uji',
+            });
+            const [shown] = await sent();
+            expect(
+                shown?.lines.map((line) => [
+                    line.drug_id,
+                    line.dispensed_quantity,
+                    line.substitute_name,
+                    line.substitution_reason,
+                ]),
+            ).toEqual([
+                [
+                    drugs[0],
+                    '10 TAB',
+                    'Obat Generik Uji',
+                    'Stok obat resep habis',
+                ],
+                [drugs[1], '4 TAB', null, null],
+            ]);
+            await hand(prescription.id, ['10', '4']);
+            expect(
+                (await sent())[0]?.lines.map((line) => line.substitute_name),
+            ).toEqual([null, null]);
         });
 
         test('the prescription keeps the practitioners linked to the pharmacist and assistant accounts at hand-over', async () => {

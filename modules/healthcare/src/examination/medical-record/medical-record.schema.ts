@@ -240,6 +240,10 @@ export const prescriptionLineSchema = z.object({
     dispensed_quantity: text.optional(),
     // Total yang dikembalikan pasien ke farmasi; hanya dibaca, kosong bila belum pernah ada retur.
     returned_quantity: text.optional(),
+    // Obat pengganti yang diserahkan farmasi sebagai ganti obat ini, dan alasannya; hanya dibaca, kosong bila obat
+    // yang diserahkan obat resep.
+    substitute_name: text.optional(),
+    substitution_reason: text.optional(),
 });
 
 // Resep (SIMtrResep). Hanya draf yang diubah Simpan; nomor, status, waktu kirim, dokter, dan perawat hanya dibaca.

@@ -10,7 +10,9 @@ import { idSchema } from '@core/platform/http/index.ts';
 // contracts/events/pharmacy.prescription.dispensed.v1.yaml). Module ini tidak meng-import module farmasi, jadi bagian
 // isi yang dibacanya ditulis di sini; field lain dilewati. Jumlah yang diserahkan dicatat dalam satuan dasar:
 // base_quantity, atau quantity pada pesan lama yang belum membawanya, karena pesan itu ditulis dalam satuan dasar.
-// Apoteker dan asisten adalah pengguna; nakes-nya dicatat saat event diterima (healthcare 0046).
+// Apoteker dan asisten adalah pengguna; nakes-nya dicatat saat event diterima (healthcare 0046). Baris yang obatnya
+// diganti farmasi (substitution) menyalin obat yang diserahkan, persetujuan, dan alasannya (healthcare 0056); baris
+// tanpa substitution mengosongkannya.
 export const prescriptionDispensed =
     'pharmacy.prescription.dispensed.v1' as const;
 
@@ -24,8 +26,15 @@ const dispensedSchema = z.object({
     lines: z.array(
         z.object({
             prescription_line_id: idSchema,
+            item: z.object({ id: idSchema, name: z.string().min(1).max(200) }),
             quantity: decimalText,
             base_quantity: decimalText.optional(),
+            substitution: z
+                .object({
+                    consent: z.enum(['dokter', 'pasien', 'dokter_dan_pasien']),
+                    reason: z.string().min(1).max(200),
+                })
+                .nullish(),
         }),
     ),
 });
@@ -114,7 +123,8 @@ export async function receiveDispensing(
     );
     for (const line of data.lines)
         await db.execute(
-            `update sim_tr_resep_detail set jumlah_diserahkan = $1, updated_at = $2
+            `update sim_tr_resep_detail set jumlah_diserahkan = $1, updated_at = $2, obat_diserahkan_id = $6,
+                    nama_obat_diserahkan = $7, persetujuan_ganti = $8, alasan_ganti = $9
              where tenant_id = $3 and resep_id = $4 and id = $5`,
             [
                 line.base_quantity ?? line.quantity,
@@ -122,6 +132,10 @@ export async function receiveDispensing(
                 envelope.tenant_id,
                 prescription.id,
                 line.prescription_line_id,
+                line.substitution ? line.item.id : null,
+                line.substitution ? line.item.name : null,
+                line.substitution?.consent ?? null,
+                line.substitution?.reason ?? null,
             ],
         );
 }

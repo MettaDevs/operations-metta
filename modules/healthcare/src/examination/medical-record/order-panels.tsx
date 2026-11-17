@@ -1579,14 +1579,32 @@ function PrescriptionLines({
                                   }: {
                                       row: PrescriptionLine;
                                   }) => (
-                                      <DataTableText>
-                                          {isHeader(row)
-                                              ? ''
-                                              : `${row.dispensed_quantity ?? ''}${
-                                                    row.returned_quantity
-                                                        ? ` (${row.returned_quantity} dikembalikan)`
-                                                        : ''
-                                                }`}
+                                      <DataTableText
+                                          multiline={Boolean(
+                                              row.substitute_name,
+                                          )}
+                                      >
+                                          {isHeader(row) ? (
+                                              ''
+                                          ) : (
+                                              <>
+                                                  <span className="block">
+                                                      {`${row.dispensed_quantity ?? ''}${
+                                                          row.returned_quantity
+                                                              ? ` (${row.returned_quantity} dikembalikan)`
+                                                              : ''
+                                                      }`}
+                                                  </span>
+                                                  {row.substitute_name && (
+                                                      <span
+                                                          className="block text-xs text-muted-foreground"
+                                                          title={`Diganti ${row.substitute_name}: ${row.substitution_reason ?? ''}`}
+                                                      >
+                                                          {`Diganti ${row.substitute_name}`}
+                                                      </span>
+                                                  )}
+                                              </>
+                                          )}
                                       </DataTableText>
                                   ),
                               },
