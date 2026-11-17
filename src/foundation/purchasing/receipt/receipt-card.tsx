@@ -1,13 +1,11 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
-import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
-import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import {
     displayAmount,
     displayNumber,
@@ -23,7 +21,7 @@ import {
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { BookCheck, PackageMinus, Undo2 } from 'lucide-react';
-import { useCallback, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
@@ -35,31 +33,37 @@ import {
     PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
-import { Decimal } from '../../../platform/money/index.ts';
 import {
     PurchaseReturnCard,
     PurchaseReturnsSection,
     useCanReturnToVendor,
 } from '../purchase-return/purchase-returns.tsx';
+import {
+    amountOf,
+    itemColumns,
+    label,
+    loadItems,
+    loadLocations,
+    loadVendors,
+    nextKey,
+    today,
+    totalsOf,
+    UnitLookup,
+    unitText,
+    useLoader,
+    type ItemChoice,
+    type Reference,
+    type UnitChoice,
+} from '../purchase-lines.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
 
 export type Receipt = ApiBody<'purchasingReceiptShow'>['data'];
 export type ReceiptPermissions =
     ApiBody<'purchasingReceiptList'>['permissions'];
 type Location = ApiBody<'inventoryLocationList'>['data'][number];
-type Item = ApiBody<'inventoryItemList'>['data'][number];
-type ItemUnit = ApiBody<'inventoryItemUnitList'>['data'][number];
 type CodeEntry = ApiBody<'inventoryFundingSourceList'>['data'][number];
 type Errors = Record<string, string[]>;
 
-type Reference = { id: string; code: string; name: string };
-type UnitChoice = Reference & { quantity_per_unit: string };
-type ItemChoice = Reference & {
-    base_unit: Reference;
-    purchase_unit: UnitChoice;
-    batch_required: boolean;
-    expiry_required: boolean;
-};
 type Line = {
     key: string;
     id: string | null;
@@ -89,12 +93,6 @@ const statusLabels: Record<Receipt['status'], string> = {
     diposting: 'Diposting',
     dibatalkan: 'Dibatalkan',
 };
-const label = (entry: { code: string; name: string }) =>
-    `${entry.code} - ${entry.name}`;
-const today = () => new Date().toLocaleDateString('sv-SE');
-let keys = 0;
-const nextKey = () => `baris-${++keys}`;
-
 function headerOf(receipt: Receipt | null): Header {
     return {
         vendor: receipt?.vendor ?? null,
@@ -135,105 +133,6 @@ function linesOf(receipt: Receipt | null): Line[] {
     }));
 }
 
-const hundred = Decimal.of('100');
-const hundredth = Decimal.of('0.01');
-const decimalOf = (text: string) => {
-    try {
-        return Decimal.of(text.trim() || '0');
-    } catch {
-        return null;
-    }
-};
-
-// Nilai baris untuk tampilan: jumlah x harga satuan x (100 - diskon) / 100, desimal tepat seperti hitungan server. Isian
-// yang belum berupa angka dihitung 0.
-function amountOf(line: Line): Decimal {
-    const quantity = decimalOf(line.quantity);
-    const cost = decimalOf(line.unit_cost);
-    const discount = decimalOf(line.discount_percent);
-    return quantity && cost && discount
-        ? quantity
-              .multipliedBy(cost)
-              .multipliedBy(hundred.minus(discount))
-              .multipliedBy(hundredth)
-        : Decimal.of('0');
-}
-
-// Subtotal dan PPN dokumen dihitung seperti server: nilai baris dibulatkan ke presisi jumlah, lalu PPN = jumlah nilai
-// baris x PPN % / 100, dibulatkan sekali. PPN % yang belum berupa angka dihitung 0.
-function totalsOf(lines: Line[], decimals: number) {
-    let subtotal = Decimal.of('0');
-    let vat = Decimal.of('0');
-    for (const line of lines) {
-        const amount = amountOf(line).rounded(decimals);
-        subtotal = subtotal.plus(amount);
-        const percent = decimalOf(line.vat_percent);
-        if (percent)
-            vat = vat.plus(
-                amount.multipliedBy(percent).multipliedBy(hundredth),
-            );
-    }
-    return { subtotal, vat: vat.rounded(decimals) };
-}
-
-function useLoader<T>(
-    fetch: (
-        query: { q: string; cursor?: string },
-        signal: AbortSignal,
-    ) => Promise<{ items: T[]; nextCursor: string | null }>,
-): LookupLoader<T> {
-    return useCallback<LookupLoader<T>>(
-        ({ query, cursor, signal }) =>
-            fetch({ q: query, ...(cursor ? { cursor } : {}) }, signal),
-        [fetch],
-    );
-}
-
-const loadVendors = async (
-    query: { q: string; cursor?: string },
-    signal: AbortSignal,
-) => {
-    const { body } = await api.purchasingVendorList(
-        { query: { ...query, status: 'active' } },
-        { signal },
-    );
-    return { items: body.data, nextCursor: body.next_cursor };
-};
-const loadLocations = async (
-    query: { q: string; cursor?: string },
-    signal: AbortSignal,
-) => {
-    const { body } = await api.inventoryLocationList({ query }, { signal });
-    return { items: body.data, nextCursor: body.next_cursor };
-};
-const loadItems = async (
-    query: { q: string; cursor?: string },
-    signal: AbortSignal,
-) => {
-    const { body } = await api.inventoryItemList({ query }, { signal });
-    return {
-        items: body.data.map((item: Item): ItemChoice => ({
-            id: item.id,
-            code: item.code,
-            name: item.name,
-            base_unit: item.base_unit,
-            purchase_unit: item.purchase_unit,
-            batch_required: item.batch_required,
-            expiry_required: item.expiry_required,
-        })),
-        nextCursor: body.next_cursor,
-    };
-};
-const itemColumns: DataTableColumn<ItemChoice>[] = [
-    { id: 'code', header: 'Kode', width: 110, cell: (item) => item.code },
-    { id: 'name', header: 'Nama', width: 260, cell: (item) => item.name },
-    {
-        id: 'base_unit',
-        header: 'Satuan dasar',
-        width: 110,
-        cell: (item) => item.base_unit.code,
-    },
-];
 const loadFundingSources = async (
     query: { q: string; cursor?: string },
     signal: AbortSignal,
@@ -269,83 +168,6 @@ const codeColumns = [
         cell: (entry: Reference) => entry.name,
     },
 ];
-
-// Satuan baris hanya dari satuan barangnya: satuan dasar dan satuan kemasannya.
-function UnitLookup({
-    itemId,
-    value,
-    error,
-    field,
-    onPick,
-}: {
-    itemId: string;
-    value: UnitChoice | null;
-    error: string | undefined;
-    field: string;
-    onPick: (unit: UnitChoice) => void;
-}): ReactNode {
-    const load = useCallback<LookupLoader<UnitChoice>>(
-        async ({ query, cursor, signal }) => {
-            const { body } = await api.inventoryItemUnitList(
-                {
-                    query: {
-                        item_id: itemId,
-                        q: query,
-                        ...(cursor ? { cursor } : {}),
-                    },
-                },
-                { signal },
-            );
-            return {
-                items: body.data.map((unit: ItemUnit): UnitChoice => ({
-                    id: unit.id,
-                    code: unit.code,
-                    name: unit.name,
-                    quantity_per_unit: unit.quantity_per_unit,
-                })),
-                nextCursor: body.next_cursor,
-            };
-        },
-        [itemId],
-    );
-    return (
-        <FormControl error={error} data-error-field={field}>
-            <InlineLookup<UnitChoice>
-                label="Satuan"
-                required
-                loadItems={load}
-                value={value}
-                displayValue={value?.code ?? ''}
-                onValueChange={onPick}
-                getItemValue={(unit) => unit.id}
-                getItemLabel={(unit) => unit.code}
-                emptyMessage="Satuan tidak ditemukan. Tambahkan satuan kemasan di Satuan barang."
-                showDetails={false}
-                columns={[
-                    {
-                        id: 'code',
-                        header: 'Satuan',
-                        width: 90,
-                        cell: (unit) => unit.code,
-                    },
-                    {
-                        id: 'name',
-                        header: 'Nama',
-                        width: 160,
-                        cell: (unit) => unit.name,
-                    },
-                    {
-                        id: 'quantity_per_unit',
-                        header: 'Isi',
-                        width: 80,
-                        align: 'right',
-                        cell: (unit) => unit.quantity_per_unit,
-                    },
-                ]}
-            />
-        </FormControl>
-    );
-}
 
 // Dokumen penerimaan barang dari vendor: kepala dokumen lalu baris barang, seperti Purchase Order BC yang langsung
 // diterima. Draf disimpan dengan Simpan; Posting menyimpan perubahan yang tertunda lebih dulu, lalu memposting.
@@ -1085,12 +907,10 @@ export function ReceiptCard({
                                         />
                                     ) : (
                                         text(
-                                            line.unit
-                                                ? line.unit
-                                                      .quantity_per_unit === '1'
-                                                    ? line.unit.code
-                                                    : `${line.unit.code} (${line.unit.quantity_per_unit} ${line.item?.base_unit.code ?? ''})`
-                                                : '',
+                                            unitText(
+                                                line.unit,
+                                                line.item?.base_unit.code ?? '',
+                                            ),
                                         )
                                     ),
                             },

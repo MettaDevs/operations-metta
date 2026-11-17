@@ -1,11 +1,19 @@
+import { purchaseOrderRoutes } from './purchase-order/purchase-order.routes.ts';
 import { purchaseReturnRoutes } from './purchase-return/purchase-return.routes.ts';
 import { receiptRoutes } from './receipt/receipt.routes.ts';
 import { vendorRoutes } from './vendor/vendor.routes.ts';
 
-// Pembelian Core: vendor, penerimaan barang dari vendor, dan retur ke vendor atas penerimaan itu. Keduanya memposting
-// stok lewat mesin posting persediaan (src/foundation/inventory/); purchase order dan faktur pembelian belum ada.
+// Pembelian Core: vendor, purchase order, penerimaan barang dari vendor, dan retur ke vendor atas penerimaan itu.
+// Penerimaan dan retur memposting stok lewat mesin posting persediaan (src/foundation/inventory/); faktur pembelian
+// belum ada.
 export function purchasingRoutes() {
-    return { ...vendorRoutes(), ...receiptRoutes(), ...purchaseReturnRoutes() };
+    return {
+        ...vendorRoutes(),
+        ...purchaseOrderRoutes(),
+        ...receiptRoutes(),
+        ...purchaseReturnRoutes(),
+    };
 }
+export { purchaseOrderReport } from './purchase-order/purchase-order.report.ts';
 export { purchaseReturnReport } from './purchase-return/purchase-return.report.ts';
 export { receiptReport } from './receipt/receipt.report.ts';
