@@ -54,6 +54,7 @@ function EmployeeList({
         state: {
             canManage: boolean;
             location: ListLocation;
+            loaded: number;
             create: () => void;
         },
         table: ReactNode,
@@ -95,7 +96,12 @@ function EmployeeList({
     return (
         <>
             {frame(
-                { canManage, location, create: () => setOpen('new') },
+                {
+                    canManage,
+                    location,
+                    loaded: list.items.length,
+                    create: () => setOpen('new'),
+                },
                 <DataTable
                     data={list.items}
                     getRowKey={(employee) => employee.id}
@@ -232,7 +238,7 @@ function WarehouseEmployeesPage(): ReactNode {
         <EmployeeList
             locationId={search.location}
             query={search.q ?? ''}
-            frame={({ canManage, location, create }, table) => (
+            frame={({ canManage, location, loaded, create }, table) => (
                 <ListPageLayout
                     header={
                         <RecordActionBar
@@ -302,9 +308,7 @@ function WarehouseEmployeesPage(): ReactNode {
                     }
                     footer={
                         <p className="p-3 text-sm text-muted-foreground">
-                            {location
-                                ? `Petugas lokasi ${location.code}`
-                                : 'Petugas semua lokasi'}
+                            {`${loaded} petugas dimuat`}
                         </p>
                     }
                 >
