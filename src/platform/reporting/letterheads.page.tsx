@@ -13,8 +13,8 @@ import {
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import type { ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
     api,
@@ -25,11 +25,19 @@ import {
     orpc,
     type ApiBody,
 } from '../shell/index.ts';
+import {
+    SignerLines,
+    signersBody,
+    signersOf,
+    type SignerDraft,
+} from './signer-lines.tsx';
 
-type Letterhead = ApiBody<'letterheadList'>['data'][number];
+type Letterheads = ApiBody<'letterheadList'>;
+type Letterhead = Letterheads['data'][number];
 
 // Sys Admin › Kop surat: identitas cetak per legal entity dan unit kerja. Dokumen memakai kop unit kerja yang
 // menerbitkannya, kalau tidak ada kop legal entity-nya. Alamat dan telepon diambil dari buku alamat organisasi.
+// Penanda tangan (pejabat yang mengetahui) ikut aturan yang sama.
 
 const formOf = (row: Letterhead) => ({
     display_name: row.display_name ?? '',
@@ -37,16 +45,21 @@ const formOf = (row: Letterhead) => ({
     tax_id: row.tax_id ?? '',
     registration_id: row.registration_id ?? '',
     footer_text: row.footer_text ?? '',
+    signers: signersOf(row.signers),
 });
 
 function LetterheadCard({
     row,
+    reports,
     canManage,
     onSaved,
+    portalContainer,
 }: {
     row: Letterhead;
+    reports: Letterheads['reports'];
     canManage: boolean;
     onSaved: () => void;
+    portalContainer: RefObject<HTMLDivElement | null>;
 }): ReactNode {
     const [form, setForm] = useState(() => formOf(row));
     const [busy, setBusy] = useState(false);
@@ -65,7 +78,7 @@ function LetterheadCard({
         try {
             const { body } = await api.letterheadSave({
                 params: { id: row.organization_id },
-                body: form,
+                body: { ...form, signers: signersBody(form.signers) },
             });
             toast.success(body.message);
             onSaved();
@@ -160,6 +173,16 @@ function LetterheadCard({
                         'Dicetak di bagian bawah dokumen yang layout-nya memakainya.',
                     )}
                 </FormGrid>
+                <SignerLines
+                    lines={form.signers}
+                    onChange={(signers: SignerDraft[]) =>
+                        setForm({ ...form, signers })
+                    }
+                    reports={reports}
+                    editable={canManage}
+                    errors={errors}
+                    portalContainer={portalContainer}
+                />
             </PageDialogBody>
         </form>
     );
@@ -172,6 +195,7 @@ function LetterheadsPage(): ReactNode {
         }),
     );
     const [open, setOpen] = useState<string | null>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
     const rows = listed.data?.data ?? [];
     const selected = rows.find((row) => row.organization_id === open);
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
@@ -235,10 +259,12 @@ function LetterheadsPage(): ReactNode {
                         if (!next) setOpen(null);
                     }}
                 >
-                    <PageDialogContent title="Kop surat">
+                    <PageDialogContent ref={contentRef} title="Kop surat">
                         <LetterheadCard
                             key={selected.organization_id}
                             row={selected}
+                            reports={listed.data?.reports ?? []}
+                            portalContainer={contentRef}
                             canManage={listed.data?.can_manage ?? false}
                             onSaved={() => void listed.refetch()}
                         />

@@ -97,6 +97,28 @@ describe('report catalog', () => {
         ).toThrow('harus milik test');
     });
 
+    test('a dataset field may not take a name the engine fills for every report', () => {
+        const taken = defineReport({
+            code: 'test.a',
+            name: 'Uji',
+            moduleId: 'test',
+            permission: 'test.thing.read',
+            workspace: () => Promise.reject(new Error('Tidak dipakai.')),
+            fields: { signers: field.text('Penanda tangan') },
+            sample: {
+                legalEntityId: 'x',
+                operatingUnitId: null,
+                fileName: 'Uji',
+                values: { signers: 'B' },
+            },
+            layouts: [builtin(layout('{signers}'))],
+            load: () => Promise.resolve(null),
+        });
+        expect(() => reportCatalog([taken])).toThrow(
+            'Field signers laporan test.a dipakai mesin cetak.',
+        );
+    });
+
     test('every print action on a screen names a report in the catalog', async () => {
         const used: string[] = [];
         for (const root of ['src', 'modules'])

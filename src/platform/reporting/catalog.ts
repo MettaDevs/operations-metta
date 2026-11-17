@@ -2,6 +2,7 @@ import { layoutTags } from './docx.ts';
 import { fieldTags, templateView } from './format.ts';
 import { letterheadFields } from './letterhead.ts';
 import { field, type DocumentReport, type Fields } from './report.ts';
+import { signerFields } from './signers.ts';
 
 export const printedFields = {
     at: field.datetime('Waktu cetak'),
@@ -14,7 +15,13 @@ export const engineTags = [
     ...fieldTags(letterheadFields, 'letterhead.'),
     'printed',
     ...fieldTags(printedFields, 'printed.'),
+    ...fieldTags(signerFields),
 ];
+const engineRoots = new Set([
+    'letterhead',
+    'printed',
+    ...Object.keys(signerFields),
+]);
 const loopTags = new Set(['$first', '$last', '$no']);
 
 // Tag yang tidak dikenal layout. Tag di dalam `{#…}` dicari seperti docxtemplater mencarinya: dari baris paling dalam
@@ -54,6 +61,13 @@ export function reportCatalog(
         if (!report.code.startsWith(`${report.moduleId}.`))
             throw new Error(
                 `Kode laporan ${report.code} harus diawali ${report.moduleId}.`,
+            );
+        const taken = Object.keys(report.fields).filter((key) =>
+            engineRoots.has(key),
+        );
+        if (taken.length)
+            throw new Error(
+                `Field ${taken.join(', ')} laporan ${report.code} dipakai mesin cetak.`,
             );
         if (!report.permission.startsWith(`${report.moduleId}.`))
             throw new Error(
