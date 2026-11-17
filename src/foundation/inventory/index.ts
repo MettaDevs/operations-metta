@@ -97,3 +97,4 @@ export {
     stockCountResultReport,
     stockCountSheetReport,
 } from './stock-count/stock-count.report.ts';
+export { adjustmentReport } from './adjustment/adjustment.report.ts';

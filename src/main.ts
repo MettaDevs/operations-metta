@@ -55,6 +55,7 @@ import {
     exchangeRateRoutes,
 } from './foundation/currency/index.ts';
 import {
+    adjustmentReport,
     inventoryRoutes,
     stockCountResultReport,
     stockCountSheetReport,
@@ -124,6 +125,7 @@ export const reports = reportCatalog([
     purchaseReturnReport,
     stockCountSheetReport,
     stockCountResultReport,
+    adjustmentReport,
 ]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
