@@ -26,9 +26,6 @@ type Requisition = {
 
 const path = '/api/v1/purchasing/requisitions';
 
-// Permintaan pembelian, pola Requisition Worksheet BC: lokasi mengajukan, petugas pembelian mengisi vendor dan
-// menyetujui, lalu Buat purchase order membuat satu order terbuka per vendor dan lokasi untuk baris yang disetujui.
-// Order dan barisnya diperiksa dengan SQL langsung.
 describe.skipIf(!process.env.DB_HOST)('purchase requisitions', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -76,7 +73,6 @@ describe.skipIf(!process.env.DB_HOST)('purchase requisitions', () => {
         second = await created('/api/v1/purchasing/vendors', {
             name: 'PBF Kedua',
         });
-        // Harga penerimaan terakhir kasa menjadi harga order bila permintaan tidak membawa harga.
         const receipt = await created<{ id: string; version: number }>(
             '/api/v1/purchasing/receipts',
             {
@@ -308,8 +304,6 @@ type Listed = Requisition & {
     due_date: string;
 };
 
-// Hitung saran (Calculate Plan BC) dari cara pesan ulang barang per lokasi. Stok, sisa purchase order, dan permintaan
-// yang sudah ada mengurangi saran; menjalankannya lagi tidak menggandakan baris. Baris dibaca dengan SQL langsung.
 describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -382,7 +376,6 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
         vendor = await created('/api/v1/purchasing/vendors', {
             name: 'PBF Saran',
         });
-        // Spuit dibeli per kotak isi 10, jadi saran yang habis dibagi 10 ditulis dalam kotak.
         const box = await created('/api/v1/inventory/units-of-measure', {
             code: 'KTK',
             name: 'Kotak',
@@ -410,7 +403,6 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
                 200,
             )
         ).data;
-        // Penerimaan kasa memberi stok 10 di gudang dan vendor terakhir.
         const receipt = await created<{ id: string; version: number }>(
             '/api/v1/purchasing/receipts',
             {
@@ -427,7 +419,6 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
             ),
             200,
         );
-        // Masker sudah dipesan 5 dan belum datang.
         await created('/api/v1/purchasing/orders', {
             vendor_id: vendor.id,
             location_id: warehouse.id,
@@ -700,8 +691,6 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
     });
 });
 
-// Amprah yang belum selesai ikut dihitung, pola Transfer Line di "Inventory Profile Offsetting" BC: yang belum diterima
-// peminta, termasuk yang masih di lokasi transit, menambah stok peminta, dan yang belum dikirim pemasok menguranginya.
 describe.skipIf(!process.env.DB_HOST)(
     'reorder suggestions with transfers',
     () => {

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 import { paymentTermsReferenceSchema } from '../payment-terms/payment-terms.schema.ts';
 
-// Open dan Released di Purchase Header BC, ditambah selesai: semua baris sudah diterima.
 export const purchaseOrderStatuses = ['terbuka', 'dirilis', 'selesai'] as const;
 
 const reference = z.object({
@@ -15,13 +14,11 @@ const amount = z.union([z.number(), z.string()]);
 export const purchaseOrderLineInputSchema = z.object({
     id: z.string().nullable().optional(),
     item_id: z.string(),
-    // Kosong berarti satuan beli barang.
     unit_id: z.string().nullable().optional(),
     quantity: amount,
     unit_cost: amount,
     discount_percent: amount.nullable().optional(),
     vat_percent: amount.nullable().optional(),
-    // Kosong berarti tanggal diharapkan di kepala order.
     expected_receipt_date: z.string().nullable().optional(),
 });
 
@@ -50,7 +47,6 @@ export const purchaseOrderLineRowSchema = z.object({
     vat_percent: z.string(),
     amount: z.string(),
     expected_receipt_date: z.string().nullable(),
-    // Quantity Received dan Outstanding Quantity di Purchase Line BC, dalam satuan baris.
     quantity_received: z.string(),
     outstanding_quantity: z.string(),
 });

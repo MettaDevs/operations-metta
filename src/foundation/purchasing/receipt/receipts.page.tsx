@@ -275,7 +275,6 @@ function ReceiptsPage(): ReactNode {
     );
 }
 
-// Penerimaan yang dibuka dari kotak error, misalnya draf yang menahan Terima barang di purchase order.
 function ReceiptRecord({ id }: { id: string }): ReactNode {
     const { data } = useSuspenseQuery(
         orpc.purchasingReceiptShow.queryOptions({

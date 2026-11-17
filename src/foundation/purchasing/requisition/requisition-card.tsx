@@ -94,8 +94,6 @@ function formOf(requisition: Requisition | null): Form {
     };
 }
 
-// Satu baris permintaan pembelian (Requisition Line di BC). Lokasi mengisi barang, jumlah, dan tanggal dibutuhkan;
-// petugas pembelian mengisi vendor dan harga lalu menandainya disetujui.
 export function RequisitionCard({
     requisition: initial,
     permissions,

@@ -15,15 +15,10 @@ import {
 
 const one = 10n ** BigInt(quantityScale);
 
-// Cara pesan ulang satu barang di satu lokasi, dari gd_m_barang_lokasi. Angka dalam satuan dasar, berskala
-// quantityScale. Constraint tabel menjamin isian yang dibutuhkan setiap kebijakan.
 export type ReorderRule =
     | { policy: 'jumlah_tetap'; reorderPoint: bigint; reorderQuantity: bigint }
     | { policy: 'maksimum'; reorderPoint: bigint; maximumInventory: bigint };
 
-// Jumlah yang disarankan dipesan, dalam satuan dasar, atau null bila stok yang akan tersedia masih di atas stok
-// minimum. Rumusnya CalcOrderQty di codeunit "Inventory Profile Offsetting" BC: Maximum Qty. memesan sampai Maximum
-// Inventory; Fixed Reorder Qty. memesan Reorder Quantity, dikalikan sampai hasilnya melewati Reorder Point.
 export function reorderQuantity(
     rule: ReorderRule,
     projected: bigint,
@@ -104,8 +99,6 @@ function ruleOf(plan: Plan): ReorderRule {
     }
 }
 
-// Satuan baris saran. Seperti BC, saran pembelian memakai satuan beli barang; jumlah yang tidak habis dibagi isi
-// satuan beli ditulis dalam satuan dasar, karena jumlah barang tidak pernah dibulatkan.
 function orderUnit(plan: Plan, base: bigint) {
     const conversion =
         plan.purchase_unit_id && plan.purchase_conversion
@@ -120,10 +113,6 @@ function orderUnit(plan: Plan, base: bigint) {
     return { unitId: plan.base_unit_id, conversion: one, quantity: base };
 }
 
-// Stok yang akan tersedia: kartu gudang di lokasi itu, ditambah sisa baris purchase order terbuka dan dirilis untuk
-// lokasi itu, ditambah permintaan yang belum dipesan selain saran yang akan ditulis ulang. Amprah draf dan diajukan
-// dihitung seperti Transfer Line di "Inventory Profile Offsetting" BC: yang belum diterima lokasi peminta, termasuk
-// yang masih di lokasi transit, menambah stok peminta; yang belum dikirim lokasi pemasok menguranginya.
 const planSql = (allowed: string) => `
     select k.barang_id as item_id, k.lokasi_id as location_id, l.operating_unit_id,
            k.kebijakan_pesan_ulang as policy, k.stok_minimum::text as reorder_point,
@@ -173,10 +162,6 @@ const planSql = (allowed: string) => `
       and k.kebijakan_pesan_ulang is not null and not b.diblokir and ${allowed}
     order by l.kode, b.kode`;
 
-// Calculate Plan (report 699 BC) untuk lokasi yang boleh dilihat pengguna. Setiap barang dan lokasi yang punya cara
-// pesan ulang dan stoknya akan sampai di stok minimum mendapat satu baris saran. Saran yang belum disentuh orang
-// ditulis ulang di tempat, dan yang tidak lagi dibutuhkan dihapus, jadi menjalankannya berkali-kali berakhir di
-// keadaan yang sama. Baris yang diajukan, diubah, atau disetujui orang tidak disentuh.
 export async function calculatePlan(
     db: Database,
     workspace: Workspace,

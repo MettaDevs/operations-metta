@@ -33,9 +33,6 @@ import {
     type RequisitionPermissions,
 } from './requisition-card.tsx';
 
-// Permintaan pembelian (Requisition Worksheet di BC): baris yang belum dipesan, dan baris yang sudah menjadi purchase
-// order. Buat purchase order memproses semua baris yang disetujui.
-
 const route = getRouteApi('/_app/sysadmin/purchasing/requisitions');
 type Row = ApiBody<'purchasingRequisitionList'>['data'][number];
 const searchSchema = z.object({

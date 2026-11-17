@@ -52,9 +52,6 @@ type Refusal = {
 const orders = '/api/v1/purchasing/orders';
 const receipts = '/api/v1/purchasing/receipts';
 
-// Penerimaan dari purchase order, pola BC: Terima barang membuat draf berisi sisa order, posting menambah jumlah
-// diterima di baris order sampai ordernya selesai, batal posting menguranginya lagi, dan penerimaan tidak pernah melebihi
-// order. Jumlah diterima dan status order dibaca dengan SQL langsung.
 describe.skipIf(!process.env.DB_HOST)('receipts from purchase orders', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();

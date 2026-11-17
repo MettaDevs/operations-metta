@@ -7,9 +7,6 @@ import type { ReactNode } from 'react';
 import { api, type ApiBody } from '../../platform/shell/index.ts';
 import { Decimal } from '../../platform/money/index.ts';
 
-// Bagian layar yang dipakai bersama purchase order dan penerimaan barang: pilihan vendor, lokasi, barang, dan satuan,
-// serta hitungan nilai baris yang sama dengan server (lineAmountSql di purchase-line.service.ts).
-
 type Item = ApiBody<'inventoryItemList'>['data'][number];
 type ItemUnit = ApiBody<'inventoryItemUnitList'>['data'][number];
 
@@ -44,8 +41,6 @@ export const decimalOf = (text: string) => {
     }
 };
 
-// Nilai baris untuk tampilan: jumlah x harga satuan x (100 - diskon) / 100, desimal tepat seperti hitungan server. Isian
-// yang belum berupa angka dihitung 0.
 export function amountOf(line: PricedLine): Decimal {
     const quantity = decimalOf(line.quantity);
     const cost = decimalOf(line.unit_cost);
@@ -58,8 +53,6 @@ export function amountOf(line: PricedLine): Decimal {
         : Decimal.of('0');
 }
 
-// Subtotal dan PPN dokumen dihitung seperti server: nilai baris dibulatkan ke presisi jumlah, lalu PPN = jumlah nilai
-// baris x PPN % / 100, dibulatkan sekali. PPN % yang belum berupa angka dihitung 0.
 export function totalsOf(lines: PricedLine[], decimals: number) {
     let subtotal = Decimal.of('0');
     let vat = Decimal.of('0');
@@ -98,7 +91,6 @@ export const loadVendors = async (
     );
     return { items: body.data, nextCursor: body.next_cursor };
 };
-// Dokumen pembelian mengubah stok lokasinya, jadi lokasi khusus petugas hanya ditawarkan kepada petugasnya.
 export const loadLocations = async (
     query: { q: string; cursor?: string },
     signal: AbortSignal,
@@ -138,7 +130,6 @@ export const itemColumns: DataTableColumn<ItemChoice>[] = [
     },
 ];
 
-// Satuan baris hanya dari satuan barangnya: satuan dasar dan satuan kemasannya.
 export function UnitLookup({
     itemId,
     value,
@@ -215,7 +206,6 @@ export function UnitLookup({
     );
 }
 
-// Satuan baris yang tampil di dokumen: kode satuan, ditambah isinya dalam satuan dasar bila bukan satuan dasar.
 export const unitText = (unit: UnitChoice | null, baseUnit: string) =>
     unit
         ? unit.quantity_per_unit === '1'

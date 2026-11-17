@@ -15,8 +15,6 @@ import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import { lineAmountSql } from '../purchase-line.service.ts';
 import { purchaseOrderLayouts } from './purchase-order.layout.ts';
 
-// Purchase order yang dikirim ke vendor, padanan Order Business Central: vendor, lokasi pengiriman, tanggal diharapkan
-// datang, harga, diskon, PPN, dan total dengan terbilang. Nilai dihitung dengan rumus yang sama dengan layar order.
 export const purchaseOrderFields = {
     number: field.text('Nomor order'),
     order_date: field.date('Tanggal order'),

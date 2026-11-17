@@ -35,8 +35,6 @@ type Line = Record<string, unknown>;
 
 const path = '/api/v1/purchasing/orders';
 
-// Purchase order: baris dalam satuan beli, nilai sesudah diskon dan PPN, Rilis yang mengunci isi order dan Buka lagi
-// yang membukanya, penolakan ubah dan hapus order dirilis, cetak, dan izin. Status diperiksa dengan SQL langsung.
 describe.skipIf(!process.env.DB_HOST)('purchase orders', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -119,7 +117,6 @@ describe.skipIf(!process.env.DB_HOST)('purchase orders', () => {
         ]);
         expect(order.number).toMatch(/^PO-\d{8}$/);
         expect(order.status).toBe('terbuka');
-        // 3 x 150.000 x 90% + 1 x 150.000 x 90% = 540.000; PPN 11% = 59.400.
         expect(order.amount).toBe('540000');
         expect(order.vat_amount).toBe('59400');
         expect(order.lines.map((row) => row.expected_receipt_date)).toEqual([
@@ -160,7 +157,6 @@ describe.skipIf(!process.env.DB_HOST)('purchase orders', () => {
             released: true,
         });
 
-        // Rilis yang diulang dengan versi lama menjawab order yang sama tanpa menulis apa pun.
         expect((await act(order, 'release')).status).toBe(200);
 
         const update = await refused(

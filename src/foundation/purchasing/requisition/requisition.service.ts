@@ -90,9 +90,6 @@ const storedSchema = z.object({
     version: z.number(),
 });
 
-// Permintaan pembelian (Requisition Worksheet di BC). Lokasi mengajukan barang dan tanggal dibutuhkan; petugas pembelian
-// mengisi vendor dan harga, menyetujui, lalu Buat purchase order membuat satu order terbuka per vendor dan lokasi untuk
-// semua baris yang disetujui (Carry Out Action Message).
 export class PurchaseRequisitions {
     constructor(
         private readonly db: Database,
@@ -172,8 +169,6 @@ export class PurchaseRequisitions {
         return { data: await this.row(id), permissions: this.permissions() };
     }
 
-    // Isian baris. Vendor, harga, dan persetujuan hanya boleh berubah di tangan pemegang izin proses; nilai yang tidak
-    // berubah boleh dikirim ulang oleh siapa pun, supaya layar yang sama dipakai keduanya.
     private async checked(
         body: unknown,
         stored: z.infer<typeof storedSchema> | null,
@@ -369,8 +364,6 @@ export class PurchaseRequisitions {
         return { status: 204, headers: {}, body: undefined };
     }
 
-    // Hitung saran (Calculate Plan): baris saran untuk barang yang stoknya sampai di stok minimum. Saran mengisi vendor,
-    // jadi hanya pemegang izin proses yang menjalankannya.
     async calculatePlan(body: unknown) {
         this.workspace.guard('purchase-requisition', 'process');
         const input = calculatePlanInputSchema.safeParse(body);
@@ -388,9 +381,6 @@ export class PurchaseRequisitions {
         return { status: 200, headers: {}, body: { data: counts } };
     }
 
-    // Carry Out Action Message: semua baris disetujui di lokasi yang boleh dilihat pengguna menjadi purchase order
-    // terbuka, satu per vendor dan lokasi. Harga yang kosong diisi harga penerimaan terakhir barang dan satuan itu, atau
-    // 0 bila belum pernah diterima; order terbuka masih bisa diubah sebelum dirilis.
     async carryOut(body: unknown) {
         this.workspace.guard('purchase-requisition', 'process');
         this.workspace.guard('purchase-order', 'update');

@@ -7,12 +7,9 @@ const reference = z.object({
     name: z.string(),
 });
 
-// Cara pesan ulang (Reordering Policy di BC). Kosong berarti saran pesan tidak dihitung untuk barang di lokasi itu.
 export const reorderingPolicies = ['jumlah_tetap', 'maksimum'] as const;
 export type ReorderingPolicy = (typeof reorderingPolicies)[number];
 
-// Stok minimum dan maksimum satu barang di satu lokasi (Stockkeeping Unit di BC), beserta cara pesan ulangnya. Stok
-// minimum adalah Reorder Point dan stok maksimum Maximum Inventory. Kosong berarti tidak ditetapkan.
 export const stockkeepingUnitRowSchema = z.object({
     id: z.string(),
     item_id: z.string(),

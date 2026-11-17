@@ -19,10 +19,6 @@ import {
 const one = 10n ** BigInt(quantityScale);
 const hundredPercent = 100n * one;
 
-// Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke presisi jumlah mata uang lokal;
-// amountDecimals bilangan bulat 0 sampai 4 dari setelan mata uang, bukan isian pengguna. PPN dokumen = jumlah nilai
-// baris x tarif PPN / 100, dibulatkan sekali, seperti Pajak = subtotal x persen PPN / 100 di layar lama. Dipakai
-// purchase order dan penerimaan, yang kolom barisnya bernama sama.
 export const lineAmountSql = (alias: string, amountDecimals: number) =>
     `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
 
@@ -45,8 +41,6 @@ export type PriceLine = {
     vatPercent: bigint;
 };
 
-// Barang, satuan, jumlah, harga, diskon, dan PPN satu baris pembelian, dalam skala jumlah persediaan. Kesalahan dicatat
-// lewat fail(field, pesan); nilai yang salah diganti 0 supaya pemeriksaan baris lain tetap berjalan.
 export async function checkPriceLine(
     db: Database,
     scope: { tenantId: string; legalEntityId: string },
@@ -56,7 +50,6 @@ export async function checkPriceLine(
 ): Promise<PriceLine> {
     if (!(await exists(db, 'gd_m_barang', scope, line.item_id)))
         fail('item_id', 'Pilih barang dari daftar.');
-    // Seperti baris pembelian BC yang mengisi Unit of Measure Code dari Purch. Unit of Measure barang.
     const unit = line.unit_id
         ? {
               unitId: line.unit_id,
