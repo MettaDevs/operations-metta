@@ -57,6 +57,7 @@ export {
 export {
     baseQuantity,
     decimalInput,
+    display,
     fromNumeric,
     quantityHint,
     quantityScale,

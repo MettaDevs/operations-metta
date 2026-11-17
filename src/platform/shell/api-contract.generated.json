@@ -2481,6 +2481,42 @@
             }
         }
     },
+    "purchasingReturnList": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/purchasing/receipts/{id}/returns",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "purchasingReturnCreate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/receipts/{id}/returns",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "purchasingReturnReverse": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/receipts/{id}/returns/{returnId}/reverse",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pricingPriceGroupList": {
         "~orpc": {
             "errorMap": {},

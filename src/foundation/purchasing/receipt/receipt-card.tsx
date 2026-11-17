@@ -22,7 +22,7 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { BookCheck, Undo2 } from 'lucide-react';
+import { BookCheck, PackageMinus, Undo2 } from 'lucide-react';
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -34,6 +34,11 @@ import {
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import { Decimal } from '../../../platform/money/index.ts';
+import {
+    PurchaseReturnCard,
+    PurchaseReturnsSection,
+    useCanReturnToVendor,
+} from '../purchase-return/purchase-returns.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
 
 export type Receipt = ApiBody<'purchasingReceiptShow'>['data'];
@@ -370,6 +375,10 @@ export function ReceiptCard({
     const [operation, setOperation] = useState('Penerimaan belum disimpan');
     const [creatingVendor, setCreatingVendor] = useState(false);
     const vendorDialog = useRef<HTMLDivElement>(null);
+    const posted = receipt?.status === 'diposting';
+    const canReturn = useCanReturnToVendor(receipt?.id ?? '', posted);
+    const [returning, setReturning] = useState(false);
+    const returnDialog = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const vendorLoader = useLoader(loadVendors);
     const locationLoader = useLoader(loadLocations);
@@ -593,7 +602,9 @@ export function ReceiptCard({
                 className="flex min-h-0 flex-1 flex-col"
                 onSubmit={(event) => {
                     event.preventDefault();
-                    void submit();
+                    // Retur ke vendor tampil di dalam form ini; submit dari tombol atau dialognya tidak menyimpan
+                    // penerimaan yang sudah diposting.
+                    if (editable) void submit();
                 }}
             >
                 <PageDialogToolbar>
@@ -634,7 +645,20 @@ export function ReceiptCard({
                             Posting
                         </Button>
                     )}
-                    {receipt?.status === 'diposting' && permissions.reverse && (
+                    {posted && canReturn && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="command"
+                            disabled={busy}
+                            title="Kembalikan sebagian barang penerimaan ini ke vendor; stoknya keluar dari lokasi penerimaan."
+                            onClick={() => setReturning(true)}
+                        >
+                            <PackageMinus aria-hidden="true" />
+                            Retur ke vendor
+                        </Button>
+                    )}
+                    {posted && permissions.reverse && (
                         <Button
                             type="button"
                             variant="ghost"
@@ -1491,9 +1515,31 @@ export function ReceiptCard({
                             },
                         ]}
                     />
+                    {receipt && receipt.status !== 'draf' && (
+                        <PurchaseReturnsSection receiptId={receipt.id} />
+                    )}
                 </PageDialogBody>
                 {confirmation}
             </form>
+            {returning && receipt && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setReturning(false);
+                    }}
+                >
+                    <PageDialogContent
+                        ref={returnDialog}
+                        title="Retur ke vendor"
+                    >
+                        <PurchaseReturnCard
+                            receiptId={receipt.id}
+                            onDone={() => setReturning(false)}
+                            portalContainer={returnDialog}
+                        />
+                    </PageDialogContent>
+                </PageDialog>
+            )}
             {creatingVendor && (
                 <PageDialog
                     open

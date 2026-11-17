@@ -72,6 +72,10 @@ export type OutboundLine = LineBase & {
     // Mengurangi tepat satu posisi stok: batch ini saja, atau stok tanpa batch bila batchId kosong. Setelan pengambilan
     // dan penolakan batch kedaluwarsa tidak berlaku, karena opname mengoreksi barang yang memang sudah tidak ada.
     exactBatch?: boolean;
+    // Baris masuk yang boleh diambil, seperti Appl.-to Item Entry di BC. Diisi retur ke vendor supaya yang keluar tepat
+    // barang dari penerimaannya, dengan harga dan sumber dananya. Setelan pengambilan, batch pilihan, dan penolakan
+    // batch kedaluwarsa tidak berlaku, dan kekurangan selalu ditolak walau lokasi mengizinkan stok minus.
+    appliesTo?: string[];
 };
 export type TransferLine = LineBase & {
     kind: 'transfer';
@@ -626,14 +630,16 @@ async function prepare(
                     break;
                 }
                 const policy = policyOf(item, location, 'outbound');
-                const batch = checkChosen(
-                    errors,
-                    line,
-                    item,
-                    policy,
-                    chosen,
-                    postingDate,
-                );
+                const batch = line.appliesTo
+                    ? null
+                    : checkChosen(
+                          errors,
+                          line,
+                          item,
+                          policy,
+                          chosen,
+                          postingDate,
+                      );
                 prepared.push({
                     kind: 'outbound',
                     line,
@@ -854,7 +860,7 @@ async function issue(
     },
 ): Promise<Slice[]> {
     const { line, item, location, policy } = args;
-    const appliesTo = line.kind === 'transfer' ? line.appliesTo : undefined;
+    const { appliesTo } = line;
     const plan: Candidates = appliesTo
         ? { batch: { kind: 'any' }, order: 'posting' }
         : line.kind === 'outbound' && line.exactBatch
@@ -875,7 +881,10 @@ async function issue(
         )
     ).map(openEntry);
     const { slices, shortfall } = allocate(open, line.quantity);
-    if (shortfall > 0n && policy.refuseNegative)
+    if (
+        shortfall > 0n &&
+        (policy.refuseNegative || (line.kind === 'outbound' && appliesTo))
+    )
         await refuseShortage(ledger.db, context, {
             line,
             item,
