@@ -30,6 +30,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
 } from '../../../platform/shell/index.ts';
 import { CodeEntryCard } from '../code-list/code-list-screen.tsx';
 import { reasonCodes } from '../code-list/code-list-sources.ts';
@@ -537,6 +538,13 @@ function AdjustmentForm({
                                 Batal posting
                             </Button>
                         )}
+                    {document && (
+                        <PrintAction
+                            report="core.inventory-adjustment"
+                            recordId={document.id}
+                            label="Penyesuaian"
+                        />
+                    )}
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}

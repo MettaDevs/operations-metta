@@ -45,7 +45,7 @@ import {
     adjustmentStatuses,
 } from './adjustment.schema.ts';
 
-const sourceType = 'penyesuaian';
+export const sourceType = 'penyesuaian';
 export const adjustmentNumberReference = 'core.inventory-adjustment-number';
 
 type Direction = (typeof adjustmentDirections)[number];
