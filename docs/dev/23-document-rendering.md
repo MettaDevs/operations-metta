@@ -24,15 +24,15 @@ Repo ini mengambil model BC, dengan satu ide dari F&O: dataset adalah kontrak ya
 
 ## Core memegang mesinnya, pemilik data memegang datasetnya
 
-| Lapis | Padanan BC | Di repo ini |
-| --- | --- | --- |
-| Dataset | Report dataset | `defineReport` di folder fitur pemilik data, misalnya `payment-receipt.report.ts` dan `drug-label.report.ts` |
-| Katalog laporan | Report object | `reportCatalog([...])` di `src/main.ts`, dirakit dari laporan yang di-export Core dan module |
-| Layout bawaan | Extension layout | `layouts` pada definisi laporan, ditulis dengan `wordDocument` |
-| Layout unggahan | User-defined layout | `report_layouts`, per legal entity, isi berkas di kolom `isi` |
-| Layout yang dipakai | Report Layout Selection | `report_layout_defaults`, satu per legal entity dan laporan |
-| Render PDF | Report rendering | Gotenberg di `RENDERER_URL`, tanpa status dan tanpa tenant |
-| Identitas cetak | Company Information | `print_identities` per legal entity atau unit kerja, Sys Admin › Kop surat |
+| Lapis               | Padanan BC              | Di repo ini                                                                                                  |
+| ------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Dataset             | Report dataset          | `defineReport` di folder fitur pemilik data, misalnya `payment-receipt.report.ts` dan `drug-label.report.ts` |
+| Katalog laporan     | Report object           | `reportCatalog([...])` di `src/main.ts`, dirakit dari laporan yang di-export Core dan module                 |
+| Layout bawaan       | Extension layout        | `layouts` pada definisi laporan, ditulis dengan `wordDocument`                                               |
+| Layout unggahan     | User-defined layout     | `report_layouts`, per legal entity, isi berkas di kolom `isi`                                                |
+| Layout yang dipakai | Report Layout Selection | `report_layout_defaults`, satu per legal entity dan laporan                                                  |
+| Render PDF          | Report rendering        | Gotenberg di `RENDERER_URL`, tanpa status dan tanpa tenant                                                   |
+| Identitas cetak     | Company Information     | `print_identities` per legal entity atau unit kerja, Sys Admin › Kop surat                                   |
 
 Batas yang mengikat setiap pemilik dataset:
 
@@ -92,18 +92,19 @@ Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil g
 
 ## Dokumen yang sudah terdaftar
 
-| Kode | Dokumen | Padanan BC | Tombol di layar |
-| --- | --- | --- | --- |
-| `core.payment-receipt` | Kuitansi pembayaran | Posted Sales Invoice | Kasir › Pembayaran |
-| `pharmacy.drug-label` | Etiket obat | Tidak ada | Farmasi › kartu penyerahan |
-| `core.transfer-order` | Permintaan barang (amprah) | Transfer Order (5703) | Sys Admin › Persediaan › Amprah |
-| `core.transfer-shipment` | Mutasi barang | Transfer Shipment (5704) | Sys Admin › Persediaan › Mutasi, dan riwayat posting amprah |
-| `core.transfer-receipt` | Penerimaan mutasi | Transfer Receipt (5705) | Sys Admin › Persediaan › Penerimaan mutasi |
-| `core.purchase-receipt` | Penerimaan barang | Purchase - Receipt (408) | Sys Admin › Pembelian › Penerimaan barang |
-| `core.purchase-return` | Retur ke vendor | Purchase - Return Shipment (6636) | Bagian Retur ke vendor di kartu penerimaan |
-| `core.stock-count-sheet` | Lembar hitung opname | Phys. Inventory List (722) | Sys Admin › Persediaan › Opname stok |
-| `core.stock-count-result` | Hasil opname | Posted Phys. Invt. Order Diff. (5876) | Sys Admin › Persediaan › Opname stok |
-| `core.inventory-adjustment` | Penyesuaian stok | Item Journal dengan Reason Code | Sys Admin › Persediaan › Penyesuaian stok |
+| Kode                        | Dokumen                               | Padanan BC                            | Tombol di layar                                                        |
+| --------------------------- | ------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `core.payment-receipt`      | Kuitansi pembayaran                   | Posted Sales Invoice                  | Kasir › Pembayaran                                                     |
+| `pharmacy.drug-label`       | Etiket obat                           | Tidak ada                             | Farmasi › kartu penyerahan                                             |
+| `core.transfer-order`       | Permintaan barang (amprah)            | Transfer Order (5703)                 | Sys Admin › Persediaan › Amprah                                        |
+| `core.transfer-shipment`    | Mutasi barang                         | Transfer Shipment (5704)              | Sys Admin › Persediaan › Mutasi, dan riwayat posting amprah            |
+| `core.transfer-receipt`     | Penerimaan mutasi                     | Transfer Receipt (5705)               | Sys Admin › Persediaan › Penerimaan mutasi                             |
+| `core.purchase-receipt`     | Penerimaan barang                     | Purchase - Receipt (408)              | Sys Admin › Pembelian › Penerimaan barang                              |
+| `core.purchase-return`      | Retur ke vendor                       | Purchase - Return Shipment (6636)     | Bagian Retur ke vendor di kartu penerimaan                             |
+| `core.stock-count-sheet`    | Lembar hitung opname                  | Phys. Inventory List (722)            | Sys Admin › Persediaan › Opname stok                                   |
+| `core.stock-count-result`   | Hasil opname                          | Posted Phys. Invt. Order Diff. (5876) | Sys Admin › Persediaan › Opname stok                                   |
+| `core.inventory-adjustment` | Penyesuaian stok                      | Item Journal dengan Reason Code       | Sys Admin › Persediaan › Penyesuaian stok                              |
+| `core.stock-card`           | Kartu stok satu barang di satu lokasi | Inventory - Transaction Detail (704)  | Sys Admin › Persediaan › Kartu stok, setelah barang dan lokasi dipilih |
 
 Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocument` di `src/foundation/inventory/document-layout.ts`: kop, keterangan dokumen, tabel baris, jumlah, dan kotak tanda tangan. Bentuknya mengikuti dataset BC, bukan form puskesmas lama:
 
@@ -112,6 +113,12 @@ Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocu
 - **Tanpa jenis dokumen terpisah.** Berita acara serah terima adalah mutasi yang ditandatangani dua pihak. Berita acara pemusnahan adalah penyesuaian beralasan pemusnahan dengan kolom saksi.
 - **Penyesuaian terposting dicetak dari kartu gudang.** Batch stok keluar baru dipilih saat posting, jadi baris draf dan baris terposting bisa berbeda.
 - **Hitung buta.** Lembar hitung punya layout tanpa stok tercatat, seperti opsi Show Qty. (Calculated) di BC.
+
+## Parameter cetak
+
+Sebagian laporan butuh lebih dari id record, seperti request page BC. Kartu stok mencetak satu barang (record-nya), tetapi hanya untuk satu lokasi dan satu periode. Query cetak selain `format` dan `layout` diteruskan ke `load` sebagai `parameters`, dan `PrintAction` menerimanya sebagai `parameters`. Dataset memeriksa parameternya sendiri dengan aturan yang sama dengan layarnya: isian yang salah dijawab 422 per field, dan lokasi yang hanya untuk petugasnya ditolak `requireLocationAccess`.
+
+Laporan berparameter tetap dokumen Word: baris gerak diulang lewat `field.lines`, saldo awal dan akhir field biasa. Ia cocok untuk laporan yang dibaca dan ditandatangani di kertas, sebesar satu barang satu periode. Daftar besar yang diolah di Excel tetap menunggu laporan tabel di bawah.
 
 ## Cetak dokumen berjalan sinkron
 
@@ -125,12 +132,12 @@ Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocu
 
 PDF dibuat LibreOffice di dalam [Gotenberg](https://gotenberg.dev/), container terpisah dari runtime. Image runtime tetap `oven/bun` slim; memasang LibreOffice di dalamnya menambah ratusan megabyte ke setiap proses runtime dan worker, dan setiap konversi akan menyalakan LibreOffice dari nol.
 
-| | Terukur |
-| --- | --- |
-| Image | `gotenberg/gotenberg:8.36.0`, 2,41 GB |
-| Memori | 12 MB sebelum konversi pertama, 159 MB sesudah 12 konversi, sekitar 285 MB sesudah 100-an konversi |
+|                                 | Terukur                                                                                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Image                           | `gotenberg/gotenberg:8.36.0`, 2,41 GB                                                                                                                       |
+| Memori                          | 12 MB sebelum konversi pertama, 159 MB sesudah 12 konversi, sekitar 285 MB sesudah 100-an konversi                                                          |
 | Konversi kuitansi A4 dan etiket | median 317 sampai 372 ms; pertama 13,3 detik tanpa auto-start; sesekali sekitar 1,4 detik saat LibreOffice dinyalakan ulang (`--libreoffice-restart-after`) |
-| Isi layout di runtime | median 2,8 ms (etiket) dan 3,5 ms (kuitansi); memori runtime tidak bertambah sesudah 600 kali isi |
+| Isi layout di runtime           | median 2,8 ms (etiket) dan 3,5 ms (kuitansi); memori runtime tidak bertambah sesudah 600 kali isi                                                           |
 
 - **Satu Gotenberg per host runtime**, tanpa status dan tanpa tenant. Di SaaS dev ia service `ops-renderer` di `deploy/saas-dev/compose.yaml` repo control-plane-metta, dengan `RENDERER_URL` diisi ke ops-app.
 - **Tanpa jalan keluar ke internet**, supaya dokumen unggahan tenant tidak dapat memancingnya mengambil sumber dari luar.
@@ -139,7 +146,7 @@ PDF dibuat LibreOffice di dalam [Gotenberg](https://gotenberg.dev/), container t
 
 ## Laporan tabel: kontrak, belum dibangun
 
-Laporan tabel, misalnya daftar penjualan atau kartu stok, memakai field yang sama tanpa `field.lines`: satu baris dataset satu baris laporan. Bedanya dengan dokumen:
+Laporan tabel, misalnya daftar penjualan atau mutasi semua barang dalam satu periode, memakai field yang sama tanpa `field.lines`: satu baris dataset satu baris laporan. Bedanya dengan dokumen:
 
 - Parameter laporan (periode, lokasi) dinyatakan sebagai schema zod, sumber validasi dan tipe untuk layar pemilihnya.
 - Baris dialirkan per halaman, bukan dimuat sekaligus.

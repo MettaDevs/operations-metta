@@ -55,5 +55,6 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 - [Purchase order](./purchase-order.md): order terbuka ke vendor, Rilis yang menguncinya, dan cetak order.
 - [Terima barang dari purchase order](./terima-dari-order.md): draf penerimaan berisi sisa order, terima sebagian, dan order yang selesai.
 - [Retur ke vendor](./retur-ke-vendor.md): retur sebagian penerimaan yang sudah diposting, penolakan baris yang barangnya sudah habis, Batal posting penerimaan yang ditolak sesudah diretur, dan Batal retur.
+- [Kartu stok](./kartu-stok.md): gerak stok satu barang di satu lokasi dengan jenis gerak dalam bahasa sehari-hari, cetak PDF dan Word lewat mesin cetak, dan saldo yang dicocokkan dengan kartu gudang.
 
 Belum dipetakan: pasien baru dari layar registrasi, batal registrasi, rujuk eksternal dan meninggal, retur yang berhasil (sebelum bayar) dan batal retur, nota kredit sesudah Clerk End, pembayaran hutang, Clerk End, serta semua layar setup dan Sys Admin selain Cetak.

@@ -154,9 +154,15 @@ export class Printing {
         recordId: string,
         format: OutputFormat,
         layoutRef: string | null,
+        parameters: URLSearchParams,
     ): Promise<File> {
         const { report, workspace } = await this.forPrinting(code);
-        const record = await report.load(this.context.db, workspace, recordId);
+        const record = await report.load(
+            this.context.db,
+            workspace,
+            recordId,
+            parameters,
+        );
         // Kebijakan data unit kerja dijaga dataset lewat service pemiliknya, sama seperti saat record dibuka di layar.
         // Di sini hanya dipastikan dokumen milik legal entity tempat kerja, supaya kop dan layout-nya benar.
         if (record?.legalEntityId !== workspace.legalEntityId)

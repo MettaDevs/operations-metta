@@ -110,10 +110,13 @@ export type DocumentReport<S extends Fields = Fields> = {
     sample: ReportRecord<S>;
     layouts: readonly [BuiltinLayout, ...BuiltinLayout[]];
     // Dataset satu record. Dataset menyaring tenant dan memeriksa izin lewat service pemiliknya; null berarti tidak ada.
+    // `parameters` adalah query cetak selain format dan layout, misalnya lokasi dan periode kartu stok satu barang
+    // (request page BC). Dataset yang memakainya memeriksa isinya sendiri, sama dengan layarnya.
     load: (
         db: Database,
         workspace: Workspace,
         recordId: string,
+        parameters: URLSearchParams,
     ) => Promise<ReportRecord<S> | null>;
 };
 
@@ -123,6 +126,6 @@ export function defineReport<S extends Fields>(
     return report;
 }
 
-// Laporan tabel (daftar penjualan, kartu stok) baru kontrak. Ia memakai field yang sama tanpa `lines`, parameter
+// Laporan tabel (daftar penjualan, mutasi semua barang) baru kontrak. Ia memakai field yang sama tanpa `lines`, parameter
 // dari schema zod, baris yang dialirkan, layout .xlsx, dan antrean `report_exports` untuk daftar besar. Rinciannya di
 // docs/dev/23-document-rendering.md, bagian Laporan tabel.
