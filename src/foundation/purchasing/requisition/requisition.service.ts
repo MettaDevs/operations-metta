@@ -31,7 +31,9 @@ import {
 } from '../../currency/index.ts';
 import { insertOrder } from '../purchase-order/purchase-order.service.ts';
 import { checkPriceLine } from '../purchase-line.service.ts';
+import { calculatePlan } from './requisition-plan.ts';
 import {
+    calculatePlanInputSchema,
     carryOutInputSchema,
     requisitionInputSchema,
     requisitionRowSchema,
@@ -41,6 +43,7 @@ import {
 const rowSql = `select * from (
         select r.id, r.lokasi_id as location_id, r.version, r.tanggal_dibutuhkan::text as due_date,
                r.keterangan as description, requester.name as requested_by, r.disetujui as accepted,
+               r.saran is not null as suggested,
                case when r.order_detail_id is null then 'terbuka' else 'diproses' end as status,
                json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode) as item,
@@ -324,7 +327,8 @@ export class PurchaseRequisitions {
             await this.db.execute(
                 `update bl_tr_permintaan set operating_unit_id = $1, lokasi_id = $2, barang_id = $3, satuan_id = $4,
                         konversi = $5, jumlah = $6, tanggal_dibutuhkan = $7, keterangan = $8, vendor_id = $9,
-                        harga_satuan = $10, disetujui = $11, updated_at = $12
+                        harga_satuan = $10, disetujui = $11, updated_at = $12,
+                        saran = case when saran = 'baru' then 'diubah' else saran end
                  where tenant_id = $13 and id = $14`,
                 [
                     data.location.operating_unit_id,
@@ -363,6 +367,25 @@ export class PurchaseRequisitions {
             );
         });
         return { status: 204, headers: {}, body: undefined };
+    }
+
+    // Hitung saran (Calculate Plan): baris saran untuk barang yang stoknya sampai di stok minimum. Saran mengisi vendor,
+    // jadi hanya pemegang izin proses yang menjalankannya.
+    async calculatePlan(body: unknown) {
+        this.workspace.guard('purchase-requisition', 'process');
+        const input = calculatePlanInputSchema.safeParse(body);
+        if (
+            !input.success ||
+            !dateSchema.safeParse(input.data.due_date).success
+        )
+            return validation({ due_date: messages.due_date });
+        const counts = await calculatePlan(
+            this.db,
+            this.workspace,
+            this.scope,
+            input.data.due_date,
+        );
+        return { status: 200, headers: {}, body: { data: counts } };
     }
 
     // Carry Out Action Message: semua baris disetujui di lokasi yang boleh dilihat pengguna menjadi purchase order

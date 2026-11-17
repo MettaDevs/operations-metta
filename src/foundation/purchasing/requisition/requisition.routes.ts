@@ -8,6 +8,7 @@ import {
     type Context,
 } from '../../../platform/http/index.ts';
 import type {
+    calculatePlanInputSchema,
     carryOutInputSchema,
     requisitionInputSchema,
     requisitionListQuerySchema,
@@ -69,6 +70,13 @@ export function requisitionRoutes() {
                 (await requisitions(context, input.body)).destroy(
                     context.request,
                     input.params.id,
+                    input.body,
+                ),
+            ),
+        purchasingRequisitionCalculatePlan: route('POST', '/calculate-plan')
+            .input(typedBody<z.input<typeof calculatePlanInputSchema>>())
+            .handler(async ({ context, input }) =>
+                (await requisitions(context, input.body)).calculatePlan(
                     input.body,
                 ),
             ),

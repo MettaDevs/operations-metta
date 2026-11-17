@@ -14,7 +14,7 @@ import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { getRouteApi } from '@tanstack/react-router';
-import { ClipboardCheck } from 'lucide-react';
+import { Calculator, ClipboardCheck } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -100,6 +100,46 @@ function RequisitionsPage(): ReactNode {
     };
     const accepted = list.items.filter((row) => row.accepted).length;
 
+    const calculatePlan = async () => {
+        if (
+            !(await confirm({
+                title: 'Hitung saran pesan?',
+                description:
+                    'Barang yang stoknya sampai di stok minimum lokasi, setelah ditambah purchase order yang belum datang dan permintaan yang belum dipesan, dibuatkan saran dengan jumlah menurut cara pesan ulangnya. Saran yang belum diubah diganti hasil hitungan baru; permintaan yang sudah diubah atau disetujui tidak disentuh.',
+                confirmLabel: 'Hitung saran',
+            }))
+        )
+            return;
+        setBusy(true);
+        try {
+            const { body } = await api.purchasingRequisitionCalculatePlan({
+                body: { due_date: today() },
+            });
+            const { created, updated, removed } = body.data;
+            const changes = [
+                created ? `${created} saran baru` : '',
+                updated ? `${updated} saran diperbarui` : '',
+                removed
+                    ? `${removed} saran dihapus karena stoknya sudah cukup`
+                    : '',
+            ].filter(Boolean);
+            toast.success(
+                changes.length
+                    ? `Saran dihitung: ${changes.join(', ')}.`
+                    : 'Saran sudah sesuai stok. Tidak ada yang berubah.',
+            );
+            list.reload();
+        } catch (caught) {
+            toast.error(
+                caught instanceof ApiError && caught.status === 422
+                    ? Object.values(caught.errors).flat().join(' ')
+                    : errorText(caught, 'Saran belum dihitung.'),
+            );
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const carryOut = async () => {
         if (
             !(await confirm({
@@ -154,6 +194,19 @@ function RequisitionsPage(): ReactNode {
                                 action="create"
                                 onClick={() => openCard('new')}
                             />
+                        )}
+                        {permissions.process && status === 'terbuka' && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="command"
+                                disabled={busy}
+                                title="Buat saran pesan untuk barang yang stoknya sampai di stok minimum lokasi."
+                                onClick={() => void calculatePlan()}
+                            >
+                                <Calculator aria-hidden="true" />
+                                Hitung saran
+                            </Button>
                         )}
                         {permissions.process && status === 'terbuka' && (
                             <Button
@@ -312,7 +365,9 @@ function RequisitionsPage(): ReactNode {
                                     >
                                         {row.accepted
                                             ? 'Disetujui'
-                                            : 'Diajukan'}
+                                            : row.suggested
+                                              ? 'Saran'
+                                              : 'Diajukan'}
                                     </Badge>
                                 ),
                         },

@@ -74,3 +74,16 @@ Setelan ada di tabel `gd_m_barang_lokasi`, bagian Stok minimum dan maksimum di k
 - **Jumlah pesan ulang** (`jumlah_pesan_ulang`) adalah Reorder Quantity.
 - **Izin.** Setelan ini tetap memakai izin ubah kartu barang (`core.inventory-item.update`), bukan izin pembelian. Satu baris setelan memegang stok minimum, maksimum, dan cara pesannya sekaligus, dan memecahnya ke dua duty membuat satu kartu disimpan dengan dua izin. Di BC kartu Stockkeeping Unit juga bagian persediaan.
 - **Yang belum ada.** Safety Stock Quantity, Minimum dan Maximum Order Quantity, Order Multiple, dan lead time. Setiap angka itu menambah aturan perhitungan BC, dan tidak ada di data lama.
+
+### Hitung saran
+
+Tombol Hitung saran di Permintaan pembelian memanggil `POST /api/v1/purchasing/requisitions/calculate-plan`, yang dijalankan `calculatePlan` di `requisition-plan.ts`. Ia butuh izin `core.purchase-requisition.process`, sama dengan Buat purchase order, karena saran mengisi vendor.
+
+- **Yang dihitung.** Setiap barang dan lokasi yang punya cara pesan ulang, di lokasi yang boleh dilihat pengguna (`allowedLocationsSql`). Barang yang diblokir dilewati, seperti `Blocked = false` di report 699.
+- **Stok yang akan tersedia.** Kartu gudang di lokasi itu, ditambah sisa baris purchase order terbuka dan dirilis untuk lokasi itu (Outstanding Quantity), ditambah permintaan yang belum dipesan selain saran yang akan ditulis ulang. Semua dalam satuan dasar. Mutasi antar lokasi belum dihitung, karena saran di sini hanya pembelian (Replenishment System Purchase).
+- **Jumlah.** `reorderQuantity` mengikuti `CalcOrderQty` di codeunit "Inventory Profile Offsetting". Saran dibuat bila stok yang akan tersedia sama dengan atau di bawah stok minimum. Jumlah tetap memesan jumlah pesan ulang, dikalikan sampai hasilnya melewati stok minimum. Sampai stok maksimum memesan selisihnya dengan stok maksimum.
+- **Satuan.** Satuan beli barang bila jumlahnya habis dibagi isi satuan beli, kalau tidak satuan dasar. BC memakai satuan beli dan membulatkan jumlahnya; di sini jumlah barang tidak pernah dibulatkan.
+- **Vendor dan harga.** Vendor dari penerimaan terakhir yang diposting untuk barang itu, bila vendornya aktif. Harga dibiarkan kosong, jadi Buat purchase order mengisinya dengan harga penerimaan terakhir seperti permintaan biasa.
+- **Tanda saran.** Kolom `saran`: `baru` untuk saran yang belum disentuh orang, `diubah` sesudah orang mengubah atau menyetujuinya. Layar menampilkan status Saran, dan keterangan baris menyebut stok dan stok minimum yang dipakai.
+- **Diulang.** Saran `baru` ditulis ulang di tempat dan yang tidak lagi dibutuhkan dihapus, jadi menjalankannya dua kali berakhir di keadaan yang sama. Index unik menjaga satu saran `baru` per barang dan lokasi, dan advisory lock per legal entity menahan dua hitungan yang berjalan bersamaan. Permintaan orang dan saran `diubah` tidak disentuh dan dihitung sebagai stok yang akan datang. BC menghapus semua baris barang itu di lembar kerja; di sini lembar kerja dipakai bersama lokasi yang mengajukan, jadi baris orang dipertahankan.
+- **Sesudahnya.** Saran disetujui lalu Buat purchase order, sama dengan permintaan lain.

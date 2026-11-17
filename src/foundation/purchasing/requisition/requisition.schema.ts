@@ -28,6 +28,8 @@ export const requisitionInputSchema = z.object({
 
 export const carryOutInputSchema = z.object({ order_date: z.string() });
 
+export const calculatePlanInputSchema = z.object({ due_date: z.string() });
+
 export const requisitionRowSchema = z.object({
     id: z.string(),
     location: reference,
@@ -43,6 +45,8 @@ export const requisitionRowSchema = z.object({
         .nullable(),
     unit_cost: z.string().nullable(),
     accepted: z.boolean(),
+    // Baris yang ditulis Hitung saran, termasuk yang sesudahnya diubah orang.
+    suggested: z.boolean(),
     order: z.object({ id: z.string(), number: z.string() }).nullable(),
     version: z.number(),
 });

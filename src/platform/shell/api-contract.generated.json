@@ -2517,6 +2517,18 @@
             }
         }
     },
+    "purchasingRequisitionCalculatePlan": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/requisitions/calculate-plan",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingRequisitionCarryOut": {
         "~orpc": {
             "errorMap": {},
