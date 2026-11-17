@@ -35,6 +35,7 @@ import { z } from 'zod';
 import {
     api,
     definePage,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import {
@@ -50,6 +51,7 @@ import {
     type LookupRequest,
     type Reference,
 } from '@operations-metta/ui/master-lookup';
+import { movementLabel } from './movement.ts';
 
 // Kartu stok (Item Ledger Entries di BC): gerak stok satu barang dalam satu periode, langsung dari kartu gudang.
 
@@ -339,7 +341,14 @@ function ItemLedgerEntriesPage(): ReactNode {
             width: 260,
             cell: (entry) => (
                 <span className="flex min-w-0 items-center gap-2">
-                    <DataTableText>{kindLabels[entry.kind]}</DataTableText>
+                    <DataTableText>
+                        {movementLabel({
+                            kind: entry.kind,
+                            sourceType: entry.document.type,
+                            inbound: !entry.quantity.startsWith('-'),
+                            reversal: entry.reversed_entry_id !== null,
+                        })}
+                    </DataTableText>
                     {entry.reversed_entry_id && (
                         <Badge variant="outline">Pembalik</Badge>
                     )}
@@ -494,7 +503,20 @@ function ItemLedgerEntriesPage(): ReactNode {
                             active: filtered,
                             controls: filterPanelId,
                         }}
-                    />
+                    >
+                        {item && locationId && (
+                            <PrintAction
+                                report="core.stock-card"
+                                recordId={item.id}
+                                parameters={{
+                                    location_id: locationId,
+                                    from,
+                                    to,
+                                }}
+                                label="Kartu stok"
+                            />
+                        )}
+                    </RecordActionBar>
                 }
                 filterPanel={
                     filtersOpen ? (

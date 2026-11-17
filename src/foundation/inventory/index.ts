@@ -107,3 +107,4 @@ export {
     stockCountSheetReport,
 } from './stock-count/stock-count.report.ts';
 export { adjustmentReport } from './adjustment/adjustment.report.ts';
+export { stockCardReport } from './item-ledger/stock-card.report.ts';

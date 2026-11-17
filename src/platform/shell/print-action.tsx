@@ -18,10 +18,11 @@ type Format = 'pdf' | 'docx';
 function fileUrl(
     report: string,
     recordId: string,
+    parameters: Record<string, string>,
     format: Format,
     layout: string | null,
 ) {
-    const query = new URLSearchParams({ format });
+    const query = new URLSearchParams({ ...parameters, format });
     if (layout) query.set('layout', layout);
     return `/api/v1/reports/${encodeURIComponent(report)}/records/${encodeURIComponent(recordId)}?${query.toString()}`;
 }
@@ -73,10 +74,13 @@ export async function openInTab(url: string): Promise<void> {
 export function PrintAction({
     report,
     recordId,
+    parameters = {},
     label = 'Cetak',
 }: {
     report: string;
     recordId: string;
+    // Parameter laporan selain record, misalnya lokasi dan periode kartu stok.
+    parameters?: Record<string, string>;
     label?: string;
 }): ReactNode {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -93,7 +97,9 @@ export function PrintAction({
     async function openPdf(layout: string | null) {
         setPending(true);
         try {
-            await openInTab(fileUrl(report, recordId, 'pdf', layout));
+            await openInTab(
+                fileUrl(report, recordId, parameters, 'pdf', layout),
+            );
         } catch (caught) {
             const rendererDown =
                 caught instanceof ApiError &&
@@ -115,7 +121,9 @@ export function PrintAction({
         setPending(true);
         try {
             download(
-                await fetchFile(fileUrl(report, recordId, 'docx', layout)),
+                await fetchFile(
+                    fileUrl(report, recordId, parameters, 'docx', layout),
+                ),
             );
         } catch (caught) {
             toast.error(errorText(caught, 'Dokumen belum bisa diunduh.'));

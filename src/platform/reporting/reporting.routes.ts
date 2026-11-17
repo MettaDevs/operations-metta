@@ -33,6 +33,14 @@ function query(context: Context) {
     );
 }
 
+// Query cetak tanpa format dan layout: parameter laporan yang diteruskan ke dataset.
+function reportParameters(context: Context) {
+    const parameters = new URL(context.request.url).searchParams;
+    parameters.delete('format');
+    parameters.delete('layout');
+    return parameters;
+}
+
 function file(body: File) {
     return {
         status: 200 as const,
@@ -78,6 +86,7 @@ export function reportingRoutes(catalog: ReportCatalog) {
                         input.params.id,
                         parsed.data.format,
                         parsed.data.layout ?? null,
+                        reportParameters(context),
                     ),
                 );
             }),
