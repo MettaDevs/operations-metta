@@ -93,6 +93,7 @@ import {
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as foundationPricingChargeComponentChargeComponentsPage } from './foundation/pricing/charge-component/charge-components.page.tsx';
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
+import { page as foundationPurchasingPaymentTermsPaymentTermsPage } from './foundation/purchasing/payment-terms/payment-terms.page.tsx';
 import {
     page as foundationPurchasingPurchaseOrderPurchaseOrdersPage,
     record as foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
@@ -1014,6 +1015,17 @@ const foundationPricingPriceGroupPriceGroupsRoute = createRoute({
     staticData: { title: foundationPricingPriceGroupPriceGroupsPage.title },
 });
 
+const foundationPurchasingPaymentTermsPaymentTermsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingPaymentTermsPaymentTermsPage.path,
+    component: foundationPurchasingPaymentTermsPaymentTermsPage.component,
+    validateSearch:
+        foundationPurchasingPaymentTermsPaymentTermsPage.validateSearch,
+    staticData: {
+        title: foundationPurchasingPaymentTermsPaymentTermsPage.title,
+    },
+});
+
 const foundationPurchasingPurchaseOrderPurchaseOrdersRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingPurchaseOrderPurchaseOrdersPage.path,
@@ -1271,6 +1283,7 @@ const routeTree = rootRoute.addChildren([
         foundationNumberSequenceNumberSequencesRoute,
         foundationPricingChargeComponentChargeComponentsRoute,
         foundationPricingPriceGroupPriceGroupsRoute,
+        foundationPurchasingPaymentTermsPaymentTermsRoute,
         foundationPurchasingPurchaseOrderPurchaseOrdersRoute,
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingRequisitionRequisitionsRoute,

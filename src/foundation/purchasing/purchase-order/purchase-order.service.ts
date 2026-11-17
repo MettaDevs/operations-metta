@@ -37,6 +37,10 @@ import {
     type PriceLine,
 } from '../purchase-line.service.ts';
 import {
+    paymentTermsJson,
+    paymentTermsOf,
+} from '../payment-terms/payment-terms.service.ts';
+import {
     purchaseOrderInputSchema,
     purchaseOrderLineRowSchema,
     purchaseOrderRowSchema,
@@ -65,10 +69,12 @@ const rowSql = (amountDecimals: number) => `select * from (
                            p.name as vendor_name, l.kode as location_code, h.termasuk_ppn as prices_including_vat,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
+                           ${paymentTermsJson('pt')} as payment_terms,
                            coalesce(trim_scale(t.amount)::text, '0') as amount,
                            coalesce(trim_scale(round(t.vat, ${amountDecimals}))::text, '0') as vat_amount,
                            ${isoSql('h.dirilis_pada')} as released_at
                     from bl_tr_order h
+                    left join termin_pembayaran pt on pt.tenant_id = h.tenant_id and pt.id = h.termin_pembayaran_id
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
@@ -94,6 +100,7 @@ const messages = {
     quantity: 'Isi jumlah lebih dari 0.',
     unit_cost: 'Isi harga satuan 0 atau lebih.',
     discount_percent: 'Isi diskon 0 sampai 100 persen.',
+    payment_terms_id: 'Pilih termin pembayaran dari daftar.',
 };
 
 // Purchase order ke vendor (Purchase Order di BC). Order terbuka boleh diubah dan dihapus; Rilis menguncinya supaya
@@ -268,6 +275,15 @@ export class PurchaseOrders {
         const description = data.description?.trim() || null;
         if (description && description.length > 200)
             errors.description = messages.description;
+        const terms =
+            data.payment_terms_id === undefined
+                ? undefined
+                : await paymentTermsOf(
+                      this.db,
+                      this.scope,
+                      data.payment_terms_id,
+                  );
+        if (terms === null) errors.payment_terms_id = messages.payment_terms_id;
         const unitCostDecimals = unitAmountDecimals(await this.precision());
         const lines: LineDraft[] = [];
         for (const [index, line] of data.lines.entries()) {
@@ -301,6 +317,10 @@ export class PurchaseOrders {
             expectedReceiptDate: expected,
             description,
             pricesIncludingVat: data.prices_including_vat ?? false,
+            paymentTermsId:
+                data.payment_terms_id === undefined
+                    ? undefined
+                    : (terms?.id ?? null),
             lines,
         };
     }
@@ -409,6 +429,7 @@ export class PurchaseOrders {
                 expectedReceiptDate: data.expectedReceiptDate,
                 description: data.description,
                 pricesIncludingVat: data.pricesIncludingVat,
+                paymentTermsId: data.paymentTermsId,
                 lines: data.lines,
             });
         });
@@ -458,7 +479,8 @@ export class PurchaseOrders {
             );
             await this.db.execute(
                 `update bl_tr_order set operating_unit_id = $1, lokasi_id = $2, vendor_id = $3, tanggal = $4,
-                        tanggal_diharapkan = $5, keterangan = $6, termasuk_ppn = $7, updated_at = $8
+                        tanggal_diharapkan = $5, keterangan = $6, termasuk_ppn = $7, updated_at = $8,
+                        termin_pembayaran_id = case when $11 then $12::uuid else termin_pembayaran_id end
                  where tenant_id = $9 and id = $10`,
                 [
                     data.location.operating_unit_id,
@@ -471,6 +493,8 @@ export class PurchaseOrders {
                     nowSql(),
                     this.scope.tenantId,
                     current.id,
+                    data.paymentTermsId !== undefined,
+                    data.paymentTermsId ?? null,
                 ],
             );
             await this.saveLines(current.id, data.lines);
@@ -790,8 +814,27 @@ export type NewOrder = {
     expectedReceiptDate: string | null;
     description: string | null;
     pricesIncludingVat: boolean;
+    // Tidak diisi berarti termin bawaan vendor, seperti Payment Terms Code yang disalin dari vendor di BC.
+    paymentTermsId?: string | null | undefined;
     lines: (PriceLine & { expectedReceiptDate: string | null })[];
 };
+
+async function vendorPaymentTerms(
+    db: Database,
+    scope: Scope,
+    vendorId: string,
+): Promise<string | null> {
+    return (
+        (
+            await db.one(
+                z.object({ id: z.string().nullable() }),
+                `select termin_pembayaran_id as id from vendors
+                 where tenant_id = $1 and legal_entity_id = $2 and id = $3`,
+                [scope.tenantId, scope.legalEntityId, vendorId],
+            )
+        )?.id ?? null
+    );
+}
 
 // Order terbuka baru beserta nomornya, di transaksi pemanggil. Dipakai layar order dan Buat purchase order dari
 // permintaan pembelian (Carry Out Action Message di BC). Mengembalikan nomor order dan id barisnya, berurutan sama dengan
@@ -823,6 +866,10 @@ export async function insertOrder(
         tanggal_diharapkan: order.expectedReceiptDate,
         keterangan: order.description,
         termasuk_ppn: order.pricesIncludingVat,
+        termin_pembayaran_id:
+            order.paymentTermsId !== undefined
+                ? order.paymentTermsId
+                : await vendorPaymentTerms(db, scope, order.vendorId),
         created_at: stamp,
         updated_at: stamp,
     });

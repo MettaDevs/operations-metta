@@ -358,6 +358,13 @@ export const sysAdminArea: NavigationAreaEntry = {
                     href: '/sysadmin/purchasing/vendors',
                     permission: 'core.vendor.read',
                 },
+                {
+                    id: 'payment-terms',
+                    label: 'Termin pembayaran',
+                    href: '/sysadmin/purchasing/payment-terms',
+                    section: 'Setup',
+                    permission: 'core.payment-terms.read',
+                },
             ],
         },
         {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
+import { paymentTermsReferenceSchema } from '../payment-terms/payment-terms.schema.ts';
 
 // Open dan Released di Purchase Header BC, ditambah selesai: semua baris sudah diterima.
 export const purchaseOrderStatuses = ['terbuka', 'dirilis', 'selesai'] as const;
@@ -31,6 +32,8 @@ export const purchaseOrderInputSchema = z.object({
     expected_receipt_date: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     prices_including_vat: z.boolean().optional(),
+    // Tidak dikirim berarti termin bawaan vendor saat order dibuat, atau termin yang sudah ada saat order diubah.
+    payment_terms_id: z.string().nullable().optional(),
     lines: z.array(purchaseOrderLineInputSchema).max(500),
     version: z.number().optional(),
 });
@@ -62,6 +65,7 @@ export const purchaseOrderRowSchema = z.object({
     location: reference,
     description: z.string().nullable(),
     prices_including_vat: z.boolean(),
+    payment_terms: paymentTermsReferenceSchema,
     amount: z.string(),
     vat_amount: z.string(),
     released_at: z.string().nullable(),

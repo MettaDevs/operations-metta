@@ -547,6 +547,7 @@ export function ReceiptCard({
                                             ? {
                                                   ...header.vendor,
                                                   tax_number: null,
+                                                  payment_terms: null,
                                                   status: 'active',
                                                   version: 0,
                                               }
