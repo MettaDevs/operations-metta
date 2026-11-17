@@ -14,6 +14,7 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    requireLocationAccess,
     baseQuantity,
     decimalInput,
     issuedSlices,
@@ -357,6 +358,9 @@ export class DispensingReturns {
             if (!dispensing)
                 validation({ _form: this.definition.notHandedOver });
             await dispensing.lock(this.workspace);
+            await requireLocationAccess(this.db, this.workspace, [
+                dispensing.locationId,
+            ]);
             const groups = await this.remaining(dispensing.dispensingId);
             const dispensed = await this.dispensingLines(
                 dispensing.dispensingId,
@@ -532,6 +536,9 @@ export class DispensingReturns {
             if (current.version !== version)
                 coded(409, 'stale_version', staleMessage);
             await dispensing.lock(this.workspace);
+            await requireLocationAccess(this.db, this.workspace, [
+                dispensing.locationId,
+            ]);
             const stamp = nowSql();
             await this.db.execute(
                 `update retur_farmasi set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,

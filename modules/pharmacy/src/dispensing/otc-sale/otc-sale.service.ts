@@ -17,6 +17,7 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    requireLocationAccess,
     baseQuantity,
     decimalInput,
     fromNumeric,
@@ -757,6 +758,15 @@ export class OtcSales {
             ? await saleLocations(this.db, scope, locationId)
             : [];
         if (!location) errors.location_id = locationNotAllowedMessage;
+        else
+            await requireLocationAccess(
+                this.db,
+                this.workspace,
+                [location.id],
+                {
+                    field: 'location_id',
+                },
+            );
         const defaultPriceGroupId = location?.price_group?.id ?? null;
         const priceGroupId =
             data.price_group_id === undefined

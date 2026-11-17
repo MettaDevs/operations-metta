@@ -189,11 +189,20 @@ function PrescriptionsPage(): ReactNode {
     );
     const closeCard = () => setSearch({ prescription: undefined }, false);
     const leaveGuard = useUnsavedChangesGuard(dirty, closeCard);
+    // Lokasi yang diingat perangkat ini bila masih boleh dipakai pengguna, kalau tidak lokasi bawaannya di Petugas
+    // lokasi.
+    const places = metadata.data;
     useEffect(() => {
-        if (location !== undefined) return;
+        if (location !== undefined || !places) return;
         const remembered = readPlace();
-        if (remembered) setSearch({ location: remembered });
-    }, [location, setSearch]);
+        const place =
+            remembered &&
+            (remembered === NONE ||
+                places.locations.some((option) => option.id === remembered))
+                ? remembered
+                : places.default_location_id;
+        if (place) setSearch({ location: place });
+    }, [location, places, setSearch]);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.pharmacyPrescriptionList(

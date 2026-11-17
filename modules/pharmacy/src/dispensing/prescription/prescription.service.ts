@@ -11,7 +11,11 @@ import {
     incrementalList,
     lookupId,
 } from '@core/platform/http/index.ts';
-import { activeLegalEntity } from '@core/foundation/inventory/index.ts';
+import {
+    activeLegalEntity,
+    allowedLocationsSql,
+    defaultLocation,
+} from '@core/foundation/inventory/index.ts';
 import {
     prescriptionLineSchema,
     prescriptionRowSchema,
@@ -76,11 +80,19 @@ export class Prescriptions {
     }
 
     // Lokasi yang melayani resep di legal entity ini, untuk pilihan lokasi di layar antrean: yang diatur di Lokasi
-    // layanan resep dan yang pernah dipilih petugas pada resep.
+    // layanan resep dan yang pernah dipilih petugas pada resep, selama pengguna boleh bekerja di sana. Lokasi bawaan
+    // petugas dipilih antrean bila perangkat ini belum mengingat lokasi lain.
     async metadata() {
         this.workspace.guard('prescription', 'read');
         const scope = this.scope;
+        const bindings: Bind[] = [scope.tenantId, scope.legalEntityId];
+        const allowed = allowedLocationsSql(this.workspace, bindings, ['l.id']);
         return {
+            default_location_id: await defaultLocation(
+                this.db,
+                this.workspace,
+                scope.legalEntityId,
+            ),
             locations: await this.db.rows(
                 z.object({
                     id: z.string(),
@@ -93,8 +105,9 @@ export class Prescriptions {
                                 where m.tenant_id = l.tenant_id and m.lokasi_id = l.id and m.deleted_at is null)
                         or exists (select 1 from far_tr_resep r
                                    where r.tenant_id = l.tenant_id and r.lokasi_id = l.id and r.deleted_at is null))
+                   and ${allowed}
                  order by l.kode`,
-                [scope.tenantId, scope.legalEntityId],
+                bindings,
             ),
             permissions: {
                 prepare: this.workspace.permissions.has(
@@ -111,7 +124,8 @@ export class Prescriptions {
         this.workspace.guard('prescription', 'read');
         const scope = this.scope;
         const bindings: Bind[] = [scope.tenantId, scope.legalEntityId];
-        let filter = '';
+        // Resep di lokasi khusus petugas hanya tampil bagi petugasnya; resep tanpa lokasi tampil bagi semua.
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
         const location = parameters.get('location') ?? '';
         if (location === 'none') filter += ' and location_id is null';
         else if (lookupId(location))
@@ -166,13 +180,14 @@ export class Prescriptions {
     async show(id: string) {
         this.workspace.guard('prescription', 'read');
         const scope = this.scope;
+        const bindings: Bind[] = [scope.tenantId, scope.legalEntityId, id];
         const header = lookupId(id)
             ? await this.db.one(
                   prescriptionRowSchema.extend({
                       notes: z.string().nullable(),
                   }),
-                  `${rowSql} and prescriptions.id = $3`,
-                  [scope.tenantId, scope.legalEntityId, id],
+                  `${rowSql} and prescriptions.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!header) abort(404, 'Not Found');
