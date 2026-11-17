@@ -80,6 +80,10 @@ const pages: RecordPages = {
         title: 'Petugas lokasi',
         component: ({ id }) => h('p', null, `Petugas lokasi ${id}`),
     },
+    'core.purchase-invoice': {
+        title: 'Faktur pembelian',
+        component: ({ id }) => h('p', null, `Faktur pembelian ${id}`),
+    },
     'core.purchase-order': {
         title: 'Purchase order',
         component: ({ id }) => h('p', null, `Purchase order ${id}`),

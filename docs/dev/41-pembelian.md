@@ -107,3 +107,47 @@ Tombol Hitung saran di Permintaan pembelian memanggil `POST /api/v1/purchasing/r
 - **Tanda saran.** Kolom `saran`: `baru` untuk saran yang belum disentuh orang, `diubah` sesudah orang mengubah atau menyetujuinya. Layar menampilkan status Saran, dan keterangan baris menyebut stok yang akan tersedia dan stok minimum yang dipakai.
 - **Diulang.** Saran `baru` ditulis ulang di tempat dan yang tidak lagi dibutuhkan dihapus, jadi menjalankannya dua kali berakhir di keadaan yang sama. Index unik menjaga satu saran `baru` per barang dan lokasi, dan advisory lock per legal entity menahan dua hitungan yang berjalan bersamaan. Permintaan orang dan saran `diubah` tidak disentuh dan dihitung sebagai stok yang akan datang. BC menghapus semua baris barang itu di lembar kerja; di sini lembar kerja dipakai bersama lokasi yang mengajukan, jadi baris orang dipertahankan.
 - **Sesudahnya.** Saran disetujui lalu Buat purchase order, sama dengan permintaan lain.
+
+## Faktur pembelian
+
+Tabel `ap_tr_faktur` dan `ap_tr_faktur_detail`, nama dari `AP_trFaktur` dan `AP_trFakturDetail` sistem lama. Padanannya Purchase Header berjenis Invoice dengan baris dari Get Receipt Lines (codeunit 74 "Purch.-Get Receipt"), lalu Posted Purchase Invoice. Layarnya Pembelian › Faktur pembelian.
+
+Di sistem lama tagihan vendor tidak punya dokumen sendiri. Tabel `AP_trFaktur` ada tetapi kosong di setiap database, dan tagihan dicatat di penerimaan itu sendiri:
+
+| Database lama | Penerimaan aktif | Kredit (`Type_Pembayaran` 1) | Jatuh tempo bukan hari terima | Ditandai lunas (`StatusBayar`) | Ongkos angkut | Potongan |
+| ------------- | ---------------: | ---------------------------: | ----------------------------: | -----------------------------: | ------------: | -------: |
+| Adapotek      |          187.624 |                      155.034 |                       151.526 |                        181.382 |        10.317 |   11.294 |
+| Penta         |               15 |                           15 |                             8 |                kolom tidak ada |             0 |        0 |
+| Seroja        |               41 |                           41 |                             0 |                kolom tidak ada |             0 |        0 |
+| Kuta 1        |               99 |                           99 |                             0 |                kolom tidak ada |             0 |        0 |
+
+Hanya Adapotek yang benar-benar mencatat utang. Pembayarannya satu tanda lunas per penerimaan beserta tanggal, cara bayar (Tunai atau Transfer), dan bank, tanpa bayar sebagian. Nomor dokumen vendor (`No_DO`) diisi di setiap penerimaan, tetapi 16.236 penerimaan berbagi nomor isian seperti `-`, `00`, atau `.`, jadi nomor itu tidak bisa dijadikan kunci unik untuk data lama.
+
+- **Kenapa dokumen sendiri, bukan kolom di penerimaan.** Satu faktur vendor sering menagih beberapa pengiriman, dan satu pengiriman bisa ditagih sebagian. BC memisahkan keduanya: penerimaan mencatat barang, faktur mencatat tagihan, dan baris penerimaan menyimpan jumlah yang sudah difakturkan.
+- **Ambil baris penerimaan.** `GET /api/v1/purchasing/invoice-receipt-lines?vendor_id=` mengembalikan baris penerimaan diposting milik vendor itu yang sisanya belum difakturkan (`Qty. Rcd. Not Invoiced <> 0`), di lokasi yang boleh dilihat pengguna. Jumlah yang sudah ada di draf faktur lain ikut dikurangkan, supaya dua draf tidak menagih barang yang sama.
+- **Jumlah difakturkan.** Kolom `bl_tr_penerimaan_detail.jumlah_difaktur` adalah Quantity Invoiced di Purch. Rcpt. Line, dalam satuan baris penerimaan. Ia hanya ditulis posting dan batal posting faktur, dan constraint `jumlah_difaktur <= jumlah` menjaga faktur tidak pernah melebihi yang diterima. Baris faktur boleh menagih sebagian. Barang yang diretur sebelum ditagih cukup tidak ikut difakturkan, karena belum ada credit memo.
+- **Harga.** Baris barang membawa harga, diskon, dan PPN penerimaan, dan boleh diubah mengikuti faktur vendor. Kolom Selisih dari penerimaan menunjukkan selisih nilai baris dengan nilai jumlah yang sama pada harga penerimaan. Selisih itu tidak mengubah harga di kartu gudang; di BC ia menjadi penyesuaian biaya barang (Value Entry), yang menunggu perhitungan biaya persediaan.
+- **Biaya lain.** Baris biaya berisi keterangan dan nilai, misalnya ongkos angkut, seperti baris G/L Account di BC dan `Ongkos_Angkut` sistem lama. Nilainya 0 atau lebih. `Potongan` sistem lama (diskon per faktur) tidak dipindah; diskon dicatat per baris.
+- **Nomor faktur vendor** (Vendor Invoice No.) wajib dan unik per vendor di antara faktur yang belum dihapus dan belum dibatalkan, tanpa membedakan huruf besar, seperti `CheckExternalDocumentNumber` di codeunit 90 "Purch.-Post". BC tetap menolak nomor dari faktur yang sudah dibatalkan; di sini nomornya lepas supaya tagihan yang sama bisa dicatat ulang dengan benar.
+- **Jatuh tempo** dihitung dari tanggal faktur vendor dan termin (bagian [Termin pembayaran](#termin-pembayaran)), boleh diubah, dan tidak boleh sebelum tanggal faktur vendor. Termin bawaan diambil dari vendor.
+- **Posting.** Vendor harus aktif, faktur punya sedikitnya satu baris, dan setiap baris barang masih punya sisa belum difakturkan di penerimaan yang diposting milik vendor yang sama. Baris penerimaan dikunci (`for update`), `jumlah_difaktur` bertambah, lalu satu entri utang ditulis. Posting yang diulang tidak menulis apa pun.
+- **Batal posting** mengikuti Cancel pada Posted Purchase Invoice (codeunit "Correct Posted Purch. Invoice"): ditolak bila utangnya sudah dibayar sebagian atau lunas (`TestIfInvoiceIsPaid`). Entri pembatalan bernilai negatif menutup entri fakturnya, dan `jumlah_difaktur` berkurang lagi. BC membuat credit memo; di sini belum ada credit memo, jadi pembatalannya entri pada ledger yang sama.
+- **Penerimaan yang sudah difakturkan** tidak bisa dibatalkan postingnya, seperti Undo Receipt BC ("This receipt has already been invoiced"). Penolakannya membawa tombol yang membuka faktur itu.
+- **Izin.** `core.purchase-invoice.read`, `.update`, `.post`, dan `.reverse`, pola yang sama dengan penerimaan barang: duty `core.purchase-invoice.inquire` hanya melihat, duty `core.purchase-invoice.manage` membuat, memposting, dan membatalkan posting.
+- **Nomor.** Reference `core.purchase-invoice-number`, satu sequence per legal entity, awalan `PI-`.
+
+## Utang vendor
+
+Tabel `ap_tr_entri_utang`, padanan Vendor Ledger Entry (`python D:\Kerja\bc-tools\bc.py table "Vendor Ledger Entry"`). Layarnya Pembelian › Utang vendor.
+
+- **Isi.** Satu entri `faktur` per faktur yang diposting: tanggal posting, nomor faktur, nomor faktur vendor, jatuh tempo, jumlah termasuk PPN, dan sisa. Entri `pembatalan` ditulis saat posting dibatalkan. Entri hanya ditambah; yang berubah hanya sisa dan tanda tutupnya (`ditutup_oleh_entri_id`, `ditutup_pada`, seperti Closed by Entry No. dan Closed at Date). BC menyimpan sisa sebagai FlowField dari Detailed Vendor Ledger Entry; di sini sisa disimpan langsung karena belum ada pembayaran yang memecahnya.
+- **Layar** menampilkan entri yang masih terbuka, dari jatuh tempo paling awal, dengan keterangan berapa hari lewat atau tersisa sampai jatuh tempo, total sisa, dan total yang lewat jatuh tempo. Entri yang sudah ditutup bisa ditampilkan. Baris membuka fakturnya.
+- **Izin** sama dengan lihat faktur pembelian.
+
+## Yang belum ada
+
+- **Pembayaran ke vendor.** Mesin kasir di `src/foundation/billing/` hanya menerima pembayaran pasien, jadi belum ada cara mencatat pembayaran utang. Pembayaran milik finance atau kas dan bank, dan di BC ia Payment Journal yang diterapkan ke entri utang (Apply Entries). Bila dibuat, ia mengurangi `sisa` dan menutup entri yang lunas.
+- **Jurnal ke finance.** Feed posting finance (`src/foundation/finance-posting/`) hanya dipakai penerimaan aset, dan penerimaan barang di Core belum menerbitkan posting. Faktur pembelian juga tidak, karena pemetaan akunnya (setara Vendor Posting Group dan General Posting Setup BC: akun utang, persediaan atau perantara penerimaan, dan PPN Masukan) belum ada. Menerbitkan tanpa pemetaan itu hanya akan membuat setiap posting tertahan (`held`).
+- **Credit memo pembelian** untuk koreksi faktur yang sudah dibayar, dan untuk retur yang sudah difakturkan.
+- **Cetak faktur pembelian** lewat mesin cetak.
+- **Selisih harga ke biaya persediaan.** Harga faktur yang berbeda dari penerimaan belum mengubah nilai stok.

@@ -95,6 +95,10 @@ import { page as foundationPricingChargeComponentChargeComponentsPage } from './
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
 import { page as foundationPurchasingPaymentTermsPaymentTermsPage } from './foundation/purchasing/payment-terms/payment-terms.page.tsx';
 import {
+    page as foundationPurchasingPurchaseInvoicePurchaseInvoicesPage,
+    record as foundationPurchasingPurchaseInvoicePurchaseInvoicesRecord,
+} from './foundation/purchasing/purchase-invoice/purchase-invoices.page.tsx';
+import {
     page as foundationPurchasingPurchaseOrderPurchaseOrdersPage,
     record as foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
 } from './foundation/purchasing/purchase-order/purchase-orders.page.tsx';
@@ -103,6 +107,7 @@ import {
     record as foundationPurchasingReceiptReceiptsRecord,
 } from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingRequisitionRequisitionsPage } from './foundation/purchasing/requisition/requisitions.page.tsx';
+import { page as foundationPurchasingVendorLedgerVendorLedgerPage } from './foundation/purchasing/vendor-ledger/vendor-ledger.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -1026,6 +1031,18 @@ const foundationPurchasingPaymentTermsPaymentTermsRoute = createRoute({
     },
 });
 
+const foundationPurchasingPurchaseInvoicePurchaseInvoicesRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingPurchaseInvoicePurchaseInvoicesPage.path,
+    component:
+        foundationPurchasingPurchaseInvoicePurchaseInvoicesPage.component,
+    validateSearch:
+        foundationPurchasingPurchaseInvoicePurchaseInvoicesPage.validateSearch,
+    staticData: {
+        title: foundationPurchasingPurchaseInvoicePurchaseInvoicesPage.title,
+    },
+});
+
 const foundationPurchasingPurchaseOrderPurchaseOrdersRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingPurchaseOrderPurchaseOrdersPage.path,
@@ -1053,6 +1070,17 @@ const foundationPurchasingRequisitionRequisitionsRoute = createRoute({
         foundationPurchasingRequisitionRequisitionsPage.validateSearch,
     staticData: {
         title: foundationPurchasingRequisitionRequisitionsPage.title,
+    },
+});
+
+const foundationPurchasingVendorLedgerVendorLedgerRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingVendorLedgerVendorLedgerPage.path,
+    component: foundationPurchasingVendorLedgerVendorLedgerPage.component,
+    validateSearch:
+        foundationPurchasingVendorLedgerVendorLedgerPage.validateSearch,
+    staticData: {
+        title: foundationPurchasingVendorLedgerVendorLedgerPage.title,
     },
 });
 
@@ -1284,9 +1312,11 @@ const routeTree = rootRoute.addChildren([
         foundationPricingChargeComponentChargeComponentsRoute,
         foundationPricingPriceGroupPriceGroupsRoute,
         foundationPurchasingPaymentTermsPaymentTermsRoute,
+        foundationPurchasingPurchaseInvoicePurchaseInvoicesRoute,
         foundationPurchasingPurchaseOrderPurchaseOrdersRoute,
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingRequisitionRequisitionsRoute,
+        foundationPurchasingVendorLedgerVendorLedgerRoute,
         foundationPurchasingVendorVendorsRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
@@ -1379,6 +1409,8 @@ const recordPages = {
     'core.inventory-location':
         foundationInventoryWarehouseEmployeeWarehouseEmployeesRecord,
     'core.payment': foundationBillingInvoicePaymentRecord,
+    'core.purchase-invoice':
+        foundationPurchasingPurchaseInvoicePurchaseInvoicesRecord,
     'core.purchase-order':
         foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
     'core.purchase-receipt': foundationPurchasingReceiptReceiptsRecord,

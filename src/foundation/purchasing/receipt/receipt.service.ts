@@ -43,6 +43,7 @@ import {
     receiveOnOrder,
     unreceiveOnOrder,
 } from '../purchase-order/purchase-order.service.ts';
+import { refuseInvoicedReceipt } from '../purchase-invoice/purchase-invoice.service.ts';
 import { firstReturnNumber } from '../purchase-return/purchase-return.service.ts';
 import {
     receiptBasePrices,
@@ -941,6 +942,7 @@ export class Receipts {
                 validation({
                     _form: `Barang dari penerimaan ini sudah pernah diretur ke vendor (${returned}), jadi postingnya tidak bisa dibatalkan. Kembalikan barang lain yang salah terima lewat Retur ke vendor.`,
                 });
+            await refuseInvoicedReceipt(this.db, this.workspace, current.id);
             await reverseItemEntries(
                 this.db,
                 {

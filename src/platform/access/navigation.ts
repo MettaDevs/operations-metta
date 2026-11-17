@@ -353,6 +353,18 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.purchase-receipt.read',
                 },
                 {
+                    id: 'invoices',
+                    label: 'Faktur pembelian',
+                    href: '/sysadmin/purchasing/invoices',
+                    permission: 'core.purchase-invoice.read',
+                },
+                {
+                    id: 'vendor-ledger',
+                    label: 'Utang vendor',
+                    href: '/sysadmin/purchasing/vendor-ledger',
+                    permission: 'core.purchase-invoice.read',
+                },
+                {
                     id: 'vendors',
                     label: 'Vendor',
                     href: '/sysadmin/purchasing/vendors',
