@@ -19,6 +19,7 @@ import {
     activeLegalEntity,
     baseQuantity,
     decimalInput,
+    fromNumeric,
     itemUnits,
     openStock,
     parseInput,
@@ -39,6 +40,7 @@ import {
     amountInput,
     Currency,
     localCurrencyCode,
+    unitAmountDecimals,
     type Precision,
 } from '@core/foundation/currency/index.ts';
 import { Decimal } from '@core/platform/money/index.ts';
@@ -54,6 +56,17 @@ import {
     plannedFees,
 } from '../dispensing-fee/dispensing-fee.service.ts';
 import { moduleId } from '../../module.ts';
+import {
+    canOverridePrice,
+    checkedReason,
+    discountInput,
+    feeAmountInput,
+    guardPriceOverride,
+    reasonMessage,
+    samePrice,
+    unitPriceInput,
+    type LinePrice,
+} from '../line-price/line-price.service.ts';
 import {
     dispensingNumberReference,
     dispensingSource,
@@ -99,8 +112,15 @@ type SaleShape = Pick<
     | 'price_group_id'
     | 'ktp_patient'
     | 'without_prescription'
+    | 'price_reason'
     | 'lines'
 >;
+
+type RequestedPrice = {
+    unit_price?: string | number | null;
+    discount_percent?: string | number | null;
+    fee_amount?: string | number | null;
+};
 
 type SaleLine = {
     field: string;
@@ -110,6 +130,7 @@ type SaleLine = {
     quantity: bigint;
     baseQuantity: bigint;
     batchId: string | null;
+    requested: RequestedPrice;
 };
 
 type CheckedSale = {
@@ -117,8 +138,18 @@ type CheckedSale = {
     priceGroupId: string | null;
     ktpPatient: boolean;
     withoutPrescription: boolean;
+    priceReason: string | null | undefined;
     lines: SaleLine[];
 };
+
+const requestsOverride = (data: SaleShape) =>
+    (data.price_reason ?? null) !== null ||
+    data.lines.some(
+        (line) =>
+            (line.unit_price ?? null) !== null ||
+            (line.discount_percent ?? null) !== null ||
+            (line.fee_amount ?? null) !== null,
+    );
 
 const itemRowSchema = z.object({
     id: z.string(),
@@ -321,6 +352,7 @@ export class OtcSales {
                 can_search_buyers: cashier.permissions.has(
                     'core.organization.read',
                 ),
+                can_override_price: canOverridePrice(this.workspace),
             },
         };
     }
@@ -386,19 +418,29 @@ export class OtcSales {
         );
         return {
             data: {
-                lines: priced.lines.map(({ line, price, amount }) => ({
-                    item_id: line.item.id,
-                    unit_id: line.unitId,
-                    quantity: quantityText(line.quantity),
-                    unit_price: quantityText(price.unitPrice),
-                    discount_percent: quantityText(price.discountPercent),
-                    amount,
-                })),
-                fees: priced.fees.map(({ kind, name, amount }) => ({
-                    kind,
-                    name,
-                    amount,
-                })),
+                lines: priced.lines.map(
+                    ({ line, price, computed, amount }) => ({
+                        item_id: line.item.id,
+                        unit_id: line.unitId,
+                        quantity: quantityText(line.quantity),
+                        unit_price: quantityText(price.unitPrice),
+                        discount_percent: quantityText(price.discountPercent),
+                        computed_unit_price: quantityText(computed.unitPrice),
+                        computed_discount_percent: quantityText(
+                            computed.discountPercent,
+                        ),
+                        amount,
+                    }),
+                ),
+                fees: priced.fees.map(
+                    ({ kind, name, lineId, amount, override }) => ({
+                        kind,
+                        name,
+                        line_index: lineId === null ? null : Number(lineId),
+                        amount: override?.amount ?? amount,
+                        computed_amount: amount,
+                    }),
+                ),
                 total: priced.total,
             },
         };
@@ -470,7 +512,7 @@ export class OtcSales {
                 id: Bun.randomUUIDv7(),
                 order: index + 1,
             }));
-            for (const { id, order, line, price } of lines)
+            for (const { id, order, line, price, computed, changed } of lines)
                 await this.db.insert('bill_farmasi_detail', {
                     id,
                     tenant_id: scope.tenantId,
@@ -491,6 +533,17 @@ export class OtcSales {
                         price.discountPercent,
                         quantityScale,
                     ),
+                    harga_satuan_hitung: toNumeric(
+                        computed.unitPrice,
+                        quantityScale,
+                    ),
+                    persen_diskon_hitung: toNumeric(
+                        computed.discountPercent,
+                        quantityScale,
+                    ),
+                    harga_diubah_pada: changed ? stamp : null,
+                    harga_diubah_oleh_user_id: changed ? userId : null,
+                    alasan_ubah_harga: changed ? priced.reason : null,
                     created_at: stamp,
                     updated_at: stamp,
                 });
@@ -697,6 +750,7 @@ export class OtcSales {
         data: SaleShape,
         errors: Record<string, string> = {},
     ): Promise<CheckedSale> {
+        if (requestsOverride(data)) guardPriceOverride(this.workspace);
         const scope = this.scope;
         const locationId = lookupId(data.location_id);
         const [location] = locationId
@@ -786,6 +840,7 @@ export class OtcSales {
                     quantity,
                     baseQuantity: base,
                     batchId,
+                    requested: line,
                 });
         }
         if (Object.keys(errors).length || !location) validation(errors);
@@ -794,13 +849,15 @@ export class OtcSales {
             priceGroupId,
             ktpPatient: data.ktp_patient ?? true,
             withoutPrescription: data.without_prescription ?? true,
+            priceReason: data.price_reason,
             lines,
         };
     }
 
     // Harga obat dengan grading resep (kelompok harga, Patient KTP, dan tanggal penjualan), lalu nilai baris dan total
     // dengan rumus kasir atas baris tagihan yang sama: Qty jumlah jual, Nilai dan HargaOrig harga satuan, Disc % diskon,
-    // HExt 0, tanpa kelompok jasa. Nilai baris dibulatkan ke presisi jumlah, total ke pembulatan tagihan.
+    // HExt 0, tanpa kelompok jasa. Nilai baris dibulatkan ke presisi jumlah, total ke pembulatan tagihan. Harga, diskon,
+    // dan biaya resep yang diketik pemegang izin ubah harga menggantikan hitungan; yang berbeda wajib beralasan.
     private async priced(
         sale: CheckedSale,
         date: string,
@@ -811,13 +868,26 @@ export class OtcSales {
             price,
         }: {
             line: SaleLine;
-            price: { unitPrice: bigint; discountPercent: bigint };
+            price: LinePrice;
         }) =>
             saleCharge(
                 quantityText(line.quantity),
                 quantityText(price.unitPrice),
                 quantityText(price.discountPercent),
             );
+        const errors: Record<string, string> = {};
+        const requested = (
+            index: number,
+            name: keyof RequestedPrice,
+            parse: (raw: unknown) => bigint | { error: string },
+        ): bigint | null => {
+            const raw = sale.lines[index]?.requested[name] ?? null;
+            if (raw === null) return null;
+            const value = parse(raw);
+            if (typeof value === 'bigint') return value;
+            errors[`lines.${String(index)}.${name}`] = value.error;
+            return null;
+        };
         const lines = (
             await priceDrugLines(
                 this.db,
@@ -832,14 +902,33 @@ export class OtcSales {
                     itemId: line.item.id,
                 })),
             )
-        ).map((entry) => ({
-            ...entry,
-            amount:
-                invoiceTotals([charge(entry)], precision).groups.get(null) ??
-                '0',
-        }));
+        ).map(({ line, price: computed }, index) => {
+            const price = {
+                ...computed,
+                unitPrice:
+                    requested(index, 'unit_price', (raw) =>
+                        unitPriceInput(raw, unitAmountDecimals(precision)),
+                    ) ?? computed.unitPrice,
+                discountPercent:
+                    requested(index, 'discount_percent', discountInput) ??
+                    computed.discountPercent,
+            };
+            const entry = { line, price };
+            return {
+                ...entry,
+                computed: {
+                    unitPrice: computed.unitPrice,
+                    discountPercent: computed.discountPercent,
+                },
+                changed: !samePrice(price, computed),
+                amount:
+                    invoiceTotals([charge(entry)], precision).groups.get(
+                        null,
+                    ) ?? '0',
+            };
+        });
         // Penjualan obat bebas tidak punya racikan, jadi hanya biaya resep yang mungkin. lineId adalah urutan baris.
-        const fees = plannedFees(
+        const planned = plannedFees(
             await feeRates(this.db, this.scope, {
                 locationId: sale.location.id,
                 priceGroupId: sale.priceGroupId,
@@ -849,18 +938,68 @@ export class OtcSales {
                 compound: null,
             })),
             sale.withoutPrescription,
-        ).map((fee) => ({
+        );
+        const feeAmounts = sale.lines.map((_, index) =>
+            requested(index, 'fee_amount', (raw) =>
+                feeAmountInput(raw, precision.amount_decimals),
+            ),
+        );
+        for (const [index, value] of feeAmounts.entries())
+            if (
+                value !== null &&
+                !planned.some((fee) => fee.lineId === String(index))
+            )
+                errors[`lines.${String(index)}.fee_amount`] =
+                    'Obat ini tidak dikenai biaya resep, jadi biayanya tidak bisa diubah.';
+        const reason = checkedReason(sale.priceReason);
+        const typedFees = planned.map((fee) => {
+            const typed = feeAmounts[Number(fee.lineId)] ?? null;
+            return {
+                fee,
+                typed:
+                    typed !== null &&
+                    typed !== fromNumeric(fee.amount, quantityScale)
+                        ? typed
+                        : null,
+            };
+        });
+        if ('error' in reason) errors.price_reason = reason.error;
+        else if (
+            reason.reason === null &&
+            (lines.some((line) => line.changed) ||
+                typedFees.some(({ typed }) => typed !== null))
+        )
+            errors.price_reason = reasonMessage;
+        if (Object.keys(errors).length) validation(errors);
+        const why = 'reason' in reason ? (reason.reason ?? '') : '';
+        const fees = typedFees.map(({ fee, typed }) => ({
             ...fee,
             name: feeName(fee.kind, {
                 compound: fee.compound,
                 itemName: sale.lines[Number(fee.lineId)]?.item.name ?? null,
             }),
+            override:
+                typed === null
+                    ? undefined
+                    : {
+                          amount: quantityText(typed),
+                          userId: this.workspace.userId,
+                          reason: why,
+                      },
         }));
         return {
             lines,
             fees,
+            reason: why || null,
             total: invoiceTotals(
-                [...lines.map(charge), ...fees.map(feeCharge)],
+                [
+                    ...lines.map(charge),
+                    ...fees.map((fee) =>
+                        feeCharge({
+                            amount: fee.override?.amount ?? fee.amount,
+                        }),
+                    ),
+                ],
                 precision,
             ).value,
         };

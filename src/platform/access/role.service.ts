@@ -192,11 +192,11 @@ export class Roles {
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('access', 'update');
         const role = await this.row(id);
-        // Role Owner memegang semua duty yang sah secara otomatis; menyuntingnya tidak mengubah apa pun selain
-        // membingungkan jejaknya.
+        // Role Owner memegang duty yang sah secara otomatis, kecuali duty yang tidak diberikan ke pemilik; menyuntingnya
+        // tidak mengubah apa pun selain membingungkan jejaknya.
         if (role.is_owner)
             validation({
-                name: 'Role Owner diatur otomatis dan selalu memegang semua duty, jadi tidak dapat diubah.',
+                name: 'Role Owner diatur otomatis, jadi tidak dapat diubah. Berikan izin tambahan lewat role lain.',
             });
         const input = parseRoleInput(body);
         await this.upsert(input, role.id, expectedVersion(request, body));

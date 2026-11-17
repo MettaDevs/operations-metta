@@ -6,7 +6,7 @@ export function FeeLines({
     fees,
     muted = false,
 }: {
-    fees: { name: string; amount: string }[];
+    fees: { name: string; amount: string; computed_amount?: string }[];
     muted?: boolean;
 }): ReactNode {
     if (!fees.length) return null;
@@ -21,6 +21,12 @@ export function FeeLines({
                     className="flex justify-end gap-6"
                 >
                     <span>{fee.name}</span>
+                    {fee.computed_amount !== undefined &&
+                        fee.computed_amount !== fee.amount && (
+                            <span className="text-muted-foreground tabular-nums">
+                                {`Sistem ${displayNumber(fee.computed_amount)}`}
+                            </span>
+                        )}
                     <span className="min-w-24 text-right tabular-nums">
                         {displayNumber(fee.amount)}
                     </span>

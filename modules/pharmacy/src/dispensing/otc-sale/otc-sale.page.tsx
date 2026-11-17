@@ -31,7 +31,12 @@ import {
     orpc,
     useUnsavedChangesGuard,
 } from '@core/platform/shell/index.ts';
-import { newLine, OtcSaleLines, type SaleLine } from './otc-sale-lines.tsx';
+import {
+    newLine,
+    OtcSaleLines,
+    typedPrices,
+    type SaleLine,
+} from './otc-sale-lines.tsx';
 import {
     emptyTender,
     OtcSaleTender,
@@ -56,6 +61,8 @@ type Header = {
     buyerName: string;
     ktp: boolean;
     withoutPrescription: boolean;
+    // Alasan harga, diskon, atau biaya resep yang diubah pemegang izin ubah harga.
+    priceReason: string;
 };
 
 const quoteDelay = 300;
@@ -155,6 +162,7 @@ function OtcSaleCounter({
         buyerName: '',
         ktp: true,
         withoutPrescription: true,
+        priceReason: '',
     });
     const [header, setHeader] = useState<Header>(() => {
         const stored = readLocation(userId);
@@ -179,10 +187,14 @@ function OtcSaleCounter({
               price_group_id: header.priceGroup?.id ?? null,
               ktp_patient: header.ktp,
               without_prescription: header.withoutPrescription,
+              ...(header.priceReason.trim()
+                  ? { price_reason: header.priceReason.trim() }
+                  : {}),
               lines: quoted.map(({ line }) => ({
                   item_id: line.drug?.id ?? '',
                   unit_id: line.unitId,
                   quantity: typed(line.quantity),
+                  ...typedPrices(line, typed),
               })),
           }
         : null;
@@ -266,6 +278,9 @@ function OtcSaleCounter({
                     price_group_id: header.priceGroup?.id ?? null,
                     ktp_patient: header.ktp,
                     without_prescription: header.withoutPrescription,
+                    ...(header.priceReason.trim()
+                        ? { price_reason: header.priceReason.trim() }
+                        : {}),
                     buyer_party_id: header.buyer?.id ?? null,
                     buyer_name: header.buyerName.trim() || null,
                     lines: sent.map(({ line }) => ({
@@ -273,6 +288,7 @@ function OtcSaleCounter({
                         unit_id: line.unitId,
                         quantity: typed(line.quantity),
                         batch_id: line.batch?.id ?? null,
+                        ...typedPrices(line, typed),
                     })),
                     expected_total: current.total,
                     payment: tenderPayload(options, tender),
@@ -473,11 +489,39 @@ function OtcSaleCounter({
                         locationId={header.locationId}
                         priced={priced}
                         pricesCurrent={current !== null}
-                        fees={shown?.fees ?? []}
+                        fees={(shown?.fees ?? []).map((fee) => ({
+                            ...fee,
+                            lineKey:
+                                fee.line_index === null
+                                    ? null
+                                    : (shown?.rowKeys[fee.line_index] ?? null),
+                        }))}
                         total={total}
                         errors={shownErrors}
                         portalContainer={portalContainer}
+                        canOverridePrice={options.can_override_price}
                     />
+                    {options.can_override_price && (
+                        <FormGrid columns={1}>
+                            <FormControl
+                                error={shownErrors.price_reason?.[0]}
+                                hint="Wajib bila harga, diskon, atau biaya resep berbeda dengan hitungan sistem. Tercatat bersama nama Anda dan waktunya."
+                            >
+                                <Input
+                                    label="Alasan ubah harga"
+                                    maxLength={200}
+                                    data-error-field="price_reason"
+                                    value={header.priceReason}
+                                    onChange={(event) =>
+                                        setHeader((now) => ({
+                                            ...now,
+                                            priceReason: event.target.value,
+                                        }))
+                                    }
+                                />
+                            </FormControl>
+                        </FormGrid>
+                    )}
                     <section className="space-y-3">
                         <h3 className="text-sm font-semibold">Pembayaran</h3>
                         <OtcSaleTender

@@ -24,14 +24,20 @@ export type Drug = ApiBody<'pharmacyOtcSaleItems'>['data'][number];
 export type QuotedLine =
     ApiBody<'pharmacyOtcSaleQuote'>['data']['lines'][number];
 
+export type QuotedFee = ApiBody<'pharmacyOtcSaleQuote'>['data']['fees'][number];
+
 // Satu baris obat di loket. Jumlah disimpan sebagai teks yang tampil di isian (12,5) dan baru diubah ke angka API saat
-// dikirim. Batch kosong berarti diambil otomatis saat disimpan.
+// dikirim. Batch kosong berarti diambil otomatis saat disimpan. Harga satuan, diskon, dan biaya resep hanya diisi pemegang
+// izin ubah harga; kosong berarti hitungan sistem.
 export type SaleLine = {
     key: string;
     drug: Drug | null;
     unitId: string;
     quantity: string;
     batch: PickedBatch | null;
+    unitPrice: string;
+    discount: string;
+    feeAmount: string;
 };
 
 export const newLine = (): SaleLine => ({
@@ -40,6 +46,19 @@ export const newLine = (): SaleLine => ({
     unitId: '',
     quantity: '',
     batch: null,
+    unitPrice: '',
+    discount: '',
+    feeAmount: '',
+});
+
+// Harga yang diketik pemegang izin ubah harga, untuk quote dan Simpan dan bayar. Isian kosong tidak dikirim.
+export const typedPrices = (
+    line: SaleLine,
+    typed: (text: string) => string,
+) => ({
+    ...(line.unitPrice.trim() ? { unit_price: typed(line.unitPrice) } : {}),
+    ...(line.discount.trim() ? { discount_percent: typed(line.discount) } : {}),
+    ...(line.feeAmount.trim() ? { fee_amount: typed(line.feeAmount) } : {}),
 });
 
 const drugLabel = (drug: { code: string; name: string }) =>
@@ -107,6 +126,88 @@ function DrugLookup({
     );
 }
 
+// Isian harga untuk pemegang izin ubah harga. Kosong berarti hitungan sistem, yang tampil sebagai placeholder.
+function PriceInput({
+    label,
+    field,
+    value,
+    computed,
+    error,
+    onChange,
+}: {
+    label: string;
+    field: string;
+    value: string;
+    computed: string | undefined;
+    error: string | undefined;
+    onChange: (value: string) => void;
+}): ReactNode {
+    return (
+        <FormControl error={error}>
+            <Input
+                label={label}
+                inputMode="decimal"
+                data-error-field={field}
+                placeholder={
+                    computed === undefined ? '' : displayNumber(computed)
+                }
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+            />
+        </FormControl>
+    );
+}
+
+// Biaya resep yang bisa diubah per obat. Kosong berarti nilai dari setelan Biaya racik dan resep.
+function EditableFees({
+    fees,
+    lines,
+    onChange,
+    errors,
+}: {
+    fees: (QuotedFee & { lineKey: string | null })[];
+    lines: SaleLine[];
+    onChange: (lineKey: string, feeAmount: string) => void;
+    errors: Record<string, string[]>;
+}): ReactNode {
+    if (!fees.length) return null;
+    return (
+        <ul aria-label="Biaya racik dan resep" className="space-y-1 text-sm">
+            {fees.map((fee, index) => {
+                const row = lines.findIndex((line) => line.key === fee.lineKey);
+                const line = lines[row];
+                const field = `lines.${String(row)}.fee_amount`;
+                return (
+                    <li
+                        key={`${fee.name}:${String(index)}`}
+                        className="flex items-center justify-end gap-6"
+                    >
+                        <span>{fee.name}</span>
+                        {line ? (
+                            <div className="w-36">
+                                <PriceInput
+                                    label={fee.name}
+                                    field={field}
+                                    value={line.feeAmount}
+                                    computed={fee.computed_amount}
+                                    error={errors[field]?.[0]}
+                                    onChange={(value) =>
+                                        onChange(line.key, value)
+                                    }
+                                />
+                            </div>
+                        ) : (
+                            <span className="min-w-24 text-right tabular-nums">
+                                {displayNumber(fee.amount)}
+                            </span>
+                        )}
+                    </li>
+                );
+            })}
+        </ul>
+    );
+}
+
 // Baris obat loket. Harga satuan, diskon, dan nilai hanya datang dari quote server; selama quote untuk isian terbaru
 // belum kembali, angkanya ditampilkan redup.
 export function OtcSaleLines({
@@ -119,6 +220,7 @@ export function OtcSaleLines({
     total,
     errors,
     portalContainer,
+    canOverridePrice,
 }: {
     lines: SaleLine[];
     onChange: (lines: SaleLine[]) => void;
@@ -126,8 +228,9 @@ export function OtcSaleLines({
     // Harga per kunci baris, dari quote terakhir.
     priced: Map<string, QuotedLine>;
     pricesCurrent: boolean;
-    // Biaya resep dari quote terakhir.
-    fees: { name: string; amount: string }[];
+    // Biaya resep dari quote terakhir, dengan kunci baris obatnya.
+    fees: (QuotedFee & { lineKey: string | null })[];
+    canOverridePrice: boolean;
     total: string | null;
     errors: Record<string, string[]>;
     portalContainer: RefObject<HTMLElement | null>;
@@ -258,20 +361,61 @@ export function OtcSaleLines({
                     />
                 ) : null,
         },
-        {
-            id: 'unit_price',
-            header: 'Harga satuan',
-            width: 120,
-            align: 'right',
-            cell: ({ line }) => money(priced.get(line.key)?.unit_price),
-        },
-        {
-            id: 'discount_percent',
-            header: 'Diskon %',
-            width: 90,
-            align: 'right',
-            cell: ({ line }) => money(priced.get(line.key)?.discount_percent),
-        },
+        canOverridePrice
+            ? {
+                  id: 'unit_price',
+                  header: 'Harga satuan',
+                  content: 'control',
+                  minWidth: 130,
+                  cell: ({ line, index }) => (
+                      <PriceInput
+                          label="Harga satuan"
+                          field={field(index, 'unit_price')}
+                          value={line.unitPrice}
+                          computed={priced.get(line.key)?.computed_unit_price}
+                          error={error(index, 'unit_price')}
+                          onChange={(unitPrice) =>
+                              update(line.key, { unitPrice })
+                          }
+                      />
+                  ),
+              }
+            : {
+                  id: 'unit_price',
+                  header: 'Harga satuan',
+                  width: 120,
+                  align: 'right',
+                  cell: ({ line }) => money(priced.get(line.key)?.unit_price),
+              },
+        canOverridePrice
+            ? {
+                  id: 'discount_percent',
+                  header: 'Diskon %',
+                  content: 'control',
+                  minWidth: 100,
+                  cell: ({ line, index }) => (
+                      <PriceInput
+                          label="Diskon %"
+                          field={field(index, 'discount_percent')}
+                          value={line.discount}
+                          computed={
+                              priced.get(line.key)?.computed_discount_percent
+                          }
+                          error={error(index, 'discount_percent')}
+                          onChange={(discount) =>
+                              update(line.key, { discount })
+                          }
+                      />
+                  ),
+              }
+            : {
+                  id: 'discount_percent',
+                  header: 'Diskon %',
+                  width: 90,
+                  align: 'right',
+                  cell: ({ line }) =>
+                      money(priced.get(line.key)?.discount_percent),
+              },
         {
             id: 'amount',
             header: 'Nilai',
@@ -303,7 +447,18 @@ export function OtcSaleLines({
             emptyMessage="Belum ada obat. Pilih Tambah untuk menambahkan baris."
             footer={
                 <div className="space-y-2">
-                    <FeeLines fees={fees} muted={!pricesCurrent} />
+                    {canOverridePrice ? (
+                        <EditableFees
+                            fees={fees}
+                            lines={lines}
+                            onChange={(key, feeAmount) =>
+                                update(key, { feeAmount })
+                            }
+                            errors={errors}
+                        />
+                    ) : (
+                        <FeeLines fees={fees} muted={!pricesCurrent} />
+                    )}
                     <div className="flex justify-end gap-6 text-base font-semibold">
                         <span>Total</span>
                         <span

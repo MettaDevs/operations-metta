@@ -48,5 +48,6 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 - [Resep ke farmasi](./resep-farmasi.md): e-resep, Kirim ke farmasi, Siapkan dan Serahkan di antrean resep, retur sesudah dibayar ditolak, dan jalan keluarnya: buka pembayaran dari kotak error, Batal Pembayaran, lalu Simpan retur lagi.
 - [Kasir bayar dan batal pembayaran](./kasir-bayar.md): jenis bayar, Clerk Start, Bayar, dan Batal Pembayaran.
 - [Penjualan obat bebas](./penjualan-obat-bebas.md): lokasi penjualan, Simpan dan bayar di loket farmasi.
+- [Ubah harga obat per baris](./ubah-harga.md): role yang memegang izin ubah harga, Ubah harga sesudah Siapkan, kasir menagih harga yang dipakai, terkunci sesudah dibayar, dan harga yang diketik di loket.
 
 Belum dipetakan: pasien baru dari layar registrasi, batal registrasi, rujuk eksternal dan meninggal, retur yang berhasil (sebelum bayar) dan batal retur, nota kredit sesudah Clerk End, pembayaran hutang, Clerk End, serta semua layar setup dan Sys Admin.

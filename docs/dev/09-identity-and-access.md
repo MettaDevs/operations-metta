@@ -36,7 +36,7 @@ Keanggotaan tidak membawa penanda owner, admin, atau user. Semua hak di dalam te
 
 Setiap tenant punya satu role pemilik (`roles.is_owner`), padanan *System administrator* di Dynamics 365. Penyiapan lingkungan membuatnya dengan nama "Pemilik" dan memberikannya ke admin pertama; nama itu boleh diganti, yang menandai pemilik adalah `is_owner`.
 
-- **Memegang semua duty yang sah untuk tenant.** Penyiapan memberinya semua duty Core, dan pemasangan module memberinya semua duty module itu.
+- **Memegang semua duty yang sah untuk tenant, kecuali yang ditandai tidak untuk pemilik.** Penyiapan memberinya semua duty Core, dan pemasangan module memberinya semua duty module itu. Duty module dengan `security_duties.diberikan_ke_pemilik = false` dilewati pemasangan module, misalnya ubah harga per baris di farmasi (`pharmacy.line-price.manage`, keputusan pemilik produk 17 November 2026). Tenant yang memakainya membuat role sendiri untuk duty itu.
 - **Tidak dapat diubah, dihapus, atau dijadikan turunan role lain.** Role yang menjadikan pemilik sebagai turunannya akan setara pemilik.
 - **Hanya pemegang role pemilik yang dapat memberikan atau mencabutnya** (`assertMayGrantRoles`).
 - **Tenant tidak boleh terkunci.** Perubahan yang membuat tidak ada lagi anggota aktif pemegang `core.access.update` ditolak (`assertNotLockedOut`).

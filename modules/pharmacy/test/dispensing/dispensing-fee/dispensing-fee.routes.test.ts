@@ -22,7 +22,13 @@ type Charge = {
     qty: string;
     nilai: string;
 };
-type Fee = { kind: string; name: string; amount: string };
+type Fee = {
+    kind: string;
+    name: string;
+    amount: string;
+    line_index?: number | null;
+    computed_amount?: string;
+};
 const chargesReplaced = 'pharmacy.dispensing.charges-replaced.v1';
 const fees = `${api}/dispensing-fees`;
 
@@ -374,8 +380,20 @@ describe.skipIf(!process.env.DB_HOST)('dispensing fees', () => {
             lines: priced,
         });
         expect(withPrescription.fees).toEqual([
-            { kind: 'resep', name: 'Biaya resep Obat BYA-1', amount: '2000' },
-            { kind: 'resep', name: 'Biaya resep Obat BYA-2', amount: '2000' },
+            {
+                kind: 'resep',
+                name: 'Biaya resep Obat BYA-1',
+                line_index: 0,
+                amount: '2000',
+                computed_amount: '2000',
+            },
+            {
+                kind: 'resep',
+                name: 'Biaya resep Obat BYA-2',
+                line_index: 1,
+                amount: '2000',
+                computed_amount: '2000',
+            },
         ]);
         expect(withPrescription.total).toBe('6500');
         const sold = await json<{ data: { id: string } }>(

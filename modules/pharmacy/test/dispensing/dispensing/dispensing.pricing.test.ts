@@ -10,7 +10,14 @@ import {
 } from '../../support/pharmacy-fixture.ts';
 
 type Reference = { id: string; code: string; name: string };
-type Price = { unit_price: string; discount_percent: string; amount: string };
+type Price = {
+    unit_price: string;
+    discount_percent: string;
+    amount: string;
+    computed_unit_price: string;
+    computed_discount_percent: string;
+    changed: { by: string; at: string; reason: string } | null;
+};
 type Dispensing = {
     dispensing: {
         id: string;
@@ -216,7 +223,14 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
         };
         expect(await stored(billId)).toEqual([priced]);
         expect(prepared.lines.map((line) => line.price)).toEqual([
-            { unit_price: '1097', discount_percent: '5', amount: '2084.3' },
+            {
+                unit_price: '1097',
+                discount_percent: '5',
+                amount: '2084.3',
+                computed_unit_price: '1097',
+                computed_discount_percent: '5',
+                changed: null,
+            },
         ]);
         expect(prepared.dispensing?.total_amount).toBe('2084.3');
 
@@ -320,7 +334,14 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             { harga_satuan: '843.8170' },
         ]);
         expect(exact.lines.map((line) => line.price)).toEqual([
-            { unit_price: '843.817', discount_percent: '0', amount: '1687.63' },
+            {
+                unit_price: '843.817',
+                discount_percent: '0',
+                amount: '1687.63',
+                computed_unit_price: '843.817',
+                computed_discount_percent: '0',
+                changed: null,
+            },
         ]);
         expect(exact.dispensing?.total_amount).toBe('1687.63');
 
@@ -333,7 +354,14 @@ describe.skipIf(!process.env.DB_HOST)('dispensing prices', () => {
             { harga_satuan: '844.0000' },
         ]);
         expect(whole.lines.map((line) => line.price)).toEqual([
-            { unit_price: '844', discount_percent: '0', amount: '1688' },
+            {
+                unit_price: '844',
+                discount_percent: '0',
+                amount: '1688',
+                computed_unit_price: '844',
+                computed_discount_percent: '0',
+                changed: null,
+            },
         ]);
     });
 

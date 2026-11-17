@@ -28,12 +28,41 @@ export type Taken = {
 
 export type UnitOption = Reference & { quantity_per_unit: string };
 
-// Harga yang disalin ke baris saat disiapkan; kosong selama belum disiapkan.
+// Harga yang disalin ke baris saat disiapkan; kosong selama belum disiapkan. computed_* adalah hitungan sistem, dan
+// changed mencatat siapa yang mengubah harganya dan alasannya.
 export type LinePrice = {
     unit_price: string;
     discount_percent: string;
     amount: string;
+    computed_unit_price: string;
+    computed_discount_percent: string;
+    changed: { by: string; at: string; reason: string } | null;
 };
+
+// Nilai yang dipakai, dengan hitungan sistem di bawahnya bila harga baris itu diubah.
+function PriceText({
+    value,
+    computed,
+    changed,
+}: {
+    value: string;
+    computed: string;
+    changed: LinePrice['changed'];
+}): ReactNode {
+    return (
+        <DataTableText multiline>
+            <span className="block tabular-nums">{displayNumber(value)}</span>
+            {changed && value !== computed && (
+                <span
+                    className="block text-xs text-muted-foreground tabular-nums"
+                    title={`Diubah ${changed.by}: ${changed.reason}`}
+                >
+                    {`Sistem ${displayNumber(computed)}`}
+                </span>
+            )}
+        </DataTableText>
+    );
+}
 
 // Isian satu obat resep. Jumlah disimpan sebagai teks yang tampil di isian (12,5) dan baru diubah ke angka API saat
 // dikirim.
@@ -297,9 +326,13 @@ export function DispensingLines({
                 width: 120,
                 align: 'right',
                 cell: ({ draft }) =>
-                    draft?.price
-                        ? text(displayNumber(draft.price.unit_price))
-                        : null,
+                    draft?.price ? (
+                        <PriceText
+                            value={draft.price.unit_price}
+                            computed={draft.price.computed_unit_price}
+                            changed={draft.price.changed}
+                        />
+                    ) : null,
             },
             {
                 id: 'discount_percent',
@@ -307,9 +340,13 @@ export function DispensingLines({
                 width: 90,
                 align: 'right',
                 cell: ({ draft }) =>
-                    draft?.price
-                        ? text(displayNumber(draft.price.discount_percent))
-                        : null,
+                    draft?.price ? (
+                        <PriceText
+                            value={draft.price.discount_percent}
+                            computed={draft.price.computed_discount_percent}
+                            changed={draft.price.changed}
+                        />
+                    ) : null,
             },
             {
                 id: 'amount',

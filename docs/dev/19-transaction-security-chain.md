@@ -46,7 +46,7 @@ Mengikuti [role-based security Dynamics 365](https://learn.microsoft.com/en-us/d
 
 Di CoreERP lapis ini dideklarasikan manifest `app.yaml` yang divalidasi saat didaftarkan. Repo ini tidak punya manifest. Module menulis katalognya di migration-nya sendiri dengan `INSERT ... ON CONFLICT DO NOTHING`, dalam berkas yang sama dengan baris `apps` module itu. Contoh lengkapnya `modules/healthcare/database/migrations/0001_patient.sql`, yang juga mendaftarkan kebijakan data, peran party, referensi nomor, dan tujuan hierarchy module itu. Core menulis katalognya sendiri di `database/migrations/`.
 
-Migration module dijalankan saat module dipasang, dan pemasangan memberi role pemilik tenant semua duty module itu. Kodenya `installModule` di `src/platform/environment/`.
+Migration module dijalankan saat module dipasang, dan pemasangan memberi role pemilik tenant semua duty module itu, kecuali duty yang bertanda `security_duties.diberikan_ke_pemilik = false`. Kodenya `installModule` di `src/platform/environment/`.
 
 ## Contoh utuh: satu master
 

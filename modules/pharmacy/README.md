@@ -16,24 +16,24 @@ Resep tanpa ketiganya tetap masuk antrean dan tampil sebagai "Belum ada lokasi".
 
 Awalan `far_`, ditambah dua nama legacy yang dipertahankan: `bill_farmasi` (BILLFarmasi) dan `retur_farmasi` (RETURFARMASI). `bun run check:boundaries` menolak ketiganya di kode Core.
 
-| Tabel                    | Isi                                                                                                                   |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                          |
-| `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode         |
-| `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                            |
-| `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                         |
-| `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, Patient KTP, dan rentang harga dasar (SIMmGradingHargaObat) |
-| `far_m_parameter`        | Yatim sejak 0008: desimal harga satuan obat pindah ke setelan keuangan Core                                           |
-| `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                                  |
-| `far_m_lokasi_penjualan` | Lokasi stok yang boleh menjual obat bebas, dengan kelompok harga bawaannya                                            |
-| `far_m_biaya_pelayanan`  | Nilai biaya racik dan biaya resep per legal entity, boleh dipersempit ke lokasi stok dan kelompok harga               |
-| `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                               |
-| `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                            |
-| `bill_farmasi`           | Penyerahan obat satu resep, atau satu penjualan obat bebas tanpa resep: nomor, status, lokasi, orang, dan waktu       |
-| `bill_farmasi_detail`    | Satu baris per obat: jumlah diserahkan, satuan, batch pilihan, alasan bila kurang dari resep, harga saat disiapkan    |
-| `bill_farmasi_biaya`     | Biaya racik (per racikan) dan biaya resep (per obat tunggal) yang dibekukan saat Siapkan atau Simpan dan bayar        |
-| `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                                   |
-| `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                            |
+| Tabel                    | Isi                                                                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `far_processed_events`   | Event yang sudah diproses, supaya event yang diantar dua kali dicatat sekali                                                              |
+| `far_m_golongan_obat`    | Golongan obat per legal entity (narkotika, psikotropika, obat keras, bebas terbatas, bebas): data, bukan kode                             |
+| `far_m_obat`             | Perluasan barang Core berkunci id barang: golongan, kelompok grading, generik, formularium                                                |
+| `far_m_kelompok_grading` | Kelompok grading obat per legal entity untuk harga obat (SIMmKelompokGrading)                                                             |
+| `far_m_grading_harga`    | % naik dan % diskon per kelompok harga, kelompok grading, Patient KTP, dan rentang harga dasar (SIMmGradingHargaObat)                     |
+| `far_m_parameter`        | Yatim sejak 0008: desimal harga satuan obat pindah ke setelan keuangan Core                                                               |
+| `far_m_lokasi_layanan`   | Lokasi stok yang melayani resep dari satu operating unit, dan dari satu section asal                                                      |
+| `far_m_lokasi_penjualan` | Lokasi stok yang boleh menjual obat bebas, dengan kelompok harga bawaannya                                                                |
+| `far_m_biaya_pelayanan`  | Nilai biaya racik dan biaya resep per legal entity, boleh dipersempit ke lokasi stok dan kelompok harga                                   |
+| `far_tr_resep`           | Antrean resep: potret resep dari event, ditambah lokasi pilihan petugas                                                                   |
+| `far_tr_resep_detail`    | Baris resep apa adanya: obat tunggal, kepala racikan, dan komponen racikan                                                                |
+| `bill_farmasi`           | Penyerahan obat satu resep, atau satu penjualan obat bebas tanpa resep: nomor, status, lokasi, orang, dan waktu                           |
+| `bill_farmasi_detail`    | Satu baris per obat: jumlah diserahkan, satuan, batch pilihan, alasan bila kurang dari resep, harga hitungan dan yang dipakai             |
+| `bill_farmasi_biaya`     | Biaya racik (per racikan) dan biaya resep (per obat tunggal) yang dibekukan saat Siapkan atau Simpan dan bayar, hitungan dan yang dipakai |
+| `retur_farmasi`          | Retur obat dari pasien atas satu penyerahan: nomor, tanggal, lokasi, alasan, status                                                       |
+| `retur_farmasi_detail`   | Satu baris per obat dan batch yang kembali                                                                                                |
 
 ## Resep masuk lewat event
 
@@ -112,8 +112,20 @@ Sistem lama menyimpan satu nilai per database di `SetupAwal` (`BiayaRacikObat`, 
 - **Dibekukan** di `bill_farmasi_biaya` saat Siapkan resep dan saat Simpan dan bayar, seperti harga obat. Mengubah setelan sesudahnya tidak mengubah biaya yang sudah dibekukan. Penyerahan yang termasuk jasa tidak punya biaya.
 - **Retur**: biaya resep mengikuti obatnya, jadi obat yang habis diretur tidak lagi ditagih biaya resepnya. Biaya racik tetap, karena racikan tidak pernah diretur di sistem lama (Retur.php).
 - **Kasir**: setiap biaya menjadi baris tagihan sendiri di group OBAT (Qty 1, Nilai biayanya, kode `RACIKAN` atau `RESEP`), lewat `fees` di `pharmacy.dispensing.charges-replaced.v1` untuk resep dan lewat `replaceSaleBill` untuk penjualan obat bebas. Rumus total kasir tidak berubah. Kolom `tagihan_kasir_detail.biaya_resep` yang tidak pernah diisi dibuang (`database/migrations/0068_drop_biaya_resep.sql`).
-- **Layar**: kartu penyerahan, loket, dan kartu penjualan menampilkan biaya di bawah baris obat, dan totalnya ikut menghitung biaya. Mengubah biaya per baris belum ada; itu menyusul bersama izin ubah harga.
+- **Layar**: kartu penyerahan, loket, dan kartu penjualan menampilkan biaya di bawah baris obat, dan totalnya ikut menghitung biaya. Nilai per baris bisa diubah pemegang izin ubah harga (bagian [Ubah harga per baris](#ubah-harga-per-baris)).
 - **Belum termasuk**: komponen biaya Core pada baris biaya, untuk posting finance.
+
+## Ubah harga per baris
+
+Di beberapa klinik sistem lama (Seroja, Adapotek) apoteker mengetik Harga Jual dan Diskon per baris obat (`views/pharmacies/form.php`), dan baris biaya racik bisa diubah. Di sini kemampuan itu izin tersendiri yang bawaannya tidak dipegang siapa pun (keputusan pemilik produk 17 November 2026, `0020_line_price_override.sql`), berbeda dengan batal pembayaran kasir yang bawaannya boleh.
+
+- **Izin.** Duty `pharmacy.line-price.manage` (permission `pharmacy.line-price.override`). Duty ini tidak diberikan ke role pemilik saat module dipasang (`security_duties.diberikan_ke_pemilik`, Core `0069`) dan tidak ditambahkan ke role yang sudah ada. Tenant yang memakainya membuat role sendiri, misalnya "Apoteker penanggung jawab", lalu memberikannya ke orang yang boleh.
+- **Hitungan tetap tersimpan.** `bill_farmasi_detail.harga_satuan` dan `persen_diskon` adalah yang dipakai; `harga_satuan_hitung` dan `persen_diskon_hitung` adalah hitungan grading saat Siapkan atau Simpan dan bayar, juga untuk baris yang tidak diubah. Biaya sama: `bill_farmasi_biaya.nilai` dipakai, `nilai_hitung` dari setelan. Baris yang berbeda dengan hitungan wajib mencatat siapa, kapan, dan alasannya (`harga_diubah_*`, `alasan_ubah_harga`, `nilai_diubah_*`, `alasan_ubah_nilai`); constraint menolak catatan yang tidak lengkap dan perbedaan tanpa catatan. Mengembalikan baris ke hitungan menghapus catatannya.
+- **Resep.** Sesudah Siapkan, tombol **Ubah harga** di kartu penyerahan membuka jendela berisi harga satuan, diskon, dan nilai biaya per baris, dengan hitungan sistem di sampingnya dan satu alasan (`POST .../prescriptions/{id}/dispensing/prices`). Baris yang tidak berubah tidak disentuh. Ubah harga mengunci kunjungan lewat kunci kasir yang sama dengan Siapkan dan retur: kunjungan yang sudah dibayar ditolak "Data ini sudah melakukan Pembayaran diKasir!" dengan tombol **Buka pembayaran …** bagi yang boleh membuka pembayarannya. Sesudah disimpan, `pharmacy.dispensing.charges-replaced.v1` terbit lagi dengan harga yang dipakai. Batal siapkan lalu Siapkan lagi menghitung ulang, jadi harga yang diubah ikut hilang.
+- **Penjualan obat bebas.** Pemegang izin mengetik harga satuan, diskon, dan biaya resep di baris loket (kosong berarti hitungan, yang tampil sebagai placeholder) dan satu alasan (`price_reason`). Quote dan Simpan dan bayar memakai harga itu, jadi total yang dibayar sama dengan yang terlihat. Penjualan langsung dibayar, jadi tidak ada ubah harga sesudahnya.
+- **Ditolak di server.** Pengguna tanpa izin yang mengirim harga, diskon, biaya, atau alasan dijawab 403, juga bila nilainya sama dengan hitungan. Layar hanya menampilkan isian harga untuk pemegang izin (`permissions.override_price` kartu penyerahan, `can_override_price` pilihan loket).
+- **Kasir.** Tagihan menerima harga yang dipakai, tanpa perubahan bentuk pesan atau rumus total. Biaya yang diubah menjadi 0 tidak ditagih, sama dengan setelan bernilai 0. `harga_orig` kasir juga harga yang dipakai.
+- **Belum termasuk.** Kartu penjualan obat bebas belum menampilkan hitungan sistem di samping harga yang dipakai; datanya sudah tersimpan untuk laporan. Biaya racik atau resep yang tidak dikenakan setelan tidak bisa ditambahkan lewat ubah harga.
 
 ## Penjualan obat bebas
 
@@ -169,8 +181,9 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 | `pharmacy.otc-sale.operate`   | Jual obat bebas di loket (bersama izin kasir Core untuk menerima uangnya), lihat daftar penjualan                     |
 | `pharmacy.setup.inquire`      | Lihat lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat  |
 | `pharmacy.setup.manage`       | Kelola lokasi layanan resep dan penjualan obat bebas, biaya racik dan resep, golongan obat, data obat, dan harga obat |
+| `pharmacy.line-price.manage`  | Ubah harga obat, diskon, dan biaya racik atau resep per baris; tidak dipegang role mana pun secara bawaan             |
 
-Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`). Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
+Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`), kecuali `pharmacy.line-price.manage`. Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
 ## Belum dikerjakan
 

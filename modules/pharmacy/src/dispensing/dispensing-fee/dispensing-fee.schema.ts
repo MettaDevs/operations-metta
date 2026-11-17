@@ -28,12 +28,18 @@ export const dispensingFeeInputSchema = z.object({
     version: z.number().optional(),
 });
 
-// Biaya yang ditagih untuk satu penyerahan atau penjualan, dalam bentuk baris tagihan kasir: Qty 1, Nilai amount.
+// Biaya yang ditagih untuk satu penyerahan atau penjualan, dalam bentuk baris tagihan kasir: Qty 1, Nilai amount (yang
+// dipakai; 0 berarti tidak ditagih). computed_amount adalah nilai dari setelan saat dibekukan, dan changed mencatat
+// siapa, kapan, dan mengapa nilainya diubah.
 export const billedFeeSchema = z.object({
     id: z.string(),
     kind: feeKindSchema,
     setup_id: z.string(),
     name: z.string(),
     amount: z.string(),
+    computed_amount: z.string(),
+    changed: z
+        .object({ by: z.string(), at: z.string(), reason: z.string() })
+        .nullable(),
 });
 export type BilledFee = z.infer<typeof billedFeeSchema>;

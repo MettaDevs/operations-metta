@@ -30,6 +30,7 @@ import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     Ban,
+    BadgePercent,
     HandHeart,
     Megaphone,
     PackageCheck,
@@ -59,6 +60,7 @@ import {
     ReturnsSection,
     useCanReturn,
 } from '../dispensing-return/dispensing-returns.tsx';
+import { DispensingPriceCard } from './dispensing-price-card.tsx';
 import { PrescriptionCancelDialog } from './prescription-cancel-dialog.tsx';
 import {
     DispensingLines,
@@ -295,6 +297,7 @@ function DispensingForm({
     const [action, setAction] = useState<Action>('save');
     const [returning, setReturning] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+    const [repricing, setRepricing] = useState(false);
     const returnContent = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const canReturn = useCanReturn(
@@ -587,6 +590,21 @@ function DispensingForm({
                             Retur
                         </Button>
                     )}
+                    {prepared &&
+                        !cancelled &&
+                        status !== 'dibatalkan' &&
+                        permissions.override_price && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={busy}
+                                title="Ubah harga satuan, diskon, atau biaya racik dan resep per baris. Kunjungan yang sudah dibayar perlu dibatalkan pembayarannya dulu."
+                                onClick={() => setRepricing(true)}
+                            >
+                                <BadgePercent aria-hidden="true" />
+                                Ubah harga
+                            </Button>
+                        )}
                     {awaitingHandover && permissions.reverse && (
                         <Button
                             type="button"
@@ -889,6 +907,24 @@ function DispensingForm({
                     />
                 )}
             </form>
+            {repricing && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setRepricing(false);
+                    }}
+                >
+                    <PageDialogContent title="Ubah harga">
+                        <DispensingPriceCard
+                            view={view}
+                            onDone={(next) => {
+                                setRepricing(false);
+                                if (next) onSaved(next);
+                            }}
+                        />
+                    </PageDialogContent>
+                </PageDialog>
+            )}
             {returning && (
                 <PageDialog
                     open

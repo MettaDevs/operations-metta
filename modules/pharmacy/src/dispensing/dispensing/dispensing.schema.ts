@@ -49,12 +49,20 @@ const reference = z.object({
     name: z.string(),
 });
 
+// Siapa, kapan, dan mengapa harga atau biaya diubah dari hitungan sistem. Kosong bila sama dengan hitungan.
+export const priceChangeSchema = z
+    .object({ by: z.string(), at: z.string(), reason: z.string() })
+    .nullable();
+
 // Harga baris yang disalin saat disiapkan: harga per satuan baris dengan angka di belakang koma menurut setelan farmasi,
-// % diskon, dan nilai baris.
+// % diskon, dan nilai baris, semuanya yang dipakai. computed_* adalah hitungan sistem saat Siapkan.
 export const dispensingPriceSchema = z.object({
     unit_price: z.string(),
     discount_percent: z.string(),
     amount: z.string(),
+    computed_unit_price: z.string(),
+    computed_discount_percent: z.string(),
+    changed: priceChangeSchema,
 });
 
 // Baris penyerahan untuk satu baris obat resep. id kosong berarti usulan untuk penyerahan yang belum disimpan: jumlah
@@ -101,6 +109,29 @@ export const dispensingInputSchema = z.object({
 });
 
 export const versionInputSchema = z.object({ version: z.number() });
+
+const decimal = z.union([z.string(), z.number()]);
+
+// Ubah harga sesudah Siapkan: harga satuan dan % diskon per baris penyerahan, dan nilai per baris biaya racik atau resep.
+// Baris yang tidak dikirim tidak berubah. reason berlaku untuk setiap baris yang berbeda dengan hitungan sistem.
+export const dispensingPriceInputSchema = z.object({
+    reason: z.string().nullable().optional(),
+    lines: z
+        .array(
+            z.object({
+                id: z.string(),
+                unit_price: decimal,
+                discount_percent: decimal,
+            }),
+        )
+        .max(200)
+        .optional(),
+    fees: z
+        .array(z.object({ id: z.string(), amount: decimal }))
+        .max(200)
+        .optional(),
+    version: z.number(),
+});
 
 // receiver_name wajib bila obat diterima orang lain dan ditolak bila diterima pasien sendiri; service yang memeriksanya,
 // supaya kedua kasus mendapat pesannya sendiri.
