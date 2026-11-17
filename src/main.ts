@@ -72,6 +72,7 @@ import {
     purchaseReturnReport,
     purchasingRoutes,
     receiptReport,
+    vendorPaymentReport,
 } from './foundation/purchasing/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import { dataSharingRoutes } from './platform/data-sharing/index.ts';
@@ -129,6 +130,7 @@ export const reports = reportCatalog([
     purchaseOrderReport,
     receiptReport,
     purchaseReturnReport,
+    vendorPaymentReport,
     stockCountSheetReport,
     stockCountResultReport,
     adjustmentReport,

@@ -365,6 +365,12 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.purchase-invoice.read',
                 },
                 {
+                    id: 'vendor-payments',
+                    label: 'Pembayaran ke vendor',
+                    href: '/sysadmin/purchasing/vendor-payments',
+                    permission: 'core.vendor-payment.read',
+                },
+                {
                     id: 'vendors',
                     label: 'Vendor',
                     href: '/sysadmin/purchasing/vendors',

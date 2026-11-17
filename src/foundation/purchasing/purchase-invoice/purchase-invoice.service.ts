@@ -46,6 +46,7 @@ import {
     paymentTermsOf,
 } from '../payment-terms/payment-terms.service.ts';
 import { lineAmountSql } from '../purchase-line.service.ts';
+import { refusePaidEntry } from '../vendor-payment/vendor-payment.service.ts';
 import {
     purchaseInvoiceInputSchema,
     purchaseInvoiceLineRowSchema,
@@ -911,8 +912,8 @@ export class PurchaseInvoices {
     }
 
     // Batal posting, seperti Cancel pada Posted Purchase Invoice (codeunit "Correct Posted Purch. Invoice"): ditolak bila
-    // utangnya sudah dibayar sebagian atau lunas. Entri pembatalan menutup entri fakturnya, jumlah difakturkan di baris
-    // penerimaan berkurang lagi, dan nomor faktur vendor bisa dicatat ulang.
+    // utangnya sudah dibayar sebagian atau lunas, dengan tombol yang membuka pembayarannya. Entri pembatalan menutup entri
+    // fakturnya, jumlah difakturkan di baris penerimaan berkurang lagi, dan nomor faktur vendor bisa dicatat ulang.
     async reverse(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-invoice', 'reverse');
         const current = await this.header(id);
@@ -939,9 +940,7 @@ export class PurchaseInvoices {
                 fromNumeric(entry.open, quantityScale) !==
                 fromNumeric(entry.amount, quantityScale)
             )
-                validation({
-                    _form: 'Utang faktur ini sudah dibayar sebagian atau lunas, jadi postingnya tidak bisa dibatalkan.',
-                });
+                await refusePaidEntry(this.db, this.workspace, entry.id);
             const lines = await this.lockedLines(current.id);
             await requireLocationAccess(
                 this.db,

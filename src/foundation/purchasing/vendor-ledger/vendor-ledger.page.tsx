@@ -28,12 +28,39 @@ import {
     type PurchaseInvoice,
     type PurchaseInvoicePermissions,
 } from '../purchase-invoice/purchase-invoice-card.tsx';
+import {
+    VendorPaymentCard,
+    type VendorPayment,
+    type VendorPaymentPermissions,
+} from '../vendor-payment/vendor-payment-card.tsx';
 
-// Utang vendor (Vendor Ledger Entries di BC): faktur pembelian yang sudah diposting dan belum dibayar, dari jatuh tempo
-// paling awal.
+// Utang vendor (Vendor Ledger Entries di BC): faktur pembelian yang sudah diposting dan belum lunas, dari jatuh tempo
+// paling awal. Entri yang sudah ditutup, termasuk pembayaran, tampil bila diminta, dan setiap faktur membuka pembayaran
+// yang membayarnya.
 
 const route = getRouteApi('/_app/sysadmin/purchasing/vendor-ledger');
 type Row = ApiBody<'purchasingVendorLedgerList'>['data'][number];
+
+const closedText: Record<Row['kind'], string> = {
+    faktur: 'Ditutup',
+    pembatalan: 'Pembatalan',
+    pembayaran: 'Pembayaran',
+    pembatalan_pembayaran: 'Pembayaran dibatalkan',
+};
+
+type Opened =
+    | {
+          kind: 'invoice';
+          invoice: PurchaseInvoice;
+          permissions: PurchaseInvoicePermissions;
+          amountDecimals: number;
+      }
+    | {
+          kind: 'payment';
+          payment: VendorPayment;
+          permissions: VendorPaymentPermissions;
+          amountDecimals: number;
+      };
 
 const dueText = (days: number) =>
     days > 0
@@ -50,11 +77,7 @@ function VendorLedgerPage(): ReactNode {
     const contentRef = useRef<HTMLDivElement>(null);
     const [totals, setTotals] = useState({ remaining: '0', overdue: '0' });
     const [amountDecimals, setAmountDecimals] = useState(0);
-    const [opened, setOpened] = useState<{
-        invoice: PurchaseInvoice;
-        permissions: PurchaseInvoicePermissions;
-        amountDecimals: number;
-    } | null>(null);
+    const [opened, setOpened] = useState<Opened | null>(null);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingVendorLedgerList(
@@ -81,12 +104,13 @@ function VendorLedgerPage(): ReactNode {
         query: search.q ?? '',
         getKey: (row) => row.id,
     });
-    const show = async (row: Row) => {
+    const showInvoice = async (id: string) => {
         try {
             const { body } = await api.purchasingInvoiceShow({
-                params: { id: row.invoice_id },
+                params: { id },
             });
             setOpened({
+                kind: 'invoice',
                 invoice: body.data,
                 permissions: body.permissions,
                 amountDecimals: body.amount_decimals,
@@ -94,6 +118,40 @@ function VendorLedgerPage(): ReactNode {
         } catch (caught) {
             toast.error(errorText(caught, 'Faktur belum bisa dibuka.'));
         }
+    };
+    const showPayment = async (id: string) => {
+        try {
+            const { body } = await api.purchasingVendorPaymentShow({
+                params: { id },
+            });
+            setOpened({
+                kind: 'payment',
+                payment: body.data,
+                permissions: body.permissions,
+                amountDecimals: body.amount_decimals,
+            });
+        } catch (caught) {
+            toast.error(errorText(caught, 'Pembayaran belum bisa dibuka.'));
+        }
+    };
+    const show = (row: Row) => {
+        if (row.payment_id) void showPayment(row.payment_id);
+        else if (row.invoice_id) void showInvoice(row.invoice_id);
+    };
+    const paymentAction = 'payment:';
+    const rowActions = (row: Row) =>
+        row.payment_id
+            ? [{ id: 'open', label: 'Buka pembayaran' }]
+            : [
+                  { id: 'open', label: 'Buka faktur' },
+                  ...row.payments.map((payment) => ({
+                      id: `${paymentAction}${payment.id}`,
+                      label: `Buka pembayaran ${payment.number}`,
+                  })),
+              ];
+    const closeOpened = () => {
+        setOpened(null);
+        list.reload();
     };
     const amount = (value: string) => displayAmount(value, amountDecimals);
 
@@ -167,16 +225,23 @@ function VendorLedgerPage(): ReactNode {
                     getRowLabel={(row) => row.document_number}
                     showRowNumbers
                     actionsPlacement="inline"
-                    actions={[{ id: 'open', label: 'Buka faktur' }]}
-                    onRowAction={(_, row) => void show(row)}
-                    onRowClick={(row) => void show(row)}
+                    actions={[{ id: 'open', label: 'Buka' }]}
+                    getRowActions={rowActions}
+                    onRowAction={(action, row) => {
+                        if (action.startsWith(paymentAction))
+                            void showPayment(
+                                action.slice(paymentAction.length),
+                            );
+                        else show(row);
+                    }}
+                    onRowClick={show}
                     sort={list.sort}
                     onSortChange={list.onSortChange}
                     serverSort
                     incremental={list}
                     emptyMessage={
                         includeClosed
-                            ? 'Belum ada faktur pembelian yang diposting.'
+                            ? 'Belum ada faktur pembelian atau pembayaran yang diposting.'
                             : 'Tidak ada utang ke vendor yang belum dibayar.'
                     }
                     columns={[
@@ -208,9 +273,10 @@ function VendorLedgerPage(): ReactNode {
                                     </Badge>
                                 ) : (
                                     <Badge variant="outline">
-                                        {row.kind === 'pembatalan'
-                                            ? 'Pembatalan'
-                                            : 'Ditutup'}
+                                        {row.kind === 'faktur' &&
+                                        row.payments.length
+                                            ? 'Lunas'
+                                            : closedText[row.kind]}
                                     </Badge>
                                 ),
                         },
@@ -229,13 +295,13 @@ function VendorLedgerPage(): ReactNode {
                             width: 160,
                             cell: (row) => (
                                 <DataTableText>
-                                    {row.vendor_invoice_number}
+                                    {row.vendor_invoice_number ?? ''}
                                 </DataTableText>
                             ),
                         },
                         {
                             id: 'document_number',
-                            header: 'Faktur',
+                            header: 'Dokumen',
                             width: 140,
                             cell: (row) => (
                                 <DataTableText>
@@ -267,6 +333,31 @@ function VendorLedgerPage(): ReactNode {
                             ),
                         },
                         {
+                            id: 'paid',
+                            header: 'Dibayar',
+                            width: 140,
+                            align: 'right',
+                            cell: (row) => (
+                                <DataTableText>
+                                    {row.payments.length
+                                        ? amount(row.paid)
+                                        : ''}
+                                </DataTableText>
+                            ),
+                        },
+                        {
+                            id: 'payments',
+                            header: 'Pembayaran',
+                            width: 180,
+                            cell: (row) => (
+                                <DataTableText>
+                                    {row.payments
+                                        .map((payment) => payment.number)
+                                        .join(', ')}
+                                </DataTableText>
+                            ),
+                        },
+                        {
                             id: 'remaining',
                             header: 'Sisa',
                             width: 140,
@@ -284,27 +375,37 @@ function VendorLedgerPage(): ReactNode {
                 <PageDialog
                     open
                     onOpenChange={(next) => {
-                        if (next) return;
-                        setOpened(null);
-                        list.reload();
+                        if (!next) closeOpened();
                     }}
                 >
                     <PageDialogContent
                         ref={contentRef}
-                        title="Faktur pembelian"
+                        title={
+                            opened.kind === 'invoice'
+                                ? 'Faktur pembelian'
+                                : 'Pembayaran ke vendor'
+                        }
                         defaultExpanded
                     >
-                        <PurchaseInvoiceCard
-                            invoice={opened.invoice}
-                            permissions={opened.permissions}
-                            amountDecimals={opened.amountDecimals}
-                            portalContainer={contentRef}
-                            onSaved={() => undefined}
-                            onClose={() => {
-                                setOpened(null);
-                                list.reload();
-                            }}
-                        />
+                        {opened.kind === 'invoice' ? (
+                            <PurchaseInvoiceCard
+                                invoice={opened.invoice}
+                                permissions={opened.permissions}
+                                amountDecimals={opened.amountDecimals}
+                                portalContainer={contentRef}
+                                onSaved={() => undefined}
+                                onClose={closeOpened}
+                            />
+                        ) : (
+                            <VendorPaymentCard
+                                payment={opened.payment}
+                                permissions={opened.permissions}
+                                amountDecimals={opened.amountDecimals}
+                                portalContainer={contentRef}
+                                onSaved={() => undefined}
+                                onClose={closeOpened}
+                            />
+                        )}
                     </PageDialogContent>
                 </PageDialog>
             )}

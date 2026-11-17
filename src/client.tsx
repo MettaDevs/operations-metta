@@ -108,6 +108,10 @@ import {
 } from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingRequisitionRequisitionsPage } from './foundation/purchasing/requisition/requisitions.page.tsx';
 import { page as foundationPurchasingVendorLedgerVendorLedgerPage } from './foundation/purchasing/vendor-ledger/vendor-ledger.page.tsx';
+import {
+    page as foundationPurchasingVendorPaymentVendorPaymentsPage,
+    record as foundationPurchasingVendorPaymentVendorPaymentsRecord,
+} from './foundation/purchasing/vendor-payment/vendor-payments.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -1084,6 +1088,17 @@ const foundationPurchasingVendorLedgerVendorLedgerRoute = createRoute({
     },
 });
 
+const foundationPurchasingVendorPaymentVendorPaymentsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingVendorPaymentVendorPaymentsPage.path,
+    component: foundationPurchasingVendorPaymentVendorPaymentsPage.component,
+    validateSearch:
+        foundationPurchasingVendorPaymentVendorPaymentsPage.validateSearch,
+    staticData: {
+        title: foundationPurchasingVendorPaymentVendorPaymentsPage.title,
+    },
+});
+
 const foundationPurchasingVendorVendorsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingVendorVendorsPage.path,
@@ -1317,6 +1332,7 @@ const routeTree = rootRoute.addChildren([
         foundationPurchasingReceiptReceiptsRoute,
         foundationPurchasingRequisitionRequisitionsRoute,
         foundationPurchasingVendorLedgerVendorLedgerRoute,
+        foundationPurchasingVendorPaymentVendorPaymentsRoute,
         foundationPurchasingVendorVendorsRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,
@@ -1414,6 +1430,8 @@ const recordPages = {
     'core.purchase-order':
         foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
     'core.purchase-receipt': foundationPurchasingReceiptReceiptsRecord,
+    'core.vendor-payment':
+        foundationPurchasingVendorPaymentVendorPaymentsRecord,
 } satisfies RecordPages;
 
 startClient(router, recordPages);
