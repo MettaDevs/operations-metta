@@ -1,3 +1,4 @@
+import { Button } from '@operations-metta/ui/button';
 import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { displayNumber } from '@operations-metta/ui/display-number';
@@ -11,10 +12,12 @@ import {
     type LookupRequest,
 } from '@operations-metta/ui/master-lookup';
 import { Select } from '@operations-metta/ui/select';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { api, type ApiBody } from '@core/platform/shell/index.ts';
 import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
+import { typed } from './otc-sale-tender.tsx';
 import {
     BatchLookup,
     type PickedBatch,
@@ -123,6 +126,66 @@ function DrugLookup({
                 },
             ]}
         />
+    );
+}
+
+// Jumlah baris dalam satuan dasar melebihi stok lokasi. Server tetap yang menolak; ini hanya pemicu saran pengganti.
+function shortOfStock(line: SaleLine): boolean {
+    const stock = Number(line.drug?.stock ?? NaN);
+    const perUnit = Number(
+        line.drug?.units.find((unit) => unit.id === line.unitId)
+            ?.quantity_per_unit ?? NaN,
+    );
+    const quantity = Number(typed(line.quantity));
+    return quantity * perUnit > stock;
+}
+
+// Obat pengganti yang masih punya stok di lokasi ini, ditawarkan saat stok obat baris kurang. Polanya Item Substitution BC
+// pada baris penjualan: memilihnya mengganti obat baris. Penjualan tanpa resep tidak mencatat obat asalnya, karena tidak
+// ada resep dokter yang perlu dipertahankan.
+function SubstituteSuggestion({
+    line,
+    locationId,
+    onPick,
+}: {
+    line: SaleLine;
+    locationId: string;
+    onPick: (drug: Drug) => void;
+}): ReactNode {
+    const itemId = line.drug?.id ?? '';
+    const substitutes = useQuery({
+        queryKey: ['pharmacy-otc-sale-substitutes', itemId, locationId],
+        queryFn: async ({ signal }) =>
+            (
+                await api.pharmacyOtcSaleItems(
+                    {
+                        query: {
+                            substitutes_of: itemId,
+                            location_id: locationId,
+                        },
+                    },
+                    { signal },
+                )
+            ).body.data.filter((drug) => Number(drug.stock ?? 0) > 0),
+    });
+    if (!substitutes.data?.length) return null;
+    return (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span>Stok kurang. Obat pengganti:</span>
+            {substitutes.data.map((drug) => (
+                <Button
+                    key={drug.id}
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto px-0 py-0 text-left text-xs whitespace-normal"
+                    title={drugLabel(drug)}
+                    onClick={() => onPick(drug)}
+                >
+                    {`${drug.name} · stok ${displayNumber(drug.stock ?? '0')} ${drug.units[0]?.code ?? ''}`}
+                </Button>
+            ))}
+        </div>
     );
 }
 
@@ -244,6 +307,15 @@ export function OtcSaleLines({
                 line.key === key ? { ...line, ...change } : line,
             ),
         );
+    const pick = (line: SaleLine, drug: Drug) =>
+        update(line.key, {
+            drug,
+            unitId: drug.units.some((unit) => unit.id === drug.sales_unit_id)
+                ? drug.sales_unit_id
+                : (drug.units[0]?.id ?? ''),
+            quantity: line.quantity || '1',
+            batch: null,
+        });
     const rows = lines.map((line, index) => ({ line, index }));
     const money = (value: string | undefined) => (
         <DataTableText>
@@ -262,25 +334,23 @@ export function OtcSaleLines({
             content: 'control',
             minWidth: 280,
             cell: ({ line, index }) => (
-                <DrugLookup
-                    locationId={locationId}
-                    field={field(index, 'item_id')}
-                    value={line.drug}
-                    onChange={(drug) =>
-                        update(line.key, {
-                            drug,
-                            unitId: drug.units.some(
-                                (unit) => unit.id === drug.sales_unit_id,
-                            )
-                                ? drug.sales_unit_id
-                                : (drug.units[0]?.id ?? ''),
-                            quantity: line.quantity || '1',
-                            batch: null,
-                        })
-                    }
-                    error={error(index, 'item_id')}
-                    portalContainer={portalContainer}
-                />
+                <>
+                    <DrugLookup
+                        locationId={locationId}
+                        field={field(index, 'item_id')}
+                        value={line.drug}
+                        onChange={(drug) => pick(line, drug)}
+                        error={error(index, 'item_id')}
+                        portalContainer={portalContainer}
+                    />
+                    {shortOfStock(line) && (
+                        <SubstituteSuggestion
+                            line={line}
+                            locationId={locationId}
+                            onPick={(drug) => pick(line, drug)}
+                        />
+                    )}
+                </>
             ),
         },
         {

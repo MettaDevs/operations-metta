@@ -924,6 +924,48 @@ describe.skipIf(!process.env.DB_HOST)(
             expect((await search(warehouse.id))[0]?.stock).toBeNull();
         });
 
+        test('the drug search narrowed to substitutes lists the substitutes of one drug with their stock', async () => {
+            const brand = await drug('OTC-MEREK', [
+                { batch: 'M1', expiry: '2027-03-31', quantity: 1 },
+            ]);
+            const generic = await drug('OTC-GENERIK', [
+                { batch: 'G1', expiry: '2027-03-31', quantity: 25 },
+            ]);
+            const empty = await drug('OTC-KOSONG', []);
+            const unrelated = await drug('OTC-LAIN', [
+                { batch: 'L1', expiry: '2027-03-31', quantity: 5 },
+            ]);
+            for (const substitute of [generic, empty])
+                await json(
+                    await pharmacy.admin.post(
+                        `${api}/drugs/${brand.id}/substitutions`,
+                        {
+                            substitute_item_id: substitute.id,
+                            notes: null,
+                            interchangeable: false,
+                        },
+                    ),
+                    200,
+                );
+            const substitutes = async (itemId: string) =>
+                (
+                    await json<{
+                        data: (Reference & { stock: string | null })[];
+                    }>(
+                        await pharmacy.admin.get(
+                            `${sales}/items?substitutes_of=${itemId}&location_id=${counter.id}`,
+                        ),
+                        200,
+                    )
+                ).data.map((row) => [row.code, row.stock]);
+            expect(await substitutes(brand.id)).toEqual([
+                ['OTC-GENERIK', '25'],
+                ['OTC-KOSONG', '0'],
+            ]);
+            expect(await substitutes(unrelated.id)).toEqual([]);
+            expect(await substitutes('bukan-id')).toEqual([]);
+        });
+
         test('a counter user reads drugs and batches without prescription access; others are refused', async () => {
             const item = await drug('OTC-BATCH', [
                 { batch: 'B1', expiry: '2027-05-31', quantity: 5 },

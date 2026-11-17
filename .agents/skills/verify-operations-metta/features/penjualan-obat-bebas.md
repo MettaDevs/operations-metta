@@ -6,6 +6,7 @@ Petugas loket farmasi menjual obat tanpa resep kepada pembeli. Ia memilih lokasi
 
 - `otc-lokasi` mengizinkan sebuah lokasi farmasi menjual obat bebas, dengan kelompok harganya.
 - `otc-jual` menjual obat dengan pembayaran tunai dan kembalian.
+- `otc-pengganti` menawarkan obat pengganti yang masih punya stok saat jumlah baris melebihi stok lokasi, dan memilihnya mengganti obat baris.
 - `otc-petugas-lokasi` menyembunyikan penjualan di lokasi khusus petugas dari pengguna yang bukan petugasnya, dan menolak kartunya bila dibuka lewat alamat.
 
 ## How to get to it (user POV)
@@ -30,6 +31,7 @@ Prasyarat:
 - **Lokasi khusus petugas.** Jalankan `bun scripts/verify.ts go sysadmin/inventory/locations`, `click button "Tindakan untuk Farmasi" --exact`, `click menuitem Buka --exact`, `click checkbox "Khusus petugas lokasi" --exact`, dan `click button Simpan --exact`. Admin bukan petugas FARMASI, jadi lokasi itu tertutup baginya.
 - **Daftar disaring.** Jalankan `bun scripts/verify.ts go pharmacy/dispensing/otc-sales` dan `snapshot otc-daftar`. Hanya penjualan PUSLING yang tampil. Di loket, combobox `Lokasi` hanya menawarkan `PUSLING · Farmasi Pusling`.
 - **Buka lewat alamat.** Ambil id penjualan FARMASI dengan `sql "select id from bill_farmasi where nomor = '<nomor>'"`, lalu `go "pharmacy/dispensing/otc-sales?sale=<id>"` dan `wait text "hanya untuk petugasnya"`. Kartu menulis `Lokasi FARMASI Farmasi hanya untuk petugasnya, dan Anda belum terdaftar sebagai petugas di sana.` dengan tombol `Coba lagi`.
+- **Obat pengganti saat stok kurang.** Atur dulu pengganti Parasetamol: `go pharmacy/drug/drugs`, `click button "Tindakan untuk PCT-500 Parasetamol 500 mg" --exact`, `click menuitem Buka --exact`, `fill combobox "Obat pengganti" Antasida --exact`, `click text "Antasida DOEN tablet kunyah" --nth 1`, dan `click button "Tambah obat pengganti"`. Di loket, `fill combobox "Obat, baris 1" Parasetamol`, `click option Parasetamol`, dan `fill textbox "Jumlah, baris 1" 400` (stok FARMASI 300). Di bawah obat muncul `Stok kurang. Obat pengganti:` dengan tombol `Antasida DOEN tablet kunyah · stok 150 TAB`. `click button "Antasida DOEN tablet kunyah · stok 150 TAB" --exact` mengganti obat baris menjadi `ANT-DOEN · Antasida DOEN tablet kunyah`. Isi jumlah 5, lalu Simpan dan bayar seperti di atas; `bill_farmasi_detail` penjualan itu berisi `ANT-DOEN`.
 
 ## Gotchas
 
