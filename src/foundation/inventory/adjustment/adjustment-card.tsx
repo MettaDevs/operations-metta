@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    type ErrorAction,
     errorText,
     FormErrorHeader,
     PrintAction,
@@ -211,6 +212,9 @@ function AdjustmentForm({
     const [draft, setDraft] = useState<Draft>(() => draftOf(document));
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     const [action, setAction] = useState<Action>('save');
     const [creating, setCreating] = useState<Creating | null>(null);
@@ -250,13 +254,15 @@ function AdjustmentForm({
         setAction(next);
         setBusy(true);
         setErrors({});
+        setErrorActions([]);
         setMessage(null);
         try {
             await request();
         } catch (caught) {
-            if (caught instanceof ApiError && caught.status === 422)
+            if (caught instanceof ApiError && caught.status === 422) {
                 setErrors(caught.errors);
-            else setMessage(errorText(caught, `${failedOperations[next]}.`));
+                setErrorActions(caught.actions);
+            } else setMessage(errorText(caught, `${failedOperations[next]}.`));
         } finally {
             setBusy(false);
         }
@@ -366,6 +372,7 @@ function AdjustmentForm({
         }
         setDraft(draftOf(document));
         setErrors({});
+        setErrorActions([]);
         setMessage(null);
     };
 
@@ -548,6 +555,7 @@ function AdjustmentForm({
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
+                    errorActions={errorActions}
                     message={message}
                     operation={failedOperations[action]}
                 />
