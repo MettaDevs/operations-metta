@@ -2601,6 +2601,18 @@
             }
         }
     },
+    "purchasingOrderReceive": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/orders/{id}/receipts",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingReceiptPost": {
         "~orpc": {
             "errorMap": {},

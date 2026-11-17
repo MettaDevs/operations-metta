@@ -78,6 +78,8 @@ type Line = {
     funding_source: Reference | null;
     procurement_program: Reference | null;
     budget_year: string;
+    order_line_id: string | null;
+    order_outstanding: string | null;
 };
 type Header = {
     vendor: { id: string; number: string; name: string } | null;
@@ -130,6 +132,8 @@ function linesOf(receipt: Receipt | null): Line[] {
         funding_source: line.funding_source,
         procurement_program: line.procurement_program,
         budget_year: line.budget_year === null ? '' : String(line.budget_year),
+        order_line_id: line.order_line_id,
+        order_outstanding: line.order_outstanding,
     }));
 }
 
@@ -260,6 +264,7 @@ export function ReceiptCard({
             funding_source_id: line.funding_source?.id ?? null,
             procurement_program_id: line.procurement_program?.id ?? null,
             budget_year: line.budget_year ? Number(line.budget_year) : null,
+            order_line_id: line.order_line_id,
         })),
     });
 
@@ -416,12 +421,17 @@ export function ReceiptCard({
                     funding_source: previous?.funding_source ?? null,
                     procurement_program: previous?.procurement_program ?? null,
                     budget_year: previous?.budget_year ?? '',
+                    order_line_id: null,
+                    order_outstanding: null,
                 })),
             ];
         });
 
     const text = (value: string) => <DataTableText>{value}</DataTableText>;
     const control = editable ? ('control' as const) : ('text' as const);
+    // Penerimaan dari purchase order: vendor, lokasi, dan barangnya milik order; petugas hanya mengubah jumlah yang
+    // datang, batch, kedaluwarsa, dan sumber dana, atau menghapus baris yang belum datang.
+    const fromOrder = receipt?.order !== null && receipt?.order !== undefined;
 
     // Kartu vendor baru berada di luar form dokumen: event submit dari portal ikut naik ke induk React-nya.
     return (
@@ -527,7 +537,7 @@ export function ReceiptCard({
                             error={error('vendor_id')}
                             data-error-field="vendor_id"
                         >
-                            {editable ? (
+                            {editable && !fromOrder ? (
                                 <InlineLookup<Vendor>
                                     label="Vendor"
                                     required
@@ -589,7 +599,7 @@ export function ReceiptCard({
                             error={error('location_id')}
                             data-error-field="location_id"
                         >
-                            {editable ? (
+                            {editable && !fromOrder ? (
                                 <InlineLookup<Location>
                                     label="Lokasi tujuan"
                                     required
@@ -748,6 +758,15 @@ export function ReceiptCard({
                                 }
                             />
                         </FormControl>
+                        {receipt?.order && (
+                            <FormControl hint="Barang di penerimaan ini datang dari purchase order ini. Jumlah yang diposting menambah jumlah diterima di ordernya.">
+                                <Input
+                                    label="Purchase order"
+                                    readOnly
+                                    value={receipt.order.number}
+                                />
+                            </FormControl>
+                        )}
                         {receipt && (
                             <FormControl>
                                 <Input
@@ -778,9 +797,13 @@ export function ReceiptCard({
                                   }
                                 : undefined
                         }
-                        onAddRow={editable ? () => addLines([null]) : undefined}
+                        onAddRow={
+                            editable && !fromOrder
+                                ? () => addLines([null])
+                                : undefined
+                        }
                         selectRecords={
-                            editable
+                            editable && !fromOrder
                                 ? {
                                       noun: 'barang',
                                       loadItems: itemLoader,
@@ -847,7 +870,7 @@ export function ReceiptCard({
                                 content: control,
                                 minWidth: 260,
                                 cell: ({ index, line }) =>
-                                    editable ? (
+                                    editable && !line.order_line_id ? (
                                         <FormControl
                                             error={error(
                                                 field(index, 'item_id'),
@@ -893,7 +916,9 @@ export function ReceiptCard({
                                 content: control,
                                 minWidth: 120,
                                 cell: ({ index, line }) =>
-                                    editable && line.item ? (
+                                    editable &&
+                                    line.item &&
+                                    !line.order_line_id ? (
                                         <UnitLookup
                                             itemId={line.item.id}
                                             value={line.unit}
@@ -952,6 +977,24 @@ export function ReceiptCard({
                                         text(displayNumber(line.quantity))
                                     ),
                             },
+                            ...(fromOrder
+                                ? [
+                                      {
+                                          id: 'order_outstanding',
+                                          header: 'Sisa order',
+                                          minWidth: 110,
+                                          align: 'right' as const,
+                                          cell: ({ line }: { line: Line }) =>
+                                              text(
+                                                  line.order_outstanding
+                                                      ? displayNumber(
+                                                            line.order_outstanding,
+                                                        )
+                                                      : '',
+                                              ),
+                                      },
+                                  ]
+                                : []),
                             {
                                 id: 'unit_cost',
                                 header: 'Harga satuan',

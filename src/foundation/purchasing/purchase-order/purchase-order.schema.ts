@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 
-// Open dan Released di Purchase Header BC.
-export const purchaseOrderStatuses = ['terbuka', 'dirilis'] as const;
+// Open dan Released di Purchase Header BC, ditambah selesai: semua baris sudah diterima.
+export const purchaseOrderStatuses = ['terbuka', 'dirilis', 'selesai'] as const;
 
 const reference = z.object({
     id: z.string(),
@@ -47,6 +47,9 @@ export const purchaseOrderLineRowSchema = z.object({
     vat_percent: z.string(),
     amount: z.string(),
     expected_receipt_date: z.string().nullable(),
+    // Quantity Received dan Outstanding Quantity di Purchase Line BC, dalam satuan baris.
+    quantity_received: z.string(),
+    outstanding_quantity: z.string(),
 });
 
 export const purchaseOrderRowSchema = z.object({

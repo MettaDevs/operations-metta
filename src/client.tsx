@@ -93,8 +93,14 @@ import {
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as foundationPricingChargeComponentChargeComponentsPage } from './foundation/pricing/charge-component/charge-components.page.tsx';
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
-import { page as foundationPurchasingPurchaseOrderPurchaseOrdersPage } from './foundation/purchasing/purchase-order/purchase-orders.page.tsx';
-import { page as foundationPurchasingReceiptReceiptsPage } from './foundation/purchasing/receipt/receipts.page.tsx';
+import {
+    page as foundationPurchasingPurchaseOrderPurchaseOrdersPage,
+    record as foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
+} from './foundation/purchasing/purchase-order/purchase-orders.page.tsx';
+import {
+    page as foundationPurchasingReceiptReceiptsPage,
+    record as foundationPurchasingReceiptReceiptsRecord,
+} from './foundation/purchasing/receipt/receipts.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -1347,6 +1353,9 @@ const recordPages = {
     'core.inventory-location':
         foundationInventoryWarehouseEmployeeWarehouseEmployeesRecord,
     'core.payment': foundationBillingInvoicePaymentRecord,
+    'core.purchase-order':
+        foundationPurchasingPurchaseOrderPurchaseOrdersRecord,
+    'core.purchase-receipt': foundationPurchasingReceiptReceiptsRecord,
 } satisfies RecordPages;
 
 startClient(router, recordPages);

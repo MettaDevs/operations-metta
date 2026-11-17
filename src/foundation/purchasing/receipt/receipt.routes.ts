@@ -68,6 +68,20 @@ export function receiptRoutes() {
                     input.body,
                 ),
             ),
+        purchasingOrderReceive: base
+            .route({
+                method: 'POST',
+                path: '/api/v1/purchasing/orders/{id}/receipts',
+                inputStructure: 'detailed',
+                outputStructure: 'detailed',
+            })
+            .input(record<{ posting_date: string }>())
+            .handler(async ({ context, input }) =>
+                (await receipts(context, input.body)).createFromOrder(
+                    input.params.id,
+                    input.body,
+                ),
+            ),
         purchasingReceiptPost: route('POST', '/{id}/post')
             .input(record<{ version: number }>())
             .handler(async ({ context, input }) =>

@@ -80,6 +80,14 @@ const pages: RecordPages = {
         title: 'Petugas lokasi',
         component: ({ id }) => h('p', null, `Petugas lokasi ${id}`),
     },
+    'core.purchase-order': {
+        title: 'Purchase order',
+        component: ({ id }) => h('p', null, `Purchase order ${id}`),
+    },
+    'core.purchase-receipt': {
+        title: 'Penerimaan barang',
+        component: ({ id }) => h('p', null, `Penerimaan ${id}`),
+    },
 };
 
 function ReturnForm(): React.ReactNode {

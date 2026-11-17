@@ -20,7 +20,7 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { LockOpen, Send } from 'lucide-react';
+import { LockOpen, PackageCheck, Send } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -50,6 +50,11 @@ import {
     type Reference,
     type UnitChoice,
 } from '../purchase-lines.tsx';
+import {
+    ReceiptCard,
+    type Receipt,
+    type ReceiptPermissions,
+} from '../receipt/receipt-card.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
 
 export type PurchaseOrder = ApiBody<'purchasingOrderShow'>['data'];
@@ -68,6 +73,7 @@ type Line = {
     discount_percent: string;
     vat_percent: string;
     expected_receipt_date: string;
+    quantity_received: string;
 };
 type Header = {
     vendor: { id: string; number: string; name: string } | null;
@@ -84,6 +90,7 @@ export const purchaseOrderStatusLabels: Record<
 > = {
     terbuka: 'Terbuka',
     dirilis: 'Dirilis',
+    selesai: 'Selesai',
 };
 
 function headerOf(order: PurchaseOrder | null): Header {
@@ -119,6 +126,7 @@ function linesOf(order: PurchaseOrder | null): Line[] {
         discount_percent: line.discount_percent,
         vat_percent: line.vat_percent,
         expected_receipt_date: line.expected_receipt_date ?? '',
+        quantity_received: line.quantity_received,
     }));
 }
 
@@ -154,6 +162,12 @@ export function PurchaseOrderCard({
     const [operation, setOperation] = useState('Order belum disimpan');
     const [creatingVendor, setCreatingVendor] = useState(false);
     const vendorDialog = useRef<HTMLDivElement>(null);
+    const [receiving, setReceiving] = useState<{
+        receipt: Receipt;
+        permissions: ReceiptPermissions;
+        amountDecimals: number;
+    } | null>(null);
+    const receiptDialog = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
     const vendorLoader = useLoader(loadVendors);
     const locationLoader = useLoader(loadLocations);
@@ -284,6 +298,40 @@ export function PurchaseOrderCard({
             }
         });
 
+    // Terima barang membuat draf penerimaan berisi sisa order, lalu membukanya di atas order. Jumlah diterima di order
+    // berubah saat penerimaan itu diposting, jadi order dimuat ulang sesudah jendela penerimaan ditutup.
+    const receive = () =>
+        run(async () => {
+            if (!order) return;
+            setErrors({});
+            setErrorActions([]);
+            setMessage(null);
+            try {
+                const created = await api.purchasingOrderReceive({
+                    params: { id: order.id },
+                    body: { posting_date: today() },
+                });
+                const { body } = await api.purchasingReceiptShow({
+                    params: { id: created.body.data.id },
+                });
+                setReceiving({
+                    receipt: body.data,
+                    permissions: body.permissions,
+                    amountDecimals: body.amount_decimals,
+                });
+            } catch (caught) {
+                failed(caught, 'Barang belum bisa diterima');
+            }
+        });
+
+    const reload = async () => {
+        if (!order) return;
+        const { body } = await api.purchasingOrderShow({
+            params: { id: order.id },
+        });
+        adopt(body.data);
+    };
+
     const remove = async () => {
         if (!order) return;
         if (
@@ -326,6 +374,7 @@ export function PurchaseOrderCard({
                     // Satu order biasanya satu PPN %, jadi baris baru meneruskan PPN baris sebelumnya.
                     vat_percent: previous?.vat_percent ?? '',
                     expected_receipt_date: '',
+                    quantity_received: '0',
                 })),
             ];
         });
@@ -419,6 +468,19 @@ export function PurchaseOrderCard({
                         >
                             <LockOpen aria-hidden="true" />
                             Buka lagi
+                        </Button>
+                    )}
+                    {order?.status === 'dirilis' && permissions.receive && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="command"
+                            disabled={busy}
+                            title="Buat penerimaan berisi sisa barang order ini yang belum datang."
+                            onClick={() => void receive()}
+                        >
+                            <PackageCheck aria-hidden="true" />
+                            Terima barang
                         </Button>
                     )}
                     {order && editable && (
@@ -864,6 +926,24 @@ export function PurchaseOrderCard({
                                           )
                                         : text(displayNumber(line.quantity)),
                             },
+                            ...(lines.some(
+                                (line) => Number(line.quantity_received) > 0,
+                            ) || order?.status !== 'terbuka'
+                                ? [
+                                      {
+                                          id: 'quantity_received',
+                                          header: 'Diterima',
+                                          minWidth: 100,
+                                          align: 'right' as const,
+                                          cell: ({ line }: { line: Line }) =>
+                                              text(
+                                                  displayNumber(
+                                                      line.quantity_received,
+                                                  ),
+                                              ),
+                                      },
+                                  ]
+                                : []),
                             {
                                 id: 'unit_cost',
                                 header: 'Harga satuan',
@@ -974,6 +1054,34 @@ export function PurchaseOrderCard({
                 </PageDialogBody>
                 {confirmation}
             </form>
+            {receiving && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (next) return;
+                        setReceiving(null);
+                        void reload();
+                    }}
+                >
+                    <PageDialogContent
+                        ref={receiptDialog}
+                        title="Penerimaan barang"
+                        defaultExpanded
+                    >
+                        <ReceiptCard
+                            receipt={receiving.receipt}
+                            permissions={receiving.permissions}
+                            amountDecimals={receiving.amountDecimals}
+                            portalContainer={receiptDialog}
+                            onSaved={() => undefined}
+                            onClose={() => {
+                                setReceiving(null);
+                                void reload();
+                            }}
+                        />
+                    </PageDialogContent>
+                </PageDialog>
+            )}
             {creatingVendor && (
                 <PageDialog
                     open
