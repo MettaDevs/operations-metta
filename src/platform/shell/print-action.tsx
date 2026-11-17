@@ -27,7 +27,9 @@ function fileUrl(
 }
 
 // Nama berkas datang dari server (Content-Disposition), jadi layar tidak menyusunnya sendiri.
-async function fetchFile(url: string): Promise<{ blob: Blob; name: string }> {
+export async function fetchFile(
+    url: string,
+): Promise<{ blob: Blob; name: string }> {
     const response = await fetch(url, { credentials: 'same-origin' });
     if (response.ok) {
         const encoded = /filename\*=UTF-8''([^;]+)/.exec(
@@ -42,12 +44,27 @@ async function fetchFile(url: string): Promise<{ blob: Blob; name: string }> {
     throw new ApiError(response.status, body);
 }
 
-function download({ blob, name }: { blob: Blob; name: string }) {
+export function download({ blob, name }: { blob: Blob; name: string }) {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+}
+
+// Berkas dari server dibuka di tab baru. Tab dibuka sebelum menunggu server, supaya tidak ditahan pemblokir pop-up;
+// gagal menutup tab itu lagi dan melempar ApiError ke pemanggil.
+export async function openInTab(url: string): Promise<void> {
+    const tab = window.open('', '_blank');
+    try {
+        const { blob } = await fetchFile(url);
+        const objectUrl = URL.createObjectURL(blob);
+        if (tab) tab.location.href = objectUrl;
+        else window.location.href = objectUrl;
+    } catch (caught) {
+        tab?.close();
+        throw caught;
+    }
 }
 
 // Satu-satunya tombol cetak di layar. Layar hanya menyebut laporan dan record-nya; isi, layout, kop, dan PDF milik mesin
@@ -74,18 +91,10 @@ export function PrintAction({
     });
 
     async function openPdf(layout: string | null) {
-        // Tab dibuka sebelum menunggu server, supaya tidak ditahan pemblokir pop-up.
-        const tab = window.open('', '_blank');
         setPending(true);
         try {
-            const { blob } = await fetchFile(
-                fileUrl(report, recordId, 'pdf', layout),
-            );
-            const url = URL.createObjectURL(blob);
-            if (tab) tab.location.href = url;
-            else window.location.href = url;
+            await openInTab(fileUrl(report, recordId, 'pdf', layout));
         } catch (caught) {
-            tab?.close();
             const rendererDown =
                 caught instanceof ApiError &&
                 caught.errorCode === 'renderer_unavailable';

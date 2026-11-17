@@ -17,7 +17,7 @@ Prasyarat: Docker berjalan, `bun install` sudah dijalankan, dan Chrome atau Edge
 bun scripts/verify.ts up
 ```
 
-`up` membuat container `ops-verify-<run>` (`postgres:17`, port host acak di 127.0.0.1), menunggu PostgreSQL menerima koneksi TCP, menjalankan `scripts/dev-setup.ts` (migration dan data contoh dari `dev/tenants.json`, sekitar 2 sampai 3 menit), membangun peramban ke folder run, lalu menyalakan `bun src/main.ts` dan Chrome headless. Semua proses anak memakai `--no-env-file`, jadi `.env` worktree tidak ikut terbaca. Siap berarti baris terakhir `READY http://klinik-contoh.localhost:<port>`: server sudah menjawab alamat tenant dan peramban sudah menjawab CDP. Login belum terjadi.
+`up` membuat container `ops-verify-<run>` (`postgres:17`, port host acak di 127.0.0.1) dan `ops-verify-<run>-renderer` (Gotenberg pembuat PDF dokumen cetak, diisikan ke `RENDERER_URL` server run), menunggu PostgreSQL menerima koneksi TCP, menjalankan `scripts/dev-setup.ts` (migration dan data contoh dari `dev/tenants.json`, sekitar 2 sampai 3 menit), membangun peramban ke folder run, lalu menyalakan `bun src/main.ts` dan Chrome headless. Semua proses anak memakai `--no-env-file`, jadi `.env` worktree tidak ikut terbaca. Siap berarti baris terakhir `READY http://klinik-contoh.localhost:<port>`: server sudah menjawab alamat tenant dan peramban sudah menjawab CDP. Login belum terjadi.
 
 `up` menolak menyala bila run sebelumnya dari worktree yang sama belum dimatikan. Run yang gagal di tengah `up` langsung dimatikan, dan log-nya tetap ada.
 
@@ -58,9 +58,12 @@ Resep per fitur ada di [features/README.md](features/README.md). Perjalanan rawa
 ```bash
 bun scripts/verify.ts journey outpatient
 bun scripts/verify.ts journey outpatient --prepare-cashier
+bun scripts/verify.ts journey print
 ```
 
 Perjalanan itu masuk sebagai admin, memilih tempat kerja dari `sample.workspace`, mendaftarkan pasien kunjungan contoh pertama ke polinya, Mulai periksa dari antrean, mengisi dokter, keluhan, periksa fisik wajib, satu tindakan, dan satu baris e-resep, Simpan, Kirim ke farmasi, Selesai periksa, Siapkan di farmasi, lalu Bayar tunai di kasir dan membaca database. Data contoh belum membuat jenis bayar tunai maupun Clerk Start, jadi tanpa `--prepare-cashier` perjalanan berhenti gagal di langkah `kasir-bayar` dengan alasannya. `--prepare-cashier` membuat keduanya lewat layar Kasir (Jenis bayar dan Clerk) sebelum membayar, dan mencatatnya di `journey.json`.
+
+`journey print` berjalan sesudahnya di run yang sama: mencetak kuitansi dan etiket lewat tombol cetak, mengunggah layout kuitansi A5 di Sys Admin › Cetak › Layout cetak lalu mencetak lagi, dan kembali ke layout bawaan. PDF yang dibuka tombol cetak disimpan dan dibaca ulang, termasuk ukuran kertasnya. Resepnya di [features/cetak-dokumen.md](features/cetak-dokumen.md).
 
 ## Evidence
 
@@ -68,7 +71,8 @@ Bukti ada di `<VERIFY_HOME>/<run>/evidence/`, bawaan `<tmpdir>/operations-metta-
 
 - `server.log` dan `server.err.log` server run itu;
 - `<nama>.png` dan `<nama>.aria.txt` dari `shot` dan `snapshot`, `<nama>.sql.txt` dari `sql --save`;
-- `outpatient-<waktu>/` dari setiap `journey outpatient`: screenshot dan snapshot per langkah (`NN-<langkah>.png`, akhiran `-gagal` untuk langkah yang gagal), `database.txt`, dan `journey.json` berisi commit, nomor dokumen, durasi, dan catatan tiap langkah.
+- `outpatient-<waktu>/` dari setiap `journey outpatient`: screenshot dan snapshot per langkah (`NN-<langkah>.png`, akhiran `-gagal` untuk langkah yang gagal), `database.txt`, dan `journey.json` berisi commit, nomor dokumen, durasi, dan catatan tiap langkah;
+- `print-<waktu>/` dari setiap `journey print`: PDF tiap cetakan, layout Word yang diunggah, screenshot dan snapshot per langkah, `database.txt`, dan `journey.json`.
 
 Standar bukti:
 

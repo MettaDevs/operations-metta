@@ -507,3 +507,23 @@ export async function ariaSnapshot(page: Page): Promise<string> {
     if (root) visit(root.nodeId, 0, '');
     return lines.join('\n');
 }
+
+const nodeSchema = z.object({ root: z.object({ nodeId: z.number() }) });
+const querySchema = z.object({ nodeId: z.number() });
+
+// Mengisi input berkas pertama yang cocok dengan selector, seperti pengguna memilih berkas di dialog Open.
+export async function chooseFile(
+    page: Page,
+    selector: string,
+    path: string,
+): Promise<void> {
+    const document = nodeSchema.parse(await page.send('DOM.getDocument'));
+    const { nodeId } = querySchema.parse(
+        await page.send('DOM.querySelector', {
+            nodeId: document.root.nodeId,
+            selector,
+        }),
+    );
+    if (!nodeId) throw new Error(`Input berkas ${selector} tidak ditemukan.`);
+    await page.send('DOM.setFileInputFiles', { nodeId, files: [path] });
+}

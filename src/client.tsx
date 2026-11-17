@@ -104,6 +104,8 @@ import { page as platformIdentityProfilePage } from './platform/identity/profile
 import { page as platformOrganizationHierarchiesPage } from './platform/organization/hierarchies.page.tsx';
 import { page as platformOrganizationLegalEntitiesPage } from './platform/organization/legal-entities.page.tsx';
 import { page as platformOrganizationOperatingUnitsPage } from './platform/organization/operating-units.page.tsx';
+import { page as platformReportingLetterheadsPage } from './platform/reporting/letterheads.page.tsx';
+import { page as platformReportingReportLayoutsPage } from './platform/reporting/report-layouts.page.tsx';
 import { page as platformShellHomePage } from './platform/shell/home.page.tsx';
 import { page as platformShellLoginPage } from './platform/shell/login.page.tsx';
 import {
@@ -1104,6 +1106,20 @@ const platformOrganizationOperatingUnitsRoute = createRoute({
     staticData: { title: platformOrganizationOperatingUnitsPage.title },
 });
 
+const platformReportingLetterheadsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformReportingLetterheadsPage.path,
+    component: platformReportingLetterheadsPage.component,
+    staticData: { title: platformReportingLetterheadsPage.title },
+});
+
+const platformReportingReportLayoutsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: platformReportingReportLayoutsPage.path,
+    component: platformReportingReportLayoutsPage.component,
+    staticData: { title: platformReportingReportLayoutsPage.title },
+});
+
 const platformShellHomeRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: platformShellHomePage.path,
@@ -1221,6 +1237,8 @@ const routeTree = rootRoute.addChildren([
         platformOrganizationHierarchiesRoute,
         platformOrganizationLegalEntitiesRoute,
         platformOrganizationOperatingUnitsRoute,
+        platformReportingLetterheadsRoute,
+        platformReportingReportLayoutsRoute,
         platformShellHomeRoute,
     ]),
     authLayoutRoute.addChildren([platformShellLoginRoute]),

@@ -21,6 +21,7 @@ import {
     type Page,
 } from './verify/browser.ts';
 import { runOutpatientJourney } from './verify/outpatient.ts';
+import { runPrintJourney } from './verify/print.ts';
 import {
     cdpAnswers,
     containerRunning,
@@ -59,6 +60,8 @@ const usage = `bun scripts/verify.ts <perintah>
   journey outpatient [--prepare-cashier]
                                       perjalanan rawat jalan penuh, daftar sampai bayar; --prepare-cashier membuat
                                       jenis bayar tunai dan Clerk Start lewat layar Kasir bila belum ada
+  journey print                       sesudah journey outpatient: cetak kuitansi dan etiket, unggah layout kuitansi
+                                      lalu cetak lagi, kembali ke bawaan; PDF disimpan di evidence/
   down                                matikan semua yang dinyalakan run ini, bukti tetap ada
 role: ${roles.join(', ')}`;
 
@@ -263,6 +266,18 @@ try {
             break;
         }
         case 'journey': {
+            if (rest[0] === 'print') {
+                const run = currentRun();
+                await withPage(run, (page) =>
+                    runPrintJourney(
+                        page,
+                        run,
+                        login,
+                        sampleTenant().admin.email,
+                    ),
+                );
+                break;
+            }
             if (rest[0] !== 'outpatient') throw new Error(usage);
             const run = currentRun();
             await withPage(run, (page) =>
