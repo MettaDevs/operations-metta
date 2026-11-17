@@ -17,7 +17,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api, errorText, type ApiBody } from '@core/platform/shell/index.ts';
+import {
+    api,
+    errorText,
+    PrintAction,
+    type ApiBody,
+} from '@core/platform/shell/index.ts';
 import {
     ReturnCard,
     ReturnsSection,
@@ -110,8 +115,13 @@ export function OtcSaleCard({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            {canReturn && (
-                <PageDialogToolbar>
+            <PageDialogToolbar>
+                <PrintAction
+                    report="pharmacy.otc-sale-note"
+                    recordId={saleId}
+                    label="Nota"
+                />
+                {canReturn && (
                     <Button
                         type="button"
                         variant="ghost"
@@ -121,8 +131,8 @@ export function OtcSaleCard({
                         <RotateCcw aria-hidden="true" />
                         Retur
                     </Button>
-                </PageDialogToolbar>
-            )}
+                )}
+            </PageDialogToolbar>
             <PageDialogBody className="py-3">
                 <CollapsibleSectionGroup
                     defaultValue={['sale', 'lines', 'returns']}

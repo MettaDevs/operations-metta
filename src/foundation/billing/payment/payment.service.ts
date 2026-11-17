@@ -4,7 +4,11 @@ import {
     type Viewer,
     type Workspace,
 } from '../../../platform/access/index.ts';
-import { nowSql, type Database } from '../../../platform/database/index.ts';
+import {
+    isoSql,
+    nowSql,
+    type Database,
+} from '../../../platform/database/index.ts';
 import { publishEvent } from '../../../platform/events/index.ts';
 import {
     Decimal,
@@ -331,6 +335,51 @@ export async function paidDocuments(
         [tenantId, `{${documentIds.join(',')}}`],
     );
     return new Set(rows.map((row) => row.document_id));
+}
+
+const documentPaymentSchema = z.object({
+    number: z.string(),
+    paid_at: z.string(),
+    surcharge: z.string(),
+    total: z.string(),
+    tenders: z.array(z.object({ name: z.string(), amount: z.string() })),
+    received: z.string(),
+    change: z.string(),
+    cashier: z.string().nullable(),
+});
+
+export type DocumentPayment = z.infer<typeof documentPaymentSchema>;
+
+// Pembayaran yang masih berlaku atas satu dokumen sumber, untuk dokumen cetak module penjualnya (nota penjualan obat
+// bebas): nomor bukti, cara bayar, uang diterima, kembalian, dan kasir. Nilai mentah dari SQL; mesin cetak yang
+// memformatnya. Tanpa pemeriksaan izin kasir, sama dengan paidDocuments: izinnya milik dokumen sumber yang dicetak.
+export async function documentPayment(
+    db: Database,
+    tenantId: string,
+    documentId: string,
+): Promise<DocumentPayment | null> {
+    return (
+        (await db.one(
+            documentPaymentSchema,
+            `select k.no_bukti as number, ${isoSql('k.jam')} as paid_at,
+                    trim_scale(k.biaya_tambahan)::text as surcharge,
+                    trim_scale(k.nilai - k.nilai_discount + k.biaya_tambahan)::text as total,
+                    coalesce((select json_agg(json_build_object('name', coalesce(j.label_kasir, j.nama),
+                                                                'amount', trim_scale(d.nilai)::text)
+                                              order by j.urutan, j.kode)
+                              from kasir_detail d
+                              join jenis_bayar j on j.tenant_id = d.tenant_id and j.id = d.jenis_bayar_id
+                              where d.tenant_id = k.tenant_id and d.kasir_id = k.id), '[]'::json) as tenders,
+                    trim_scale(k.jumlah_bayar)::text as received, trim_scale(k.nilai_kembalian)::text as change,
+                    u.name as cashier
+             from kasir k
+             left join users u on u.id = k.user_id
+             where k.tenant_id = $1 and k.sumber_dokumen_id = $2 and k.status = 'diposting'
+             order by k.jam desc, k.id desc
+             limit 1`,
+            [tenantId, documentId],
+        )) ?? null
+    );
 }
 
 type Scope = { tenantId: string; legalEntityId: string };

@@ -9,6 +9,7 @@ import {
 } from '../modules/healthcare/src/index.ts';
 import {
     drugLabelReport,
+    otcSaleNoteReport,
     pharmacyRoutes,
     registerPharmacyEventHandlers,
 } from '../modules/pharmacy/src/index.ts';
@@ -121,6 +122,7 @@ function valkeySessions(config: Config): ValkeySessions | null {
 export const reports = reportCatalog([
     paymentReceiptReport,
     drugLabelReport,
+    otcSaleNoteReport,
     transferOrderReport,
     transferShipmentReport,
     transferReceiptReport,
