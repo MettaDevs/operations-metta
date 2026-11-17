@@ -7,3 +7,5 @@ import { vendorRoutes } from './vendor/vendor.routes.ts';
 export function purchasingRoutes() {
     return { ...vendorRoutes(), ...receiptRoutes(), ...purchaseReturnRoutes() };
 }
+export { purchaseReturnReport } from './purchase-return/purchase-return.report.ts';
+export { receiptReport } from './receipt/receipt.report.ts';

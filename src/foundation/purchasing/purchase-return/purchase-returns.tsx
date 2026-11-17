@@ -26,6 +26,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 
@@ -445,6 +446,18 @@ export function PurchaseReturnsSection({
                                     </span>
                                 ))}
                             </DataTableText>
+                        ),
+                    },
+                    {
+                        id: 'print',
+                        header: 'Surat retur',
+                        content: 'control',
+                        width: 130,
+                        cell: (row) => (
+                            <PrintAction
+                                report="core.purchase-return"
+                                recordId={row.id}
+                            />
                         ),
                     },
                     {
