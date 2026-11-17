@@ -56,6 +56,8 @@ import {
 } from './foundation/currency/index.ts';
 import {
     inventoryRoutes,
+    stockCountResultReport,
+    stockCountSheetReport,
     transferOrderReport,
     transferReceiptReport,
     transferShipmentReport,
@@ -120,6 +122,8 @@ export const reports = reportCatalog([
     transferReceiptReport,
     receiptReport,
     purchaseReturnReport,
+    stockCountSheetReport,
+    stockCountResultReport,
 ]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya

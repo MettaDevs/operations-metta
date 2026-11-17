@@ -31,6 +31,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import {
@@ -718,6 +719,20 @@ export function StockCountCard({
                             <CircleX aria-hidden="true" />
                             Batalkan opname
                         </Button>
+                    )}
+                    {count && (
+                        <PrintAction
+                            report="core.stock-count-sheet"
+                            recordId={count.id}
+                            label="Lembar hitung"
+                        />
+                    )}
+                    {count && (
+                        <PrintAction
+                            report="core.stock-count-result"
+                            recordId={count.id}
+                            label="Hasil opname"
+                        />
                     )}
                 </PageDialogToolbar>
                 <FormErrorHeader
