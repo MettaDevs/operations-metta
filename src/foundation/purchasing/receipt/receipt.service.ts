@@ -43,6 +43,7 @@ import {
     unitAmountDecimals,
 } from '../../currency/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
+import { firstReturnNumber } from '../purchase-return/purchase-return.service.ts';
 import {
     receiptBasePrices,
     receiptItemLine,
@@ -800,6 +801,17 @@ export class Receipts {
                 'reverse',
             );
             if (!claimed) return;
+            // Undo Receipt di BC ditolak begitu baris kartu gudangnya sudah diterapkan ke retur, juga sesudah returnya
+            // dibatalkan, karena Batal retur memasukkan barang lewat baris baru.
+            const returned = await firstReturnNumber(
+                this.db,
+                this.scope.tenantId,
+                current.id,
+            );
+            if (returned)
+                validation({
+                    _form: `Barang dari penerimaan ini sudah pernah diretur ke vendor (${returned}), jadi postingnya tidak bisa dibatalkan. Kembalikan barang lain yang salah terima lewat Retur ke vendor.`,
+                });
             await reverseItemEntries(
                 this.db,
                 {
