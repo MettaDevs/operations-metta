@@ -101,6 +101,7 @@ import {
     page as foundationPurchasingReceiptReceiptsPage,
     record as foundationPurchasingReceiptReceiptsRecord,
 } from './foundation/purchasing/receipt/receipts.page.tsx';
+import { page as foundationPurchasingRequisitionRequisitionsPage } from './foundation/purchasing/requisition/requisitions.page.tsx';
 import { page as foundationPurchasingVendorVendorsPage } from './foundation/purchasing/vendor/vendors.page.tsx';
 import { page as platformAccessAccessPage } from './platform/access/access.page.tsx';
 import { page as platformAccessRolesPage } from './platform/access/roles.page.tsx';
@@ -1032,6 +1033,17 @@ const foundationPurchasingReceiptReceiptsRoute = createRoute({
     staticData: { title: foundationPurchasingReceiptReceiptsPage.title },
 });
 
+const foundationPurchasingRequisitionRequisitionsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationPurchasingRequisitionRequisitionsPage.path,
+    component: foundationPurchasingRequisitionRequisitionsPage.component,
+    validateSearch:
+        foundationPurchasingRequisitionRequisitionsPage.validateSearch,
+    staticData: {
+        title: foundationPurchasingRequisitionRequisitionsPage.title,
+    },
+});
+
 const foundationPurchasingVendorVendorsRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingVendorVendorsPage.path,
@@ -1261,6 +1273,7 @@ const routeTree = rootRoute.addChildren([
         foundationPricingPriceGroupPriceGroupsRoute,
         foundationPurchasingPurchaseOrderPurchaseOrdersRoute,
         foundationPurchasingReceiptReceiptsRoute,
+        foundationPurchasingRequisitionRequisitionsRoute,
         foundationPurchasingVendorVendorsRoute,
         platformAccessAccessRoute,
         platformAccessRolesRoute,

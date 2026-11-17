@@ -50,6 +50,7 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 - [Penjualan obat bebas](./penjualan-obat-bebas.md): lokasi penjualan, Simpan dan bayar di loket farmasi.
 - [Ubah harga obat per baris](./ubah-harga.md): role yang memegang izin ubah harga, Ubah harga sesudah Siapkan, kasir menagih harga yang dipakai, terkunci sesudah dibayar, dan harga yang diketik di loket.
 - [Cetak dokumen dan layout cetak](./cetak-dokumen.md): kuitansi dan etiket lewat tombol cetak, unggah layout kuitansi lalu cetak lagi, kembali ke bawaan, dan kop surat. `bun scripts/verify.ts journey print` menjalankannya sesudah `journey outpatient`.
+- [Permintaan pembelian](./permintaan-pembelian.md): lokasi mengajukan, petugas pembelian menyetujui, dan Buat purchase order per vendor dan lokasi.
 - [Purchase order](./purchase-order.md): order terbuka ke vendor, Rilis yang menguncinya, dan cetak order.
 - [Terima barang dari purchase order](./terima-dari-order.md): draf penerimaan berisi sisa order, terima sebagian, dan order yang selesai.
 - [Retur ke vendor](./retur-ke-vendor.md): retur sebagian penerimaan yang sudah diposting, penolakan baris yang barangnya sudah habis, Batal posting penerimaan yang ditolak sesudah diretur, dan Batal retur.

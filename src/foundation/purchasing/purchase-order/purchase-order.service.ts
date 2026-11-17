@@ -400,32 +400,17 @@ export class PurchaseOrders {
         const data = await this.checked(body);
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
-            const number = await new NumberIssuer(this.db, {
-                tenantId: this.scope.tenantId,
-                moduleId: 'core',
-            }).issue({
-                reference: numberReference,
-                key: `${sourceType}:${id}`,
-                documentDate: data.orderDate,
-                legalEntityId: this.scope.legalEntityId,
-            });
-            const stamp = nowSql();
-            await this.db.insert('bl_tr_order', {
+            await insertOrder(this.db, this.scope, {
                 id,
-                tenant_id: this.scope.tenantId,
-                legal_entity_id: this.scope.legalEntityId,
-                operating_unit_id: data.location.operating_unit_id,
-                lokasi_id: data.location.id,
-                vendor_id: data.vendorId,
-                nomor: number,
-                tanggal: data.orderDate,
-                tanggal_diharapkan: data.expectedReceiptDate,
-                keterangan: data.description,
-                termasuk_ppn: data.pricesIncludingVat,
-                created_at: stamp,
-                updated_at: stamp,
+                vendorId: data.vendorId,
+                locationId: data.location.id,
+                operatingUnitId: data.location.operating_unit_id,
+                orderDate: data.orderDate,
+                expectedReceiptDate: data.expectedReceiptDate,
+                description: data.description,
+                pricesIncludingVat: data.pricesIncludingVat,
+                lines: data.lines,
             });
-            await this.saveLines(id, data.lines);
         });
         return {
             status: 201,
@@ -794,4 +779,74 @@ export async function unreceiveOnOrder(
             ],
         );
     await settleOrder(db, scope.tenantId, orderId);
+}
+
+export type NewOrder = {
+    id: string;
+    vendorId: string;
+    locationId: string;
+    operatingUnitId: string;
+    orderDate: string;
+    expectedReceiptDate: string | null;
+    description: string | null;
+    pricesIncludingVat: boolean;
+    lines: (PriceLine & { expectedReceiptDate: string | null })[];
+};
+
+// Order terbuka baru beserta nomornya, di transaksi pemanggil. Dipakai layar order dan Buat purchase order dari
+// permintaan pembelian (Carry Out Action Message di BC). Mengembalikan nomor order dan id barisnya, berurutan sama dengan
+// order.lines.
+export async function insertOrder(
+    db: Database,
+    scope: Scope,
+    order: NewOrder,
+): Promise<{ number: string; lineIds: string[] }> {
+    const number = await new NumberIssuer(db, {
+        tenantId: scope.tenantId,
+        moduleId: 'core',
+    }).issue({
+        reference: numberReference,
+        key: `${sourceType}:${order.id}`,
+        documentDate: order.orderDate,
+        legalEntityId: scope.legalEntityId,
+    });
+    const stamp = nowSql();
+    await db.insert('bl_tr_order', {
+        id: order.id,
+        tenant_id: scope.tenantId,
+        legal_entity_id: scope.legalEntityId,
+        operating_unit_id: order.operatingUnitId,
+        lokasi_id: order.locationId,
+        vendor_id: order.vendorId,
+        nomor: number,
+        tanggal: order.orderDate,
+        tanggal_diharapkan: order.expectedReceiptDate,
+        keterangan: order.description,
+        termasuk_ppn: order.pricesIncludingVat,
+        created_at: stamp,
+        updated_at: stamp,
+    });
+    const lineIds: string[] = [];
+    for (const [index, line] of order.lines.entries()) {
+        const lineId = Bun.randomUUIDv7();
+        lineIds.push(lineId);
+        await db.insert('bl_tr_order_detail', {
+            id: lineId,
+            tenant_id: scope.tenantId,
+            legal_entity_id: scope.legalEntityId,
+            order_id: order.id,
+            urutan: index + 1,
+            barang_id: line.itemId,
+            satuan_id: line.unitId,
+            konversi: toNumeric(line.conversion, quantityScale),
+            jumlah: toNumeric(line.quantity, quantityScale),
+            harga_satuan: toNumeric(line.unitCost, quantityScale),
+            diskon_persen: toNumeric(line.discountPercent, quantityScale),
+            tarif_ppn: toNumeric(line.vatPercent, quantityScale),
+            tanggal_diharapkan: line.expectedReceiptDate,
+            created_at: stamp,
+            updated_at: stamp,
+        });
+    }
+    return { number, lineIds };
 }
