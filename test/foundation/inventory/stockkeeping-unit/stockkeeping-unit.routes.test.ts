@@ -18,6 +18,8 @@ type Level = {
     location: { id: string; code: string };
     minimum_quantity: string | null;
     maximum_quantity: string | null;
+    reordering_policy: string | null;
+    reorder_quantity: string | null;
     version: number;
 };
 
@@ -153,6 +155,97 @@ describe.skipIf(!process.env.DB_HOST)('stockkeeping units', () => {
         expect(
             await errors({ location_id: 'bukan-id', maximum_quantity: 1 }),
         ).toEqual(['location_id']);
+    });
+
+    test('a reordering policy keeps its reorder quantity and needs the levels it orders from', async () => {
+        const location = await business.location('SKU-POL');
+        const planned = await business.item('SKU-POL');
+        const errors = async (body: Record<string, unknown>) =>
+            refused(
+                await business.admin.post(path, {
+                    item_id: planned.id,
+                    location_id: location.id,
+                    ...body,
+                }),
+            );
+        expect(
+            Object.keys(
+                await errors({
+                    reordering_policy: 'jumlah_tetap',
+                    maximum_quantity: 50,
+                }),
+            ).sort(),
+        ).toEqual(['minimum_quantity', 'reorder_quantity']);
+        expect(
+            Object.keys(
+                await errors({
+                    reordering_policy: 'maksimum',
+                    minimum_quantity: 10,
+                    maximum_quantity: 10,
+                }),
+            ),
+        ).toEqual(['maximum_quantity']);
+        expect(
+            Object.keys(
+                await errors({
+                    reordering_policy: 'maksimum',
+                    minimum_quantity: 10,
+                }),
+            ),
+        ).toEqual(['maximum_quantity']);
+        expect(
+            Object.keys(
+                await errors({
+                    reordering_policy: 'sesuka_hati',
+                    minimum_quantity: 10,
+                }),
+            ),
+        ).toEqual(['reordering_policy']);
+        expect(
+            Object.keys(
+                await errors({
+                    reordering_policy: 'jumlah_tetap',
+                    minimum_quantity: 10,
+                    reorder_quantity: 0,
+                }),
+            ),
+        ).toEqual(['reorder_quantity']);
+
+        const fixed = (
+            await json<{ data: Level }>(
+                await business.admin.post(path, {
+                    item_id: planned.id,
+                    location_id: location.id,
+                    reordering_policy: 'jumlah_tetap',
+                    minimum_quantity: 0,
+                    reorder_quantity: '12.5',
+                }),
+                201,
+            )
+        ).data;
+        expect([
+            fixed.reordering_policy,
+            fixed.minimum_quantity,
+            fixed.reorder_quantity,
+        ]).toEqual(['jumlah_tetap', '0', '12.5']);
+        const maximum = (
+            await json<{ data: Level }>(
+                await business.admin.patch(`${path}/${fixed.id}`, {
+                    item_id: planned.id,
+                    location_id: location.id,
+                    reordering_policy: 'maksimum',
+                    minimum_quantity: 5,
+                    maximum_quantity: 40,
+                    version: fixed.version,
+                }),
+                200,
+            )
+        ).data;
+        expect([
+            maximum.reordering_policy,
+            maximum.maximum_quantity,
+            maximum.reorder_quantity,
+        ]).toEqual(['maksimum', '40', null]);
     });
 
     test('delete fills deleted_at, and the location can be set again afterwards', async () => {
