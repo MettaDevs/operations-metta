@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    type ErrorAction,
     errorText,
     FormErrorHeader,
     PrintAction,
@@ -379,6 +380,9 @@ export function TransferOrderCard({
     const [picking, setPicking] = useState<StoredLine | null>(null);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     const [operation, setOperation] = useState('Amprah belum disimpan');
     const [viewing, setViewing] = useState<{
@@ -457,12 +461,14 @@ export function TransferOrderCard({
 
     const failed = (caught: unknown, failure: string) => {
         setOperation(failure);
-        if (caught instanceof ApiError && caught.status === 422)
+        if (caught instanceof ApiError && caught.status === 422) {
             setErrors(caught.errors);
-        else setMessage(errorText(caught, failure + '.'));
+            setErrorActions(caught.actions);
+        } else setMessage(errorText(caught, failure + '.'));
     };
     const clear = () => {
         setErrors({});
+        setErrorActions([]);
         setMessage(null);
     };
     const run = async (work: () => Promise<void>) => {
@@ -939,6 +945,7 @@ export function TransferOrderCard({
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
+                    errorActions={errorActions}
                     message={message}
                     operation={operation}
                 />

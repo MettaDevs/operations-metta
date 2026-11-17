@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    type ErrorAction,
     errorText,
     FormErrorHeader,
     PrintAction,
@@ -372,6 +373,9 @@ export function ReceiptCard({
     const [selected, setSelected] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const [message, setMessage] = useState<string | null>(null);
     const [operation, setOperation] = useState('Penerimaan belum disimpan');
     const [creatingVendor, setCreatingVendor] = useState(false);
@@ -440,13 +444,15 @@ export function ReceiptCard({
     // Judul ringkasan kesalahan menyebut tindakan yang gagal: simpan, posting, batal posting, atau hapus.
     const failed = (caught: unknown, failure: string) => {
         setOperation(failure);
-        if (caught instanceof ApiError && caught.status === 422)
+        if (caught instanceof ApiError && caught.status === 422) {
             setErrors(caught.errors);
-        else setMessage(errorText(caught, failure + '.'));
+            setErrorActions(caught.actions);
+        } else setMessage(errorText(caught, failure + '.'));
     };
 
     const save = async (): Promise<Receipt | null> => {
         setErrors({});
+        setErrorActions([]);
         setMessage(null);
         try {
             const { body } = receipt
@@ -629,6 +635,7 @@ export function ReceiptCard({
                                     setHeader(headerOf(receipt));
                                     setLines(linesOf(receipt));
                                     setErrors({});
+                                    setErrorActions([]);
                                     setMessage(null);
                                 }}
                             />
@@ -688,6 +695,7 @@ export function ReceiptCard({
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
+                    errorActions={errorActions}
                     message={message}
                     operation={operation}
                 />
