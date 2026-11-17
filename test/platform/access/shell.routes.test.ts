@@ -7,6 +7,7 @@ import {
     createMember,
     createTenant,
     createUser,
+    entitle,
     grantAllOrganizations,
 } from '../../support/tenant-fixtures.ts';
 
@@ -294,14 +295,30 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
         );
     });
 
-    test('organizations outside the data policy are not offered', async () => {
-        const unscoped = await createMember(pool, tenantId, [
-            'core.organization.inquire',
+    test('a member whose roles use no data policy may work in every organization', async () => {
+        const storekeeper = await createMember(pool, tenantId, [
+            'core.inventory-transfer.inquire',
         ]);
         const viewer = browser();
-        await viewer.login(unscoped.email, unscoped.password);
+        await viewer.login(storekeeper.email, storekeeper.password);
+        const all = (await shell(owner)).workspace;
+        const data = (await shell(viewer)).workspace;
+        expect(data.legal_entities).toEqual(all.legal_entities);
+        expect(data.org_units).toEqual(all.org_units);
+        expect(data.active_legal_entity).toEqual(all.legal_entities[0] ?? null);
+        expect(data.legal_entities.length).toBeGreaterThan(0);
+    });
+
+    test('a member whose role uses a data policy reaches no organization until granted one', async () => {
+        const guarded = await createTenant(pool, 'Klinik Uji Batas Data');
+        await entitle(pool, guarded, 'healthcare');
+        const clerk = await createMember(pool, guarded, [
+            'healthcare.patient.inquire',
+        ]);
+        const viewer = browser();
+        await viewer.login(clerk.email, clerk.password);
         const data = await shell(viewer);
-        expect(data.auth.membership?.id).toBe(unscoped.membershipId);
+        expect(data.auth.membership?.id).toBe(clerk.membershipId);
         expect(data.workspace.legal_entities).toEqual([]);
         expect(data.workspace.org_units).toEqual([]);
         expect(data.workspace.active_legal_entity).toBeNull();
