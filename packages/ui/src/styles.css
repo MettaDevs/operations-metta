@@ -249,6 +249,11 @@
 .core-page-dialog[data-active='false'] {
     pointer-events: none;
 }
+@media (max-width: 1279px), (max-height: 767px) {
+    .core-page-dialog {
+        inset-block: 0;
+    }
+}
 /* Semua isi, termasuk portal pada content ref, dicat di bawah scrim parent. */
 .core-page-dialog-contents {
     position: relative;
