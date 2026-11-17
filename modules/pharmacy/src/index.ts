@@ -56,3 +56,4 @@ export function registerPharmacyEventHandlers(): void {
 
 // Dokumen cetak farmasi, dirakit src/main.ts ke katalog laporan Core.
 export { drugLabelReport } from './dispensing/dispensing/drug-label.report.ts';
+export { otcSaleNoteReport } from './dispensing/otc-sale/otc-sale-note.report.ts';
