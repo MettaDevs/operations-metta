@@ -159,7 +159,8 @@ function CollapsibleSection({
             <AccordionContent
                 className="min-w-0 px-3 pt-3 pb-3"
                 forceMount={preserveContent ? true : undefined}
-                hidden={preserveContent && !isOpen ? true : undefined}
+                // Tanpa forceMount, Radix yang mengatur hidden setelah animasi selesai.
+                {...(preserveContent && !isOpen ? { hidden: true } : {})}
             >
                 {children}
             </AccordionContent>
