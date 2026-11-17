@@ -44,6 +44,7 @@ export function otcSaleRoutes() {
                 typedQuery<
                     z.input<typeof listParametersSchema> & {
                         location_id?: string;
+                        substitutes_of?: string;
                     }
                 >(),
             )

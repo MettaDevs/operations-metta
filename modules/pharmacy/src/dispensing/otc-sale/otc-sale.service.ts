@@ -366,17 +366,26 @@ export class OtcSales {
 
     // Pencarian obat di loket: barang legal entity ini yang tidak diblokir, sama dengan yang diterima quote, dengan
     // pilihan satuannya (satuan dasar lebih dulu) dan satuan jual bawaannya. Stok dalam satuan dasar hanya diisi untuk
-    // lokasi yang boleh menjual obat bebas.
+    // lokasi yang boleh menjual obat bebas. substitutes_of membatasi hasilnya ke obat pengganti satu obat, yang ditawarkan
+    // loket saat stok obat itu kurang (Item Substitution BC pada baris penjualan).
     async items(parameters: URLSearchParams) {
         this.workspace.guard('otc-sale', 'read');
         const scope = this.scope;
+        const bindings: Bind[] = [scope.tenantId, scope.legalEntityId];
+        const substituted = parameters.get('substitutes_of');
+        const substitutes =
+            substituted === null
+                ? ''
+                : ` and id in (select barang_pengganti_id from far_m_obat_pengganti
+                               where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null
+                                 and barang_id = $${bindings.push(lookupId(substituted))}::uuid)`;
         const batch = await incrementalList(this.db, {
             query: `select * from (select id, kode as code, nama as name,
                                           coalesce(satuan_jual_id, satuan_dasar_id) as sales_unit_id
                                    from gd_m_barang
                                    where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null
-                                     and not diblokir) items where true`,
-            bindings: [scope.tenantId, scope.legalEntityId],
+                                     and not diblokir${substitutes}) items where true`,
+            bindings,
             parameters,
             columns: { name: 'name', code: 'code' },
             searchColumns: ['code', 'name'],
