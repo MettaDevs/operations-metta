@@ -24,6 +24,8 @@ import {
     type SubstitutionConsent,
 } from './dispensing-lines.tsx';
 
+type SubstituteErrors = { consent?: string; reason?: string };
+
 export type SubstituteChoice = {
     option: ItemOption;
     consent: SubstitutionConsent | null;
@@ -56,13 +58,22 @@ export function SubstituteDialog({
     const [itemId, setItemId] = useState(current.itemId);
     const [consent, setConsent] = useState(current.consent);
     const [reason, setReason] = useState(current.reason);
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [errors, setErrors] = useState<SubstituteErrors>({});
     const chosen = options.find((option) => option.item.id === itemId);
     const substituting = chosen !== undefined && !chosen.is_prescribed;
 
+    const chooseConsent = (next: SubstitutionConsent | null) => {
+        setConsent(next);
+        setErrors(({ reason }) => (reason ? { reason } : {}));
+    };
+    const changeReason = (next: string) => {
+        setReason(next);
+        setErrors(({ consent }) => (consent ? { consent } : {}));
+    };
+
     const apply = () => {
         if (!chosen) return;
-        const missing: Record<string, string> = {};
+        const missing: SubstituteErrors = {};
         if (substituting && !consent)
             missing.consent = 'Pilih siapa yang menyetujui obat ini diganti.';
         if (substituting && !reason.trim())
@@ -99,7 +110,10 @@ export function SubstituteDialog({
                         <RadioGroup
                             aria-label="Obat yang diserahkan"
                             value={itemId}
-                            onValueChange={setItemId}
+                            onValueChange={(value) => {
+                                setItemId(value);
+                                setErrors({});
+                            }}
                         >
                             {options.map((option) => (
                                 <div
@@ -142,7 +156,7 @@ export function SubstituteDialog({
                                         aria-label="Disetujui oleh"
                                         value={consent ?? ''}
                                         onValueChange={(value) =>
-                                            setConsent(
+                                            chooseConsent(
                                                 substitutionConsents.find(
                                                     (option) =>
                                                         option === value,
@@ -178,7 +192,7 @@ export function SubstituteDialog({
                                     maxLength={200}
                                     value={reason}
                                     onChange={(event) =>
-                                        setReason(event.target.value)
+                                        changeReason(event.target.value)
                                     }
                                 />
                             </FormControl>

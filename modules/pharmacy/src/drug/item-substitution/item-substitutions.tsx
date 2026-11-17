@@ -127,12 +127,6 @@ export function ItemSubstitutions({
     return (
         <section aria-label="Obat pengganti" className="mt-6 space-y-3">
             <h3 className="text-sm font-semibold">Obat pengganti</h3>
-            <p className="text-sm text-muted-foreground">
-                Saat resep disiapkan, apoteker boleh menyerahkan salah satu obat
-                ini sebagai ganti obat ini, misalnya generik dengan zat aktif
-                dan kekuatan yang sama. Satu satuan dasar obat pengganti
-                menggantikan satu satuan dasar obat ini.
-            </p>
             {listing.isError ? (
                 <p role="alert" className="text-sm text-destructive">
                     {errorText(
@@ -198,6 +192,7 @@ export function ItemSubstitutions({
                         }
                         disabled={busy}
                         error={errors.substitute_item_id?.[0]}
+                        hint="Saat resep disiapkan, apoteker boleh menyerahkan obat pengganti sebagai ganti obat ini, misalnya generik dengan zat aktif dan kekuatan yang sama. Satu satuan dasar obat pengganti menggantikan satu satuan dasar obat ini."
                         portalContainer={portalContainer}
                         noun="Obat"
                         load={loadDrugs}
