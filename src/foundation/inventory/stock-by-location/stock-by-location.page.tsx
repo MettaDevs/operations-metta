@@ -237,6 +237,7 @@ function StockByLocationPage(): ReactNode {
                                     }
                                 />
                                 <LocationLookup
+                                    accessible
                                     label="Lokasi"
                                     field="location"
                                     hint="Tanpa pilihan lokasi, semua lokasi tampil kecuali lokasi transit. Pilih lokasi transit untuk melihat barang yang sedang dalam perjalanan."

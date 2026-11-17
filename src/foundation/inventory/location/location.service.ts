@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { Workspace } from '../../../platform/access/index.ts';
-import { nowSql, type Database } from '../../../platform/database/index.ts';
+import {
+    nowSql,
+    type Bind,
+    type Database,
+} from '../../../platform/database/index.ts';
 import {
     abort,
     coded,
@@ -18,6 +22,7 @@ import {
     parseInput,
     violates,
 } from '../inventory.service.ts';
+import { allowedLocationsSql } from '../warehouse-employee/location-access.ts';
 import {
     locationInputSchema,
     locationRowSchema,
@@ -47,7 +52,7 @@ export class Locations {
 
     async list(parameters: URLSearchParams) {
         this.workspace.guard('inventory-location', 'read');
-        const bindings: string[] = [
+        const bindings: Bind[] = [
             this.workspace.tenantId,
             activeLegalEntity(this.workspace),
         ];
@@ -57,6 +62,8 @@ export class Locations {
         const transit = parameters.get('transit');
         if (transit === 'true' || transit === 'false')
             filter += ` and is_transit = ${transit}`;
+        if (parameters.get('accessible') === 'true')
+            filter += ` and ${allowedLocationsSql(this.workspace, bindings, ['locations.id'])}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,

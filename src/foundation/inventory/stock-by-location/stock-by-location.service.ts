@@ -18,6 +18,10 @@ import {
     quantityScale,
 } from '../quantity.ts';
 import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
+import {
     expiryFilters,
     stockByLocationLineSchema,
     stockByLocationSchema,
@@ -36,7 +40,7 @@ type Group = {
 // Stok per lokasi per tanggal (Inventory - Availability di BC): jumlah kartu gudang sampai tanggal itu per barang,
 // lokasi, dan batch, beserta nilainya. Lokasi transit tidak ikut kecuali dipilih sebagai saringan lokasi. Bila stok
 // minus pernah diizinkan, kekurangan yang belum tertutup tercatat tanpa batch, jadi baris batch dan baris tanpa batch
-// bisa berlawanan tanda; total barangnya tetap benar.
+// bisa berlawanan tanda; total barangnya tetap benar. Lokasi khusus petugas hanya tampil bagi petugasnya.
 export class StockByLocation {
     constructor(
         private readonly db: Database,
@@ -102,6 +106,9 @@ export class StockByLocation {
         )
             errors.days = 'Isi jumlah hari antara 1 dan 3650.';
         if (Object.keys(errors).length) validation(errors);
+        if (locationId)
+            await requireLocationAccess(this.db, this.workspace, [locationId]);
+        filter += ` and ${allowedLocationsSql(this.workspace, bindings, ['k.lokasi_id'])}`;
 
         const asOfAt = bind(asOf);
         let batchFilter = '';

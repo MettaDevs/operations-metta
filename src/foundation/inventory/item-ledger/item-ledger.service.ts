@@ -8,6 +8,10 @@ import {
     validation,
 } from '../../../platform/http/index.ts';
 import { activeLegalEntity } from '../inventory.service.ts';
+import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
 import { entryKinds } from './item-ledger.posting.ts';
 import { ledgerRowSchema, stockRowSchema } from './item-ledger.schema.ts';
 import { Currency, localCurrencyCode } from '../../currency/index.ts';
@@ -16,7 +20,7 @@ const batchJson = `case when t.id is null then null else json_build_object(
                        'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end`;
 
 // Stok dan kartu stok legal entity aktif, dibaca langsung dari kartu gudang. Tidak ada saldo yang disimpan: stok adalah
-// jumlah sisa baris terbuka, dan saldo kartu stok dijumlahkan saat dibaca.
+// jumlah sisa baris terbuka, dan saldo kartu stok dijumlahkan saat dibaca. Lokasi khusus petugas hanya terbaca petugasnya.
 export class ItemLedger {
     constructor(
         private readonly db: Database,
@@ -29,12 +33,14 @@ export class ItemLedger {
             this.workspace.tenantId,
             activeLegalEntity(this.workspace),
         ];
-        let filter = '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['k.lokasi_id'])}`;
         const item = lookupId(parameters.get('item_id') ?? '');
         if (item) filter += ` and k.barang_id = $${bindings.push(item)}`;
         const location = lookupId(parameters.get('location_id') ?? '');
-        if (location)
+        if (location) {
+            await requireLocationAccess(this.db, this.workspace, [location]);
             filter += ` and k.lokasi_id = $${bindings.push(location)}`;
+        }
         const batch = await incrementalList(this.db, {
             query: `select md5(k.barang_id::text || ':' || k.lokasi_id::text || ':' || coalesce(k.batch_id::text, ''))
                            as id,
@@ -95,10 +101,12 @@ export class ItemLedger {
             activeLegalEntity(this.workspace),
             item,
         ];
-        let filter = '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['k.lokasi_id'])}`;
         const location = lookupId(parameters.get('location_id') ?? '');
-        if (location)
+        if (location) {
+            await requireLocationAccess(this.db, this.workspace, [location]);
             filter += ` and k.lokasi_id = $${bindings.push(location)}`;
+        }
         const batchId = lookupId(parameters.get('batch_id') ?? '');
         if (batchId) filter += ` and k.batch_id = $${bindings.push(batchId)}`;
         const kind = z.enum(entryKinds).safeParse(parameters.get('kind'));
