@@ -6,10 +6,12 @@ Petugas loket farmasi menjual obat tanpa resep kepada pembeli. Ia memilih lokasi
 
 - `otc-lokasi` mengizinkan sebuah lokasi farmasi menjual obat bebas, dengan kelompok harganya.
 - `otc-jual` menjual obat dengan pembayaran tunai dan kembalian.
+- `otc-petugas-lokasi` menyembunyikan penjualan di lokasi khusus petugas dari pengguna yang bukan petugasnya, dan menolak kartunya bila dibuka lewat alamat.
 
 ## How to get to it (user POV)
 
 - Menu aplikasi Farmasi › Pelayanan resep › Penjualan obat bebas (`/pharmacy/dispensing/otc-sale`).
+- Menu aplikasi Farmasi › Pelayanan resep › Daftar penjualan (`/pharmacy/dispensing/otc-sales`), dan kartu penjualan lewat alamat `/pharmacy/dispensing/otc-sales?sale=<id>`.
 - Farmasi › Setup › Lokasi penjualan obat bebas (`/pharmacy/dispensing/otc-sale-locations`), tombol `Baru`.
 
 ## Driving it with verify.ts
@@ -24,6 +26,10 @@ Prasyarat:
 - **Isi penjualan.** Jalankan `bun scripts/verify.ts fill textbox "Nama pembeli" "Pembeli Contoh"`, `fill combobox "Obat, baris 1" Oralit`, `click option Oralit`, dan `fill textbox "Jumlah, baris 1" 2`. Baris menampilkan stok lokasi, harga, dan total, dan `Harus dibayar` terisi.
 - **Simpan dan bayar.** Jalankan `bun scripts/verify.ts fill textbox "Tunai diterima" 2000` lalu `click button "Simpan dan bayar"`. Teks `Penjualan <nomor> tersimpan dengan pembayaran <no bukti>. Kembalian <nilai>.` muncul.
 - **Bukti.** Jalankan `bun scripts/verify.ts sql "select b.nomor, b.status, b.pembeli_nama, b.resep_id is null tanpa_resep, t.jenis, k.no_bukti, k.nilai, k.nilai_kembalian, k.status from bill_farmasi b join tagihan_kasir t on t.sumber_nomor = b.nomor join kasir k on k.sumber_dokumen_id = t.sumber_dokumen_id where b.nomor = '<nomor>'" --save otc`. `bill_farmasi` berstatus `diserahkan` tanpa resep, `tagihan_kasir` berjenis `penjualan` dari `pharmacy`, dan `kasir` berstatus `diposting`.
+- **Penjualan di dua lokasi.** Atur juga `PUSLING Farmasi Pusling` lewat butir pertama. Di loket, `click combobox Lokasi --exact` lalu `click option "PUSLING · Farmasi Pusling" --exact`, dan jual Oralit seperti di atas. `sql "select b.nomor, l.kode from bill_farmasi b join gd_m_lokasi l on l.id = b.lokasi_id where b.resep_id is null order by b.nomor"` mencetak satu penjualan di `FARMASI` dan satu di `PUSLING`.
+- **Lokasi khusus petugas.** Jalankan `bun scripts/verify.ts go sysadmin/inventory/locations`, `click button "Tindakan untuk Farmasi" --exact`, `click menuitem Buka --exact`, `click checkbox "Khusus petugas lokasi" --exact`, dan `click button Simpan --exact`. Admin bukan petugas FARMASI, jadi lokasi itu tertutup baginya.
+- **Daftar disaring.** Jalankan `bun scripts/verify.ts go pharmacy/dispensing/otc-sales` dan `snapshot otc-daftar`. Hanya penjualan PUSLING yang tampil. Di loket, combobox `Lokasi` hanya menawarkan `PUSLING · Farmasi Pusling`.
+- **Buka lewat alamat.** Ambil id penjualan FARMASI dengan `sql "select id from bill_farmasi where nomor = '<nomor>'"`, lalu `go "pharmacy/dispensing/otc-sales?sale=<id>"` dan `wait text "hanya untuk petugasnya"`. Kartu menulis `Lokasi FARMASI Farmasi hanya untuk petugasnya, dan Anda belum terdaftar sebagai petugas di sana.` dengan tombol `Coba lagi`.
 
 ## Gotchas
 
@@ -31,3 +37,4 @@ Prasyarat:
 - Pilihan lokasi dan kelompok harga bernama kode lalu nama (`FARMASI Farmasi`, `UMUM Umum`). `--exact` dengan nama saja tidak menemukan apa pun.
 - Penjualan ini satu-satunya kali dijalankan saat jenis bayar tunai sudah ada dan Clerk Start sudah dilakukan. Perilakunya tanpa keduanya belum diverifikasi.
 - Penjualan memotong stok lokasi. Ulangan berkali-kali di run yang sama menghabiskan stok obat contoh yang kecil.
+- Lokasi khusus petugas tertutup juga bagi admin yang belum terdaftar di Petugas lokasi, jadi resep dan penjualan FARMASI hilang dari layar admin sampai saklarnya dimatikan lagi. Jalankan langkah itu terakhir di sebuah run.

@@ -205,6 +205,7 @@ Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`), 
 Petugas pusling hanya melihat dan mengerjakan resep pusling lewat Petugas lokasi persediaan Core (Sys Admin › Persediaan › Petugas lokasi), pola Warehouse Employee BC, bukan lewat aturan di module ini. Lokasi yang ditandai **Khusus petugas lokasi** di kartu lokasinya hanya terbuka bagi pengguna yang ditugaskan ke sana; lokasi tanpa tanda itu terbuka bagi setiap pemegang duty farmasi, sama dengan sebelumnya.
 
 - Antrean, kartu penyerahan, dan etiket menyaring resep menurut lokasi yang melayaninya (`allowedLocationsSql`). Resep yang belum punya lokasi tetap terlihat semua petugas.
+- Daftar penjualan obat bebas menyaring penjualan menurut lokasinya dengan `allowedLocationsSql` yang sama, dan pilihan lokasi di loket hanya berisi lokasi tempat pengguna boleh menjual. Kartu penjualan dan returnya yang dibuka lewat alamat di lokasi lain ditolak dengan `requireLocationAccess`, jadi pengguna membaca nama lokasinya, bukan halaman kosong.
 - Siapkan, panggil, serahkan, batal siapkan, ubah harga, batal resep, dan retur ditolak di lokasi yang bukan tempat pengguna bertugas (`requireLocationAccess`), begitu juga memilih lokasi seperti itu pada resep atau penjualan obat bebas. Pemegang izin lokasi stok mendapat tombol yang membuka daftar petugas lokasi itu.
 - Pilihan lokasi di antrean hanya berisi lokasi yang boleh dipakai pengguna. Bila perangkat belum mengingat lokasi, antrean memakai lokasi bawaan pengguna di Petugas lokasi.
 
@@ -214,4 +215,3 @@ Petugas pusling hanya melihat dan mengerjakan resep pusling lewat Petugas lokasi
 - Resep luar. Di Kuta 1 hampir tidak dipakai (0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
 - CPPT di layanan kesehatan menampilkan obat pengganti yang diserahkan; E-Resep sudah.
 - Obat pengganti pada penjualan obat bebas, dan obat pengganti dengan syarat (Substitution Condition BC).
-- Daftar penjualan obat bebas belum disaring per petugas lokasi; menjual di lokasi khusus petugas sudah ditolak.
