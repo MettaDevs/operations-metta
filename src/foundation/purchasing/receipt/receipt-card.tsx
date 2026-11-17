@@ -31,6 +31,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import { Decimal } from '../../../platform/money/index.ts';
@@ -675,6 +676,13 @@ export function ReceiptCard({
                             action="archive"
                             disabled={busy}
                             onClick={() => void remove()}
+                        />
+                    )}
+                    {receipt && (
+                        <PrintAction
+                            report="core.purchase-receipt"
+                            recordId={receipt.id}
+                            label="Penerimaan"
                         />
                     )}
                 </PageDialogToolbar>

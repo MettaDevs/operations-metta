@@ -94,7 +94,7 @@ type LineDraft = {
 // Nilai baris = jumlah x harga satuan x (100 - diskon) / 100, dibulatkan ke presisi jumlah mata uang lokal;
 // amountDecimals bilangan bulat 0 sampai 4 dari setelan mata uang, bukan isian pengguna. PPN dokumen = jumlah nilai
 // baris x tarif PPN / 100, dibulatkan sekali, seperti Pajak = subtotal x persen PPN / 100 di layar lama.
-const lineAmountSql = (alias: string, amountDecimals: number) =>
+export const lineAmountSql = (alias: string, amountDecimals: number) =>
     `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
 
 const rowSql = (amountDecimals: number) => `select * from (

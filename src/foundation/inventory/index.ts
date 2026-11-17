@@ -88,3 +88,8 @@ export {
     transferReceiptReport,
     transferShipmentReport,
 } from './transfer/posted-transfer.report.ts';
+export {
+    blankName,
+    inventoryDocument,
+    type DocumentColumn,
+} from './document-layout.ts';

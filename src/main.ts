@@ -61,7 +61,11 @@ import {
     transferShipmentReport,
 } from './foundation/inventory/index.ts';
 import { pricingRoutes } from './foundation/pricing/index.ts';
-import { purchasingRoutes } from './foundation/purchasing/index.ts';
+import {
+    purchaseReturnReport,
+    purchasingRoutes,
+    receiptReport,
+} from './foundation/purchasing/index.ts';
 import { addressBookRoutes } from './platform/address-book/index.ts';
 import { dataSharingRoutes } from './platform/data-sharing/index.ts';
 import {
@@ -114,6 +118,8 @@ export const reports = reportCatalog([
     transferOrderReport,
     transferShipmentReport,
     transferReceiptReport,
+    receiptReport,
+    purchaseReturnReport,
 ]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
