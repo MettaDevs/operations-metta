@@ -11,6 +11,7 @@ import {
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -19,6 +20,8 @@ import { z } from 'zod';
 import {
     api,
     definePage,
+    defineRecordPage,
+    orpc,
     errorText,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
@@ -272,10 +275,39 @@ function ReceiptsPage(): ReactNode {
     );
 }
 
+// Penerimaan yang dibuka dari kotak error, misalnya draf yang menahan Terima barang di purchase order.
+function ReceiptRecord({ id }: { id: string }): ReactNode {
+    const { data } = useSuspenseQuery(
+        orpc.purchasingReceiptShow.queryOptions({
+            input: { params: { id } },
+            select: (response) => response.body,
+        }),
+    );
+    const container = useRef<HTMLDivElement>(null);
+    return (
+        <div ref={container} className="contents">
+            <ReceiptCard
+                receipt={data.data}
+                permissions={data.permissions}
+                amountDecimals={data.amount_decimals}
+                portalContainer={container}
+                onSaved={() => undefined}
+                onClose={() => undefined}
+            />
+        </div>
+    );
+}
+
 export const page = definePage({
     path: '/sysadmin/purchasing/receipts',
     layout: 'app',
     title: 'Penerimaan barang',
     validateSearch: searchSchema,
     component: ReceiptsPage,
+});
+
+export const record = defineRecordPage({
+    key: 'core.purchase-receipt',
+    title: 'Penerimaan barang',
+    component: ReceiptRecord,
 });

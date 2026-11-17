@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Workspace } from '../../../platform/access/index.ts';
+import { refuse, type Workspace } from '../../../platform/access/index.ts';
 import {
     isoSql,
     nowSql,
@@ -18,6 +18,7 @@ import {
 import {
     activeLegalEntity,
     allowedLocationsSql,
+    fromNumeric,
     parseInput,
     quantityScale,
     requireLocationAccess,
@@ -28,6 +29,7 @@ import {
     localCurrencyCode,
     unitAmountDecimals,
 } from '../../currency/index.ts';
+import { Decimal } from '../../../platform/money/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
     checkPriceLine,
@@ -163,6 +165,7 @@ export class PurchaseOrders {
         return {
             update: has('purchase-order.update'),
             release: has('purchase-order.release'),
+            receive: has('purchase-receipt.update'),
             create_vendor: has('vendor.update'),
         };
     }
@@ -192,7 +195,9 @@ export class PurchaseOrders {
                     trim_scale(d.diskon_persen)::text as discount_percent,
                     trim_scale(d.tarif_ppn)::text as vat_percent,
                     trim_scale(${lineAmountSql('d', await this.amountDecimals())})::text as amount,
-                    d.tanggal_diharapkan::text as expected_receipt_date
+                    d.tanggal_diharapkan::text as expected_receipt_date,
+                    trim_scale(d.jumlah_diterima)::text as quantity_received,
+                    trim_scale(d.jumlah - d.jumlah_diterima)::text as outstanding_quantity
              from bl_tr_order_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan base on base.tenant_id = b.tenant_id and base.id = b.satuan_dasar_id
@@ -300,18 +305,51 @@ export class PurchaseOrders {
         };
     }
 
+    // Baris yang sudah diterima sebagian tetap ada, barang dan satuannya tetap, dan jumlahnya tidak boleh kurang dari
+    // yang sudah diterima, seperti validasi Quantity terhadap Quantity Received di Purchase Line BC.
     private async saveLines(orderId: string, lines: LineDraft[]) {
-        const existing = new Set(
-            (
-                await this.db.rows(
-                    z.object({ id: z.string() }),
-                    `select id from bl_tr_order_detail
-                     where tenant_id = $1 and order_id = $2 and deleted_at is null`,
-                    [this.scope.tenantId, orderId],
-                )
-            ).map((line) => line.id),
+        const stored = await this.db.rows(
+            z.object({
+                id: z.string(),
+                item_id: z.string(),
+                unit_id: z.string(),
+                received: z.string(),
+            }),
+            `select id, barang_id as item_id, satuan_id as unit_id, jumlah_diterima::text as received
+             from bl_tr_order_detail
+             where tenant_id = $1 and order_id = $2 and deleted_at is null`,
+            [this.scope.tenantId, orderId],
         );
-        const kept = new Set<string>();
+        const existing = new Map(
+            stored.map((line) => [
+                line.id,
+                {
+                    ...line,
+                    received: fromNumeric(line.received, quantityScale),
+                },
+            ]),
+        );
+        const errors: Record<string, string> = {};
+        for (const [index, line] of lines.entries()) {
+            const before = line.id === null ? undefined : existing.get(line.id);
+            if (!before || before.received === 0n) continue;
+            if (
+                before.item_id !== line.itemId ||
+                before.unit_id !== line.unitId
+            )
+                errors[`lines.${index}.item_id`] =
+                    'Barang dan satuan baris yang sudah diterima tidak bisa diganti. Tambahkan baris baru untuk barang lain.';
+            else if (line.quantity < before.received)
+                errors[`lines.${index}.quantity`] =
+                    `Jumlah tidak boleh kurang dari yang sudah diterima (${quantityText(before.received)}).`;
+        }
+        const kept = new Set(lines.map((line) => line.id));
+        for (const before of existing.values())
+            if (before.received > 0n && !kept.has(before.id))
+                errors.lines =
+                    'Baris yang sudah diterima tidak bisa dihapus. Kurangi jumlahnya sampai sama dengan yang sudah diterima.';
+        if (Object.keys(errors).length) validation(errors);
+        const saved = new Set<string>();
         const stamp = nowSql();
         for (const [index, line] of lines.entries()) {
             // Urutan kunci sama dengan urutan kolom di update di bawah.
@@ -338,9 +376,9 @@ export class PurchaseOrders {
                 });
                 continue;
             }
-            if (!existing.has(line.id) || kept.has(line.id))
+            if (!existing.has(line.id) || saved.has(line.id))
                 validation({ [`lines.${index}.id`]: messages.id });
-            kept.add(line.id);
+            saved.add(line.id);
             await this.db.execute(
                 `update bl_tr_order_detail set urutan = $1, barang_id = $2, satuan_id = $3, konversi = $4,
                         jumlah = $5, harga_satuan = $6, diskon_persen = $7, tarif_ppn = $8,
@@ -349,8 +387,8 @@ export class PurchaseOrders {
                 [...Object.values(values), stamp, this.scope.tenantId, line.id],
             );
         }
-        for (const id of existing)
-            if (!kept.has(id))
+        for (const id of existing.keys())
+            if (!saved.has(id))
                 await this.db.execute(
                     'update bl_tr_order_detail set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3',
                     [stamp, this.scope.tenantId, id],
@@ -413,6 +451,10 @@ export class PurchaseOrders {
     // Kepala order dikunci lebih dulu, supaya dua penyimpanan bersamaan tidak menyatukan dua set baris.
     private async lockOpen(id: string, version: number, refusal: string) {
         const locked = await this.lockHeader(id);
+        if (locked.status === 'selesai')
+            validation({
+                _form: 'Order ini sudah diterima seluruhnya, jadi tidak bisa diubah atau dihapus lagi.',
+            });
         if (locked.status !== 'terbuka') validation({ _form: refusal });
         if (locked.version !== version)
             coded(409, 'stale_version', staleMessage);
@@ -455,6 +497,40 @@ export class PurchaseOrders {
         };
     }
 
+    // Order yang barangnya sudah datang, atau yang sedang diterima lewat draf penerimaan, tetap ada sebagai rujukan.
+    private async refuseReceived(id: string) {
+        const usage = await this.db.one(
+            z.object({
+                received: z.boolean(),
+                draft: z.string().nullable(),
+                draft_number: z.string().nullable(),
+            }),
+            `select exists (select 1 from bl_tr_order_detail d
+                            where d.tenant_id = $1 and d.order_id = $2 and d.deleted_at is null
+                              and d.jumlah_diterima > 0) as received,
+                    r.id as draft, r.nomor as draft_number
+             from (select 1) one
+             left join lateral (select id, nomor from bl_tr_penerimaan
+                                where tenant_id = $1 and order_id = $2 and status = 'draf' and deleted_at is null
+                                order by nomor limit 1) r on true`,
+            [this.scope.tenantId, id],
+        );
+        if (usage?.received)
+            validation({
+                _form: 'Sebagian barang order ini sudah diterima, jadi ordernya tidak bisa dihapus. Kurangi jumlah barisnya sampai sama dengan yang sudah diterima, lalu rilis lagi.',
+            });
+        if (usage?.draft && usage.draft_number)
+            await refuse(this.db, this.workspace, {
+                message: `Order ini sedang diterima lewat draf penerimaan ${usage.draft_number}, jadi belum bisa dihapus. Hapus draf itu lebih dulu.`,
+                open: {
+                    page: 'core.purchase-receipt',
+                    recordId: usage.draft,
+                    label: `Buka penerimaan ${usage.draft_number}`,
+                },
+                otherwise: `Minta petugas gudang menghapus draf penerimaan ${usage.draft_number}.`,
+            });
+    }
+
     async destroy(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-order', 'update');
         const current = await this.header(id);
@@ -465,6 +541,7 @@ export class PurchaseOrders {
                 version,
                 'Order yang sudah dirilis tidak bisa dihapus. Pilih Buka lagi lebih dulu.',
             );
+            await this.refuseReceived(current.id);
             const stamp = nowSql();
             await this.db.execute(
                 'update bl_tr_order set deleted_at = $1, updated_at = $1 where tenant_id = $2 and id = $3',
@@ -540,6 +617,7 @@ export class PurchaseOrders {
                 validation({
                     lines: 'Tambahkan sedikitnya satu barang sebelum order dirilis.',
                 });
+            await settleOrder(this.db, this.scope.tenantId, current.id);
         });
         return {
             status: 200,
@@ -561,4 +639,159 @@ export class PurchaseOrders {
             body: { data: await this.document(current.id) },
         };
     }
+}
+
+// Order dirilis yang semua barisnya sudah diterima menjadi selesai; order selesai yang barisnya kembali bersisa, karena
+// posting penerimaannya dibatalkan, kembali dirilis.
+async function settleOrder(db: Database, tenantId: string, orderId: string) {
+    await db.execute(
+        `update bl_tr_order h
+         set status = s.status, updated_at = $3,
+             selesai_pada = case when s.status = 'selesai' then $3::timestamp end
+         from (select case when exists (select 1 from bl_tr_order_detail d
+                                        where d.tenant_id = $1 and d.order_id = $2 and d.deleted_at is null
+                                          and d.jumlah_diterima < d.jumlah)
+                           then 'dirilis' else 'selesai' end as status) s
+         where h.tenant_id = $1 and h.id = $2 and h.status in ('dirilis', 'selesai') and h.status <> s.status`,
+        [tenantId, orderId, nowSql()],
+    );
+}
+
+export type OrderReceiptLine = {
+    // Indeks baris di dokumen penerimaan, untuk menempelkan kesalahan ke barisnya.
+    index: number;
+    orderLineId: string;
+    itemId: string;
+    unitId: string;
+    quantity: bigint;
+};
+
+type Scope = { tenantId: string; legalEntityId: string };
+
+async function lockOrder(db: Database, scope: Scope, orderId: string) {
+    return db.one(
+        z.object({
+            status: z.enum(purchaseOrderStatuses),
+            number: z.string(),
+        }),
+        `select status, nomor as number from bl_tr_order
+         where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null for update`,
+        [scope.tenantId, scope.legalEntityId, orderId],
+    );
+}
+
+const quantityText = (value: bigint) =>
+    Decimal.of(toNumeric(value, quantityScale)).normalized();
+
+// Posting penerimaan dari order, di transaksi posting itu: kepala order dikunci, setiap baris penerimaan harus cocok
+// dengan baris ordernya dan tidak melebihi sisanya, lalu Quantity Received bertambah. Constraint jumlah_diterima <=
+// jumlah menjaga hal yang sama di database.
+export async function receiveOnOrder(
+    db: Database,
+    workspace: Workspace,
+    scope: Scope,
+    orderId: string,
+    lines: OrderReceiptLine[],
+) {
+    const order = await lockOrder(db, scope, orderId);
+    if (!order)
+        return validation({
+            _form: 'Purchase order penerimaan ini sudah dihapus. Buat penerimaan tanpa order.',
+        });
+    if (order.status !== 'dirilis')
+        await refuse(db, workspace, {
+            message:
+                order.status === 'selesai'
+                    ? `Purchase order ${order.number} sudah diterima seluruhnya.`
+                    : `Purchase order ${order.number} sedang dibuka untuk diubah, jadi penerimaannya belum bisa diposting. Rilis ordernya lebih dulu.`,
+            open: {
+                page: 'core.purchase-order',
+                recordId: orderId,
+                label: `Buka order ${order.number}`,
+            },
+            otherwise: `Minta petugas pembelian memeriksa order ${order.number}.`,
+        });
+    const stored = new Map(
+        (
+            await db.rows(
+                z.object({
+                    id: z.string(),
+                    item_id: z.string(),
+                    unit_id: z.string(),
+                    unit: z.string(),
+                    outstanding: z.string(),
+                }),
+                `select d.id, d.barang_id as item_id, d.satuan_id as unit_id, s.kode as unit,
+                        (d.jumlah - d.jumlah_diterima)::text as outstanding
+                 from bl_tr_order_detail d
+                 join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
+                 where d.tenant_id = $1 and d.order_id = $2 and d.deleted_at is null`,
+                [scope.tenantId, orderId],
+            )
+        ).map((line) => [
+            line.id,
+            {
+                ...line,
+                outstanding: fromNumeric(line.outstanding, quantityScale),
+            },
+        ]),
+    );
+    const totals = new Map<string, bigint>();
+    for (const line of lines)
+        totals.set(
+            line.orderLineId,
+            (totals.get(line.orderLineId) ?? 0n) + line.quantity,
+        );
+    const errors: Record<string, string> = {};
+    for (const line of lines) {
+        const target = stored.get(line.orderLineId);
+        const field = `lines.${line.index}.quantity`;
+        if (!target)
+            errors[field] =
+                'Baris ini sudah dihapus dari purchase order. Hapus baris ini dari penerimaan.';
+        else if (
+            target.item_id !== line.itemId ||
+            target.unit_id !== line.unitId
+        )
+            errors[field] =
+                'Barang atau satuan baris ini berbeda dengan baris purchase order-nya.';
+        else if ((totals.get(line.orderLineId) ?? 0n) > target.outstanding)
+            errors[field] =
+                `Jumlah melebihi sisa order (${quantityText(target.outstanding)} ${target.unit}). Kurangi jumlahnya, atau tambah jumlah di order lebih dulu.`;
+    }
+    if (Object.keys(errors).length) validation(errors);
+    for (const [orderLineId, quantity] of totals)
+        await db.execute(
+            `update bl_tr_order_detail set jumlah_diterima = jumlah_diterima + $1, updated_at = $2
+             where tenant_id = $3 and id = $4`,
+            [
+                toNumeric(quantity, quantityScale),
+                nowSql(),
+                scope.tenantId,
+                orderLineId,
+            ],
+        );
+    await settleOrder(db, scope.tenantId, orderId);
+}
+
+// Batal posting penerimaan dari order: Quantity Received berkurang, dan order selesai kembali dirilis.
+export async function unreceiveOnOrder(
+    db: Database,
+    scope: Scope,
+    orderId: string,
+    lines: { orderLineId: string; quantity: bigint }[],
+) {
+    if (!(await lockOrder(db, scope, orderId))) return;
+    for (const line of lines)
+        await db.execute(
+            `update bl_tr_order_detail set jumlah_diterima = jumlah_diterima - $1, updated_at = $2
+             where tenant_id = $3 and id = $4`,
+            [
+                toNumeric(line.quantity, quantityScale),
+                nowSql(),
+                scope.tenantId,
+                line.orderLineId,
+            ],
+        );
+    await settleOrder(db, scope.tenantId, orderId);
 }

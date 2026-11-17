@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Workspace } from '../../../platform/access/index.ts';
+import { refuse, type Workspace } from '../../../platform/access/index.ts';
 import {
     isoSql,
     nowSql,
@@ -17,6 +17,7 @@ import {
 } from '../../../platform/http/index.ts';
 import {
     activeLegalEntity,
+    fromNumeric,
     exists,
     allowedLocationsSql,
     parseInput,
@@ -38,6 +39,10 @@ import {
     lineAmountSql,
     type PriceLine,
 } from '../purchase-line.service.ts';
+import {
+    receiveOnOrder,
+    unreceiveOnOrder,
+} from '../purchase-order/purchase-order.service.ts';
 import { firstReturnNumber } from '../purchase-return/purchase-return.service.ts';
 import {
     receiptBasePrices,
@@ -70,6 +75,7 @@ const transitions = {
 
 type LineDraft = PriceLine & {
     id: string | null;
+    orderLineId: string | null;
     batchNumber: string | null;
     expiry: string | null;
     fundingSourceId: string | null;
@@ -84,6 +90,9 @@ const rowSql = (amountDecimals: number) => `select * from (
                            p.name as vendor_name, l.kode as location_code, h.termasuk_ppn as prices_including_vat,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
+                           case when o.id is null then null
+                                else json_build_object('id', o.id, 'number', o.nomor) end as "order",
+                           o.nomor as order_number,
                            coalesce(trim_scale(t.amount)::text, '0') as amount,
                            coalesce(trim_scale(round(t.vat, ${amountDecimals}))::text, '0') as vat_amount,
                            ${isoSql('h.diposting_pada')} as posted_at, ${isoSql('h.dibatalkan_pada')} as reversed_at
@@ -91,6 +100,7 @@ const rowSql = (amountDecimals: number) => `select * from (
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
+                    left join bl_tr_order o on o.tenant_id = h.tenant_id and o.id = h.order_id
                     left join lateral (
                         select sum(line.amount) as amount, sum(line.amount * line.tarif_ppn / 100) as vat
                         from (select ${lineAmountSql('d', amountDecimals)} as amount, d.tarif_ppn
@@ -117,6 +127,8 @@ const storedLineSchema = z.object({
     funding_source_id: z.string().nullable(),
     procurement_program_id: z.string().nullable(),
     budget_year: z.number().nullable(),
+    unit_id: z.string(),
+    order_line_id: z.string().nullable(),
 }) satisfies z.ZodType<StoredReceiptLine>;
 
 const messages = {
@@ -197,6 +209,7 @@ export class Receipts {
                 'vendor_name',
                 'location_code',
                 'vendor_document_number',
+                'order_number',
             ],
             numericColumns: [],
             defaultSort: 'posting_date',
@@ -255,7 +268,8 @@ export class Receipts {
                     trim_scale(${lineAmountSql('d', await this.amountDecimals())})::text as amount,
                     d.no_batch as batch_number, d.kedaluwarsa::text as expiry_date,
                     ${reference('f')} as funding_source, ${reference('g')} as procurement_program,
-                    d.tahun_anggaran as budget_year
+                    d.tahun_anggaran as budget_year, d.order_detail_id as order_line_id,
+                    trim_scale(od.jumlah - od.jumlah_diterima)::text as order_outstanding
              from bl_tr_penerimaan_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan base on base.tenant_id = b.tenant_id and base.id = b.satuan_dasar_id
@@ -263,6 +277,7 @@ export class Receipts {
              left join gd_m_profil_pelacakan t on t.tenant_id = b.tenant_id and t.id = b.profil_pelacakan_id
              left join gd_m_sumber_dana f on f.tenant_id = d.tenant_id and f.id = d.sumber_dana_id
              left join gd_m_program_pengadaan g on g.tenant_id = d.tenant_id and g.id = d.program_pengadaan_id
+             left join bl_tr_order_detail od on od.tenant_id = d.tenant_id and od.id = d.order_detail_id
              where d.tenant_id = $1 and d.penerimaan_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.scope.tenantId, header.id],
@@ -291,9 +306,16 @@ export class Receipts {
 
     // Isian dokumen. Kecocokan batch dan kedaluwarsa dengan profil pelacakan barang diperiksa saat posting, oleh mesin
     // posting, supaya draf boleh disimpan setengah jadi.
-    private async checked(body: unknown) {
+    private async checked(body: unknown, orderId: string | null) {
         const data = parseInput(receiptInputSchema, body, messages);
         const errors: Record<string, string> = {};
+        const order = orderId ? await this.orderOf(orderId) : null;
+        if (order && order.vendor_id !== data.vendor_id)
+            errors.vendor_id =
+                'Vendor penerimaan dari order harus sama dengan vendor ordernya.';
+        if (order && order.location_id !== data.location_id)
+            errors.location_id =
+                'Lokasi penerimaan dari order harus sama dengan lokasi tujuan ordernya.';
         if (!dateSchema.safeParse(data.posting_date).success)
             errors.posting_date = messages.posting_date;
         const vendor = await this.activeVendor(data.vendor_id);
@@ -384,8 +406,16 @@ export class Receipts {
                     budgetYear > 2999)
             )
                 fail('budget_year', messages.budget_year);
+            const orderLineId = line.order_line_id || null;
+            if (order && (!orderLineId || !order.lines.has(orderLineId)))
+                fail(
+                    'item_id',
+                    'Penerimaan dari order hanya berisi barang order itu. Hapus baris ini, atau catat barang lain di penerimaan tersendiri.',
+                );
+            if (!order && orderLineId) fail('item_id', messages.id);
             lines.push({
                 id: line.id ?? null,
+                orderLineId: order ? orderLineId : null,
                 ...price,
                 batchNumber,
                 expiry,
@@ -434,6 +464,7 @@ export class Receipts {
                 sumber_dana_id: line.fundingSourceId,
                 program_pengadaan_id: line.programId,
                 tahun_anggaran: line.budgetYear,
+                order_detail_id: line.orderLineId,
             };
             if (line.id === null) {
                 await this.db.insert('bl_tr_penerimaan_detail', {
@@ -454,8 +485,8 @@ export class Receipts {
                 `update bl_tr_penerimaan_detail set urutan = $1, barang_id = $2, satuan_id = $3, konversi = $4,
                         jumlah = $5, harga_satuan = $6, diskon_persen = $7, tarif_ppn = $8, no_batch = $9,
                         kedaluwarsa = $10, sumber_dana_id = $11, program_pengadaan_id = $12, tahun_anggaran = $13,
-                        updated_at = $14
-                 where tenant_id = $15 and id = $16`,
+                        order_detail_id = $14, updated_at = $15
+                 where tenant_id = $16 and id = $17`,
                 [
                     values.urutan,
                     values.barang_id,
@@ -470,6 +501,7 @@ export class Receipts {
                     values.sumber_dana_id,
                     values.program_pengadaan_id,
                     values.tahun_anggaran,
+                    values.order_detail_id,
                     stamp,
                     this.scope.tenantId,
                     line.id,
@@ -484,9 +516,152 @@ export class Receipts {
                 );
     }
 
+    // Order asal penerimaan beserta baris yang boleh diterima, dibaca saat draf penerimaannya disimpan.
+    private async orderOf(orderId: string) {
+        const order = await this.db.one(
+            z.object({ vendor_id: z.string(), location_id: z.string() }),
+            `select vendor_id, lokasi_id as location_id from bl_tr_order
+             where tenant_id = $1 and legal_entity_id = $2 and id = $3`,
+            [this.scope.tenantId, this.scope.legalEntityId, orderId],
+        );
+        if (!order) return abort(404, 'Not Found');
+        const lines = await this.db.rows(
+            z.object({ id: z.string() }),
+            `select id from bl_tr_order_detail where tenant_id = $1 and order_id = $2 and deleted_at is null`,
+            [this.scope.tenantId, orderId],
+        );
+        return { ...order, lines: new Set(lines.map((line) => line.id)) };
+    }
+
+    // Terima barang dari purchase order: draf penerimaan berisi sisa setiap baris order dengan harga, diskon, dan PPN
+    // order, seperti Qty. to Receive yang terisi Outstanding Quantity di BC. Petugas mengubah jumlah yang benar-benar
+    // datang, mengisi batch dan kedaluwarsa, lalu memposting. Satu order hanya punya satu draf penerimaan pada satu waktu.
+    async createFromOrder(orderId: string, body: unknown) {
+        this.workspace.guard('purchase-receipt', 'update');
+        const input = z.object({ posting_date: z.string() }).safeParse(body);
+        if (
+            !input.success ||
+            !dateSchema.safeParse(input.data.posting_date).success
+        )
+            validation({ posting_date: messages.posting_date });
+        const postingDate = input.data.posting_date;
+        const id = Bun.randomUUIDv7();
+        await this.db.transaction(async () => {
+            const order = lookupId(orderId)
+                ? await this.db.one(
+                      z.object({
+                          status: z.string(),
+                          number: z.string(),
+                          vendor_id: z.string(),
+                          location_id: z.string(),
+                          operating_unit_id: z.string(),
+                          prices_including_vat: z.boolean(),
+                      }),
+                      `select status, nomor as number, vendor_id, lokasi_id as location_id, operating_unit_id,
+                              termasuk_ppn as prices_including_vat
+                       from bl_tr_order
+                       where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
+                       for update`,
+                      [this.scope.tenantId, this.scope.legalEntityId, orderId],
+                  )
+                : undefined;
+            if (!order) return abort(404, 'Not Found');
+            await requireLocationAccess(this.db, this.workspace, [
+                order.location_id,
+            ]);
+            if (order.status === 'terbuka')
+                validation({
+                    _form: `Order ${order.number} belum dirilis. Rilis ordernya lebih dulu, lalu terima barangnya.`,
+                });
+            if (order.status === 'selesai')
+                validation({
+                    _form: `Semua barang order ${order.number} sudah diterima.`,
+                });
+            const draft = await this.db.one(
+                z.object({ id: z.string(), number: z.string() }),
+                `select id, nomor as number from bl_tr_penerimaan
+                 where tenant_id = $1 and order_id = $2 and status = 'draf' and deleted_at is null
+                 order by nomor limit 1`,
+                [this.scope.tenantId, orderId],
+            );
+            if (draft)
+                await refuse(this.db, this.workspace, {
+                    message: `Barang order ini sedang diterima lewat draf ${draft.number}. Lanjutkan draf itu, atau hapus drafnya lebih dulu.`,
+                    open: {
+                        page: 'core.purchase-receipt',
+                        recordId: draft.id,
+                        label: `Buka penerimaan ${draft.number}`,
+                    },
+                    otherwise: `Minta petugas gudang memposting atau menghapus draf ${draft.number}.`,
+                });
+            const number = await new NumberIssuer(this.db, {
+                tenantId: this.scope.tenantId,
+                moduleId: 'core',
+            }).issue({
+                reference: numberReference,
+                key: `${sourceType}:${id}`,
+                documentDate: postingDate,
+                legalEntityId: this.scope.legalEntityId,
+            });
+            const stamp = nowSql();
+            await this.db.insert('bl_tr_penerimaan', {
+                id,
+                tenant_id: this.scope.tenantId,
+                legal_entity_id: this.scope.legalEntityId,
+                operating_unit_id: order.operating_unit_id,
+                lokasi_id: order.location_id,
+                vendor_id: order.vendor_id,
+                order_id: orderId,
+                nomor: number,
+                tanggal: postingDate,
+                termasuk_ppn: order.prices_including_vat,
+                created_at: stamp,
+                updated_at: stamp,
+            });
+            const outstanding = await this.db.rows(
+                z.object({
+                    barang_id: z.string(),
+                    satuan_id: z.string(),
+                    konversi: z.string(),
+                    jumlah: z.string(),
+                    harga_satuan: z.string(),
+                    diskon_persen: z.string(),
+                    tarif_ppn: z.string(),
+                    order_detail_id: z.string(),
+                }),
+                `select barang_id, satuan_id, konversi::text, (jumlah - jumlah_diterima)::text as jumlah,
+                        harga_satuan::text, diskon_persen::text, tarif_ppn::text, id as order_detail_id
+                 from bl_tr_order_detail
+                 where tenant_id = $1 and order_id = $2 and deleted_at is null and jumlah > jumlah_diterima
+                 order by urutan, id`,
+                [this.scope.tenantId, orderId],
+            );
+            if (!outstanding.length)
+                validation({
+                    _form: `Semua barang order ${order.number} sudah diterima.`,
+                });
+            for (const [index, line] of outstanding.entries())
+                await this.db.insert('bl_tr_penerimaan_detail', {
+                    id: Bun.randomUUIDv7(),
+                    tenant_id: this.scope.tenantId,
+                    legal_entity_id: this.scope.legalEntityId,
+                    penerimaan_id: id,
+                    urutan: index + 1,
+                    ...line,
+                    created_at: stamp,
+                    updated_at: stamp,
+                });
+        });
+        return {
+            status: 201,
+            headers: {},
+            body: { data: await this.document(id) },
+        };
+    }
+
     async create(body: unknown) {
         this.workspace.guard('purchase-receipt', 'update');
-        const data = await this.checked(body);
+        const data = await this.checked(body, null);
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
             const number = await new NumberIssuer(this.db, {
@@ -527,7 +702,7 @@ export class Receipts {
     async update(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-receipt', 'update');
         const current = await this.header(id);
-        const data = await this.checked(body);
+        const data = await this.checked(body, current.order?.id ?? null);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {
             const locked = await this.lockHeader(current.id);
@@ -617,11 +792,12 @@ export class Receipts {
                 posting_date: z.string(),
                 location_id: z.string(),
                 vendor_id: z.string(),
+                order_id: z.string().nullable(),
             }),
             `update bl_tr_penerimaan set status = $3, ${stamp}, updated_at = $1
              where tenant_id = $4 and legal_entity_id = $5 and id = $6 and status = $7 and version = $8
                and deleted_at is null
-             returning nomor as number, tanggal::text as posting_date, lokasi_id as location_id, vendor_id`,
+             returning nomor as number, tanggal::text as posting_date, lokasi_id as location_id, vendor_id, order_id`,
             [
                 nowSql(),
                 this.workspace.userId,
@@ -672,7 +848,7 @@ export class Receipts {
                         harga_satuan::text as unit_cost, diskon_persen::text as discount_percent,
                         tarif_ppn::text as vat_percent, no_batch as batch_number, kedaluwarsa::text as expiry,
                         sumber_dana_id as funding_source_id, program_pengadaan_id as procurement_program_id,
-                        tahun_anggaran as budget_year
+                        tahun_anggaran as budget_year, satuan_id as unit_id, order_detail_id as order_line_id
                  from bl_tr_penerimaan_detail
                  where tenant_id = $1 and penerimaan_id = $2 and deleted_at is null
                  order by urutan, id`,
@@ -682,6 +858,29 @@ export class Receipts {
                 validation({
                     lines: 'Tambahkan sedikitnya satu baris sebelum posting.',
                 });
+            if (claimed.order_id)
+                await receiveOnOrder(
+                    this.db,
+                    this.workspace,
+                    this.scope,
+                    claimed.order_id,
+                    lines.flatMap((line, index) =>
+                        line.order_line_id
+                            ? [
+                                  {
+                                      index,
+                                      orderLineId: line.order_line_id,
+                                      itemId: line.item_id,
+                                      unitId: line.unit_id,
+                                      quantity: fromNumeric(
+                                          line.quantity,
+                                          quantityScale,
+                                      ),
+                                  },
+                              ]
+                            : [],
+                    ),
+                );
             const unitCostDecimals = await this.unitCostDecimals();
             await raiseBasePrices(
                 this.db,
@@ -751,6 +950,28 @@ export class Receipts {
                 },
                 { type: sourceType, id: current.id },
             );
+            if (claimed.order_id)
+                await unreceiveOnOrder(
+                    this.db,
+                    this.scope,
+                    claimed.order_id,
+                    (
+                        await this.db.rows(
+                            z.object({
+                                order_line_id: z.string(),
+                                quantity: z.string(),
+                            }),
+                            `select order_detail_id as order_line_id, jumlah::text as quantity
+                             from bl_tr_penerimaan_detail
+                             where tenant_id = $1 and penerimaan_id = $2 and deleted_at is null
+                               and order_detail_id is not null`,
+                            [this.scope.tenantId, current.id],
+                        )
+                    ).map((line) => ({
+                        orderLineId: line.order_line_id,
+                        quantity: fromNumeric(line.quantity, quantityScale),
+                    })),
+                );
         });
         return {
             status: 200,

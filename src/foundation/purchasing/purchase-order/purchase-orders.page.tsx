@@ -11,6 +11,7 @@ import {
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -19,6 +20,8 @@ import { z } from 'zod';
 import {
     api,
     definePage,
+    defineRecordPage,
+    orpc,
     errorText,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
@@ -38,6 +41,7 @@ const searchSchema = z.object({ q: z.string().max(200).optional() });
 const noPermissions: PurchaseOrderPermissions = {
     update: false,
     release: false,
+    receive: false,
     create_vendor: false,
 };
 
@@ -266,10 +270,39 @@ function PurchaseOrdersPage(): ReactNode {
     );
 }
 
+// Purchase order yang dibuka dari kotak error, misalnya saat posting penerimaannya ditolak karena order dibuka lagi.
+function PurchaseOrderRecord({ id }: { id: string }): ReactNode {
+    const { data } = useSuspenseQuery(
+        orpc.purchasingOrderShow.queryOptions({
+            input: { params: { id } },
+            select: (response) => response.body,
+        }),
+    );
+    const container = useRef<HTMLDivElement>(null);
+    return (
+        <div ref={container} className="contents">
+            <PurchaseOrderCard
+                order={data.data}
+                permissions={data.permissions}
+                amountDecimals={data.amount_decimals}
+                portalContainer={container}
+                onSaved={() => undefined}
+                onClose={() => undefined}
+            />
+        </div>
+    );
+}
+
 export const page = definePage({
     path: '/sysadmin/purchasing/orders',
     layout: 'app',
     title: 'Purchase order',
     validateSearch: searchSchema,
     component: PurchaseOrdersPage,
+});
+
+export const record = defineRecordPage({
+    key: 'core.purchase-order',
+    title: 'Purchase order',
+    component: PurchaseOrderRecord,
 });
