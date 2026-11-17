@@ -889,3 +889,160 @@ describe.skipIf(!process.env.DB_HOST)(
         });
     },
 );
+
+// Saran memakai satuan beli hanya bila jumlahnya habis dibagi isi satuan beli; selain itu satuan dasar, karena jumlah
+// barang tidak pernah dibulatkan. Angkanya dari laporan di aplikasi: BOX isi 100, stok 340, minimum 400, maksimum 1000.
+describe.skipIf(!process.env.DB_HOST)(
+    'reorder suggestions in whole purchase units',
+    () => {
+        if (!process.env.DB_HOST) return;
+        const { pool, browser, close } = operationsTestApp();
+        afterAll(close);
+
+        let business: Business;
+        let warehouse: { id: string };
+        let pharmacy: { id: string };
+        let item: { id: string };
+
+        const calculate = async () =>
+            (
+                await json<{ data: Counts }>(
+                    await business.admin.post(`${path}/calculate-plan`, {
+                        due_date: '2026-11-25',
+                    }),
+                    200,
+                )
+            ).data;
+        const suggested = async () =>
+            (
+                await pool.unsafe<
+                    { location: string; quantity: string; unit: string }[]
+                >(
+                    `select l.kode as location, trim_scale(r.jumlah)::text as quantity, s.kode as unit
+                     from bl_tr_permintaan r
+                     join gd_m_lokasi l on l.id = r.lokasi_id
+                     join gd_m_satuan s on s.id = r.satuan_id
+                     where r.tenant_id = $1 and r.deleted_at is null and r.saran = 'baru'
+                     order by l.kode`,
+                    [business.tenantId],
+                )
+            ).map((row) => [row.location, row.quantity, row.unit]);
+
+        beforeAll(async () => {
+            business = await createBusiness(
+                pool,
+                browser,
+                'Klinik Uji Saran Satuan',
+                [
+                    ...inventoryDuties,
+                    'core.purchase-requisition.manage',
+                    'core.inventory-transfer.manage',
+                ],
+            );
+            warehouse = await business.location('GUDANG');
+            pharmacy = await business.location('FARMASI');
+            const plain = await business.item<Reference & { version: number }>(
+                'PCT-500',
+            );
+            await business.posted('masuk', warehouse.id, [
+                { item_id: plain.id, quantity: 340, unit_cost: 500 },
+            ]);
+            const box = (
+                await json<{ data: Reference }>(
+                    await business.admin.post(
+                        '/api/v1/inventory/units-of-measure',
+                        { code: 'BOX', name: 'Box' },
+                    ),
+                    201,
+                )
+            ).data;
+            await json(
+                await business.admin.post('/api/v1/inventory/item-units', {
+                    item_id: plain.id,
+                    unit_id: box.id,
+                    quantity_per_unit: 100,
+                }),
+                201,
+            );
+            item = (
+                await json<{ data: Reference }>(
+                    await business.admin.patch(
+                        `/api/v1/inventory/items/${plain.id}`,
+                        {
+                            code: plain.code,
+                            name: plain.name,
+                            base_unit_id: business.uom.id,
+                            purchase_unit_id: box.id,
+                            version: plain.version,
+                        },
+                    ),
+                    200,
+                )
+            ).data;
+            for (const [location, body] of [
+                [
+                    warehouse,
+                    {
+                        reordering_policy: 'maksimum',
+                        minimum_quantity: 400,
+                        maximum_quantity: 1000,
+                    },
+                ],
+                [
+                    pharmacy,
+                    {
+                        reordering_policy: 'jumlah_tetap',
+                        minimum_quantity: 100,
+                        reorder_quantity: 150,
+                    },
+                ],
+            ] as const)
+                await json(
+                    await business.admin.post(
+                        '/api/v1/inventory/stockkeeping-units',
+                        { item_id: item.id, location_id: location.id, ...body },
+                    ),
+                    201,
+                );
+        });
+
+        test('a quantity that does not fill whole boxes is suggested in tablets', async () => {
+            expect(await calculate()).toEqual({
+                created: 2,
+                updated: 0,
+                removed: 0,
+            });
+            expect(await suggested()).toEqual([
+                ['FARMASI', '150', 'TAB'],
+                ['GUDANG', '660', 'TAB'],
+            ]);
+        });
+
+        test('an amprah that leaves whole boxes to order turns the suggestion into boxes', async () => {
+            await json(
+                await business.admin.post('/api/v1/inventory/transfer-orders', {
+                    posting_date: '2026-11-10',
+                    from_location_id: warehouse.id,
+                    to_location_id: pharmacy.id,
+                    lines: [
+                        {
+                            item_id: item.id,
+                            unit_id: business.uom.id,
+                            quantity: 40,
+                        },
+                    ],
+                }),
+                201,
+            );
+            expect(await calculate()).toEqual({
+                created: 0,
+                updated: 2,
+                removed: 0,
+            });
+            expect(await suggested()).toEqual([
+                ['FARMASI', '150', 'TAB'],
+                ['GUDANG', '7', 'BOX'],
+            ]);
+        });
+    },
+);
