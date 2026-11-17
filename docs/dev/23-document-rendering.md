@@ -92,19 +92,20 @@ Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil g
 
 ## Dokumen yang sudah terdaftar
 
-| Kode                        | Dokumen                               | Padanan BC                            | Tombol di layar                                                        |
-| --------------------------- | ------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `core.payment-receipt`      | Kuitansi pembayaran                   | Posted Sales Invoice                  | Kasir › Pembayaran                                                     |
-| `pharmacy.drug-label`       | Etiket obat                           | Tidak ada                             | Farmasi › kartu penyerahan                                             |
-| `core.transfer-order`       | Permintaan barang (amprah)            | Transfer Order (5703)                 | Sys Admin › Persediaan › Amprah                                        |
-| `core.transfer-shipment`    | Mutasi barang                         | Transfer Shipment (5704)              | Sys Admin › Persediaan › Mutasi, dan riwayat posting amprah            |
-| `core.transfer-receipt`     | Penerimaan mutasi                     | Transfer Receipt (5705)               | Sys Admin › Persediaan › Penerimaan mutasi                             |
-| `core.purchase-receipt`     | Penerimaan barang                     | Purchase - Receipt (408)              | Sys Admin › Pembelian › Penerimaan barang                              |
-| `core.purchase-return`      | Retur ke vendor                       | Purchase - Return Shipment (6636)     | Bagian Retur ke vendor di kartu penerimaan                             |
-| `core.stock-count-sheet`    | Lembar hitung opname                  | Phys. Inventory List (722)            | Sys Admin › Persediaan › Opname stok                                   |
-| `core.stock-count-result`   | Hasil opname                          | Posted Phys. Invt. Order Diff. (5876) | Sys Admin › Persediaan › Opname stok                                   |
-| `core.inventory-adjustment` | Penyesuaian stok                      | Item Journal dengan Reason Code       | Sys Admin › Persediaan › Penyesuaian stok                              |
-| `core.stock-card`           | Kartu stok satu barang di satu lokasi | Inventory - Transaction Detail (704)  | Sys Admin › Persediaan › Kartu stok, setelah barang dan lokasi dipilih |
+| Kode                        | Dokumen                               | Padanan BC                                         | Tombol di layar                                                        |
+| --------------------------- | ------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `core.payment-receipt`      | Kuitansi pembayaran                   | Posted Sales Invoice                               | Kasir › Pembayaran                                                     |
+| `pharmacy.drug-label`       | Etiket obat                           | Tidak ada                                          | Farmasi › kartu penyerahan                                             |
+| `core.transfer-order`       | Permintaan barang (amprah)            | Transfer Order (5703)                              | Sys Admin › Persediaan › Amprah                                        |
+| `core.transfer-shipment`    | Mutasi barang                         | Transfer Shipment (5704)                           | Sys Admin › Persediaan › Mutasi, dan riwayat posting amprah            |
+| `core.transfer-receipt`     | Penerimaan mutasi                     | Transfer Receipt (5705)                            | Sys Admin › Persediaan › Penerimaan mutasi                             |
+| `core.purchase-receipt`     | Penerimaan barang                     | Purchase - Receipt (408)                           | Sys Admin › Pembelian › Penerimaan barang                              |
+| `core.purchase-return`      | Retur ke vendor                       | Purchase - Return Shipment (6636)                  | Bagian Retur ke vendor di kartu penerimaan                             |
+| `core.stock-count-sheet`    | Lembar hitung opname                  | Phys. Inventory List (722)                         | Sys Admin › Persediaan › Opname stok                                   |
+| `core.stock-count-result`   | Hasil opname                          | Posted Phys. Invt. Order Diff. (5876)              | Sys Admin › Persediaan › Opname stok                                   |
+| `core.inventory-adjustment` | Penyesuaian stok                      | Item Journal dengan Reason Code                    | Sys Admin › Persediaan › Penyesuaian stok                              |
+| `core.stock-card`           | Kartu stok satu barang di satu lokasi | Inventory - Transaction Detail (704)               | Sys Admin › Persediaan › Kartu stok, setelah barang dan lokasi dipilih |
+| `core.lplpo`                | LPLPO satu lokasi                     | Inventory Valuation (1001), tanpa kolom permintaan | Sys Admin › Persediaan › Stok per lokasi, setelah lokasi dipilih       |
 
 Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocument` di `src/foundation/inventory/document-layout.ts`: kop, keterangan dokumen, tabel baris, jumlah, dan kotak tanda tangan. Bentuknya mengikuti dataset BC, bukan form puskesmas lama:
 
@@ -119,6 +120,19 @@ Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocu
 Sebagian laporan butuh lebih dari id record, seperti request page BC. Kartu stok mencetak satu barang (record-nya), tetapi hanya untuk satu lokasi dan satu periode. Query cetak selain `format` dan `layout` diteruskan ke `load` sebagai `parameters`, dan `PrintAction` menerimanya sebagai `parameters`. Dataset memeriksa parameternya sendiri dengan aturan yang sama dengan layarnya: isian yang salah dijawab 422 per field, dan lokasi yang hanya untuk petugasnya ditolak `requireLocationAccess`.
 
 Laporan berparameter tetap dokumen Word: baris gerak diulang lewat `field.lines`, saldo awal dan akhir field biasa. Ia cocok untuk laporan yang dibaca dan ditandatangani di kertas, sebesar satu barang satu periode. Daftar besar yang diolah di Excel tetap menunggu laporan tabel di bawah.
+
+### LPLPO
+
+LPLPO (Laporan Pemakaian dan Lembar Permintaan Obat) adalah laporan bulanan puskesmas. Ia kembali sebagai laporan di mesin ini, bukan layar tetap, sesuai `0030_inventory_report_names.sql`. Record-nya lokasi, parameternya periode: tombol LPLPO di Stok per lokasi mencetak dari awal bulan tanggal stok sampai tanggal stok, jadi sisa stoknya sama dengan stok di layar. Izinnya izin baca Stok per lokasi (`core.inventory-report.read`), yang memang lahir sebagai izin LPLPO.
+
+Kolom dan rumusnya dari prosedur `SIMPUS_LPLPO` sistem lama: stok awal, penerimaan, persediaan (stok awal + penerimaan), pemakaian, sisa stok (persediaan - pemakaian), stok optimum (`Max_Stok`, di sini stok maksimum lokasi), dan permintaan. Penerimaan dan pemakaian adalah semua gerak masuk dan keluar di lokasi itu, termasuk mutasi dan penyesuaian, sama dengan `Qty_Masuk` dan `Qty_Keluar` lama. Yang sengaja berbeda:
+
+- Stok awal adalah jumlah kartu gudang sebelum periode. Prosedur lama hanya membaca baris saldo awal (`JTransaksi_ID` 500) di hari pertama periode.
+- Barang yang punya stok tanpa gerak tetap tercetak. Prosedur lama hanya memuat barang yang bergerak.
+- Permintaan adalah permintaan pembelian lokasi itu yang dibuat dalam periode, menurut zona waktu legal entity. Prosedur lama menjumlah permintaan semua lokasi.
+- Pemberian per sumber dana (B_Pusat, B_Prov, APBD, Program, Lainnya) tidak ikut. Prosedur lama memilihnya dari id subkategori yang ditulis mati. Kartu gudang sudah membawa sumber dana, jadi kolom itu bisa ditambahkan sebagai field bila diminta.
+
+BC tidak punya LPLPO. Padanan terdekatnya report "Inventory Valuation" (1001) dengan saringan lokasi: stok awal, bertambah, berkurang, dan stok akhir per barang dalam periode. Kolom permintaan tidak punya padanan di report itu.
 
 ## Cetak dokumen berjalan sinkron
 

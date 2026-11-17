@@ -12,7 +12,12 @@ import { Download, FilterX } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
-import { api, definePage, errorText } from '../../../platform/shell/index.ts';
+import {
+    api,
+    definePage,
+    errorText,
+    PrintAction,
+} from '../../../platform/shell/index.ts';
 import {
     ItemCategoryLookup,
     type ItemCategory,
@@ -185,6 +190,17 @@ function StockByLocationPage(): ReactNode {
                         controls: filterPanelId,
                     }}
                 >
+                    {search.location && (
+                        <PrintAction
+                            report="core.lplpo"
+                            recordId={search.location}
+                            parameters={{
+                                from: `${asOf.slice(0, 7)}-01`,
+                                to: asOf,
+                            }}
+                            label="LPLPO"
+                        />
+                    )}
                     {table && table.rows.length > 0 && (
                         <Button
                             type="button"

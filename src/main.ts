@@ -57,6 +57,7 @@ import {
 import {
     adjustmentReport,
     inventoryRoutes,
+    lplpoReport,
     stockCardReport,
     stockCountResultReport,
     stockCountSheetReport,
@@ -130,6 +131,7 @@ export const reports = reportCatalog([
     stockCountResultReport,
     adjustmentReport,
     stockCardReport,
+    lplpoReport,
 ]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
