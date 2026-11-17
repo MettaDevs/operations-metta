@@ -248,7 +248,7 @@ function RolesPage(): ReactNode {
                             cell: (role) =>
                                 role.is_owner ? (
                                     <Badge variant="secondary">
-                                        Pemilik, memegang semua hak
+                                        Pemilik, memegang semua hak bawaan
                                     </Badge>
                                 ) : (
                                     <DataTableText>—</DataTableText>

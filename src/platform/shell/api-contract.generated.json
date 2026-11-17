@@ -4747,6 +4747,18 @@
             }
         }
     },
+    "pharmacyDispensingChangePrices": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/modules/pharmacy/v1/prescriptions/{id}/dispensing/prices",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "pharmacyPrescriptionCancel": {
         "~orpc": {
             "errorMap": {},

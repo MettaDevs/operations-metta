@@ -89,4 +89,45 @@ describe.skipIf(!process.env.DB_HOST)('installModule', () => {
         await installModule(settings, source, install);
         expect(await sequences()).toEqual([...companies].sort());
     }, 60_000);
+
+    // Keputusan pemilik produk 17 November 2026: ubah harga per baris di farmasi tidak dipegang role mana pun secara
+    // bawaan, termasuk role pemilik yang mendapat semua duty module lain saat module dipasang.
+    test('the owner role gets every module duty except one marked not for the owner', async () => {
+        const id = Bun.randomUUIDv7();
+        const slug = `uji-${id.slice(-12)}`;
+        await provisionEnvironment(
+            settings,
+            source,
+            provisionRequestSchema.parse({
+                environment: { kind: 'production', name: 'Produksi' },
+                database: null,
+                client: { id: Bun.randomUUIDv7(), legal_name: 'PT Uji', slug },
+                tenant: { id, name: 'Klinik Uji Duty Pemilik', slug },
+                admin: {
+                    id: Bun.randomUUIDv7(),
+                    name: 'Admin Uji',
+                    email: `admin-${id}@example.com`,
+                    password_hash: await Bun.password.hash(password, {
+                        algorithm: 'bcrypt',
+                        cost: 4,
+                    }),
+                },
+            }),
+        );
+        await installModule(settings, source, {
+            database: null,
+            tenant_id: id,
+            module_id: 'pharmacy',
+        });
+        const held = (
+            await runtime.unsafe<{ duty_code: string }[]>(
+                `select d.duty_code from security_role_duties d
+                 join roles r on r.id = d.role_id
+                 where r.tenant_id = $1 and r.is_owner and d.duty_code like 'pharmacy.%'`,
+                [id],
+            )
+        ).map((row) => row.duty_code);
+        expect(held).toContain('pharmacy.dispensing.manage');
+        expect(held).not.toContain('pharmacy.line-price.manage');
+    }, 60_000);
 });

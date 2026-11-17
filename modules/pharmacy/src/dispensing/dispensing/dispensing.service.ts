@@ -16,6 +16,7 @@ import {
     activeLegalEntity,
     baseQuantity,
     decimalInput,
+    fromNumeric,
     itemUnits,
     openStock,
     parseInput,
@@ -28,6 +29,11 @@ import {
     unitConversion,
 } from '@core/foundation/inventory/index.ts';
 import { lockChargeForChange } from '@core/foundation/billing/index.ts';
+import {
+    Currency,
+    localCurrencyCode,
+    unitAmountDecimals,
+} from '@core/foundation/currency/index.ts';
 import { NumberIssuer } from '@core/foundation/number-sequence/index.ts';
 import { priceDrugLines } from '../../drug/drug-price/drug-price.service.ts';
 import {
@@ -38,6 +44,17 @@ import {
 } from '../dispensing-fee/dispensing-fee.service.ts';
 import type { BilledFee } from '../dispensing-fee/dispensing-fee.schema.ts';
 import { moduleId } from '../../module.ts';
+import {
+    canOverridePrice,
+    checkedReason,
+    discountInput,
+    feeAmountInput,
+    guardPriceOverride,
+    reasonMessage,
+    samePrice,
+    unitPriceInput,
+    type LinePrice,
+} from '../line-price/line-price.service.ts';
 import { servingLocationSql } from '../prescription/prescription.service.ts';
 import { Prescriptions } from '../prescription/prescription.service.ts';
 import {
@@ -50,6 +67,7 @@ import {
 import {
     dispensingHeaderSchema,
     dispensingInputSchema,
+    dispensingPriceInputSchema,
     dispensingPriceSchema,
     handOverInputSchema,
     prescriptionCancelInputSchema,
@@ -176,6 +194,7 @@ export class Dispensings {
             hand_over: has('dispensing.hand-over'),
             reverse: has('dispensing.reverse'),
             cancel: has('prescription.cancel'),
+            override_price: canOverridePrice(this.workspace),
         };
     }
 
@@ -316,7 +335,13 @@ export class Dispensings {
                           case when d.harga_satuan is null then null else json_build_object(
                               'unit_price', trim_scale(d.harga_satuan)::text,
                               'discount_percent', trim_scale(d.persen_diskon)::text,
-                              'amount', trim_scale(${lineAmountSql('d')})::text) end as price,
+                              'amount', trim_scale(${lineAmountSql('d')})::text,
+                              'computed_unit_price', trim_scale(d.harga_satuan_hitung)::text,
+                              'computed_discount_percent', trim_scale(d.persen_diskon_hitung)::text,
+                              'changed', case when d.harga_diubah_pada is null then null else json_build_object(
+                                  'by', (select u.name from users u where u.id = d.harga_diubah_oleh_user_id),
+                                  'at', ${isoSql('d.harga_diubah_pada')}, 'reason', d.alasan_ubah_harga) end)
+                          end as price,
                           case when t.id is null then null else json_build_object(
                               'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end as batch
                    from bill_farmasi_detail d
@@ -796,7 +821,9 @@ export class Dispensings {
             ))
                 await this.db.execute(
                     `update bill_farmasi_detail set harga_dasar = $1, grading_harga_id = $2, persen_naik = $3,
-                            harga_satuan = $4, persen_diskon = $5, updated_at = $6
+                            harga_satuan = $4, persen_diskon = $5, harga_satuan_hitung = $4, persen_diskon_hitung = $5,
+                            harga_diubah_pada = null, harga_diubah_oleh_user_id = null, alasan_ubah_harga = null,
+                            updated_at = $6
                      where tenant_id = $7 and id = $8`,
                     [
                         toNumeric(price.basePrice, quantityScale),
@@ -1018,6 +1045,190 @@ export class Dispensings {
             { type: dispensingSource, id: billId },
         );
         await publishDispensingCharges(this.db, this.scope, billId);
+    }
+
+    // Ubah harga sesudah Siapkan, hanya untuk pemegang izin ubah harga: harga satuan dan % diskon baris obat, dan nilai
+    // biaya racik atau resep. Hitungan sistem tidak berubah; baris yang berbeda dengan hitungan mencatat siapa, kapan, dan
+    // alasannya, dan baris yang dikembalikan ke hitungan menghapus catatan itu. Tagihan kasir mengikuti lewat
+    // pharmacy.dispensing.charges-replaced.v1, jadi kunjungan yang sudah dibayar menolak lewat kunci kasir.
+    async changePrices(prescriptionId: string, body: unknown) {
+        guardPriceOverride(this.workspace);
+        const data = parseInput(dispensingPriceInputSchema, body, messages);
+        await this.db.transaction(async () => {
+            const locked = await this.lock(prescriptionId);
+            const current = await this.active(locked.id);
+            if (!current || current.status === 'draf')
+                validation({
+                    _form: 'Resep ini belum disiapkan. Harga obat dihitung saat Siapkan, sesudah itu baru bisa diubah.',
+                });
+            if (data.version !== current.version)
+                coded(409, 'stale_version', staleMessage);
+            const scope = this.scope;
+            const precision = await new Currency(
+                this.db,
+                scope.tenantId,
+            ).precision(localCurrencyCode);
+            const storedLines = new Map(
+                (
+                    await this.db.rows(
+                        z.object({
+                            id: z.string(),
+                            unit_price: z.string(),
+                            discount_percent: z.string(),
+                            computed_unit_price: z.string(),
+                            computed_discount_percent: z.string(),
+                        }),
+                        `select id, harga_satuan::text as unit_price, persen_diskon::text as discount_percent,
+                                harga_satuan_hitung::text as computed_unit_price,
+                                persen_diskon_hitung::text as computed_discount_percent
+                         from bill_farmasi_detail
+                         where tenant_id = $1 and bill_farmasi_id = $2 and deleted_at is null
+                           and harga_satuan is not null`,
+                        [scope.tenantId, current.id],
+                    )
+                ).map((row) => [row.id, row]),
+            );
+            const storedFees = new Map(
+                (
+                    await this.db.rows(
+                        z.object({
+                            id: z.string(),
+                            amount: z.string(),
+                            computed_amount: z.string(),
+                        }),
+                        `select id, nilai::text as amount, nilai_hitung::text as computed_amount
+                         from bill_farmasi_biaya
+                         where tenant_id = $1 and bill_farmasi_id = $2 and deleted_at is null`,
+                        [scope.tenantId, current.id],
+                    )
+                ).map((row) => [row.id, row]),
+            );
+            const errors: Record<string, string> = {};
+            const scaled = (text: string) => fromNumeric(text, quantityScale);
+            const lineChanges: {
+                id: string;
+                price: LinePrice;
+                differs: boolean;
+            }[] = [];
+            for (const [index, input] of (data.lines ?? []).entries()) {
+                const field = `lines.${String(index)}`;
+                const stored = storedLines.get(input.id);
+                if (!stored) {
+                    errors[`${field}.id`] = messages.lines;
+                    continue;
+                }
+                const unitPrice = unitPriceInput(
+                    input.unit_price,
+                    unitAmountDecimals(precision),
+                );
+                const discountPercent = discountInput(input.discount_percent);
+                if (typeof unitPrice !== 'bigint')
+                    errors[`${field}.unit_price`] = unitPrice.error;
+                if (typeof discountPercent !== 'bigint')
+                    errors[`${field}.discount_percent`] = discountPercent.error;
+                if (
+                    typeof unitPrice !== 'bigint' ||
+                    typeof discountPercent !== 'bigint'
+                )
+                    continue;
+                const price = { unitPrice, discountPercent };
+                const used = {
+                    unitPrice: scaled(stored.unit_price),
+                    discountPercent: scaled(stored.discount_percent),
+                };
+                if (samePrice(price, used)) continue;
+                lineChanges.push({
+                    id: stored.id,
+                    price,
+                    differs: !samePrice(price, {
+                        unitPrice: scaled(stored.computed_unit_price),
+                        discountPercent: scaled(
+                            stored.computed_discount_percent,
+                        ),
+                    }),
+                });
+            }
+            const feeChanges: {
+                id: string;
+                amount: bigint;
+                differs: boolean;
+            }[] = [];
+            for (const [index, input] of (data.fees ?? []).entries()) {
+                const field = `fees.${String(index)}`;
+                const stored = storedFees.get(input.id);
+                if (!stored) {
+                    errors[`${field}.id`] = messages.lines;
+                    continue;
+                }
+                const value = feeAmountInput(
+                    input.amount,
+                    precision.amount_decimals,
+                );
+                if (typeof value !== 'bigint') {
+                    errors[`${field}.amount`] = value.error;
+                    continue;
+                }
+                if (value === scaled(stored.amount)) continue;
+                feeChanges.push({
+                    id: stored.id,
+                    amount: value,
+                    differs: value !== scaled(stored.computed_amount),
+                });
+            }
+            const reason = checkedReason(data.reason);
+            if ('error' in reason) errors.reason = reason.error;
+            else if (
+                reason.reason === null &&
+                [...lineChanges, ...feeChanges].some((change) => change.differs)
+            )
+                errors.reason = reasonMessage;
+            if (Object.keys(errors).length) validation(errors);
+            if (!lineChanges.length && !feeChanges.length) return;
+            const why = 'reason' in reason ? reason.reason : null;
+            if (locked.visit_id)
+                await lockChargeForChange(this.db, this.workspace, {
+                    documentId: locked.visit_id,
+                    message: paidMessage,
+                });
+            const stamp = nowSql();
+            const audit = (differs: boolean) =>
+                differs
+                    ? [stamp, this.workspace.userId, why]
+                    : [null, null, null];
+            for (const change of lineChanges)
+                await this.db.execute(
+                    `update bill_farmasi_detail set harga_satuan = $1, persen_diskon = $2, harga_diubah_pada = $3,
+                            harga_diubah_oleh_user_id = $4, alasan_ubah_harga = $5, updated_at = $6
+                     where tenant_id = $7 and id = $8`,
+                    [
+                        toNumeric(change.price.unitPrice, quantityScale),
+                        toNumeric(change.price.discountPercent, quantityScale),
+                        ...audit(change.differs),
+                        stamp,
+                        scope.tenantId,
+                        change.id,
+                    ],
+                );
+            for (const change of feeChanges)
+                await this.db.execute(
+                    `update bill_farmasi_biaya set nilai = $1, nilai_diubah_pada = $2, nilai_diubah_oleh_user_id = $3,
+                            alasan_ubah_nilai = $4, updated_at = $5
+                     where tenant_id = $6 and id = $7`,
+                    [
+                        toNumeric(change.amount, quantityScale),
+                        ...audit(change.differs),
+                        stamp,
+                        scope.tenantId,
+                        change.id,
+                    ],
+                );
+            await this.db.execute(
+                'update bill_farmasi set updated_at = $1 where tenant_id = $2 and id = $3',
+                [stamp, scope.tenantId, current.id],
+            );
+            await publishDispensingCharges(this.db, scope, current.id);
+        });
+        return this.show(prescriptionId);
     }
 
     // Batal resep ("Tidak Diambil" di antrean sistem lama): resep keluar dari antrean. Resep yang sudah disiapkan

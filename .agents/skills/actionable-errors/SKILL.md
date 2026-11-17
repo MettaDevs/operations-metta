@@ -59,6 +59,7 @@ Semua penolakan "sudah dibayar" datang dari `lockChargeForChange` di `src/founda
 
 - retur obat dan Batal retur, untuk resep dan penjualan obat bebas (`dispensing-returns.tsx`);
 - Siapkan dan batal penyiapan di kartu penyerahan (`dispensing-card.tsx`);
+- Ubah harga sesudah Siapkan, di jendela Ubah harga (`dispensing-price-card.tsx`);
 - Simpan pemeriksaan yang mengubah Biaya Tindakan (`examination.page.tsx`).
 
 Batal resep, batal registrasi, dan rujuk internal juga ditolak lewat kunci itu, tetapi layarnya belum memasang tombol, jadi hanya pesannya yang tampil. Batal resep dan batal registrasi memakai `Dialog` modal, dan jendela yang dibuka dari dalamnya belum diuji.

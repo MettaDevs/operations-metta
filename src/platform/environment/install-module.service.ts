@@ -34,7 +34,8 @@ export type InstallModuleRequest = z.infer<typeof installModuleRequestSchema>;
 // yang dibuat sesudahnya mendapatkannya saat lahir. Proses yang memanggil installModule wajib memanggil
 // registerOrganizationDefaults (src/foundation/number-sequence/) supaya pendaftaran itu ada.
 //
-// Role pemilik tenant lalu mendapat semua duty module itu, sama dengan duty Core yang diberikan saat penyiapan.
+// Role pemilik tenant lalu mendapat semua duty module itu, sama dengan duty Core yang diberikan saat penyiapan, kecuali
+// duty yang ditandai tidak diberikan ke pemilik (security_duties.diberikan_ke_pemilik).
 // Aman diulang: entitlement aktif, migration yang sudah tercatat, catatan pemasangan, dan duty yang sudah ada dilewati.
 // Pemanggilnya `bun run dev:setup` dan operasi sync_entitlements dari control plane (sync-entitlements.service.ts).
 export async function installModule(
@@ -92,6 +93,7 @@ export async function installModule(
                     `insert into security_role_duties (role_id, duty_code)
                      select r.id, d.code from roles r
                      join security_duties d on d.app_id = $2 and d.tenant_id is null and d.status = 'active'
+                                          and d.diberikan_ke_pemilik
                      where r.tenant_id = $1 and r.is_owner
                        and not exists (select 1 from security_role_duties x where x.role_id = r.id and x.duty_code = d.code)`,
                     [request.tenant_id, request.module_id],

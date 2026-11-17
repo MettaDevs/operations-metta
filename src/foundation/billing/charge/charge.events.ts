@@ -308,9 +308,9 @@ export async function receiveCharges(
     );
 }
 
-// Baris OBAT dari penyerahan farmasi (blok BILLFarmasi GetDetailRincianBiaya): harga satuan dan persen diskon yang
-// dibekukan farmasi saat Siapkan, Qty bersih sesudah retur. Obat yang termasuk jasa bernilai 0 dengan harga aslinya
-// tetap di harga_orig, seperti Kuta (IncludeJasa = 1).
+// Baris OBAT dari penyerahan farmasi (blok BILLFarmasi GetDetailRincianBiaya): harga satuan dan persen diskon yang dipakai
+// farmasi (dibekukan saat Siapkan, atau diubah pemegang izin ubah harga sesudahnya), Qty bersih sesudah retur. Obat yang
+// termasuk jasa bernilai 0 dengan harga aslinya tetap di harga_orig, seperti Kuta (IncludeJasa = 1).
 export async function receivePharmacyCharges(
     db: Database,
     envelope: EventEnvelope,

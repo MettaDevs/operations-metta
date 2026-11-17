@@ -5,8 +5,9 @@ info:
     description: |
         Potret penuh biaya obat satu penyerahan farmasi untuk kasir, padanan blok BILLFarmasi di GetDetailRincianBiaya
         sistem lama: baris OBAT ada sejak penyerahan disiapkan, dengan Qty = JmlPemakaian - JmlRetur. Diterbitkan module
-        farmasi (`modules/pharmacy`) lewat `publishEvent` di transaksi Siapkan, Batal siapkan, retur, batal retur, dan Batal
-        resep yang sudah disiapkan. Harga satuan dan persen diskon adalah nilai yang dibekukan saat Siapkan.
+        farmasi (`modules/pharmacy`) lewat `publishEvent` di transaksi Siapkan, Ubah harga, Batal siapkan, retur, batal
+        retur, dan Batal resep yang sudah disiapkan. Harga satuan, persen diskon, dan nilai biaya adalah yang dipakai:
+        hitungan yang dibekukan saat Siapkan, atau nilai yang diketik pemegang izin ubah harga sesudahnya.
 
         Penerima mengganti baris biaya terbuka penyerahan itu dengan isi `lines`: baris yang tidak ada lagi dihapus, jadi
         `lines` kosong berarti penyerahan itu tidak lagi punya biaya (Batal siapkan, Batal resep, atau semua obat diretur).
@@ -19,15 +20,19 @@ info:
           barisnya di `tagihan_kasir_detail`. Belum ada pengirim ke luar runtime.
         - Resep yang diterima farmasi sebelum `healthcare.prescription.issued.v1` membawa `visit_id` tidak menerbitkan
           event ini, karena kunjungannya tidak diketahui.
-        - Sesudah kunjungan dibayar kasir, Siapkan, Batal siapkan, retur, batal retur, dan Batal resep ditolak di farmasi
-          lewat kunci kasir (`lockChargeForChange`) sampai pembayarannya dibatalkan, jadi event ini tidak terbit untuk
-          kunjungan yang sudah dibayar kasir. Pembayaran otomatis dibatalkan kasir lalu dilunasi ulang dengan biaya yang
-          baru.
+        - Sesudah kunjungan dibayar kasir, Siapkan, Ubah harga, Batal siapkan, retur, batal retur, dan Batal resep
+          ditolak di farmasi lewat kunci kasir (`lockChargeForChange`) sampai pembayarannya dibatalkan, jadi event ini
+          tidak terbit untuk kunjungan yang sudah dibayar kasir. Pembayaran otomatis dibatalkan kasir lalu dilunasi ulang
+          dengan biaya yang baru.
         - Biaya racik dan biaya resep (`SetupAwal.BiayaRacikObat`, `BiayaResepObat` sistem lama) dikirim di `fees` sejak
           16 November 2026, sebagai field opsional di versi yang sama. Nilainya dari setelan Biaya racik dan resep farmasi
           per legal entity, lokasi, dan kelompok harga, dibekukan saat Siapkan. Biaya resep obat yang habis diretur tidak
           ikut lagi; biaya racik tetap. Penyerahan yang termasuk jasa tidak punya biaya. Biaya belum membawa komponen biaya
           Core; pemetaan ke finance menyusul.
+        - Sejak 17 November 2026 pemegang izin ubah harga farmasi boleh mengubah harga satuan, persen diskon, dan nilai
+          biaya per baris sesudah Siapkan. Bentuk pesan tidak berubah: `unit_price`, `discount_percent`, dan `amount`
+          membawa nilai yang dipakai, dan hitungan sistem tetap tersimpan di farmasi. Biaya yang diubah menjadi 0 tidak
+          dikirim, sama dengan setelan bernilai 0.
 channels:
     pharmacy.dispensing.charges-replaced.v1:
         address: pharmacy.dispensing.charges-replaced.v1
@@ -169,10 +174,10 @@ components:
                                 description: Qty bersih dalam satuan baris (diserahkan dikurangi retur), teks desimal.
                             unit_price:
                                 type: string
-                                description: Harga per satuan baris yang dibekukan saat Siapkan, teks desimal.
+                                description: Harga per satuan baris yang dipakai (dibekukan saat Siapkan atau diubah sesudahnya), teks desimal.
                             discount_percent:
                                 type: string
-                                description: Persen diskon grading harga, teks desimal.
+                                description: Persen diskon yang dipakai (grading harga, atau diubah sesudah Siapkan), teks desimal.
                 fees:
                     type: array
                     description: |

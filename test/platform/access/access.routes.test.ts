@@ -360,7 +360,7 @@ describe.skipIf(!process.env.DB_HOST)('access administration', () => {
             ),
         ).toEqual({
             name: [
-                'Role Owner diatur otomatis dan selalu memegang semua duty, jadi tidak dapat diubah.',
+                'Role Owner diatur otomatis, jadi tidak dapat diubah. Berikan izin tambahan lewat role lain.',
             ],
         });
         expect(

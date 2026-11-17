@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Workspace } from '@core/platform/access/index.ts';
 import {
+    isoSql,
     nowSql,
     sqlErrorCode,
     type Database,
@@ -131,11 +132,14 @@ export function plannedFees(
     return fees;
 }
 
+// Nilai biaya yang diketik pemegang izin ubah harga, bila berbeda dengan nilai dari setelan (amount).
+export type FeeOverride = { amount: string; userId: string; reason: string };
+
 export async function freezeFees(
     db: Database,
     scope: Scope,
     billId: string,
-    fees: PlannedFee[],
+    fees: (PlannedFee & { override?: FeeOverride })[],
 ): Promise<void> {
     const stamp = nowSql();
     for (const fee of fees)
@@ -148,7 +152,11 @@ export async function freezeFees(
             bill_farmasi_detail_id: fee.lineId,
             racikan_ke: fee.compound,
             biaya_pelayanan_id: fee.setupId,
-            nilai: fee.amount,
+            nilai: fee.override?.amount ?? fee.amount,
+            nilai_hitung: fee.amount,
+            nilai_diubah_pada: fee.override ? stamp : null,
+            nilai_diubah_oleh_user_id: fee.override?.userId ?? null,
+            alasan_ubah_nilai: fee.override?.reason ?? null,
             created_at: stamp,
             updated_at: stamp,
         });
@@ -180,8 +188,11 @@ export async function billedFees(
         }),
         `select f.id, f.bill_farmasi_id as dispensing_id, f.jenis as kind, f.biaya_pelayanan_id as setup_id,
                 f.bill_farmasi_detail_id as line_id, f.racikan_ke as compound, b.nama as item_name,
-                trim_scale(f.nilai)::text as amount
+                trim_scale(f.nilai)::text as amount, trim_scale(f.nilai_hitung)::text as computed_amount,
+                case when f.nilai_diubah_pada is null then null else json_build_object(
+                    'by', u.name, 'at', ${isoSql('f.nilai_diubah_pada')}, 'reason', f.alasan_ubah_nilai) end as changed
          from bill_farmasi_biaya f
+         left join users u on u.id = f.nilai_diubah_oleh_user_id
          left join bill_farmasi_detail d on d.tenant_id = f.tenant_id and d.id = f.bill_farmasi_detail_id
          left join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
          where f.tenant_id = $1 and f.bill_farmasi_id = any($2::uuid[]) and f.deleted_at is null
@@ -200,18 +211,22 @@ export async function billedFees(
                 itemName: row.item_name,
             }),
             amount: row.amount,
+            computed_amount: row.computed_amount,
+            changed: row.changed,
         }));
 }
 
-// Baris tagihan kasir untuk biaya yang ditagih.
+// Baris tagihan kasir untuk biaya yang ditagih. Biaya yang diubah menjadi 0 tidak ditagih, sama dengan setelan bernilai 0.
 export const chargeFees = (fees: BilledFee[]): ChargeFee[] =>
-    fees.map((fee) => ({
-        line_id: fee.id,
-        fee_id: fee.setup_id,
-        code: feeCodes[fee.kind],
-        name: fee.name,
-        amount: fee.amount,
-    }));
+    fees
+        .filter((fee) => Decimal.of(fee.amount).compare(Decimal.of('0')) > 0)
+        .map((fee) => ({
+            line_id: fee.id,
+            fee_id: fee.setup_id,
+            code: feeCodes[fee.kind],
+            name: fee.name,
+            amount: fee.amount,
+        }));
 
 const messages = {
     kind: 'Pilih jenis biaya.',

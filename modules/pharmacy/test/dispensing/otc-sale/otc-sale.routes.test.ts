@@ -25,6 +25,8 @@ type Quote = {
     lines: (Line & {
         unit_price: string;
         discount_percent: string;
+        computed_unit_price: string;
+        computed_discount_percent: string;
         amount: string;
     })[];
     fees: { kind: string; name: string; amount: string }[];
@@ -291,6 +293,8 @@ describe.skipIf(!process.env.DB_HOST)(
                         quantity: '2',
                         unit_price: '12000',
                         discount_percent: '5',
+                        computed_unit_price: '12000',
+                        computed_discount_percent: '5',
                         amount: '22800',
                     },
                 ],

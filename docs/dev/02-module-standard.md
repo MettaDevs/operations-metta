@@ -101,7 +101,7 @@ Mengubah menu atau metadata keamanan berarti menulis migration baru. Tidak ada m
 `installModule` di `src/platform/environment/install-module.service.ts` memasang satu module untuk satu tenant:
 
 1. Menjalankan migration module di database lingkungan, bersama module lain yang sudah terpasang.
-2. Di satu transaksi: menulis entitlement aktif bila belum ada, menulis `core_module_installations` berstatus `installed`, memberi role pemilik tenant semua duty module itu, lalu menjalankan ulang data bawaan per organisasi lewat `replayOrganizationsCreated`.
+2. Di satu transaksi: menulis entitlement aktif bila belum ada, menulis `core_module_installations` berstatus `installed`, memberi role pemilik tenant semua duty module itu kecuali yang bertanda `diberikan_ke_pemilik = false`, lalu menjalankan ulang data bawaan per organisasi lewat `replayOrganizationsCreated`.
 
 Semua langkahnya aman diulang. Pemanggilnya `bun run dev:setup` dan operasi `sync_entitlements`. Operasi itu memasang module yang dihak, lalu mencabut hak yang tidak lagi diberikan dengan mengubah status entitlement menjadi `revoked`. Tabel module dan isinya tidak disentuh, jadi hak yang diberikan lagi menampilkan data lamanya.
 

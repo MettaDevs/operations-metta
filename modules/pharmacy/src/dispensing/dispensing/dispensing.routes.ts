@@ -9,6 +9,7 @@ import {
 import { moduleId, moduleWorkspace } from '../../module.ts';
 import type {
     dispensingInputSchema,
+    dispensingPriceInputSchema,
     handOverInputSchema,
     prescriptionCancelInputSchema,
     versionInputSchema,
@@ -96,6 +97,15 @@ export function dispensingRoutes() {
                     await (
                         await dispensings(context, input.body)
                     ).cancelPreparation(input.params.id, input.body),
+                ),
+            ),
+        pharmacyDispensingChangePrices: route('POST', `${dispensing}/prices`)
+            .input(record<z.input<typeof dispensingPriceInputSchema>>())
+            .handler(async ({ context, input }) =>
+                ok(
+                    await (
+                        await dispensings(context, input.body)
+                    ).changePrices(input.params.id, input.body),
                 ),
             ),
         pharmacyPrescriptionCancel: route('POST', '/prescriptions/{id}/cancel')
