@@ -46,6 +46,7 @@ import {
 import { calendarRoutes } from './foundation/calendar/index.ts';
 import {
     billingRoutes,
+    paymentReceiptReport,
     registerBillingEventHandlers,
 } from './foundation/billing/index.ts';
 import {
@@ -72,6 +73,7 @@ import {
     ValkeySessions,
 } from './platform/identity/index.ts';
 import { organizationRoutes } from './platform/organization/index.ts';
+import { reportCatalog, reportingRoutes } from './platform/reporting/index.ts';
 
 registerOrganizationDefaults();
 registerPharmacyEventHandlers();
@@ -97,6 +99,10 @@ function valkeySessions(config: Config): ValkeySessions | null {
         }
     }
 }
+
+// Semua dokumen cetak dan laporan, dirakit dari laporan yang di-export Core dan module. Laporan yang salah bentuk
+// menggagalkan proses saat mulai.
+export const reports = reportCatalog([paymentReceiptReport]);
 
 // Seluruh procedure aplikasi. Tipenya dipakai klien oRPC di layar (`src/platform/shell/api.ts`), dan bentuk route-nya
 // ditulis scripts/generate-client.ts ke kontrak yang dibaca klien itu.
@@ -156,6 +162,7 @@ export const router = {
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
     ...pharmacyRoutes(),
+    ...reportingRoutes(reports),
 };
 export type Router = typeof router;
 
@@ -314,6 +321,7 @@ export function createApplication(config: Config) {
                     db,
                     session,
                     sso,
+                    renderer: config.renderer,
                     request,
                     errorHeaders: {},
                 };

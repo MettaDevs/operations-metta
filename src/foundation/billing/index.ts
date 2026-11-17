@@ -52,6 +52,8 @@ export {
     unclerkedPaymentMessage,
 } from './credit-memo/credit-memo.service.ts';
 export { outstandingPaymentMessage } from './receivable-payment/receivable-payment.service.ts';
+// Dokumen cetak milik kasir, dirakit src/main.ts ke katalog laporan.
+export { paymentReceiptReport } from './payment/payment-receipt.report.ts';
 export {
     onBeforePayment,
     onPaymentHolds,

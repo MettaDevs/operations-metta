@@ -65,6 +65,18 @@ const environmentSchema = z.object({
     SSO_ISSUER: z.url().optional(),
     SSO_CLIENT_ID: z.string().min(1).optional(),
     SSO_CLIENT_SECRET: z.string().min(1).optional(),
+    // Gotenberg yang mengubah dokumen cetak Word menjadi PDF (src/platform/reporting/). Kosong berarti cetak hanya bisa
+    // diunduh sebagai Word. Tenggatnya menutup start dingin LibreOffice yang terukur sekitar 13 detik.
+    RENDERER_URL: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z.url().optional(),
+    ),
+    RENDERER_TIMEOUT_SECONDS: z.coerce
+        .number()
+        .int()
+        .min(5)
+        .max(300)
+        .default(30),
 });
 
 // Cukup untuk membuka koneksi database, tanpa APP_KEY dan setelan server: dipakai migrate dan dev:setup.
@@ -87,7 +99,17 @@ export function loadConfig(
     if (key.length !== 32) {
         throw new Error('APP_KEY must contain a 32-byte AES-256 key.');
     }
-    return { ...values, key, sso: ssoSettings(values) };
+    return {
+        ...values,
+        key,
+        sso: ssoSettings(values),
+        renderer: values.RENDERER_URL
+            ? {
+                  url: values.RENDERER_URL,
+                  timeoutMs: values.RENDERER_TIMEOUT_SECONDS * 1000,
+              }
+            : null,
+    };
 }
 
 export type SsoSettings = {

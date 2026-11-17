@@ -4,12 +4,15 @@ import { type Database, sqlErrorCode } from '../database/index.ts';
 import { reportError } from '../error-reporting/index.ts';
 import { HttpFailure } from './errors.ts';
 import type { Session, Sso } from '../identity/index.ts';
+import type { PdfRenderer } from '../reporting/index.ts';
 
 export type Context = {
     db: Database;
     session: Session;
     // Masuk lewat SSO; null bila SSO tidak disetel.
     sso: Sso | null;
+    // Pembuat PDF dokumen cetak; null bila RENDERER_URL tidak diisi, dan cetak lalu hanya bisa berupa Word.
+    renderer: PdfRenderer | null;
     request: Request;
     errorHeaders: Record<string, string>;
 };
