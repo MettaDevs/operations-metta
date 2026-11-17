@@ -84,6 +84,10 @@ const pages: RecordPages = {
         title: 'Faktur pembelian',
         component: ({ id }) => h('p', null, `Faktur pembelian ${id}`),
     },
+    'core.vendor-payment': {
+        title: 'Pembayaran ke vendor',
+        component: ({ id }) => h('p', null, `Pembayaran ke vendor ${id}`),
+    },
     'core.purchase-order': {
         title: 'Purchase order',
         component: ({ id }) => h('p', null, `Purchase order ${id}`),

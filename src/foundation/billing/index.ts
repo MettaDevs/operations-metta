@@ -20,6 +20,7 @@ export {
 // Total tagihan dengan rumus kasir, supaya module penjual menampilkan total yang sama dengan yang ditagih payBill.
 export { invoiceTotals } from './invoice/invoice.totals.ts';
 export { paymentOptions } from './invoice/invoice.service.ts';
+export { behaviorsSettledAs } from './payment-method/payment-method.behaviors.ts';
 import { clerkRoutes } from './clerk/clerk.routes.ts';
 import { creditMemoRoutes } from './credit-memo/credit-memo.routes.ts';
 import { invoiceRoutes } from './invoice/invoice.routes.ts';

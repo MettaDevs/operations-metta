@@ -10,19 +10,29 @@ const rowSql = `select * from (
                     select e.id, e.jenis as kind,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            e.vendor_id, p.name as vendor_name, e.faktur_id as invoice_id,
+                           e.pembayaran_id as payment_id,
                            e.nomor_dokumen as document_number, e.no_faktur_vendor as vendor_invoice_number,
                            e.tanggal::text as posting_date, e.jatuh_tempo::text as due_date,
                            trim_scale(e.jumlah)::text as amount, trim_scale(e.sisa)::text as remaining,
+                           coalesce(paid.payments, '[]'::json) as payments,
+                           coalesce(trim_scale(paid.amount), 0)::text as paid,
                            e.sisa <> 0 as open, (current_date - e.jatuh_tempo)::int as days_overdue
                     from ap_tr_entri_utang e
                     join vendors v on v.tenant_id = e.tenant_id and v.id = e.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
+                    left join lateral (
+                        select json_agg(json_build_object('id', h.id, 'number', h.nomor,
+                                                          'amount', trim_scale(d.jumlah)::text)
+                                        order by h.diposting_pada, h.id) as payments,
+                               sum(d.jumlah) as amount
+                        from ap_tr_pembayaran_detail d
+                        join ap_tr_pembayaran h on h.tenant_id = d.tenant_id and h.id = d.pembayaran_id
+                        where d.tenant_id = e.tenant_id and d.entri_utang_id = e.id and d.deleted_at is null
+                          and h.status = 'diposting') paid on true
                     where e.tenant_id = $1 and e.legal_entity_id = $2) entries
                 where true`;
 
-// Entri utang vendor (Vendor Ledger Entries di BC): satu entri per faktur pembelian yang diposting, ditambah entri
-// pembatalannya. Bawaannya hanya yang masih terbuka, diurutkan dari jatuh tempo paling awal, supaya utang yang paling
-// mendesak dibayar tampil lebih dulu.
+// Entri utang vendor (Vendor Ledger Entries di BC).
 export class VendorLedger {
     constructor(
         private readonly db: Database,

@@ -5,4 +5,5 @@ export const recordPageKeys = [
     'core.purchase-invoice',
     'core.purchase-order',
     'core.purchase-receipt',
+    'core.vendor-payment',
 ] as const;
