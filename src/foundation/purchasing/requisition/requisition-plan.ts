@@ -121,7 +121,9 @@ function orderUnit(plan: Plan, base: bigint) {
 }
 
 // Stok yang akan tersedia: kartu gudang di lokasi itu, ditambah sisa baris purchase order terbuka dan dirilis untuk
-// lokasi itu, ditambah permintaan yang belum dipesan selain saran yang akan ditulis ulang.
+// lokasi itu, ditambah permintaan yang belum dipesan selain saran yang akan ditulis ulang. Amprah draf dan diajukan
+// dihitung seperti Transfer Line di "Inventory Profile Offsetting" BC: yang belum diterima lokasi peminta, termasuk
+// yang masih di lokasi transit, menambah stok peminta; yang belum dikirim lokasi pemasok menguranginya.
 const planSql = (allowed: string) => `
     select k.barang_id as item_id, k.lokasi_id as location_id, l.operating_unit_id,
            k.kebijakan_pesan_ulang as policy, k.stok_minimum::text as reorder_point,
@@ -149,7 +151,18 @@ const planSql = (allowed: string) => `
                          where r.tenant_id = k.tenant_id and r.legal_entity_id = k.legal_entity_id
                            and r.barang_id = k.barang_id and r.lokasi_id = k.lokasi_id
                            and r.deleted_at is null and r.order_detail_id is null
-                           and r.saran is distinct from 'baru'), 0), ${quantityScale})::text as projected
+                           and r.saran is distinct from 'baru'), 0)
+             + coalesce((select sum((d.jumlah_diminta - d.jumlah_diterima) * d.konversi) from gd_tr_amprahan_detail d
+                         join gd_tr_amprahan a on a.tenant_id = d.tenant_id and a.id = d.amprahan_id
+                         where d.tenant_id = k.tenant_id and d.legal_entity_id = k.legal_entity_id
+                           and d.barang_id = k.barang_id and a.lokasi_peminta_id = k.lokasi_id
+                           and a.status in ('draf', 'diajukan') and a.deleted_at is null and d.deleted_at is null), 0)
+             - coalesce((select sum((d.jumlah_diminta - d.jumlah_dikirim) * d.konversi) from gd_tr_amprahan_detail d
+                         join gd_tr_amprahan a on a.tenant_id = d.tenant_id and a.id = d.amprahan_id
+                         where d.tenant_id = k.tenant_id and d.legal_entity_id = k.legal_entity_id
+                           and d.barang_id = k.barang_id and a.lokasi_pemasok_id = k.lokasi_id
+                           and a.status in ('draf', 'diajukan') and a.deleted_at is null and d.deleted_at is null), 0),
+             ${quantityScale})::text as projected
     from gd_m_barang_lokasi k
     join gd_m_lokasi l on l.tenant_id = k.tenant_id and l.id = k.lokasi_id and l.deleted_at is null
     join gd_m_barang b on b.tenant_id = k.tenant_id and b.id = k.barang_id and b.deleted_at is null
@@ -213,7 +226,7 @@ export async function calculatePlan(
             const base = reorderQuantity(rule, projected);
             if (base === null) continue;
             const unit = orderUnit(plan, base);
-            const description = `Stok ditambah yang sedang dipesan ${display(projected, quantityScale)} ${plan.base_unit_code}, stok minimum ${display(rule.reorderPoint, quantityScale)} ${plan.base_unit_code}.`;
+            const description = `Stok yang akan tersedia ${display(projected, quantityScale)} ${plan.base_unit_code}, stok minimum ${display(rule.reorderPoint, quantityScale)} ${plan.base_unit_code}.`;
             const key = `${plan.item_id}:${plan.location_id}`;
             const existing = stale.get(key);
             stale.delete(key);
