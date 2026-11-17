@@ -22,6 +22,7 @@ import {
     definePage,
     defineRecordPage,
     orpc,
+    PrintAction,
 } from '../../../platform/shell/index.ts';
 import { CreditMemoDialog } from '../credit-memo/credit-memo-dialog.tsx';
 import { PaymentCancelDialog } from '../payment/payment-cancel-dialog.tsx';
@@ -92,6 +93,13 @@ function PaymentRecord({ id }: { id: string }): ReactNode {
                     ))
                 }
             >
+                {payment && (
+                    <PrintAction
+                        report="core.payment-receipt"
+                        recordId={payment.id}
+                        label="Kuitansi"
+                    />
+                )}
                 {payment && data.can_cancel && (
                     <Button
                         type="button"
