@@ -2,7 +2,8 @@ import type { BuiltinLayout } from '../../../platform/reporting/index.ts';
 import { blankName, inventoryDocument } from '../document-layout.ts';
 
 // Layout bawaan LPLPO, urutan kolom ekspor Excel sistem lama: stok awal, penerimaan, persediaan, pemakaian, sisa stok,
-// stok optimum, dan permintaan. Kolom pemberian per sumber dana diisi tangan atau ditambahkan di layout unggahan.
+// stok optimum, dan permintaan. Rincian penerimaan per sumber dana satu kolom berisi daftar "nama jumlah", karena
+// sumber dana datang dari master tiap legal entity dan layout Word tidak bisa menambah kolom tabel per data.
 function a4(): Uint8Array {
     return inventoryDocument({
         title: 'LAPORAN PEMAKAIAN DAN LEMBAR PERMINTAAN OBAT',
@@ -14,8 +15,8 @@ function a4(): Uint8Array {
         ],
         lines: 'lines',
         columns: [
-            { header: 'Kode', value: '{item_code}', width: 10 },
-            { header: 'Nama barang', value: '{item_name}', width: 24 },
+            { header: 'Kode', value: '{item_code}', width: 9 },
+            { header: 'Nama barang', value: '{item_name}', width: 20 },
             { header: 'Satuan', value: '{unit}', width: 6 },
             {
                 header: 'Stok awal',
@@ -28,6 +29,11 @@ function a4(): Uint8Array {
                 value: '{received}',
                 width: 8,
                 align: 'right',
+            },
+            {
+                header: 'Penerimaan per sumber dana',
+                value: '{#received_by_funding_source}{funding_source} {quantity}{^$last}, {/$last}{/received_by_funding_source}',
+                width: 14,
             },
             {
                 header: 'Persediaan',

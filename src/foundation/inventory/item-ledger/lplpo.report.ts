@@ -25,9 +25,11 @@ import { lplpoLayouts } from './lplpo.layout.ts';
 // Berbeda dengan sistem lama, dan disengaja:
 // - Stok awal adalah jumlah kartu gudang sebelum periode, bukan baris saldo awal (JTransaksi 500) pada hari pertama.
 // - Barang yang punya stok tanpa gerak tetap tercetak, karena sisa stoknya tetap dilaporkan.
-// - Permintaan hanya permintaan pembelian lokasi itu; prosedur lama menjumlah permintaan semua lokasi.
-// - Penerimaan per sumber dana (B_Pusat, B_Prov, APBD, Program) tidak ikut: sistem lama memilihnya dari id
-//   subkategori yang ditulis mati.
+// - Permintaan hanya permintaan pembelian lokasi itu; prosedur lama menjumlah permintaan semua lokasi. Permintaan
+//   antarlokasi (amprah) tidak ikut, sama dengan sistem lama: LPLPO meminta ke pemasok, bukan ke gudang sendiri.
+// - Penerimaan dirinci per sumber dana yang tercatat di kartu gudang (master Sumber dana legal entity itu), bukan per
+//   id subkategori yang ditulis mati seperti kolom B_Pusat, B_Prov, APBD, dan Program sistem lama. Penerimaan tanpa
+//   sumber dana, misalnya penyesuaian, tercatat sebagai "Tanpa sumber dana".
 export const lplpoFields = {
     location_code: field.text('Kode lokasi'),
     location_name: field.text('Lokasi'),
@@ -39,6 +41,10 @@ export const lplpoFields = {
         unit: field.text('Satuan dasar'),
         opening: field.quantity('Stok awal'),
         received: field.quantity('Penerimaan'),
+        received_by_funding_source: field.lines('Penerimaan per sumber dana', {
+            funding_source: field.text('Sumber dana'),
+            quantity: field.quantity('Jumlah'),
+        }),
         available: field.quantity('Persediaan (stok awal + penerimaan)'),
         used: field.quantity('Pemakaian'),
         closing: field.quantity('Sisa stok'),
@@ -59,6 +65,9 @@ const lineSchema = z.object({
     unit: z.string(),
     opening: z.string(),
     received: z.string(),
+    received_by_funding_source: z.array(
+        z.object({ funding_source: z.string(), quantity: z.string() }),
+    ),
     available: z.string(),
     used: z.string(),
     closing: z.string(),
@@ -78,6 +87,13 @@ const linesSql = `
         where k.tenant_id = $1 and k.legal_entity_id = $2 and k.lokasi_id = $3 and k.tanggal_posting <= $5::date
         group by k.barang_id
     ),
+    masuk_dana as (
+        select k.barang_id, k.sumber_dana_id, sum(k.jumlah) as jumlah
+        from gd_tr_kartu_gudang k
+        where k.tenant_id = $1 and k.legal_entity_id = $2 and k.lokasi_id = $3
+          and k.tanggal_posting between $4::date and $5::date and k.jumlah > 0
+        group by k.barang_id, k.sumber_dana_id
+    ),
     minta as (
         select r.barang_id, sum(r.jumlah * r.konversi) as jumlah
         from bl_tr_permintaan r
@@ -94,6 +110,12 @@ const linesSql = `
     select b.kode as item_code, b.nama as item_name, s.kode as unit,
            trim_scale(coalesce(g.stok_awal, 0))::text as opening,
            trim_scale(coalesce(g.masuk, 0))::text as received,
+           (select coalesce(json_agg(json_build_object(
+                       'funding_source', coalesce(d.nama, 'Tanpa sumber dana'),
+                       'quantity', trim_scale(md.jumlah)::text) order by d.kode nulls last), '[]'::json)
+            from masuk_dana md
+            left join gd_m_sumber_dana d on d.tenant_id = $1 and d.id = md.sumber_dana_id
+            where md.barang_id = x.barang_id) as received_by_funding_source,
            trim_scale(coalesce(g.stok_awal, 0) + coalesce(g.masuk, 0))::text as available,
            trim_scale(coalesce(g.keluar, 0))::text as used,
            trim_scale(coalesce(g.stok_awal, 0) + coalesce(g.masuk, 0) - coalesce(g.keluar, 0))::text as closing,
@@ -162,6 +184,10 @@ const sample: Values<typeof lplpoFields> = {
             unit: 'TAB',
             opening: '120',
             received: '500',
+            received_by_funding_source: [
+                { funding_source: 'APBD', quantity: '300' },
+                { funding_source: 'Program', quantity: '200' },
+            ],
             available: '620',
             used: '170',
             closing: '450',
@@ -174,6 +200,7 @@ const sample: Values<typeof lplpoFields> = {
             unit: 'SACH',
             opening: '40',
             received: '0',
+            received_by_funding_source: [],
             available: '40',
             used: '15',
             closing: '25',

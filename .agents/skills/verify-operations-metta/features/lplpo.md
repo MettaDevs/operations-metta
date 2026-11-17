@@ -1,6 +1,6 @@
 # LPLPO
 
-Petugas memilih lokasi di Stok per lokasi lalu mencetak LPLPO: per barang stok awal, penerimaan, persediaan, pemakaian, sisa stok, stok optimum, dan permintaan, dari awal bulan tanggal stok sampai tanggal stok. Sisa stok di cetakan sama dengan stok di layar.
+Petugas memilih lokasi di Stok per lokasi lalu mencetak LPLPO: per barang stok awal, penerimaan beserta rinciannya per sumber dana, persediaan, pemakaian, sisa stok, stok optimum, dan permintaan, dari awal bulan tanggal stok sampai tanggal stok. Sisa stok di cetakan sama dengan stok di layar.
 
 ## Sub-features
 
