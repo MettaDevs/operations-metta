@@ -15,7 +15,7 @@ type OperatingUnitRow =
 export type OperatingUnit = OperatingUnitRow & { code: string };
 
 // Lokasi tampil dengan kodenya, karena gudang dan apotek dikenal dari kodenya. transit false menyembunyikan lokasi
-// transit, yang hanya dipakai mutasi. accessible menyembunyikan lokasi khusus petugas yang pengguna bukan petugasnya.
+// transit, yang hanya dipakai mutasi.
 export function LocationLookup({
     transit,
     accessible,

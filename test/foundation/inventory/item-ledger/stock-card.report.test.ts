@@ -12,8 +12,6 @@ import { documentText } from '../../../support/receipt-fixture.ts';
 type Reference = { id: string; code: string; name: string; version: number };
 type Refusal = { errors: Record<string, string[]> };
 
-// Kartu stok satu barang di satu lokasi dan satu periode (report "Inventory - Transaction Detail" BC): saldo awal dari
-// gerak sebelum periode, gerak dalam periode dengan saldo berjalan, lalu saldo akhir yang sama dengan kartu gudang.
 describe.skipIf(!process.env.DB_HOST)('stock card', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();

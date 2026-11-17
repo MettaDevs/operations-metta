@@ -366,8 +366,7 @@ export class OtcSales {
 
     // Pencarian obat di loket: barang legal entity ini yang tidak diblokir, sama dengan yang diterima quote, dengan
     // pilihan satuannya (satuan dasar lebih dulu) dan satuan jual bawaannya. Stok dalam satuan dasar hanya diisi untuk
-    // lokasi yang boleh menjual obat bebas. substitutes_of membatasi hasilnya ke obat pengganti satu obat, yang ditawarkan
-    // loket saat stok obat itu kurang (Item Substitution BC pada baris penjualan).
+    // lokasi yang boleh menjual obat bebas.
     async items(parameters: URLSearchParams) {
         this.workspace.guard('otc-sale', 'read');
         const scope = this.scope;
@@ -613,8 +612,7 @@ export class OtcSales {
     }
 
     // Daftar penjualan menurut tanggal penjualan (from dan to, keduanya opsional), dimuat bertahap, terbaru lebih dulu.
-    // total adalah yang ditagih kasir sesudah retur; paid berarti ada pembayaran kasir yang masih berlaku. Penjualan di
-    // lokasi khusus petugas hanya tampil bagi petugasnya, sama dengan antrean resep.
+    // total adalah yang ditagih kasir sesudah retur; paid berarti ada pembayaran kasir yang masih berlaku.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('otc-sale', 'read');
         const bindings: Bind[] = [
@@ -676,7 +674,6 @@ export class OtcSales {
     }
 
     // Kartu penjualan: kepala, lalu baris dengan jumlah terjual, jumlah yang masih ditagih sesudah retur, dan nilainya.
-    // Penjualan di lokasi khusus petugas yang dibuka lewat alamatnya ditolak dengan nama lokasinya, bukan 404.
     async show(id: string) {
         this.workspace.guard('otc-sale', 'read');
         const scope = this.scope;

@@ -148,9 +148,6 @@ function useLoader<T>(
     );
 }
 
-// Lokasi stok biasa untuk peminta dan pemasok, lokasi transit hanya untuk barang dalam perjalanan. Peminta adalah lokasi
-// pengguna sendiri, jadi lokasi khusus petugas hanya ditawarkan kepada petugasnya. Pemasok tetap terbuka semua, karena
-// amprah meminta barang dari lokasi lain (Warehouse Employee BC membatasi tempat orang bekerja, bukan tujuan mintanya).
 const locationsWhere =
     (transit: boolean, accessible: boolean) =>
     async (query: { q: string; cursor?: string }, signal: AbortSignal) => {

@@ -52,8 +52,7 @@ const saleLocationSchema = z.object({
 export type SaleLocation = z.infer<typeof saleLocationSchema>;
 
 // Lokasi yang boleh menjual obat bebas beserta kelompok harga bawaannya, untuk loket. Lokasi yang dihapus atau
-// dijadikan transit sesudah diatur tidak lagi menjual. Dengan user, lokasi khusus petugas yang bukan tempat user bertugas
-// tidak ikut.
+// dijadikan transit sesudah diatur tidak lagi menjual.
 export async function saleLocations(
     db: Database,
     scope: Scope,

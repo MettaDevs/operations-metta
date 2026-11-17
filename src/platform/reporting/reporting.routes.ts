@@ -33,7 +33,6 @@ function query(context: Context) {
     );
 }
 
-// Query cetak tanpa format dan layout: parameter laporan yang diteruskan ke dataset.
 function reportParameters(context: Context) {
     const parameters = new URL(context.request.url).searchParams;
     parameters.delete('format');

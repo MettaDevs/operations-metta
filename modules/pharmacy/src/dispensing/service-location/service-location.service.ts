@@ -116,8 +116,6 @@ export class ServiceLocations {
         };
     }
 
-    // accessible=true dipakai layar yang mengubah stok, misalnya penyerahan resep: lokasi khusus petugas hanya
-    // ditawarkan kepada petugasnya. Layar setelan tetap melihat semua lokasi.
     async locations(parameters: URLSearchParams) {
         this.guardLookup();
         const scope = this.scope;

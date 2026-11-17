@@ -20,7 +20,7 @@ const batchJson = `case when t.id is null then null else json_build_object(
                        'id', t.id, 'batch_number', t.no_batch, 'expiry_date', t.kedaluwarsa) end`;
 
 // Stok dan kartu stok legal entity aktif, dibaca langsung dari kartu gudang. Tidak ada saldo yang disimpan: stok adalah
-// jumlah sisa baris terbuka, dan saldo kartu stok dijumlahkan saat dibaca. Lokasi khusus petugas hanya terbaca petugasnya.
+// jumlah sisa baris terbuka, dan saldo kartu stok dijumlahkan saat dibaca.
 export class ItemLedger {
     constructor(
         private readonly db: Database,

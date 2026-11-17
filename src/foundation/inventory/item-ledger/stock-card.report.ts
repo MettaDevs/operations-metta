@@ -19,9 +19,6 @@ import { entryKinds } from './item-ledger.posting.ts';
 import { movementLabel } from './movement.ts';
 import { stockCardLayouts } from './stock-card.layout.ts';
 
-// Kartu stok satu barang di satu lokasi dalam satu periode, padanan report "Inventory - Transaction Detail" (704) BC
-// atas Item Ledger Entries: saldo awal, setiap gerak dengan saldo berjalannya, lalu saldo akhir. Record-nya barang;
-// lokasi dan periode adalah parameter cetak, seperti request page report itu. Jumlah dalam satuan dasar.
 export const stockCardFields = {
     item_code: field.text('Kode barang'),
     item_name: field.text('Nama barang'),

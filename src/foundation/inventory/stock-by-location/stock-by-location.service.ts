@@ -40,7 +40,7 @@ type Group = {
 // Stok per lokasi per tanggal (Inventory - Availability di BC): jumlah kartu gudang sampai tanggal itu per barang,
 // lokasi, dan batch, beserta nilainya. Lokasi transit tidak ikut kecuali dipilih sebagai saringan lokasi. Bila stok
 // minus pernah diizinkan, kekurangan yang belum tertutup tercatat tanpa batch, jadi baris batch dan baris tanpa batch
-// bisa berlawanan tanda; total barangnya tetap benar. Lokasi khusus petugas hanya tampil bagi petugasnya.
+// bisa berlawanan tanda; total barangnya tetap benar.
 export class StockByLocation {
     constructor(
         private readonly db: Database,

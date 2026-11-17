@@ -79,7 +79,6 @@ export function PrintAction({
 }: {
     report: string;
     recordId: string;
-    // Parameter laporan selain record, misalnya lokasi dan periode kartu stok.
     parameters?: Record<string, string>;
     label?: string;
 }): ReactNode {

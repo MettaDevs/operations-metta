@@ -9,9 +9,6 @@ import {
 import { operationsTestApp } from '../../../support/operations-app.ts';
 import { documentText } from '../../../support/receipt-fixture.ts';
 
-// LPLPO satu lokasi satu periode, kolom prosedur SIMPUS_LPLPO sistem lama: stok awal dari kartu gudang sebelum periode,
-// penerimaan dan pemakaian dalam periode, persediaan, sisa stok, stok optimum dari stok maksimum lokasi, dan permintaan
-// pembelian lokasi itu. Penerimaan dirinci per sumber dana kartu gudang, dari master Sumber dana, bukan nama tetap.
 describe.skipIf(!process.env.DB_HOST)('lplpo', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -168,8 +165,13 @@ describe.skipIf(!process.env.DB_HOST)('lplpo', () => {
             }),
             201,
         );
-        // Dibuat 31 Oktober pukul 18.00 UTC, yaitu 1 November di zona waktu Indonesia mana pun.
-        await requested(warehouse, asked, 15, '2026-10-31 18:00:00');
+        const firstNovemberInEveryIndonesianTimeZone = '2026-10-31 18:00:00';
+        await requested(
+            warehouse,
+            asked,
+            15,
+            firstNovemberInEveryIndonesianTimeZone,
+        );
         await requested(warehouse, asked, 4, '2026-10-20 03:00:00');
         await requested(pharmacy, asked, 99, '2026-11-10 03:00:00');
     });
