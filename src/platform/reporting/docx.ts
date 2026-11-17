@@ -128,7 +128,8 @@ export type Paragraph = {
 };
 
 export type Cell = { content: Paragraph[]; span?: number };
-export type Row = { cells: Cell[]; header?: boolean };
+// cantSplit menahan satu baris tabel di satu halaman, misalnya kotak tanda tangan yang tidak boleh terbelah.
+export type Row = { cells: Cell[]; header?: boolean; cantSplit?: boolean };
 export type Table = {
     kind: 'table';
     widths: number[];
@@ -230,7 +231,8 @@ function tableXml(block: Table, contentWidth: number): string {
                     return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''}</w:tcPr>${item.content.map(paragraphXml).join('')}</w:tc>`;
                 })
                 .join('');
-            return `<w:tr>${row.header ? '<w:trPr><w:tblHeader/></w:trPr>' : ''}${cells}</w:tr>`;
+            const properties = `${row.header ? '<w:tblHeader/>' : ''}${row.cantSplit ? '<w:cantSplit/>' : ''}`;
+            return `<w:tr>${properties ? `<w:trPr>${properties}</w:trPr>` : ''}${cells}</w:tr>`;
         })
         .join('');
     return `<w:tbl><w:tblPr><w:tblW w:w="${contentWidth}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>${borders}</w:tblBorders><w:tblCellMar><w:left w:w="57" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${twips.map((width) => `<w:gridCol w:w="${width}"/>`).join('')}</w:tblGrid>${rows}</w:tbl>`;

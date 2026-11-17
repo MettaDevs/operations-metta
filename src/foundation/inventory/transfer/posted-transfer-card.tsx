@@ -23,6 +23,7 @@ import {
     api,
     errorText,
     FormErrorHeader,
+    PrintAction,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import { divideRounded } from '../../../platform/money/index.ts';
@@ -134,6 +135,19 @@ export function PostedTransferCard({
                         <Undo2 aria-hidden="true" />
                         Batal posting
                     </Button>
+                )}
+                {kind === 'shipment' ? (
+                    <PrintAction
+                        report="core.transfer-shipment"
+                        recordId={document.id}
+                        label="Mutasi"
+                    />
+                ) : (
+                    <PrintAction
+                        report="core.transfer-receipt"
+                        recordId={document.id}
+                        label="Penerimaan"
+                    />
                 )}
                 {orderLink && (
                     <Button asChild variant="ghost" size="command">
