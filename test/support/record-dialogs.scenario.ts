@@ -76,6 +76,10 @@ const pages: RecordPages = {
                 h('button', { type: 'submit' }, 'Batal Pembayaran'),
             ),
     },
+    'core.inventory-location': {
+        title: 'Petugas lokasi',
+        component: ({ id }) => h('p', null, `Petugas lokasi ${id}`),
+    },
 };
 
 function ReturnForm(): React.ReactNode {

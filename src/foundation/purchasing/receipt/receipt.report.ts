@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../../inventory/index.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -97,6 +98,7 @@ async function receipt(db: Database, workspace: Workspace, receiptId: string) {
         db,
         workspace.tenantId,
     ).precision(localCurrencyCode);
+    const bindings = [workspace.tenantId, workspace.legalEntityId, receiptId];
     const row = await db.one(
         receiptSchema,
         `select h.operating_unit_id, h.nomor as number, h.tanggal::text as posting_date,
@@ -132,8 +134,8 @@ async function receipt(db: Database, workspace: Workspace, receiptId: string) {
              left join gd_m_sumber_dana dana on dana.tenant_id = d.tenant_id and dana.id = d.sumber_dana_id
              left join gd_m_program_pengadaan program
                     on program.tenant_id = d.tenant_id and program.id = d.program_pengadaan_id) t on true
-         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null`,
-        [workspace.tenantId, workspace.legalEntityId, receiptId],
+         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null and ${allowedLocationsSql(workspace, bindings, ['h.lokasi_id'])}`,
+        bindings,
     );
     if (!row) return null;
     const { operating_unit_id, ...values } = row;

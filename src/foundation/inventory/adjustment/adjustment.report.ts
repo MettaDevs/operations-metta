@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../warehouse-employee/location-access.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -76,6 +77,12 @@ async function adjustment(
 ) {
     workspace.guard('inventory-adjustment', 'read');
     if (!lookupId(adjustmentId) || !workspace.legalEntityId) return null;
+    const bindings = [
+        workspace.tenantId,
+        workspace.legalEntityId,
+        adjustmentId,
+        sourceType,
+    ];
     const row = await db.one(
         adjustmentSchema,
         `select h.operating_unit_id, h.nomor as number, h.tanggal::text as posting_date,
@@ -114,8 +121,8 @@ async function adjustment(
                    and d.deleted_at is null) e
              join gd_m_barang b on b.tenant_id = h.tenant_id and b.id = e.barang_id
              join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id) t on true
-         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null`,
-        [workspace.tenantId, workspace.legalEntityId, adjustmentId, sourceType],
+         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null and ${allowedLocationsSql(workspace, bindings, ['h.lokasi_id'])}`,
+        bindings,
     );
     if (!row) return null;
     const { operating_unit_id, ...values } = row;

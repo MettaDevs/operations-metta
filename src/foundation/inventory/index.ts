@@ -12,6 +12,7 @@ import { stockCountRoutes } from './stock-count/stock-count.routes.ts';
 import { stockkeepingUnitRoutes } from './stockkeeping-unit/stockkeeping-unit.routes.ts';
 import { trackingCodeRoutes } from './tracking-code/tracking-code.routes.ts';
 import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
+import { warehouseEmployeeRoutes } from './warehouse-employee/warehouse-employee.routes.ts';
 
 // Persediaan Core, pola Business Central: master per legal entity, satu kartu gudang dengan sisa per baris, dan satu
 // mesin posting. Module yang menggerakkan stok (farmasi, penerimaan, mutasi) memanggil postItemLines di dalam transaksi
@@ -20,7 +21,14 @@ import { transferOrderRoutes } from './transfer/transfer-order.routes.ts';
 // menyebut periodenya, jadi setiap pemanggil mendapat aturan dan pesan yang sama tanpa memeriksanya sendiri.
 // Module yang memperluas barang (pola table extension BC, misalnya obat layanan kesehatan) menulis barangnya lewat
 // createItem, updateItem, dan deleteItem di transaksi yang sama dengan baris perluasannya.
+// Lokasi yang ditandai khusus petugas hanya terbuka bagi petugasnya (Warehouse Employee BC). Setiap dokumen stok, di Core
+// maupun di module, menyaring daftarnya lewat allowedLocationsSql dan menolak tindakannya lewat requireLocationAccess.
 export { activeLegalEntity, exists, parseInput } from './inventory.service.ts';
+export {
+    allowedLocationsSql,
+    defaultLocation,
+    requireLocationAccess,
+} from './warehouse-employee/location-access.ts';
 export { type Funding } from './item-ledger/allocation.ts';
 export {
     entryKinds,
@@ -70,6 +78,7 @@ export function inventoryRoutes() {
         ...inventorySetupRoutes(),
         ...inventoryPeriodRoutes(),
         ...locationRoutes(),
+        ...warehouseEmployeeRoutes(),
         ...codeListRoutes(),
         ...trackingCodeRoutes(),
         ...itemCategoryRoutes(),

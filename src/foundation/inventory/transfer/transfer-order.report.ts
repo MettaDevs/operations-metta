@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../warehouse-employee/location-access.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -76,6 +77,7 @@ async function transferOrder(
 ) {
     workspace.guard('inventory-transfer', 'read');
     if (!lookupId(orderId) || !workspace.legalEntityId) return null;
+    const bindings = [workspace.tenantId, workspace.legalEntityId, orderId];
     const row = await db.one(
         orderSchema,
         `select peminta.operating_unit_id, a.nomor as number, a.tanggal::text as posting_date,
@@ -104,8 +106,8 @@ async function transferOrder(
          left join gd_m_lokasi transit on transit.tenant_id = a.tenant_id and transit.id = a.lokasi_transit_id
          left join users diajukan on diajukan.id = a.diajukan_oleh_user_id
          left join users pembuat on pembuat.id = a.created_by_user_id
-         where a.tenant_id = $1 and a.legal_entity_id = $2 and a.id = $3 and a.deleted_at is null`,
-        [workspace.tenantId, workspace.legalEntityId, orderId],
+         where a.tenant_id = $1 and a.legal_entity_id = $2 and a.id = $3 and a.deleted_at is null and ${allowedLocationsSql(workspace, bindings, ['a.lokasi_pemasok_id', 'a.lokasi_peminta_id'])}`,
+        bindings,
     );
     if (!row) return null;
     const { operating_unit_id, ...values } = row;

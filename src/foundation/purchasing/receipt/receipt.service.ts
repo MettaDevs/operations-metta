@@ -22,11 +22,13 @@ import {
     defaultUnit,
     exists,
     fromNumeric,
+    allowedLocationsSql,
     parseInput,
     postItemLines,
     quantityHint,
     quantityScale,
     raiseBasePrices,
+    requireLocationAccess,
     reverseItemEntries,
     toNumeric,
     unitConversion,
@@ -100,6 +102,7 @@ export const lineAmountSql = (alias: string, amountDecimals: number) =>
 const rowSql = (amountDecimals: number) => `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
                            h.no_dokumen_vendor as vendor_document_number, h.keterangan as description,
+                           h.lokasi_id as location_id,
                            p.name as vendor_name, l.kode as location_code, h.termasuk_ppn as prices_including_vat,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
@@ -197,9 +200,9 @@ export class Receipts {
         const status = z
             .enum(receiptStatuses)
             .safeParse(parameters.get('status'));
-        const filter = status.success
-            ? ` and status = $${bindings.push(status.data)}`
-            : '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
+        if (status.success)
+            filter += ` and status = $${bindings.push(status.data)}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql(await this.amountDecimals())}${filter}`,
             bindings,
@@ -246,11 +249,12 @@ export class Receipts {
     }
 
     private async header(id: string) {
+        const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
                   receiptRowSchema,
-                  `${rowSql(await this.amountDecimals())} and receipts.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, id],
+                  `${rowSql(await this.amountDecimals())} and receipts.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
@@ -339,6 +343,15 @@ export class Receipts {
         else if (location.transit)
             errors.location_id =
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
+        else
+            await requireLocationAccess(
+                this.db,
+                this.workspace,
+                [location.id],
+                {
+                    field: 'location_id',
+                },
+            );
         const vendorDocument = data.vendor_document_number?.trim() || null;
         if (vendorDocument && vendorDocument.length > 50)
             errors.vendor_document_number = messages.vendor_document_number;

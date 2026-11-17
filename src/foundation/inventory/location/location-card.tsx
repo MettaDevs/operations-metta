@@ -39,6 +39,7 @@ const formOf = (location: Location | null) => ({
         ? ({ ...location.operating_unit, code: '' } satisfies Reference)
         : null,
     isTransit: location?.is_transit ?? false,
+    restricted: location?.restricted_to_employees ?? false,
     picking: location?.picking_method ?? null,
     transferMode: location?.transfer_mode ?? null,
 });
@@ -80,6 +81,7 @@ export function LocationCard({
             name: form.name,
             operating_unit_id: form.operatingUnit?.id ?? '',
             is_transit: form.isTransit,
+            restricted_to_employees: form.restricted,
             picking_method: form.picking,
             transfer_mode: form.transferMode,
         };
@@ -195,6 +197,9 @@ export function LocationCard({
                             summary={[
                                 form.operatingUnit?.name,
                                 form.isTransit ? 'Lokasi transit' : null,
+                                form.restricted
+                                    ? 'Khusus petugas lokasi'
+                                    : null,
                             ]
                                 .filter(Boolean)
                                 .join(' · ')}
@@ -269,6 +274,31 @@ export function LocationCard({
                                             className="font-normal"
                                         >
                                             Lokasi transit
+                                        </FieldLabel>
+                                    </Field>
+                                </FormControl>
+                                <FormControl
+                                    error={errors.restricted_to_employees?.[0]}
+                                    hint="Bila dinyalakan, resep dan dokumen stok lokasi ini hanya terlihat dan bisa dikerjakan pengguna yang terdaftar di Petugas lokasi. Bila mati, semua pengguna yang punya izin dokumennya bisa memakai lokasi ini."
+                                    data-error-field="restricted_to_employees"
+                                >
+                                    <Field
+                                        orientation="horizontal"
+                                        className="w-auto"
+                                    >
+                                        <Switch
+                                            id="location-restricted"
+                                            checked={form.restricted}
+                                            disabled={!editing}
+                                            onCheckedChange={(restricted) =>
+                                                setForm({ ...form, restricted })
+                                            }
+                                        />
+                                        <FieldLabel
+                                            htmlFor="location-restricted"
+                                            className="font-normal"
+                                        >
+                                            Khusus petugas lokasi
                                         </FieldLabel>
                                     </Field>
                                 </FormControl>
