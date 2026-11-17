@@ -148,20 +148,27 @@ function useLoader<T>(
     );
 }
 
-// Lokasi stok biasa untuk peminta dan pemasok, lokasi transit hanya untuk barang dalam perjalanan.
+// Lokasi stok biasa untuk peminta dan pemasok, lokasi transit hanya untuk barang dalam perjalanan. Peminta adalah lokasi
+// pengguna sendiri, jadi lokasi khusus petugas hanya ditawarkan kepada petugasnya. Pemasok tetap terbuka semua, karena
+// amprah meminta barang dari lokasi lain (Warehouse Employee BC membatasi tempat orang bekerja, bukan tujuan mintanya).
 const locationsWhere =
-    (transit: boolean) =>
+    (transit: boolean, accessible: boolean) =>
     async (query: { q: string; cursor?: string }, signal: AbortSignal) => {
-        const { body } = await api.inventoryLocationList({ query }, { signal });
-        return {
-            items: body.data.filter(
-                (location: Location) => location.is_transit === transit,
-            ),
-            nextCursor: body.next_cursor,
-        };
+        const { body } = await api.inventoryLocationList(
+            {
+                query: {
+                    ...query,
+                    transit: transit ? 'true' : 'false',
+                    ...(accessible ? { accessible: 'true' } : {}),
+                },
+            },
+            { signal },
+        );
+        return { items: body.data, nextCursor: body.next_cursor };
     };
-const loadStockLocations = locationsWhere(false);
-const loadTransitLocations = locationsWhere(true);
+const loadRequestingLocations = locationsWhere(false, true);
+const loadSupplyingLocations = locationsWhere(false, false);
+const loadTransitLocations = locationsWhere(true, false);
 const loadItems = async (
     query: { q: string; cursor?: string },
     signal: AbortSignal,
@@ -392,7 +399,8 @@ export function TransferOrderCard({
     } | null>(null);
     const postingDialog = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
-    const stockLocations = useLoader(loadStockLocations);
+    const requestingLocations = useLoader(loadRequestingLocations);
+    const supplyingLocations = useLoader(loadSupplyingLocations);
     const transitLocations = useLoader(loadTransitLocations);
     const itemLoader = useLoader(loadItems);
     const stored = new Map<string, StoredLine>(
@@ -957,7 +965,7 @@ export function TransferOrderCard({
                                 field="to_location_id"
                                 error={error('to_location_id')}
                                 value={header.to_location}
-                                loader={stockLocations}
+                                loader={requestingLocations}
                                 required
                                 portalContainer={portalContainer}
                                 onPick={(to_location) =>
@@ -983,7 +991,7 @@ export function TransferOrderCard({
                                 field="from_location_id"
                                 error={error('from_location_id')}
                                 value={header.from_location}
-                                loader={stockLocations}
+                                loader={supplyingLocations}
                                 required
                                 portalContainer={portalContainer}
                                 onPick={(from_location) =>

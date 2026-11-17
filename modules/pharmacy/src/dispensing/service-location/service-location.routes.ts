@@ -86,7 +86,7 @@ export function serviceLocationRoutes() {
                 ),
             ),
         pharmacyLocationLookup: route('GET', '/lookups/locations')
-            .input(typedQuery<ListQuery>())
+            .input(typedQuery<ListQuery & { accessible?: 'true' }>())
             .handler(async ({ context }) =>
                 ok(
                     await (

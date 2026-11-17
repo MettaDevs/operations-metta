@@ -17,6 +17,7 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    allowedLocationsSql,
     parseInput,
 } from '@core/foundation/inventory/index.ts';
 import {
@@ -115,14 +116,21 @@ export class ServiceLocations {
         };
     }
 
+    // accessible=true dipakai layar yang mengubah stok, misalnya penyerahan resep: lokasi khusus petugas hanya
+    // ditawarkan kepada petugasnya. Layar setelan tetap melihat semua lokasi.
     async locations(parameters: URLSearchParams) {
         this.guardLookup();
         const scope = this.scope;
+        const bindings: Bind[] = [scope.tenantId, scope.legalEntityId];
+        const allowed =
+            parameters.get('accessible') === 'true'
+                ? ` and ${allowedLocationsSql(this.workspace, bindings, ['l.id'])}`
+                : '';
         const batch = await incrementalList(this.db, {
-            query: `select * from (select id, kode as code, nama as name from gd_m_lokasi
-                                   where tenant_id = $1 and legal_entity_id = $2 and deleted_at is null
-                                     and not transit) locations where true`,
-            bindings: [scope.tenantId, scope.legalEntityId],
+            query: `select * from (select l.id, l.kode as code, l.nama as name from gd_m_lokasi l
+                                   where l.tenant_id = $1 and l.legal_entity_id = $2 and l.deleted_at is null
+                                     and not l.transit${allowed}) locations where true`,
+            bindings,
             parameters,
             columns: { code: 'code' },
             searchColumns: ['code', 'name'],

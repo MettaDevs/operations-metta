@@ -681,6 +681,7 @@ function DispensingForm({
                         >
                             <FormGrid>
                                 <LocationLookup
+                                    accessible
                                     label="Lokasi farmasi"
                                     required
                                     field="location_id"

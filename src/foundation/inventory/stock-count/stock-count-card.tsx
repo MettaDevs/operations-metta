@@ -750,6 +750,7 @@ export function StockCountCard({
                 <PageDialogBody className="space-y-4 py-3">
                     <FormGrid>
                         <LocationLookup
+                            accessible
                             label="Lokasi"
                             required
                             transit={false}
