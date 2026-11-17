@@ -3,8 +3,6 @@ import { reorderQuantity } from '../../../../src/foundation/purchasing/requisiti
 
 const units = (value: number) => BigInt(value) * 10_000n;
 
-// Rumus CalcOrderQty BC dengan angka yang dihitung tangan dari definisi Reorder Point, Reorder Quantity, dan Maximum
-// Inventory, bukan dari kode yang diuji.
 describe('reorder quantity', () => {
     const fixed = {
         policy: 'jumlah_tetap',

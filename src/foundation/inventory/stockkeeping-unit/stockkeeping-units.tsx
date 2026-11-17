@@ -30,9 +30,6 @@ import type { Item } from '../item/item-lookup.tsx';
 import { LocationLookup } from '../location/location-lookup.tsx';
 import type { Reference } from '@operations-metta/ui/master-lookup';
 
-// Stok minimum dan maksimum barang per lokasi (Stockkeeping Unit di BC) beserta cara pesan ulangnya, sebagai bagian
-// kartu barang. Setiap baris disimpan lewat kartunya sendiri, seperti kartu Stockkeeping Unit di BC.
-
 type Level = ApiBody<'inventoryStockkeepingUnitList'>['data'][number];
 type Policy = NonNullable<Level['reordering_policy']>;
 type Errors = Record<string, string[]>;

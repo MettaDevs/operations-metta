@@ -174,8 +174,6 @@ export class StockkeepingUnits {
         )
             errors.maximum_quantity =
                 'Stok maksimum tidak boleh lebih kecil dari stok minimum.';
-        // Syarat kebijakan dari codeunit "Inventory Profile Offsetting" BC: Fixed Reorder Qty. menolak Reorder Quantity
-        // kosong, dan Maximum Qty. menolak Maximum Inventory yang tidak di atas Reorder Point.
         if (policy !== null && minimum === null)
             errors.minimum_quantity =
                 'Isi stok minimum. Saran pesan dibuat saat stok sampai di angka ini.';

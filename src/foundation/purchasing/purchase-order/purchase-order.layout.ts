@@ -5,8 +5,6 @@ import {
     type BuiltinLayout,
 } from '../../../platform/reporting/index.ts';
 
-// Layout bawaan purchase order: A4 tegak, karena order dikirim ke vendor tanpa batch, kedaluwarsa, atau sumber dana.
-// Yang memesan menandatangani dengan namanya; vendor menandatangani sebagai yang menerima pesanan.
 function a4(): Uint8Array {
     return inventoryDocument({
         title: 'PURCHASE ORDER',

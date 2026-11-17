@@ -33,8 +33,6 @@ import {
     type PurchaseOrderPermissions,
 } from './purchase-order-card.tsx';
 
-// Purchase order ke vendor (Purchase Orders di BC). Terbuka atau dirilis.
-
 const route = getRouteApi('/_app/sysadmin/purchasing/orders');
 type Row = ApiBody<'purchasingOrderList'>['data'][number];
 const searchSchema = z.object({ q: z.string().max(200).optional() });
@@ -50,7 +48,6 @@ function PurchaseOrdersPage(): ReactNode {
     const navigate = route.useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState<PurchaseOrder | 'new' | null>(null);
-    // Kartu dipasang ulang hanya saat order lain dibuka; menyimpan atau merilis tetap di kartu yang sama.
     const [opened, setOpened] = useState(0);
     const openCard = (target: PurchaseOrder | 'new') => {
         setOpened((count) => count + 1);
@@ -270,7 +267,6 @@ function PurchaseOrdersPage(): ReactNode {
     );
 }
 
-// Purchase order yang dibuka dari kotak error, misalnya saat posting penerimaannya ditolak karena order dibuka lagi.
 function PurchaseOrderRecord({ id }: { id: string }): ReactNode {
     const { data } = useSuspenseQuery(
         orpc.purchasingOrderShow.queryOptions({

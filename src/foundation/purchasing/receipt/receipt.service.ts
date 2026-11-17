@@ -517,7 +517,6 @@ export class Receipts {
                 );
     }
 
-    // Order asal penerimaan beserta baris yang boleh diterima, dibaca saat draf penerimaannya disimpan.
     private async orderOf(orderId: string) {
         const order = await this.db.one(
             z.object({ vendor_id: z.string(), location_id: z.string() }),
@@ -534,9 +533,6 @@ export class Receipts {
         return { ...order, lines: new Set(lines.map((line) => line.id)) };
     }
 
-    // Terima barang dari purchase order: draf penerimaan berisi sisa setiap baris order dengan harga, diskon, dan PPN
-    // order, seperti Qty. to Receive yang terisi Outstanding Quantity di BC. Petugas mengubah jumlah yang benar-benar
-    // datang, mengisi batch dan kedaluwarsa, lalu memposting. Satu order hanya punya satu draf penerimaan pada satu waktu.
     async createFromOrder(orderId: string, body: unknown) {
         this.workspace.guard('purchase-receipt', 'update');
         const input = z.object({ posting_date: z.string() }).safeParse(body);

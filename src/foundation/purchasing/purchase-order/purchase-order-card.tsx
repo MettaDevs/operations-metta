@@ -138,8 +138,6 @@ function linesOf(order: PurchaseOrder | null): Line[] {
     }));
 }
 
-// Purchase order ke vendor: kepala order lalu baris barang, seperti Purchase Order BC. Order terbuka disimpan dengan
-// Simpan; Rilis menyimpan perubahan yang tertunda lebih dulu, lalu mengunci order. Buka lagi membukanya untuk diubah.
 export function PurchaseOrderCard({
     order: initial,
     permissions,
@@ -307,8 +305,6 @@ export function PurchaseOrderCard({
             }
         });
 
-    // Terima barang membuat draf penerimaan berisi sisa order, lalu membukanya di atas order. Jumlah diterima di order
-    // berubah saat penerimaan itu diposting, jadi order dimuat ulang sesudah jendela penerimaan ditutup.
     const receive = () =>
         run(async () => {
             if (!order) return;
@@ -380,7 +376,6 @@ export function PurchaseOrderCard({
                     quantity: '',
                     unit_cost: '',
                     discount_percent: '',
-                    // Satu order biasanya satu PPN %, jadi baris baru meneruskan PPN baris sebelumnya.
                     vat_percent: previous?.vat_percent ?? '',
                     expected_receipt_date: '',
                     quantity_received: '0',

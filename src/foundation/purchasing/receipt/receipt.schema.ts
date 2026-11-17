@@ -26,7 +26,6 @@ export const receiptLineInputSchema = z.object({
     funding_source_id: z.string().nullable().optional(),
     procurement_program_id: z.string().nullable().optional(),
     budget_year: z.number().nullable().optional(),
-    // Baris purchase order asal baris ini; hanya untuk penerimaan yang dibuat dari order.
     order_line_id: z.string().nullable().optional(),
 });
 
@@ -62,7 +61,6 @@ export const receiptLineRowSchema = z.object({
     procurement_program: reference.nullable(),
     budget_year: z.number().nullable(),
     order_line_id: z.string().nullable(),
-    // Sisa baris order yang belum diterima, dalam satuan baris; kosong untuk baris tanpa order.
     order_outstanding: z.string().nullable(),
 });
 

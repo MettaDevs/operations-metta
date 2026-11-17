@@ -50,8 +50,6 @@ import {
 const numberReference = 'core.purchase-order-number';
 const sourceType = 'purchase_order';
 
-// Release dan Reopen di BC (codeunit 415 "Release Purchase Document"). Rilis mencatat kapan dan oleh siapa; Buka lagi
-// mengosongkannya.
 const transitions = {
     release: { from: 'terbuka', to: 'dirilis', released: true },
     reopen: { from: 'dirilis', to: 'terbuka', released: false },
@@ -103,8 +101,6 @@ const messages = {
     payment_terms_id: 'Pilih termin pembayaran dari daftar.',
 };
 
-// Purchase order ke vendor (Purchase Order di BC). Order terbuka boleh diubah dan dihapus; Rilis menguncinya supaya
-// isinya sama dengan yang dikirim ke vendor, dan Buka lagi membukanya untuk diubah.
 export class PurchaseOrders {
     constructor(
         private readonly db: Database,
@@ -165,7 +161,6 @@ export class PurchaseOrders {
         };
     }
 
-    // Izin order, ditambah izin membuat vendor untuk pilihan Baru di layar.
     private permissions() {
         const has = (permission: string) =>
             this.workspace.permissions.has(`core.${permission}`);
@@ -325,8 +320,6 @@ export class PurchaseOrders {
         };
     }
 
-    // Baris yang sudah diterima sebagian tetap ada, barang dan satuannya tetap, dan jumlahnya tidak boleh kurang dari
-    // yang sudah diterima, seperti validasi Quantity terhadap Quantity Received di Purchase Line BC.
     private async saveLines(orderId: string, lines: LineDraft[]) {
         const stored = await this.db.rows(
             z.object({
@@ -372,7 +365,6 @@ export class PurchaseOrders {
         const saved = new Set<string>();
         const stamp = nowSql();
         for (const [index, line] of lines.entries()) {
-            // Urutan kunci sama dengan urutan kolom di update di bawah.
             const values = {
                 urutan: index + 1,
                 barang_id: line.itemId,
@@ -404,7 +396,20 @@ export class PurchaseOrders {
                         jumlah = $5, harga_satuan = $6, diskon_persen = $7, tarif_ppn = $8,
                         tanggal_diharapkan = $9, updated_at = $10
                  where tenant_id = $11 and id = $12`,
-                [...Object.values(values), stamp, this.scope.tenantId, line.id],
+                [
+                    values.urutan,
+                    values.barang_id,
+                    values.satuan_id,
+                    values.konversi,
+                    values.jumlah,
+                    values.harga_satuan,
+                    values.diskon_persen,
+                    values.tarif_ppn,
+                    values.tanggal_diharapkan,
+                    stamp,
+                    this.scope.tenantId,
+                    line.id,
+                ],
             );
         }
         for (const id of existing.keys())
@@ -454,7 +459,6 @@ export class PurchaseOrders {
         return locked;
     }
 
-    // Kepala order dikunci lebih dulu, supaya dua penyimpanan bersamaan tidak menyatukan dua set baris.
     private async lockOpen(id: string, version: number, refusal: string) {
         const locked = await this.lockHeader(id);
         if (locked.status === 'selesai')
@@ -506,7 +510,6 @@ export class PurchaseOrders {
         };
     }
 
-    // Order yang barangnya sudah datang, atau yang sedang diterima lewat draf penerimaan, tetap ada sebagai rujukan.
     private async refuseReceived(id: string) {
         const usage = await this.db.one(
             z.object({
@@ -565,8 +568,6 @@ export class PurchaseOrders {
         return { status: 204, headers: {}, body: undefined };
     }
 
-    // Status berpindah dengan compare-and-set. Permintaan yang diulang setelah order sampai di status tujuan tidak
-    // menulis apa pun dan menjawab order yang sama.
     private async transition(
         id: string,
         version: number,
@@ -599,7 +600,6 @@ export class PurchaseOrders {
         return coded(409, 'stale_version', staleMessage);
     }
 
-    // Seperti Release di BC: order tanpa baris tidak bisa dirilis, dan vendornya harus masih aktif.
     async release(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-order', 'release');
         const current = await this.header(id);
@@ -650,8 +650,6 @@ export class PurchaseOrders {
     }
 }
 
-// Order dirilis yang semua barisnya sudah diterima menjadi selesai; order selesai yang barisnya kembali bersisa, karena
-// posting penerimaannya dibatalkan, kembali dirilis.
 async function settleOrder(db: Database, tenantId: string, orderId: string) {
     await db.execute(
         `update bl_tr_order h
@@ -667,7 +665,6 @@ async function settleOrder(db: Database, tenantId: string, orderId: string) {
 }
 
 export type OrderReceiptLine = {
-    // Indeks baris di dokumen penerimaan, untuk menempelkan kesalahan ke barisnya.
     index: number;
     orderLineId: string;
     itemId: string;
@@ -692,9 +689,6 @@ async function lockOrder(db: Database, scope: Scope, orderId: string) {
 const quantityText = (value: bigint) =>
     Decimal.of(toNumeric(value, quantityScale)).normalized();
 
-// Posting penerimaan dari order, di transaksi posting itu: kepala order dikunci, setiap baris penerimaan harus cocok
-// dengan baris ordernya dan tidak melebihi sisanya, lalu Quantity Received bertambah. Constraint jumlah_diterima <=
-// jumlah menjaga hal yang sama di database.
 export async function receiveOnOrder(
     db: Database,
     workspace: Workspace,
@@ -783,7 +777,6 @@ export async function receiveOnOrder(
     await settleOrder(db, scope.tenantId, orderId);
 }
 
-// Batal posting penerimaan dari order: Quantity Received berkurang, dan order selesai kembali dirilis.
 export async function unreceiveOnOrder(
     db: Database,
     scope: Scope,
@@ -836,9 +829,6 @@ async function vendorPaymentTerms(
     );
 }
 
-// Order terbuka baru beserta nomornya, di transaksi pemanggil. Dipakai layar order dan Buat purchase order dari
-// permintaan pembelian (Carry Out Action Message di BC). Mengembalikan nomor order dan id barisnya, berurutan sama dengan
-// order.lines.
 export async function insertOrder(
     db: Database,
     scope: Scope,

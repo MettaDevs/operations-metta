@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
 
-// Baris yang belum menjadi order, dan baris yang sudah.
 export const requisitionStatuses = ['terbuka', 'diproses'] as const;
 
 const reference = z.object({
@@ -14,12 +13,10 @@ const amount = z.union([z.number(), z.string()]);
 export const requisitionInputSchema = z.object({
     location_id: z.string(),
     item_id: z.string(),
-    // Kosong berarti satuan beli barang.
     unit_id: z.string().nullable().optional(),
     quantity: amount,
     due_date: z.string(),
     description: z.string().nullable().optional(),
-    // Tiga isian petugas pembelian: Vendor No., Direct Unit Cost, dan Accept Action Message di BC.
     vendor_id: z.string().nullable().optional(),
     unit_cost: amount.nullable().optional(),
     accepted: z.boolean().optional(),
@@ -45,7 +42,6 @@ export const requisitionRowSchema = z.object({
         .nullable(),
     unit_cost: z.string().nullable(),
     accepted: z.boolean(),
-    // Baris yang ditulis Hitung saran, termasuk yang sesudahnya diubah orang.
     suggested: z.boolean(),
     order: z.object({ id: z.string(), number: z.string() }).nullable(),
     version: z.number(),
