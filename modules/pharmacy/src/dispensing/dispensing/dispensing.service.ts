@@ -23,6 +23,7 @@ import {
     postItemLines,
     quantityHint,
     quantityScale,
+    requireLocationAccess,
     reverseItemEntries,
     toNumeric,
     issuedSlices,
@@ -502,6 +503,9 @@ export class Dispensings {
         if (!locked) abort(404, 'Not Found');
         if (locked.cancelled && !allowCancelled)
             validation({ _form: cancelledMessage });
+        await requireLocationAccess(this.db, this.workspace, [
+            locked.location_id,
+        ]);
         return locked;
     }
 
@@ -713,6 +717,13 @@ export class Dispensings {
                 )
             )
                 errors.location_id = messages.location_id;
+            else
+                await requireLocationAccess(
+                    this.db,
+                    this.workspace,
+                    [locationId],
+                    { field: 'location_id' },
+                );
         }
         const pharmacistId = data.pharmacist_id || null;
         if (!(await this.member(pharmacistId)))

@@ -368,6 +368,9 @@ function LocationEmployeesFrame({
                         {location.restricted_to_employees
                             ? 'Resep dan dokumen stok lokasi ini hanya terlihat oleh petugas di bawah ini.'
                             : 'Lokasi ini terbuka untuk semua pengguna yang punya izin dokumennya. Nyalakan Khusus petugas lokasi di kartu lokasi untuk membatasinya.'}
+                        {!canManage &&
+                            location.restricted_to_employees &&
+                            ' Minta pengelola lokasi stok menambahkan Anda sebagai petugas di sini.'}
                     </p>
                 )}
                 {children}

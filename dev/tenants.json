@@ -47,6 +47,14 @@
                         "healthcare.patient.manage",
                         "healthcare.payment-setup.inquire"
                     ]
+                },
+                {
+                    "name": "Petugas farmasi pusling (contoh)",
+                    "duties": [
+                        "healthcare.patient.inquire",
+                        "pharmacy.dispensing.manage",
+                        "core.inventory-transfer.manage"
+                    ]
                 }
             ],
             "admin": {
@@ -84,6 +92,14 @@
                     "password": "dev-petugas-contoh-saja",
                     "role": "Petugas pendaftaran (contoh)",
                     "unit": "KCD-02",
+                    "policy": "healthcare.patient-unit"
+                },
+                {
+                    "name": "Petugas Farmasi Pusling",
+                    "email": "petugas.pusling@klinik-contoh.test",
+                    "password": "dev-petugas-contoh-saja",
+                    "role": "Petugas farmasi pusling (contoh)",
+                    "unit": "KCS-01",
                     "policy": "healthcare.patient-unit"
                 }
             ],

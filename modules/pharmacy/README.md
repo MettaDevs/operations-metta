@@ -200,12 +200,18 @@ Data obat farmasi (`far_m_obat`) adalah table extension BC atas Item: barisnya l
 
 Role pemilik tenant mendapat semua duty saat module dipasang (`installModule`), kecuali `pharmacy.line-price.manage`. Tahap ini tidak menyatakan kebijakan data per unit kerja: resep dan setelan dibatasi legal entity tempat kerja dan duty, sama dengan dokumen persediaan Core.
 
+## Petugas lokasi
+
+Petugas pusling hanya melihat dan mengerjakan resep pusling lewat Petugas lokasi persediaan Core (Sys Admin › Persediaan › Petugas lokasi), pola Warehouse Employee BC, bukan lewat aturan di module ini. Lokasi yang ditandai **Khusus petugas lokasi** di kartu lokasinya hanya terbuka bagi pengguna yang ditugaskan ke sana; lokasi tanpa tanda itu terbuka bagi setiap pemegang duty farmasi, sama dengan sebelumnya.
+
+- Antrean, kartu penyerahan, dan etiket menyaring resep menurut lokasi yang melayaninya (`allowedLocationsSql`). Resep yang belum punya lokasi tetap terlihat semua petugas.
+- Siapkan, panggil, serahkan, batal siapkan, ubah harga, batal resep, dan retur ditolak di lokasi yang bukan tempat pengguna bertugas (`requireLocationAccess`), begitu juga memilih lokasi seperti itu pada resep atau penjualan obat bebas. Pemegang izin lokasi stok mendapat tombol yang membuka daftar petugas lokasi itu.
+- Pilihan lokasi di antrean hanya berisi lokasi yang boleh dipakai pengguna. Bila perangkat belum mengingat lokasi, antrean memakai lokasi bawaan pengguna di Petugas lokasi.
+
 ## Belum dikerjakan
 
-- Pembatasan akses per lokasi atau unit kerja (petugas pusling hanya melihat resep pusling).
 - Layar antrean di TV (display board).
 - Resep luar. Di Kuta 1 hampir tidak dipakai (0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
-- Tagihan; menyusul lewat billing/kasir di Foundation, yang membaca harga yang sudah disalin ke baris penyerahan.
 - CPPT di layanan kesehatan menampilkan obat pengganti yang diserahkan; E-Resep sudah.
 - Obat pengganti pada penjualan obat bebas, dan obat pengganti dengan syarat (Substitution Condition BC).
-- Cetak etiket dan kuitansi; menunggu mesin cetak.
+- Daftar penjualan obat bebas belum disaring per petugas lokasi; menjual di lokasi khusus petugas sudah ditolak.
