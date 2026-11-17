@@ -17,19 +17,6 @@ import {
 import { requireLocationAccess } from '../warehouse-employee/location-access.ts';
 import { lplpoLayouts } from './lplpo.layout.ts';
 
-// LPLPO (Laporan Pemakaian dan Lembar Permintaan Obat) satu lokasi untuk satu periode, kolom prosedur SIMPUS_LPLPO
-// sistem lama: stok awal, penerimaan, persediaan (stok awal + penerimaan), pemakaian, sisa stok (persediaan -
-// pemakaian), stok optimum, dan permintaan. Padanan terdekat di BC report "Inventory Valuation" (1001) dengan saringan
-// lokasi, yang memuat stok awal, bertambah, berkurang, dan stok akhir per barang; BC tidak punya kolom permintaan.
-//
-// Berbeda dengan sistem lama, dan disengaja:
-// - Stok awal adalah jumlah kartu gudang sebelum periode, bukan baris saldo awal (JTransaksi 500) pada hari pertama.
-// - Barang yang punya stok tanpa gerak tetap tercetak, karena sisa stoknya tetap dilaporkan.
-// - Permintaan hanya permintaan pembelian lokasi itu; prosedur lama menjumlah permintaan semua lokasi. Permintaan
-//   antarlokasi (amprah) tidak ikut, sama dengan sistem lama: LPLPO meminta ke pemasok, bukan ke gudang sendiri.
-// - Penerimaan dirinci per sumber dana yang tercatat di kartu gudang (master Sumber dana legal entity itu), bukan per
-//   id subkategori yang ditulis mati seperti kolom B_Pusat, B_Prov, APBD, dan Program sistem lama. Penerimaan tanpa
-//   sumber dana, misalnya penyesuaian, tercatat sebagai "Tanpa sumber dana".
 export const lplpoFields = {
     location_code: field.text('Kode lokasi'),
     location_name: field.text('Lokasi'),
@@ -75,8 +62,6 @@ const lineSchema = z.object({
     requested: z.string(),
 });
 
-// Gerak dihitung dari kartu gudang lokasi itu sampai akhir periode. Permintaan dihitung dari tanggal dibuatnya di zona
-// waktu legal entity, karena permintaan pembelian tidak punya tanggal permintaan sendiri.
 const linesSql = `
     with gerak as (
         select k.barang_id,

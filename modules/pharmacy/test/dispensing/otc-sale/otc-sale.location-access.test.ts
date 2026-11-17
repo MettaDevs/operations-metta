@@ -25,9 +25,6 @@ type Refusal = {
 
 const sales = `${api}/otc-sales`;
 
-// Satu farmasi, lokasi diatur: petugas loket pusling hanya melihat penjualan obat bebas di pusling, dan penjualan di
-// loket farmasi biasa yang dibuka lewat alamatnya ditolak dengan nama lokasinya. Butuh PostgreSQL yang sudah
-// dimigrasi; dilewati bila DB_HOST kosong.
 describe.skipIf(!process.env.DB_HOST)('OTC sales per location', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();

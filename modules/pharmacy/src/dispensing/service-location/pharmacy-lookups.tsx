@@ -36,7 +36,6 @@ const loadAccessibleLocations = locationsWhere(true);
 export const locationLabel = (location: Reference) =>
     `${location.code} · ${location.name}`;
 
-// accessible menyembunyikan lokasi khusus petugas yang pengguna bukan petugasnya, untuk layar yang mengubah stok.
 export function LocationLookup({
     accessible,
     ...props

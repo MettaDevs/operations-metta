@@ -40,8 +40,6 @@ const value = (number: number | null, unit: string): string | null =>
 
 type PlanPrescription = Cppt['plan']['prescriptions'][number];
 
-// Baris resep seperti CPPT sistem lama: komponen racikan menjorok di bawah racikannya, jumlah beserta satuannya. Obat
-// yang diganti farmasi tetap ditulis seperti resep dokter, diikuti obat yang diterima pasien.
 const prescriptionLines = (prescription: PlanPrescription): string[] =>
     prescription.lines.map((line) =>
         line.drug_name === null

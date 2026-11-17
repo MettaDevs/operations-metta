@@ -1,8 +1,6 @@
 import type { BuiltinLayout } from '../../../platform/reporting/index.ts';
 import { blankName, inventoryDocument } from '../document-layout.ts';
 
-// Layout bawaan kartu stok, kolom report "Inventory - Transaction Detail" BC: tanggal, dokumen, jenis gerak, masuk,
-// keluar, dan saldo, ditambah batch dan kedaluwarsa karena obat diperiksa per batch.
 function a4(): Uint8Array {
     return inventoryDocument({
         title: 'KARTU STOK',

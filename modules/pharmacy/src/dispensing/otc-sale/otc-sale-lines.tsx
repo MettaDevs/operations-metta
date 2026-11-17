@@ -129,7 +129,6 @@ function DrugLookup({
     );
 }
 
-// Jumlah baris dalam satuan dasar melebihi stok lokasi. Server tetap yang menolak; ini hanya pemicu saran pengganti.
 function shortOfStock(line: SaleLine): boolean {
     const stock = Number(line.drug?.stock ?? NaN);
     const perUnit = Number(
@@ -140,9 +139,6 @@ function shortOfStock(line: SaleLine): boolean {
     return quantity * perUnit > stock;
 }
 
-// Obat pengganti yang masih punya stok di lokasi ini, ditawarkan saat stok obat baris kurang. Polanya Item Substitution BC
-// pada baris penjualan: memilihnya mengganti obat baris. Penjualan tanpa resep tidak mencatat obat asalnya, karena tidak
-// ada resep dokter yang perlu dipertahankan.
 function SubstituteSuggestion({
     line,
     locationId,

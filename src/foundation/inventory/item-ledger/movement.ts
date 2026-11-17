@@ -2,8 +2,6 @@ import type { EntryKind } from './item-ledger.posting.ts';
 
 type Direction = { in: string; out: string };
 
-// Jenis gerak kartu stok dalam bahasa sehari-hari, per jenis baris kartu gudang dan arahnya. Opname ditulis sebagai
-// selisih hitung, bukan penyesuaian biasa. Dipakai layar Kartu stok dan cetak kartu stok, jadi keduanya selalu sama.
 const kinds: Record<EntryKind, Direction> = {
     penerimaan: { in: 'Terima dari vendor', out: 'Retur ke vendor' },
     penyerahan: { in: 'Retur dari pasien', out: 'Keluar ke pasien' },
@@ -22,8 +20,6 @@ const sources: Record<string, Direction> = {
     opname: { in: 'Selisih opname (lebih)', out: 'Selisih opname (kurang)' },
 };
 
-// Baris pembalik ditulis dengan arah baris yang dibaliknya: membatalkan penerimaan adalah "Batal terima dari vendor",
-// bukan "Retur ke vendor".
 export function movementLabel(entry: {
     kind: EntryKind;
     sourceType: string;

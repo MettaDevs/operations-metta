@@ -20,8 +20,6 @@ type Located = { location: { code: string } };
 type Refusal = { errors: Record<string, string[]> };
 type Stock = { items: { lines: Located[] }[] };
 
-// Stok, kartu stok, stok per lokasi, dan pilihan lokasinya mengikuti petugas lokasi (Warehouse Employee BC), sama
-// dengan cetak kartu stok: lokasi khusus petugas hanya terbaca petugasnya, lokasi lain tetap terbuka bagi semua.
 describe.skipIf(!process.env.DB_HOST)(
     'stock reads and warehouse employees',
     () => {
