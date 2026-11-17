@@ -55,7 +55,7 @@ export async function requireLocationAccess(
     db: Database,
     workspace: Workspace,
     locations: (string | null | undefined)[],
-    options: { field?: string; anyOf?: boolean } = {},
+    options: { anyOf?: boolean } = {},
 ): Promise<void> {
     const ids = [
         ...new Set(
@@ -67,7 +67,6 @@ export async function requireLocationAccess(
     if (!first || (options.anyOf && refused.length < ids.length)) return;
     await refuse(db, workspace, {
         message: `Lokasi ${first.code} ${first.name} hanya untuk petugasnya, dan Anda belum terdaftar sebagai petugas di sana.`,
-        ...(options.field ? { field: options.field } : {}),
         open: {
             page: 'core.inventory-location',
             recordId: first.id,

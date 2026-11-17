@@ -344,14 +344,7 @@ export class Receipts {
             errors.location_id =
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
         else
-            await requireLocationAccess(
-                this.db,
-                this.workspace,
-                [location.id],
-                {
-                    field: 'location_id',
-                },
-            );
+            await requireLocationAccess(this.db, this.workspace, [location.id]);
         const vendorDocument = data.vendor_document_number?.trim() || null;
         if (vendorDocument && vendorDocument.length > 50)
             errors.vendor_document_number = messages.vendor_document_number;

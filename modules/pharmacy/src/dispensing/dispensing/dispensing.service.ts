@@ -718,12 +718,9 @@ export class Dispensings {
             )
                 errors.location_id = messages.location_id;
             else
-                await requireLocationAccess(
-                    this.db,
-                    this.workspace,
-                    [locationId],
-                    { field: 'location_id' },
-                );
+                await requireLocationAccess(this.db, this.workspace, [
+                    locationId,
+                ]);
         }
         const pharmacistId = data.pharmacist_id || null;
         if (!(await this.member(pharmacistId)))

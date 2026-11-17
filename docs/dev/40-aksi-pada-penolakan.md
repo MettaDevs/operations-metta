@@ -38,7 +38,6 @@ Pemeriksaan itu ada di satu tempat, `refuse` di `src/platform/access/refusal.ts`
 ```ts
 await refuse(db, viewer, {
     message: chargeLockedMessage,
-    field: '_form',
     open: {
         page: 'core.payment',
         recordId: documentId,
@@ -49,9 +48,10 @@ await refuse(db, viewer, {
 ```
 
 - `viewer` cukup `tenantId` dan `holds`, jadi `Workspace` milik service mana pun bisa dipakai langsung.
+- Penolakan selalu ditulis di `errors._form`, tidak pernah di field. Tidak ada isian yang salah, jadi kotak error memakai judul tindakan layar itu (misalnya "Retur belum disimpan"), lalu alasan dan tombolnya. Penolakan yang menempel ke field tampil sebagai "Periksa 1 isian yang perlu diperbaiki", padahal memperbaiki isian tidak menyelesaikannya.
 - `otherwise` wajib diisi dan wajib menyebut nomor dokumennya, supaya pengguna tanpa izin tahu apa yang harus ia minta dan kepada siapa.
 - `validation(errors, actions)` di `src/platform/http/` menerima aksi hanya dari `refuse`. Jangan memanggilnya dengan aksi dari tempat lain, karena pemeriksaan izinnya akan terlewat.
-- Penolakan yang ditangkap lalu ditulis ulang membuang aksinya. Pesan khusus pemanggil dikirim sebagai data. Contohnya `lockChargeForChange(db, workspace, { documentId, message: paidMessage })` di farmasi, atau `field: 'status'` untuk rujuk internal.
+- Penolakan yang ditangkap lalu ditulis ulang membuang aksinya. Pesan khusus pemanggil dikirim sebagai data. Contohnya `lockChargeForChange(db, workspace, { documentId, message: paidMessage })` di farmasi.
 
 ## Halaman tujuan
 
