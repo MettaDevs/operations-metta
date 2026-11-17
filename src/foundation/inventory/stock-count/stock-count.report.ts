@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../warehouse-employee/location-access.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -94,6 +95,12 @@ const countSchema = z.object({
 async function stockCount(db: Database, workspace: Workspace, countId: string) {
     workspace.guard('inventory-count', 'read');
     if (!lookupId(countId) || !workspace.legalEntityId) return null;
+    const bindings = [
+        workspace.tenantId,
+        workspace.legalEntityId,
+        countId,
+        sourceType,
+    ];
     const row = await db.one(
         countSchema,
         `select h.operating_unit_id, h.nomor as number, h.tanggal::text as count_date,
@@ -134,8 +141,8 @@ async function stockCount(db: Database, workspace: Workspace, countId: string) {
                    join gd_m_satuan s on s.tenant_id = b.tenant_id and s.id = b.satuan_dasar_id
                    left join gd_m_batch batch on batch.tenant_id = x.tenant_id and batch.id = x.batch_id
                    where x.tenant_id = h.tenant_id and x.opname_id = h.id and x.deleted_at is null) d) t on true
-         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3`,
-        [workspace.tenantId, workspace.legalEntityId, countId, sourceType],
+         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and ${allowedLocationsSql(workspace, bindings, ['h.lokasi_id'])}`,
+        bindings,
     );
     if (!row) return null;
     const { operating_unit_id, ...values } = row;

@@ -279,6 +279,13 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.inventory-location.read',
                 },
                 {
+                    id: 'warehouse-employees',
+                    label: 'Petugas lokasi',
+                    href: '/sysadmin/inventory/warehouse-employees',
+                    section: 'Setup',
+                    permission: 'core.inventory-location.read',
+                },
+                {
                     id: 'item-categories',
                     label: 'Kategori barang',
                     href: '/sysadmin/inventory/item-categories',

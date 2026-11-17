@@ -25,7 +25,7 @@ import {
 } from './location.schema.ts';
 
 const rowSql = `select * from (
-                    select l.id, l.kode as code, l.nama as name, l.transit as is_transit,
+                    select l.id, l.kode as code, l.nama as name, l.transit as is_transit, l.khusus_petugas as restricted_to_employees,
                            l.metode_pengambilan as picking_method, l.cara_mutasi as transfer_mode, l.version,
                            l.operating_unit_id, o.name as operating_unit_name,
                            json_build_object('id', o.id, 'name', o.name) as operating_unit
@@ -151,6 +151,7 @@ export class Locations {
             name,
             operatingUnitId: unit.id,
             isTransit: data.is_transit ?? false,
+            restricted: data.restricted_to_employees ?? false,
             picking: data.picking_method ?? null,
             transferMode: data.transfer_mode ?? null,
         };
@@ -171,6 +172,7 @@ export class Locations {
                 kode: data.code,
                 nama: data.name,
                 transit: data.isTransit,
+                khusus_petugas: data.restricted,
                 metode_pengambilan: data.picking,
                 cara_mutasi: data.transferMode,
                 created_at: stamp,
@@ -191,7 +193,7 @@ export class Locations {
         try {
             updated = await this.db.execute(
                 `update gd_m_lokasi set kode = $1, nama = $2, operating_unit_id = $3, transit = $4,
-                        metode_pengambilan = $5, cara_mutasi = $6, updated_at = $7
+                        metode_pengambilan = $5, cara_mutasi = $6, updated_at = $7, khusus_petugas = $11
                  where tenant_id = $8 and id = $9 and version = $10 and deleted_at is null`,
                 [
                     data.code,
@@ -204,6 +206,7 @@ export class Locations {
                     this.workspace.tenantId,
                     current.id,
                     expectedVersion(request, body),
+                    data.restricted,
                 ],
             );
         } catch (error) {

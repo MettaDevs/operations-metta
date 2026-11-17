@@ -86,6 +86,10 @@ import { page as foundationInventoryTrackingCodeItemTrackingCodesPage } from './
 import { page as foundationInventoryTransferTransferOrdersPage } from './foundation/inventory/transfer/transfer-orders.page.tsx';
 import { page as foundationInventoryTransferTransferReceiptsPage } from './foundation/inventory/transfer/transfer-receipts.page.tsx';
 import { page as foundationInventoryTransferTransferShipmentsPage } from './foundation/inventory/transfer/transfer-shipments.page.tsx';
+import {
+    page as foundationInventoryWarehouseEmployeeWarehouseEmployeesPage,
+    record as foundationInventoryWarehouseEmployeeWarehouseEmployeesRecord,
+} from './foundation/inventory/warehouse-employee/warehouse-employees.page.tsx';
 import { page as foundationNumberSequenceNumberSequencesPage } from './foundation/number-sequence/number-sequences.page.tsx';
 import { page as foundationPricingChargeComponentChargeComponentsPage } from './foundation/pricing/charge-component/charge-components.page.tsx';
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
@@ -961,6 +965,20 @@ const foundationInventoryTransferTransferShipmentsRoute = createRoute({
     },
 });
 
+const foundationInventoryWarehouseEmployeeWarehouseEmployeesRoute = createRoute(
+    {
+        getParentRoute: () => appLayoutRoute,
+        path: foundationInventoryWarehouseEmployeeWarehouseEmployeesPage.path,
+        component:
+            foundationInventoryWarehouseEmployeeWarehouseEmployeesPage.component,
+        validateSearch:
+            foundationInventoryWarehouseEmployeeWarehouseEmployeesPage.validateSearch,
+        staticData: {
+            title: foundationInventoryWarehouseEmployeeWarehouseEmployeesPage.title,
+        },
+    },
+);
+
 const foundationNumberSequenceNumberSequencesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationNumberSequenceNumberSequencesPage.path,
@@ -1219,6 +1237,7 @@ const routeTree = rootRoute.addChildren([
         foundationInventoryTransferTransferOrdersRoute,
         foundationInventoryTransferTransferReceiptsRoute,
         foundationInventoryTransferTransferShipmentsRoute,
+        foundationInventoryWarehouseEmployeeWarehouseEmployeesRoute,
         foundationNumberSequenceNumberSequencesRoute,
         foundationPricingChargeComponentChargeComponentsRoute,
         foundationPricingPriceGroupPriceGroupsRoute,
@@ -1312,6 +1331,8 @@ declare module '@tanstack/react-router' {
 }
 
 const recordPages = {
+    'core.inventory-location':
+        foundationInventoryWarehouseEmployeeWarehouseEmployeesRecord,
     'core.payment': foundationBillingInvoicePaymentRecord,
 } satisfies RecordPages;
 

@@ -62,6 +62,8 @@ Semua penolakan "sudah dibayar" datang dari `lockChargeForChange` di `src/founda
 - Ubah harga sesudah Siapkan, di jendela Ubah harga (`dispensing-price-card.tsx`);
 - Simpan pemeriksaan yang mengubah Biaya Tindakan (`examination.page.tsx`).
 
+Penolakan "hanya untuk petugasnya" datang dari `requireLocationAccess` di `src/foundation/inventory/warehouse-employee/location-access.ts`. Tombolnya membuka daftar petugas lokasi itu (`core.inventory-location`), tempat pengelola lokasi stok menambahkan pengguna yang ditolak. Ia dipakai dokumen persediaan, penerimaan, retur ke vendor, dan semua tindakan resep farmasi.
+
 Batal resep, batal registrasi, dan rujuk internal juga ditolak lewat kunci itu, tetapi layarnya belum memasang tombol, jadi hanya pesannya yang tampil. Batal resep dan batal registrasi memakai `Dialog` modal, dan jendela yang dibuka dari dalamnya belum diuji.
 
 ## Bukti

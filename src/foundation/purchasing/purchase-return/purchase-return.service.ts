@@ -15,6 +15,7 @@ import {
 } from '../../../platform/http/index.ts';
 import {
     activeLegalEntity,
+    allowedLocationsSql,
     baseQuantity,
     decimalInput,
     display,
@@ -148,6 +149,11 @@ export class PurchaseReturns {
     }
 
     private async receipt(lock: boolean): Promise<ReceiptHeader> {
+        const bindings = [
+            this.scope.tenantId,
+            this.scope.legalEntityId,
+            this.receiptId,
+        ];
         const found = lookupId(this.receiptId)
             ? await this.db.one(
                   receiptSchema,
@@ -156,12 +162,9 @@ export class PurchaseReturns {
                    from bl_tr_penerimaan h
                    join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
                    where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null
+                     and ${allowedLocationsSql(this.workspace, bindings, ['h.lokasi_id'])}
                    ${lock ? 'for update of h' : ''}`,
-                  [
-                      this.scope.tenantId,
-                      this.scope.legalEntityId,
-                      this.receiptId,
-                  ],
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');

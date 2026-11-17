@@ -52,6 +52,10 @@ import {
     stockCountRowSchema,
     stockCountStatuses,
 } from './stock-count.schema.ts';
+import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
 
 const numberReference = 'core.inventory-count-number';
 
@@ -152,6 +156,7 @@ const messages = {
 const rowSql = `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as count_date,
                            h.tanggal_posting::text as posting_date, h.status, h.version, h.keterangan as description,
+                           h.lokasi_id as location_id,
                            l.kode as location_code, l.nama as location_name,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            (select count(*)::int from gd_tr_opname_detail d
@@ -242,9 +247,9 @@ export class StockCounts {
         const status = z
             .enum(stockCountStatuses)
             .safeParse(parameters.get('status'));
-        const filter = status.success
-            ? ` and status = $${bindings.push(status.data)}`
-            : '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
+        if (status.success)
+            filter += ` and status = $${bindings.push(status.data)}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,
@@ -274,11 +279,12 @@ export class StockCounts {
     }
 
     private async header(id: string) {
+        const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
                   stockCountRowSchema,
-                  `${rowSql} and counts.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, id],
+                  `${rowSql} and counts.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
@@ -323,6 +329,21 @@ export class StockCounts {
         return { status, headers: {}, body: { data: await this.document(id) } };
     }
 
+    // Lokasi pilihan di isian dokumen: lokasi aktif legal entity ini, yang boleh dikerjakan pengguna.
+    private async chosenLocation(id: string) {
+        const location = await this.activeLocation(id);
+        if (location && !location.transit)
+            await requireLocationAccess(
+                this.db,
+                this.workspace,
+                [location.id],
+                {
+                    field: 'location_id',
+                },
+            );
+        return location;
+    }
+
     private async activeLocation(id: string) {
         return lookupId(id)
             ? await this.db.one(
@@ -345,7 +366,7 @@ export class StockCounts {
             errors.count_date = messages.count_date;
         if (!dateSchema.safeParse(data.posting_date).success)
             errors.posting_date = messages.posting_date;
-        const location = await this.activeLocation(data.location_id);
+        const location = await this.chosenLocation(data.location_id);
         if (!location) errors.location_id = messages.location_id;
         else if (location.transit) errors.location_id = transitMessage;
         const description = data.description?.trim() || null;
@@ -865,7 +886,7 @@ export class StockCounts {
         const errors: Record<string, string> = {};
         if (!dateSchema.safeParse(data.posting_date).success)
             errors.posting_date = messages.posting_date;
-        const location = await this.activeLocation(data.location_id);
+        const location = await this.chosenLocation(data.location_id);
         if (!location) errors.location_id = messages.location_id;
         else if (location.transit) errors.location_id = transitMessage;
         const categoryId = data.category_id || null;

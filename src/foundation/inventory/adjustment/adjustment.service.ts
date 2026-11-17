@@ -44,6 +44,10 @@ import {
     adjustmentRowSchema,
     adjustmentStatuses,
 } from './adjustment.schema.ts';
+import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
 
 export const sourceType = 'penyesuaian';
 export const adjustmentNumberReference = 'core.inventory-adjustment-number';
@@ -76,7 +80,7 @@ type LineDraft = {
 
 const rowSql = `select * from (
                     select h.id, h.nomor as number, h.arah as direction, h.tanggal::text as posting_date, h.status,
-                           h.version, l.kode as location_code, a.kode as reason_code,
+                           h.version, h.lokasi_id as location_id, l.kode as location_code, a.kode as reason_code,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            json_build_object('id', a.id, 'code', a.kode, 'name', a.nama) as reason,
                            ${isoSql('h.diposting_pada')} as posted_at, ${isoSql('h.dibatalkan_pada')} as reversed_at
@@ -177,7 +181,7 @@ export class Adjustments {
             this.scope.tenantId,
             this.scope.legalEntityId,
         ];
-        let filter = '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
         const status = z
             .enum(adjustmentStatuses)
             .safeParse(parameters.get('status'));
@@ -224,11 +228,12 @@ export class Adjustments {
     }
 
     private async header(id: string) {
+        const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
                   adjustmentRowSchema,
-                  `${rowSql} and adjustments.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, id],
+                  `${rowSql} and adjustments.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
@@ -326,6 +331,15 @@ export class Adjustments {
         else if (location.transit)
             errors.location_id =
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
+        else
+            await requireLocationAccess(
+                this.db,
+                this.workspace,
+                [location.id],
+                {
+                    field: 'location_id',
+                },
+            );
         if (!(await exists(this.db, 'gd_m_alasan', this.scope, data.reason_id)))
             errors.reason_id = messages.reason_id;
         const unitCostDecimals = unitAmountDecimals(

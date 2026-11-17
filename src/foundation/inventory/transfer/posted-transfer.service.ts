@@ -19,6 +19,10 @@ import { activeLegalEntity } from '../inventory.service.ts';
 import { reverseItemEntries } from '../item-ledger/item-ledger.posting.ts';
 import { transferModes } from '../item-ledger/stock-policy.ts';
 import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
+import {
     postedTransferLineRowSchema,
     postedTransferRowSchema,
     postedTransferStatuses,
@@ -61,7 +65,8 @@ const rowSql = (kind: PostedTransferKind) => {
     return `select * from (
                 select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
                        json_build_object('id', a.id, 'number', a.nomor) as transfer_order, a.id as transfer_order_id,
-                       a.nomor as order_number, f.kode as from_code, f.nama as from_name, t.kode as to_code,
+                       a.nomor as order_number, a.lokasi_pemasok_id as order_from_id,
+                       a.lokasi_peminta_id as order_to_id, f.kode as from_code, f.nama as from_name, t.kode as to_code,
                        t.nama as to_name, ${location('f')} as from_location, ${location('t')} as to_location,
                        ${reference('x')} as transit_location, ${mode} as transfer_mode,
                        coalesce((select trim_scale(sum(d.nilai))::text from ${detail} d
@@ -114,7 +119,7 @@ export class PostedTransfers {
             this.scope.tenantId,
             this.scope.legalEntityId,
         ];
-        let filter = '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['order_from_id', 'order_to_id'])}`;
         const status = z
             .enum(postedTransferStatuses)
             .safeParse(parameters.get('status'));
@@ -156,11 +161,12 @@ export class PostedTransfers {
     }
 
     private async header(id: string) {
+        const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
                   postedTransferRowSchema,
-                  `${rowSql(this.kind)} and postings.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, id],
+                  `${rowSql(this.kind)} and postings.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['order_from_id', 'order_to_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
@@ -211,6 +217,11 @@ export class PostedTransfers {
     async reverse(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'reverse');
         const current = await this.header(id);
+        await requireLocationAccess(this.db, this.workspace, [
+            this.kind === 'shipment'
+                ? current.from_location.id
+                : current.to_location.id,
+        ]);
         const version = expectedVersion(request, body);
         const { header, detail, parent, source, mode } = kinds[this.kind];
         await this.db.transaction(async () => {

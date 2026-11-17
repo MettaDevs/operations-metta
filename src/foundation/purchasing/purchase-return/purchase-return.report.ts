@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../../inventory/index.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -82,6 +83,7 @@ async function purchaseReturn(
         db,
         workspace.tenantId,
     ).precision(localCurrencyCode);
+    const bindings = [workspace.tenantId, workspace.legalEntityId, returnId];
     const row = await db.one(
         returnSchema,
         `select h.operating_unit_id, h.nomor as number, h.tanggal::text as posting_date,
@@ -112,8 +114,8 @@ async function purchaseReturn(
                    where x.tenant_id = h.tenant_id and x.retur_id = h.id and x.deleted_at is null) d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id) t on true
-         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null`,
-        [workspace.tenantId, workspace.legalEntityId, returnId],
+         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null and ${allowedLocationsSql(workspace, bindings, ['r.lokasi_id'])}`,
+        bindings,
     );
     if (!row) return null;
     const { operating_unit_id, ...values } = row;

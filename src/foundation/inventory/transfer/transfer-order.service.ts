@@ -22,6 +22,10 @@ import {
     type TransferLine,
 } from '../item-ledger/item-ledger.posting.ts';
 import { transferModes } from '../item-ledger/stock-policy.ts';
+import {
+    allowedLocationsSql,
+    requireLocationAccess,
+} from '../warehouse-employee/location-access.ts';
 import { unitConversion } from '../item-unit/item-unit.service.ts';
 import {
     baseQuantity,
@@ -107,7 +111,8 @@ const location = (alias: string) =>
 
 const rowSql = `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as posting_date, h.status, h.version,
-                           h.keterangan as description, f.kode as from_code, f.nama as from_name, t.kode as to_code,
+                           h.keterangan as description, h.lokasi_pemasok_id as from_id, h.lokasi_peminta_id as to_id,
+                           f.kode as from_code, f.nama as from_name, t.kode as to_code,
                            t.nama as to_name, ${location('f')} as from_location, ${location('t')} as to_location,
                            case when x.id is null then null else ${location('x')} end as transit_location,
                            coalesce(f.cara_mutasi, p.cara_mutasi) as transfer_mode,
@@ -280,9 +285,9 @@ export class TransferOrders {
         const status = z
             .enum(transferOrderStatuses)
             .safeParse(parameters.get('status'));
-        const filter = status.success
-            ? ` and status = $${bindings.push(status.data)}`
-            : '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['from_id', 'to_id'])}`;
+        if (status.success)
+            filter += ` and status = $${bindings.push(status.data)}`;
         const batch = await incrementalList(this.db, {
             query: `${rowSql}${filter}`,
             bindings,
@@ -314,11 +319,12 @@ export class TransferOrders {
     }
 
     private async header(id: string) {
+        const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
                   transferOrderRowSchema,
-                  `${rowSql} and orders.id = $3`,
-                  [this.scope.tenantId, this.scope.legalEntityId, id],
+                  `${rowSql} and orders.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['from_id', 'to_id'])}`,
+                  bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
@@ -591,6 +597,10 @@ export class TransferOrders {
             });
         }
         if (Object.keys(errors).length || !from || !to) validation(errors);
+        // Amprah boleh disiapkan petugas lokasi peminta maupun pemasok; mengirim dan menerima diperiksa sendiri-sendiri.
+        await requireLocationAccess(this.db, this.workspace, [from.id, to.id], {
+            anyOf: true,
+        });
         if (
             transitId === null &&
             (await this.transferMode(from.id)) === 'kirim_terima'
@@ -907,6 +917,18 @@ export class TransferOrders {
             )
         )
             abort(403, 'Tidak diizinkan.');
+        await requireLocationAccess(this.db, this.workspace, [
+            data.lines.some(
+                (line) =>
+                    line.quantity_to_ship !== undefined ||
+                    line.batches !== undefined,
+            )
+                ? current.from_location.id
+                : null,
+            data.lines.some((line) => line.quantity_to_receive !== undefined)
+                ? current.to_location.id
+                : null,
+        ]);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {
             const locked = await this.lockHeader(current.id);
@@ -1136,6 +1158,12 @@ export class TransferOrders {
     async ship(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'ship');
         const current = await this.header(id);
+        await requireLocationAccess(
+            this.db,
+            this.workspace,
+            [current.from_location.id],
+            { field: 'from_location_id' },
+        );
         const postingDate = this.postingDate(body);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {
@@ -1290,6 +1318,12 @@ export class TransferOrders {
     async receive(request: Request, id: string, body: unknown) {
         this.workspace.guard('inventory-transfer', 'receive');
         const current = await this.header(id);
+        await requireLocationAccess(
+            this.db,
+            this.workspace,
+            [current.to_location.id],
+            { field: 'to_location_id' },
+        );
         const postingDate = this.postingDate(body);
         const version = expectedVersion(request, body);
         await this.db.transaction(async () => {

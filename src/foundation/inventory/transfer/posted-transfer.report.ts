@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { allowedLocationsSql } from '../warehouse-employee/location-access.ts';
 import {
     coreWorkspace,
     type Workspace,
@@ -130,6 +131,7 @@ function loader(kind: PostedTransferKind, label: string) {
     return async (db: Database, workspace: Workspace, id: string) => {
         workspace.guard('inventory-transfer', 'read');
         if (!lookupId(id) || !workspace.legalEntityId) return null;
+        const bindings = [workspace.tenantId, workspace.legalEntityId, id];
         const row = await db.one(
             documentSchema,
             `select ${issuer}.operating_unit_id, h.nomor as number, h.tanggal::text as posting_date,
@@ -166,8 +168,8 @@ function loader(kind: PostedTransferKind, label: string) {
              join gd_m_lokasi tujuan on tujuan.tenant_id = h.tenant_id and tujuan.id = h.lokasi_tujuan_id
              left join gd_m_lokasi transit on transit.tenant_id = h.tenant_id and transit.id = h.lokasi_transit_id
              left join users poster on poster.id = h.diposting_oleh_user_id
-             where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3`,
-            [workspace.tenantId, workspace.legalEntityId, id],
+             where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and ${allowedLocationsSql(workspace, bindings, ['a.lokasi_pemasok_id', 'a.lokasi_peminta_id'])}`,
+            bindings,
         );
         if (!row) return null;
         const { operating_unit_id, ...values } = row;

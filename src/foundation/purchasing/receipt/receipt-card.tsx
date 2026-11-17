@@ -773,6 +773,7 @@ export function ReceiptCard({
                                                       name: '',
                                                   },
                                                   is_transit: false,
+                                                  restricted_to_employees: false,
                                                   picking_method: null,
                                                   transfer_mode: null,
                                                   version: 0,
