@@ -21,7 +21,7 @@ import {
     type Page,
 } from './verify/browser.ts';
 import { runOutpatientJourney } from './verify/outpatient.ts';
-import { runPrintJourney } from './verify/print.ts';
+import { printedPdf, runPrintJourney } from './verify/print.ts';
 import {
     cdpAnswers,
     containerRunning,
@@ -57,6 +57,9 @@ const usage = `bun scripts/verify.ts <perintah>
   snapshot <nama>                     simpan pohon aksesibilitas ke evidence/<nama>.aria.txt
   shot <nama> [--alert]               simpan screenshot ke evidence/<nama>.png; --alert hanya ringkasan error
   sql <query> [--save nama]           jalankan SQL di database lingkungan tenant contoh
+  pdf <role> <nama> <berkas> [--within T] [--nth N] [--exact|--prefix]
+                                      klik tombol cetak, simpan PDF yang dibukanya ke evidence/<berkas>.pdf, lalu
+                                      cetak ukuran kertas dan teksnya
   journey outpatient [--prepare-cashier]
                                       perjalanan rawat jalan penuh, daftar sampai bayar; --prepare-cashier membuat
                                       jenis bayar tunai dan Clerk Start lewat layar Kasir bila belum ada
@@ -263,6 +266,20 @@ try {
                     `${rest[0] ?? ''}\n\n${output}`,
                 );
             console.log(output);
+            break;
+        }
+        case 'pdf': {
+            const run = currentRun();
+            const file = join(evidenceDir(run), `${rest[2] ?? 'cetak'}.pdf`);
+            const printed = await withPage(run, (page) =>
+                printedPdf(page, run, locator(rest[0], rest[1]), file),
+            );
+            const mm = (points: number) => Math.round((points / 72) * 25.4);
+            console.log(file);
+            console.log(
+                `kertas ${mm(printed.widthPt)} x ${mm(printed.heightPt)} mm`,
+            );
+            console.log(printed.text);
             break;
         }
         case 'journey': {
