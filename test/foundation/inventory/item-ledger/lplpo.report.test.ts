@@ -165,7 +165,13 @@ describe.skipIf(!process.env.DB_HOST)('lplpo', () => {
             }),
             201,
         );
-        await requested(warehouse, asked, 15, '2026-10-31 18:00:00');
+        const firstNovemberInEveryIndonesianTimeZone = '2026-10-31 18:00:00';
+        await requested(
+            warehouse,
+            asked,
+            15,
+            firstNovemberInEveryIndonesianTimeZone,
+        );
         await requested(warehouse, asked, 4, '2026-10-20 03:00:00');
         await requested(pharmacy, asked, 99, '2026-11-10 03:00:00');
     });
