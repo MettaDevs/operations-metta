@@ -3,6 +3,7 @@ import type { Workspace } from '@core/platform/access/index.ts';
 import {
     nowSql,
     sqlErrorCode,
+    type Bind,
     type Database,
 } from '@core/platform/database/index.ts';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    allowedLocationsSql,
     parseInput,
 } from '@core/foundation/inventory/index.ts';
 import {
@@ -50,12 +52,22 @@ const saleLocationSchema = z.object({
 export type SaleLocation = z.infer<typeof saleLocationSchema>;
 
 // Lokasi yang boleh menjual obat bebas beserta kelompok harga bawaannya, untuk loket. Lokasi yang dihapus atau
-// dijadikan transit sesudah diatur tidak lagi menjual.
+// dijadikan transit sesudah diatur tidak lagi menjual. Dengan user, lokasi khusus petugas yang bukan tempat user bertugas
+// tidak ikut.
 export async function saleLocations(
     db: Database,
     scope: Scope,
     locationId?: string,
+    user?: Workspace,
 ): Promise<SaleLocation[]> {
+    const bindings: Bind[] = [
+        scope.tenantId,
+        scope.legalEntityId,
+        locationId ?? null,
+    ];
+    const allowed = user
+        ? ` and ${allowedLocationsSql(user, bindings, ['l.id'])}`
+        : '';
     return db.rows(
         saleLocationSchema,
         `select l.id, l.kode as code, l.nama as name, l.operating_unit_id,
@@ -66,9 +78,9 @@ export async function saleLocations(
               and l.deleted_at is null and not l.transit
          left join kelompok_harga g on g.tenant_id = m.tenant_id and g.id = m.kelompok_harga_id
          where m.tenant_id = $1 and m.legal_entity_id = $2 and m.deleted_at is null
-           and ($3::uuid is null or m.lokasi_id = $3::uuid)
+           and ($3::uuid is null or m.lokasi_id = $3::uuid)${allowed}
          order by l.kode`,
-        [scope.tenantId, scope.legalEntityId, locationId ?? null],
+        bindings,
     );
 }
 

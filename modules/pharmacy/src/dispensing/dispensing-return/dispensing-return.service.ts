@@ -277,6 +277,9 @@ export class DispensingReturns {
                     reverse: has('return.reverse'),
                 },
             };
+        await requireLocationAccess(this.db, this.workspace, [
+            dispensing.locationId,
+        ]);
         const groups = await this.remaining(dispensing.dispensingId);
         const lines = await this.dispensingLines(dispensing.dispensingId);
         const returns = await this.db.rows(

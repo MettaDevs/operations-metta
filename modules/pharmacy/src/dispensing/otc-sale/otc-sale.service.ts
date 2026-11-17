@@ -17,6 +17,7 @@ import {
 } from '@core/platform/http/index.ts';
 import {
     activeLegalEntity,
+    allowedLocationsSql,
     requireLocationAccess,
     baseQuantity,
     decimalInput,
@@ -179,7 +180,7 @@ const saleRowSql = `select * from (
                         select h.id, h.nomor as number, h.tanggal::text as date,
                                ${isoSql('h.diserahkan_pada')} as handed_over_at, h.diserahkan_pada as handed_over_order,
                                json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
-                               l.nama as location_name, h.pembeli_nama as buyer_name
+                               h.lokasi_id as location_id, l.nama as location_name, h.pembeli_nama as buyer_name
                         from bill_farmasi h
                         join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
                         where h.tenant_id = $1 and h.legal_entity_id = $2 and h.resep_id is null
@@ -341,14 +342,19 @@ export class OtcSales {
         this.workspace.guard('otc-sale', 'read');
         return {
             data: {
-                locations: (await saleLocations(this.db, this.scope)).map(
-                    (location) => ({
-                        id: location.id,
-                        code: location.code,
-                        name: location.name,
-                        price_group: location.price_group,
-                    }),
-                ),
+                locations: (
+                    await saleLocations(
+                        this.db,
+                        this.scope,
+                        undefined,
+                        this.workspace,
+                    )
+                ).map((location) => ({
+                    id: location.id,
+                    code: location.code,
+                    name: location.name,
+                    price_group: location.price_group,
+                })),
                 ...(await paymentOptions(this.db, cashier)),
                 can_search_buyers: cashier.permissions.has(
                     'core.organization.read',
@@ -598,14 +604,15 @@ export class OtcSales {
     }
 
     // Daftar penjualan menurut tanggal penjualan (from dan to, keduanya opsional), dimuat bertahap, terbaru lebih dulu.
-    // total adalah yang ditagih kasir sesudah retur; paid berarti ada pembayaran kasir yang masih berlaku.
+    // total adalah yang ditagih kasir sesudah retur; paid berarti ada pembayaran kasir yang masih berlaku. Penjualan di
+    // lokasi khusus petugas hanya tampil bagi petugasnya, sama dengan antrean resep.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('otc-sale', 'read');
         const bindings: Bind[] = [
             this.scope.tenantId,
             this.scope.legalEntityId,
         ];
-        let filter = '';
+        let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
         const from = parameters.get('from') ?? '';
         if (dateSchema.safeParse(from).success)
             filter += ` and date >= $${bindings.push(from)}`;
@@ -660,6 +667,7 @@ export class OtcSales {
     }
 
     // Kartu penjualan: kepala, lalu baris dengan jumlah terjual, jumlah yang masih ditagih sesudah retur, dan nilainya.
+    // Penjualan di lokasi khusus petugas yang dibuka lewat alamatnya ditolak dengan nama lokasinya, bukan 404.
     async show(id: string) {
         this.workspace.guard('otc-sale', 'read');
         const scope = this.scope;
@@ -680,6 +688,9 @@ export class OtcSales {
               )
             : undefined;
         if (!sale) abort(404, 'Not Found');
+        await requireLocationAccess(this.db, this.workspace, [
+            sale.location.id,
+        ]);
         const lines = await netLines(this.db, scope.tenantId, [sale.id]);
         const fees = (
             await billedFees(this.db, scope.tenantId, [sale.id], keptIds(lines))
