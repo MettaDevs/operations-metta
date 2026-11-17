@@ -93,3 +93,7 @@ export {
     inventoryDocument,
     type DocumentColumn,
 } from './document-layout.ts';
+export {
+    stockCountResultReport,
+    stockCountSheetReport,
+} from './stock-count/stock-count.report.ts';
