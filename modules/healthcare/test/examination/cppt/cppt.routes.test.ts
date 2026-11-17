@@ -294,7 +294,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         expect((await history(current, outsider)).status).toBe(403);
     });
 
-    test('P writes the prescription until the pharmacy hands it over, then what the patient kept, in the written unit when it comes out whole', async () => {
+    test('P writes the prescription until the pharmacy hands it over, then what the patient kept, in the written unit when it comes out whole, naming the substitute', async () => {
         const stockKeeper = await login(pool, browser, clinic.tenantId, [
             'core.inventory-item.manage',
         ]);
@@ -349,6 +349,7 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         );
         const kept = await drug('SIMPAN');
         const back = await drug('KEMBALI');
+        const generic = await drug('GENERIK');
         const { destinationId } = await clinic.visit();
         await json(await clinic.start(destinationId), 200);
         const line = (drugId: string, quantity: number) => ({
@@ -379,7 +380,11 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
         type Plan = {
             status: string;
             handed_over: boolean;
-            lines: { drug_name: string | null; quantity: string | null }[];
+            lines: {
+                drug_name: string | null;
+                substitute_name: string | null;
+                quantity: string | null;
+            }[];
         }[];
         const plan = async () =>
             (
@@ -401,9 +406,26 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                 row.returned_quantity,
             ]);
         const written = [
-            { drug_name: 'Obat ANT', quantity: '2 STRIP' },
-            { drug_name: 'Obat SIMPAN', quantity: '10 TAB' },
-            { drug_name: 'Obat KEMBALI', quantity: '5 TAB' },
+            {
+                drug_name: 'Obat ANT',
+                substitute_name: null,
+                quantity: '2 STRIP',
+            },
+            {
+                drug_name: 'Obat SIMPAN',
+                substitute_name: null,
+                quantity: '10 TAB',
+            },
+            {
+                drug_name: 'Obat KEMBALI',
+                substitute_name: null,
+                quantity: '5 TAB',
+            },
+        ];
+        const handedOver = [
+            written[0],
+            { ...written[1], substitute_name: 'Obat GENERIK' },
+            written[2],
         ];
         expect(await plan()).toMatchObject([
             { status: 'draf', handed_over: false, lines: written },
@@ -475,10 +497,10 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                 name: 'Farmasi',
             },
         };
-        const item = (drugId: string) => ({
+        const item = (drugId: string, name = 'Obat') => ({
             id: drugId,
             code: 'X',
-            name: 'Obat',
+            name,
         });
         await publish('pharmacy.prescription.dispensed.v1', {
             ...header,
@@ -491,7 +513,10 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                 [back.id, tablet, '5', '1', '5'] as const,
             ].map(([drugId, unit, quantity, isi, base], index) => ({
                 prescription_line_id: lineIds[index] ?? '',
-                item: item(drugId),
+                item:
+                    drugId === kept.id
+                        ? item(generic.id, generic.name)
+                        : item(drugId),
                 unit,
                 quantity_per_unit: isi,
                 base_unit: tablet,
@@ -501,10 +526,23 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                 quantity,
                 reason: null,
                 batches: [],
+                substitution:
+                    drugId === kept.id
+                        ? {
+                              prescribed_item: item(kept.id),
+                              consent: 'pasien',
+                              reason: 'Stok obat resep habis',
+                              substituted_at: '2026-11-13T04:50:00Z',
+                              substituted_by: {
+                                  id: Bun.randomUUIDv7(),
+                                  name: 'Apoteker Uji',
+                              },
+                          }
+                        : null,
             })),
         });
         expect(await plan()).toMatchObject([
-            { status: 'dikirim', handed_over: true, lines: written },
+            { status: 'dikirim', handed_over: true, lines: handedOver },
         ]);
         expect(await eResep()).toEqual([
             ['2 STRIP', null],
@@ -540,8 +578,16 @@ describe.skipIf(!process.env.DB_HOST)('examination CPPT', () => {
                 status: 'dikirim',
                 handed_over: true,
                 lines: [
-                    { drug_name: 'Obat ANT', quantity: '15 TAB' },
-                    { drug_name: 'Obat SIMPAN', quantity: '10 TAB' },
+                    {
+                        drug_name: 'Obat ANT',
+                        substitute_name: null,
+                        quantity: '15 TAB',
+                    },
+                    {
+                        drug_name: 'Obat SIMPAN',
+                        substitute_name: 'Obat GENERIK',
+                        quantity: '10 TAB',
+                    },
                 ],
             },
         ]);

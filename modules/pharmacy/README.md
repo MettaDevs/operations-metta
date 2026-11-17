@@ -75,7 +75,7 @@ Apoteker boleh menyerahkan obat lain sebagai ganti obat yang ditulis dokter, mis
 - **Stok, harga, kasir, retur, dan etiket** memakai obat yang diserahkan tanpa kode tambahan, karena semuanya sudah membaca `bill_farmasi_detail.barang_id`: stok keluar obat pengganti, harga dihitung dari grading obat pengganti, baris kasir lewat `pharmacy.dispensing.charges-replaced.v1` menyebut obat pengganti, retur mengembalikan obat pengganti, dan etiket mencetak nama obat pengganti.
 - **Izin.** Mengganti obat butuh `pharmacy.dispensing.substitute`, yang ada di duty apoteker (`pharmacy.dispensing.manage`) dan tidak di duty asisten (`pharmacy.dispensing.prepare`). Dasarnya Permenkes 68/2010 Pasal 7 dan PP 51/2009 Pasal 24 huruf b: apoteker dapat mengganti obat merek dagang dengan generik yang sama komponen aktifnya, atau merek dagang lain, atas persetujuan dokter dan/atau pasien. Berbeda dengan ubah harga (#212), izin ini ikut ke role pemilik dan role yang sudah memegang duty apoteker, karena penggantian adalah pekerjaan apoteker sehari-hari dan tidak mengubah harga di luar grading. Asisten tetap bisa menyimpan draf yang sudah diganti apoteker selama penggantiannya tidak diubah; mengubah atau membuat penggantian dijawab 403.
 - **Persetujuan dokter tidak diwajibkan sistem.** Regulasi menerima persetujuan dokter atau pasien, jadi pilihan pasien saja sah, dan tidak ada langkah persetujuan dokter di aplikasi.
-- **Layanan kesehatan.** `pharmacy.prescription.dispensed.v1` membawa `substitution` per baris (obat resep, persetujuan, alasan, waktu, dan pengguna) sebagai field opsional, dan `item` tetap obat yang diserahkan. Layanan kesehatan menyalinnya ke baris resepnya, dan E-Resep menulis "Diganti <nama obat>" di bawah jumlah yang diserahkan.
+- **Layanan kesehatan.** `pharmacy.prescription.dispensed.v1` membawa `substitution` per baris (obat resep, persetujuan, alasan, waktu, dan pengguna) sebagai field opsional, dan `item` tetap obat yang diserahkan. Layanan kesehatan menyalinnya ke baris resepnya. E-Resep menulis "Diganti <nama obat>" di bawah jumlah yang diserahkan, dan CPPT menulis "<obat resep> diganti dengan <obat pengganti>".
 
 ## Batal resep
 
@@ -213,5 +213,4 @@ Petugas pusling hanya melihat dan mengerjakan resep pusling lewat Petugas lokasi
 
 - Layar antrean di TV (display board).
 - Resep luar. Di Kuta 1 hampir tidak dipakai (0 dari 12.177 penyerahan, Desember 2025 sampai Juni 2026).
-- CPPT di layanan kesehatan menampilkan obat pengganti yang diserahkan; E-Resep sudah.
 - Obat pengganti pada penjualan obat bebas, dan obat pengganti dengan syarat (Substitution Condition BC).

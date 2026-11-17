@@ -40,12 +40,13 @@ const value = (number: number | null, unit: string): string | null =>
 
 type PlanPrescription = Cppt['plan']['prescriptions'][number];
 
-// Baris resep seperti CPPT sistem lama: komponen racikan menjorok di bawah racikannya, jumlah beserta satuannya.
+// Baris resep seperti CPPT sistem lama: komponen racikan menjorok di bawah racikannya, jumlah beserta satuannya. Obat
+// yang diganti farmasi tetap ditulis seperti resep dokter, diikuti obat yang diterima pasien.
 const prescriptionLines = (prescription: PlanPrescription): string[] =>
     prescription.lines.map((line) =>
         line.drug_name === null
             ? `Racikan ${line.compound ?? ''} (${line.requested_quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}`
-            : `${line.compound === null ? '' : '  '}${line.drug_name} (Qty: ${line.quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}${line.usage_instruction ? ` · ${line.usage_instruction}` : ''}`,
+            : `${line.compound === null ? '' : '  '}${line.drug_name}${line.substitute_name ? ` diganti dengan ${line.substitute_name}` : ''} (Qty: ${line.quantity ?? ''})${line.signa ? ` · ${line.signa}` : ''}${line.usage_instruction ? ` · ${line.usage_instruction}` : ''}`,
     );
 
 const planText = (lines: string[]) => (lines.length ? lines.join('\n') : null);

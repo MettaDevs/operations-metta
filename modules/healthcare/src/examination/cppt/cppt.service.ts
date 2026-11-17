@@ -34,6 +34,7 @@ const writtenPrescriptionSchema = z.object({
         z.object({
             compound: z.number().nullable(),
             drug_name: z.string().nullable(),
+            substitute_name: z.string().nullable(),
             quantity: z.string().nullable(),
             unit_code: z.string().nullable(),
             conversion: z.string().nullable(),
@@ -249,6 +250,7 @@ export class Cppts {
                   `select rs.nomor as number, rs.status, rs.diserahkan_pada is not null as handed_over,
                           coalesce((select json_agg(json_build_object(
                                         'compound', rd.racikan_ke, 'drug_name', ob.nama,
+                                        'substitute_name', rd.nama_obat_diserahkan,
                                         'quantity', rd.jumlah::text, 'unit_code', so.kode,
                                         'conversion', rd.konversi::text, 'base_unit_code', bu.kode,
                                         'dispensed', rd.jumlah_diserahkan::text, 'returned', rd.jumlah_diretur::text,
