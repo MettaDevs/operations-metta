@@ -348,16 +348,14 @@ const documentPaymentSchema = z.object({
     cashier: z.string().nullable(),
 });
 
-export type DocumentPayment = z.infer<typeof documentPaymentSchema>;
-
-// Pembayaran yang masih berlaku atas satu dokumen sumber, untuk dokumen cetak module penjualnya (nota penjualan obat
-// bebas): nomor bukti, cara bayar, uang diterima, kembalian, dan kasir. Nilai mentah dari SQL; mesin cetak yang
-// memformatnya. Tanpa pemeriksaan izin kasir, sama dengan paidDocuments: izinnya milik dokumen sumber yang dicetak.
+// Pembayaran yang masih berlaku atas satu dokumen sumber, untuk dokumen cetak module penjualnya. Nilai mentah dari
+// SQL; mesin cetak yang memformatnya. Tanpa pemeriksaan izin kasir, sama dengan paidDocuments: izinnya milik dokumen
+// sumber yang dicetak.
 export async function documentPayment(
     db: Database,
     tenantId: string,
     documentId: string,
-): Promise<DocumentPayment | null> {
+): Promise<z.infer<typeof documentPaymentSchema> | null> {
     return (
         (await db.one(
             documentPaymentSchema,

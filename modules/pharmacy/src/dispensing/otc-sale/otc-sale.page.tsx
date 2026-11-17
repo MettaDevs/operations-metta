@@ -52,8 +52,7 @@ import {
 // Loket penjualan obat bebas, satu langkah: pilih obat, lihat total, terima bayar, serahkan. Harga dan total hanya
 // datang dari quote server, yang diminta ulang sebentar sesudah isian berhenti berubah. Simpan dan bayar mengirim total
 // quote itu sebagai expected_total; server menolak bila harga berubah sejak itu. Sesudah berhasil, layar kosong untuk
-// pembeli berikutnya dengan lokasi dan kelompok harga yang sama, dan tombol Nota penjualan itu tetap di toolbar sampai
-// penjualan berikutnya tersimpan. Lokasi terakhir diingat per pengguna di peramban.
+// pembeli berikutnya dengan lokasi dan kelompok harga yang sama. Lokasi terakhir diingat per pengguna di peramban.
 
 type Header = {
     locationId: string;

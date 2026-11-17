@@ -53,8 +53,7 @@ function amountRow(label: string, value: string, bold = false): Row {
 }
 
 // Baris yang hanya tampil bila flag-nya benar: tag syaratnya dibuka di sel pertama dan ditutup di sel kedua, jadi
-// seluruh baris tabel hilang bila flag-nya salah. Baris pembayaran memakainya satu per satu, bukan satu syarat di
-// sekeliling tabel, karena pemeriksa tag katalog belum mengenal syarat di dalam syarat.
+// seluruh baris tabel hilang bila flag-nya salah.
 function optionalRow(flag: string, label: string, value: string): Row {
     return {
         cells: [
@@ -183,8 +182,6 @@ function a4(): Uint8Array {
     });
 }
 
-// Struk 76 mm: satu kolom, huruf kecil, untuk printer thermal. Tinggi halaman 200 mm; nota yang lebih panjang
-// berlanjut ke halaman berikutnya.
 function thermal(): Uint8Array {
     return wordDocument({
         paper: { widthMm: 76, heightMm: 200 },
