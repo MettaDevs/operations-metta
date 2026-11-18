@@ -140,7 +140,7 @@ const messages = {
 
 // Baris penerimaan yang boleh difakturkan untuk satu vendor: penerimaan diposting, di lokasi yang boleh dilihat
 // pengguna. on_drafts = jumlah yang sudah ada di draf faktur lain, supaya dua draf tidak menagih barang yang sama.
-const receiptLinesSql = (location: string) => `
+const receiptLinesSql = (filter: string) => `
     select d.id as receipt_line_id,
            json_build_object('id', r.id, 'number', r.nomor, 'posting_date', r.tanggal::text,
                              'vendor_document_number', r.no_dokumen_vendor) as receipt,
@@ -154,14 +154,14 @@ const receiptLinesSql = (location: string) => `
                        and fh.status = 'draf' and fh.deleted_at is null and fh.id is distinct from $4::uuid),
                     0)::text as on_drafts,
            d.harga_satuan::text as unit_cost, d.diskon_persen::text as discount_percent,
-           d.tarif_ppn::text as vat_percent, r.lokasi_id as location_id
+           d.tarif_ppn::text as vat_percent, r.lokasi_id as location_id, d.order_detail_id as order_line_id
     from bl_tr_penerimaan_detail d
     join bl_tr_penerimaan r on r.tenant_id = d.tenant_id and r.id = d.penerimaan_id
     join gd_m_lokasi l on l.tenant_id = r.tenant_id and l.id = r.lokasi_id
     join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
     join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
     where d.tenant_id = $1 and r.legal_entity_id = $2 and r.vendor_id = $3 and r.status = 'diposting'
-      and r.deleted_at is null and d.deleted_at is null and d.jumlah_difaktur < d.jumlah and ${location}`;
+      and r.deleted_at is null and d.deleted_at is null and d.jumlah_difaktur < d.jumlah and ${filter}`;
 
 const storedReceiptLineSchema = z.object({
     receipt_line_id: z.string(),
@@ -362,6 +362,38 @@ export class PurchaseInvoices {
                 ];
             }),
         };
+    }
+
+    // Baris penerimaan diposting dari satu purchase order yang sisanya belum difakturkan, dari penerimaan terlama, untuk
+    // Post Invoice dari order.
+    async orderReceiptLines(vendorId: string, orderId: string) {
+        const rows = await this.db.rows(
+            storedReceiptLineSchema.extend({ order_line_id: z.string() }),
+            `${receiptLinesSql('r.order_id = $5')} order by r.tanggal, r.nomor, d.urutan`,
+            [
+                this.scope.tenantId,
+                this.scope.legalEntityId,
+                vendorId,
+                null,
+                orderId,
+            ],
+        );
+        return rows.map((row) => ({
+            ...row,
+            open:
+                fromNumeric(row.received, quantityScale) -
+                fromNumeric(row.invoiced, quantityScale) -
+                fromNumeric(row.on_drafts, quantityScale),
+        }));
+    }
+
+    async createAndPost(body: unknown) {
+        this.workspace.guard('purchase-invoice', 'post');
+        return this.db.transaction(async () => {
+            const created = (await this.create(body)).body.data;
+            await this.postDraft(created.id, created.version);
+            return created;
+        });
     }
 
     private async vendorStatus(id: string) {
@@ -857,9 +889,17 @@ export class PurchaseInvoices {
     async post(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-invoice', 'post');
         const current = await this.header(id);
-        const version = expectedVersion(request, body);
+        await this.postDraft(current.id, expectedVersion(request, body));
+        return {
+            status: 200,
+            headers: {},
+            body: { data: await this.document(current.id) },
+        };
+    }
+
+    private async postDraft(id: string, version: number) {
         await this.db.transaction(async () => {
-            const claimed = await this.transition(current.id, version, 'post');
+            const claimed = await this.transition(id, version, 'post');
             if (!claimed) return;
             const vendor = await this.vendorStatus(claimed.vendor_id);
             if (vendor?.status !== 'active')
@@ -867,8 +907,8 @@ export class PurchaseInvoices {
                     vendor_id:
                         'Vendor ini nonaktif, jadi fakturnya tidak bisa diposting. Aktifkan lagi vendornya.',
                 });
-            const total = await this.total(current.id);
-            const lines = await this.lockedLines(current.id);
+            const total = await this.total(id);
+            const lines = await this.lockedLines(id);
             await requireLocationAccess(
                 this.db,
                 this.workspace,
@@ -913,7 +953,7 @@ export class PurchaseInvoices {
                 tenant_id: this.scope.tenantId,
                 legal_entity_id: this.scope.legalEntityId,
                 vendor_id: claimed.vendor_id,
-                faktur_id: current.id,
+                faktur_id: id,
                 jenis: 'faktur',
                 tanggal: claimed.posting_date,
                 nomor_dokumen: claimed.number,
@@ -926,11 +966,6 @@ export class PurchaseInvoices {
                 updated_at: stamp,
             });
         });
-        return {
-            status: 200,
-            headers: {},
-            body: { data: await this.document(current.id) },
-        };
     }
 
     // Batal posting, seperti Cancel pada Posted Purchase Invoice (codeunit "Correct Posted Purch. Invoice").

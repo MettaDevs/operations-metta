@@ -173,6 +173,10 @@ export class PurchaseOrders {
             update: has('purchase-order.update'),
             release: has('purchase-order.release'),
             receive: has('purchase-receipt.update'),
+            post_receipt:
+                has('purchase-receipt.update') && has('purchase-receipt.post'),
+            post_invoice:
+                has('purchase-invoice.update') && has('purchase-invoice.post'),
             create_vendor: has('vendor.update'),
         };
     }
@@ -196,7 +200,9 @@ export class PurchaseOrders {
         const lines = await this.db.rows(
             storedLineSchema,
             `select d.id, d.urutan as line_no,
-                    json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode) as item,
+                    json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode,
+                                      'batch_required', coalesce(t.wajib_batch, false),
+                                      'expiry_required', coalesce(t.wajib_kedaluwarsa, false)) as item,
                     json_build_object('id', u.id, 'code', u.kode, 'name', u.nama) as unit,
                     trim_scale(d.konversi)::text as quantity_per_unit, trim_scale(d.jumlah)::text as quantity,
                     trim_scale(d.harga_satuan)::text as unit_cost,
@@ -204,11 +210,17 @@ export class PurchaseOrders {
                     trim_scale(d.tarif_ppn)::text as vat_percent,
                     d.tanggal_diharapkan::text as expected_receipt_date,
                     trim_scale(d.jumlah_diterima)::text as quantity_received,
+                    trim_scale(coalesce((
+                        select sum(r.jumlah_difaktur) from bl_tr_penerimaan_detail r
+                        join bl_tr_penerimaan rh on rh.tenant_id = r.tenant_id and rh.id = r.penerimaan_id
+                        where r.tenant_id = d.tenant_id and r.order_detail_id = d.id and r.deleted_at is null
+                          and rh.status = 'diposting'), 0))::text as quantity_invoiced,
                     trim_scale(d.jumlah - d.jumlah_diterima)::text as outstanding_quantity
              from bl_tr_order_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan base on base.tenant_id = b.tenant_id and base.id = b.satuan_dasar_id
              join gd_m_satuan u on u.tenant_id = d.tenant_id and u.id = d.satuan_id
+             left join gd_m_profil_pelacakan t on t.tenant_id = b.tenant_id and t.id = b.profil_pelacakan_id
              where d.tenant_id = $1 and d.order_id = $2 and d.deleted_at is null
              order by d.urutan, d.id`,
             [this.scope.tenantId, header.id],

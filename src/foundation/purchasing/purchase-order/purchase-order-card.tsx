@@ -3,6 +3,12 @@ import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@operations-metta/ui/dropdown-menu';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { InlineLookup } from '@operations-metta/ui/inline-lookup';
@@ -20,10 +26,11 @@ import {
 } from '@operations-metta/ui/page-dialog';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
-import { LockOpen, PackageCheck, Send } from 'lucide-react';
+import { ChevronDown, LockOpen, PackageCheck, Send } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
+import { Decimal } from '../../../platform/money/index.ts';
 import {
     api,
     ApiError,
@@ -48,7 +55,11 @@ import {
     type Reference,
     type UnitChoice,
 } from '../purchase-lines.tsx';
-import { documentTotals, lineAmount } from '../purchase-line.amounts.ts';
+import {
+    decimalOf,
+    documentTotals,
+    lineAmount,
+} from '../purchase-line.amounts.ts';
 import {
     ReceiptCard,
     type Receipt,
@@ -68,6 +79,18 @@ export type PurchaseOrderPermissions =
     ApiBody<'purchasingOrderList'>['permissions'];
 type Location = ApiBody<'inventoryLocationList'>['data'][number];
 type Errors = Record<string, string[]>;
+type PostMode = 'receive' | 'invoice' | 'receive_and_invoice';
+type Row = { index: number; line: Line };
+
+const postModes: { mode: PostMode; label: string; done: string }[] = [
+    { mode: 'receive', label: 'Terima', done: 'diterima' },
+    { mode: 'invoice', label: 'Faktur', done: 'difakturkan' },
+    {
+        mode: 'receive_and_invoice',
+        label: 'Terima dan faktur',
+        done: 'diterima dan difakturkan',
+    },
+];
 
 type Line = {
     key: string;
@@ -80,6 +103,13 @@ type Line = {
     vat_percent: string;
     expected_receipt_date: string;
     quantity_received: string;
+    quantity_invoiced: string;
+    quantity_to_receive: string;
+    // Kosong berarti Difakturkan sekarang mengikuti bawaan BC: diterima ditambah diterima sekarang, dikurangi yang sudah
+    // difakturkan.
+    quantity_to_invoice: string | null;
+    batch_number: string;
+    expiry_date: string;
 };
 type Header = {
     vendor: { id: string; number: string; name: string } | null;
@@ -125,8 +155,8 @@ function linesOf(order: PurchaseOrder | null): Line[] {
                 ...line.unit,
                 quantity_per_unit: line.quantity_per_unit,
             },
-            batch_required: false,
-            expiry_required: false,
+            batch_required: line.item.batch_required,
+            expiry_required: line.item.expiry_required,
         },
         unit: { ...line.unit, quantity_per_unit: line.quantity_per_unit },
         quantity: line.quantity,
@@ -135,7 +165,26 @@ function linesOf(order: PurchaseOrder | null): Line[] {
         vat_percent: line.vat_percent,
         expected_receipt_date: line.expected_receipt_date ?? '',
         quantity_received: line.quantity_received,
+        quantity_invoiced: line.quantity_invoiced,
+        quantity_to_receive:
+            order?.status === 'dirilis' ? line.outstanding_quantity : '0',
+        quantity_to_invoice: null,
+        batch_number: '',
+        expiry_date: '',
     }));
+}
+
+const quantityOf = (text: string) => decimalOf(text) ?? Decimal.of('0');
+
+// Qty. to Invoice bawaan BC (MaxQtyToInvoice): diterima, ditambah yang diterima sekarang bila ikut diterima, dikurangi
+// yang sudah difakturkan.
+function invoiceDefault(line: Line, receiving: boolean) {
+    const open = quantityOf(line.quantity_received).minus(
+        quantityOf(line.quantity_invoiced),
+    );
+    return (
+        receiving ? open.plus(quantityOf(line.quantity_to_receive)) : open
+    ).normalized();
 }
 
 export function PurchaseOrderCard({
@@ -157,6 +206,14 @@ export function PurchaseOrderCard({
     const editable =
         (order === null || order.status === 'terbuka') && permissions.update;
     const [header, setHeader] = useState(() => headerOf(initial));
+    const [posting, setPosting] = useState({
+        posting_date: today(),
+        vendor_invoice_number: '',
+    });
+    const receivable = order?.status === 'dirilis' && permissions.post_receipt;
+    const invoiceable =
+        (order?.status === 'dirilis' || order?.status === 'selesai') &&
+        permissions.post_invoice;
     const [lines, setLines] = useState(() => linesOf(initial));
     const [selected, setSelected] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
@@ -329,6 +386,57 @@ export function PurchaseOrderCard({
             }
         });
 
+    const post = (mode: PostMode) =>
+        run(async () => {
+            if (!order) return;
+            setErrors({});
+            setErrorActions([]);
+            setMessage(null);
+            const receiving = mode !== 'invoice';
+            try {
+                const { body } = await api.purchasingOrderPost({
+                    params: { id: order.id },
+                    body: {
+                        mode,
+                        posting_date: posting.posting_date,
+                        vendor_invoice_number:
+                            posting.vendor_invoice_number || null,
+                        version: order.version,
+                        lines: lines.map((line) => ({
+                            id: line.id ?? '',
+                            quantity_to_receive:
+                                line.quantity_to_receive || null,
+                            quantity_to_invoice:
+                                line.quantity_to_invoice ??
+                                invoiceDefault(line, receiving),
+                            batch_number: line.batch_number || null,
+                            expiry_date: line.expiry_date || null,
+                        })),
+                    },
+                });
+                const documents = [
+                    ...(body.posted.receipt
+                        ? [`penerimaan ${body.posted.receipt.number}`]
+                        : []),
+                    ...(body.posted.invoice
+                        ? [`faktur ${body.posted.invoice.number}`]
+                        : []),
+                ];
+                const done =
+                    postModes.find((entry) => entry.mode === mode)?.done ?? '';
+                toast.success(
+                    `Barang order ${order.number} ${done}: ${documents.join(' dan ')}.`,
+                );
+                adopt(body.data);
+                setPosting((current) => ({
+                    ...current,
+                    vendor_invoice_number: '',
+                }));
+            } catch (caught) {
+                failed(caught, 'Order belum diposting');
+            }
+        });
+
     const reload = async () => {
         if (!order) return;
         const { body } = await api.purchasingOrderShow({
@@ -379,6 +487,11 @@ export function PurchaseOrderCard({
                     vat_percent: previous?.vat_percent ?? '',
                     expected_receipt_date: '',
                     quantity_received: '0',
+                    quantity_invoiced: '0',
+                    quantity_to_receive: '0',
+                    quantity_to_invoice: null,
+                    batch_number: '',
+                    expiry_date: '',
                 })),
             ];
         });
@@ -407,6 +520,37 @@ export function PurchaseOrderCard({
                 }
             />
         </FormControl>
+    );
+    const postingNumber = (
+        index: number,
+        name: 'quantity_to_receive' | 'quantity_to_invoice',
+        caption: string,
+    ) => {
+        const line = lines[index];
+        const value =
+            name === 'quantity_to_invoice'
+                ? (line?.quantity_to_invoice ??
+                  (line ? invoiceDefault(line, true) : ''))
+                : (line?.quantity_to_receive ?? '');
+        return (
+            <FormControl error={error(field(index, name))}>
+                <Input
+                    label={caption}
+                    type="number"
+                    min={0}
+                    step="any"
+                    inputMode="decimal"
+                    data-error-field={field(index, name)}
+                    value={value}
+                    onChange={(event) =>
+                        change(index, { [name]: event.target.value })
+                    }
+                />
+            </FormControl>
+        );
+    };
+    const tracked = lines.some(
+        (line) => line.item?.batch_required || line.item?.expiry_required,
     );
     const optionalNumber = (value: string) =>
         text(Number(value) ? displayNumber(value) : '');
@@ -486,6 +630,39 @@ export function PurchaseOrderCard({
                             <PackageCheck aria-hidden="true" />
                             Terima barang
                         </Button>
+                    )}
+                    {(receivable || invoiceable) && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="command"
+                                    disabled={busy}
+                                    title="Posting barang yang datang dan tagihan vendor langsung dari order ini."
+                                >
+                                    <PackageCheck aria-hidden="true" />
+                                    Posting
+                                    <ChevronDown aria-hidden="true" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                                {postModes.map((entry) => (
+                                    <DropdownMenuItem
+                                        key={entry.mode}
+                                        disabled={
+                                            (entry.mode !== 'invoice' &&
+                                                !receivable) ||
+                                            (entry.mode !== 'receive' &&
+                                                !invoiceable)
+                                        }
+                                        onSelect={() => void post(entry.mode)}
+                                    >
+                                        {entry.label}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     )}
                     {order && editable && (
                         <ActionButton
@@ -788,6 +965,43 @@ export function PurchaseOrderCard({
                                 />
                             </FormControl>
                         )}
+                        {(receivable || invoiceable) && (
+                            <>
+                                <FormControl error={error('posting_date')}>
+                                    <DatePicker
+                                        label="Tanggal posting"
+                                        required
+                                        data-error-field="posting_date"
+                                        value={posting.posting_date}
+                                        portalContainer={portalContainer}
+                                        onValueChange={(posting_date) =>
+                                            setPosting({
+                                                ...posting,
+                                                posting_date,
+                                            })
+                                        }
+                                    />
+                                </FormControl>
+                                <FormControl
+                                    error={error('vendor_invoice_number')}
+                                    hint="Nomor di faktur dari vendor. Wajib untuk Faktur dan Terima dan faktur, dan tercatat di utang vendor."
+                                >
+                                    <Input
+                                        label="No. faktur vendor"
+                                        maxLength={35}
+                                        data-error-field="vendor_invoice_number"
+                                        value={posting.vendor_invoice_number}
+                                        onChange={(event) =>
+                                            setPosting({
+                                                ...posting,
+                                                vendor_invoice_number:
+                                                    event.target.value,
+                                            })
+                                        }
+                                    />
+                                </FormControl>
+                            </>
+                        )}
                     </FormGrid>
                     <DocumentLines
                         title="Baris order"
@@ -977,6 +1191,129 @@ export function PurchaseOrderCard({
                                                       line.quantity_received,
                                                   ),
                                               ),
+                                      },
+                                  ]
+                                : []),
+                            ...(receivable
+                                ? [
+                                      {
+                                          id: 'quantity_to_receive',
+                                          header: 'Diterima sekarang',
+                                          content: 'control' as const,
+                                          minWidth: 120,
+                                          align: 'right' as const,
+                                          cell: ({ index }: Row) =>
+                                              postingNumber(
+                                                  index,
+                                                  'quantity_to_receive',
+                                                  'Diterima sekarang',
+                                              ),
+                                      },
+                                  ]
+                                : []),
+                            ...(invoiceable
+                                ? [
+                                      {
+                                          id: 'quantity_invoiced',
+                                          header: 'Difakturkan',
+                                          minWidth: 100,
+                                          align: 'right' as const,
+                                          cell: ({ line }: Row) =>
+                                              text(
+                                                  displayNumber(
+                                                      line.quantity_invoiced,
+                                                  ),
+                                              ),
+                                      },
+                                      {
+                                          id: 'quantity_to_invoice',
+                                          header: 'Difakturkan sekarang',
+                                          content: 'control' as const,
+                                          minWidth: 130,
+                                          align: 'right' as const,
+                                          cell: ({ index }: Row) =>
+                                              postingNumber(
+                                                  index,
+                                                  'quantity_to_invoice',
+                                                  'Difakturkan sekarang',
+                                              ),
+                                      },
+                                  ]
+                                : []),
+                            ...(receivable && tracked
+                                ? [
+                                      {
+                                          id: 'batch_number',
+                                          header: 'Batch',
+                                          content: 'control' as const,
+                                          minWidth: 130,
+                                          cell: ({ index, line }: Row) => (
+                                              <FormControl
+                                                  error={error(
+                                                      field(
+                                                          index,
+                                                          'batch_number',
+                                                      ),
+                                                  )}
+                                              >
+                                                  <Input
+                                                      label="Batch"
+                                                      required={
+                                                          line.item
+                                                              ?.batch_required
+                                                      }
+                                                      maxLength={50}
+                                                      data-error-field={field(
+                                                          index,
+                                                          'batch_number',
+                                                      )}
+                                                      value={line.batch_number}
+                                                      onChange={(event) =>
+                                                          change(index, {
+                                                              batch_number:
+                                                                  event.target
+                                                                      .value,
+                                                          })
+                                                      }
+                                                  />
+                                              </FormControl>
+                                          ),
+                                      },
+                                      {
+                                          id: 'expiry_date',
+                                          header: 'Kedaluwarsa',
+                                          content: 'control' as const,
+                                          minWidth: 150,
+                                          cell: ({ index, line }: Row) => (
+                                              <FormControl
+                                                  error={error(
+                                                      field(
+                                                          index,
+                                                          'expiry_date',
+                                                      ),
+                                                  )}
+                                              >
+                                                  <DatePicker
+                                                      label="Kedaluwarsa"
+                                                      required={
+                                                          line.item
+                                                              ?.expiry_required
+                                                      }
+                                                      data-error-field={field(
+                                                          index,
+                                                          'expiry_date',
+                                                      )}
+                                                      value={line.expiry_date}
+                                                      onValueChange={(
+                                                          expiry_date,
+                                                      ) =>
+                                                          change(index, {
+                                                              expiry_date,
+                                                          })
+                                                      }
+                                                  />
+                                              </FormControl>
+                                          ),
                                       },
                                   ]
                                 : []),
