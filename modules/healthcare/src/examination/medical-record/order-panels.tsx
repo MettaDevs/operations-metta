@@ -26,7 +26,7 @@ import { useCallback, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Decimal } from '@core/platform/money/index.ts';
-import { api, orpc } from '@core/platform/shell/index.ts';
+import { api, LineUnitLookup, orpc } from '@core/platform/shell/index.ts';
 import { DrugCard, type Drug } from '../../clinical/drug/drug-card.tsx';
 import {
     ProcedureCard,
@@ -87,8 +87,6 @@ const unitValues = (unit: DrugUnit | undefined) => ({
     unit_name: unit?.name ?? null,
     quantity_per_unit: unit?.quantity_per_unit ?? null,
 });
-const unitLabel = (unit: DrugUnit) =>
-    `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
 const unitChoices = (row: PrescriptionLine): DrugUnit[] =>
     row.unit_id && !row.units.some((unit) => unit.id === row.unit_id)
         ? [
@@ -1115,23 +1113,11 @@ function PrescriptionLines({
                                     error={error(field(line, 'unit_id'))}
                                     data-error-field={field(line, 'unit_id')}
                                 >
-                                    <Select
-                                        label="Satuan"
-                                        items={unitChoices(row).map((unit) => ({
-                                            value: unit.id,
-                                            label: unitLabel(unit),
-                                        }))}
-                                        value={row.unit_id ?? ''}
-                                        onValueChange={(value) =>
-                                            change(
-                                                line,
-                                                unitValues(
-                                                    unitChoices(row).find(
-                                                        (unit) =>
-                                                            unit.id === value,
-                                                    ),
-                                                ),
-                                            )
+                                    <LineUnitLookup
+                                        units={unitChoices(row)}
+                                        value={row.unit_id}
+                                        onPick={(unit) =>
+                                            change(line, unitValues(unit))
                                         }
                                     />
                                 </FormControl>

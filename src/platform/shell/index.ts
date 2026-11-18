@@ -11,6 +11,7 @@ export {
 export { AreaDashboard } from './area-dashboard.tsx';
 export { MerchantLookup, PaymentMethodLookup } from './billing-lookups.tsx';
 export { CurrencyLookup } from './currency-lookup.tsx';
+export { LineUnitLookup } from './line-unit-lookup.tsx';
 export { FormErrorHeader } from './form-error-header.tsx';
 export type { ErrorAction } from '../error-action/index.ts';
 export { definePage, defineRecordPage, type RecordPages } from './page.ts';

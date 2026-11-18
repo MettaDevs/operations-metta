@@ -14,7 +14,6 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
-import { Select } from '@operations-metta/ui/select';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +25,7 @@ import {
     ApiError,
     errorText,
     FormErrorHeader,
+    LineUnitLookup,
     type ErrorAction,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
@@ -284,23 +284,14 @@ export function ReturnCard({
                                         }
                                         data-error-field={`lines.${index}.unit_id`}
                                     >
-                                        <Select
-                                            label="Satuan"
+                                        <LineUnitLookup
                                             required
-                                            items={unitChoices(row).map(
-                                                (unit) => ({
-                                                    value: unit.id,
-                                                    label: `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`,
-                                                }),
-                                            )}
+                                            units={unitChoices(row)}
                                             value={unitOf(row)}
-                                            onValueChange={(value) =>
+                                            onPick={(unit) =>
                                                 setUnits((current) => ({
                                                     ...current,
-                                                    [key(row)]:
-                                                        value ??
-                                                        row.unit?.id ??
-                                                        '',
+                                                    [key(row)]: unit.id,
                                                 }))
                                             }
                                             portalContainer={portalContainer}
