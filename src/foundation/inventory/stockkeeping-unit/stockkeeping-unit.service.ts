@@ -27,16 +27,23 @@ import {
     stockkeepingUnitRowSchema,
 } from './stockkeeping-unit.schema.ts';
 
+type StockkeepingUnitInput = z.infer<typeof stockkeepingUnitInputSchema>;
+
 const rowSql = `select * from (
                     select k.id, k.barang_id as item_id,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            trim_scale(k.stok_minimum)::text as minimum_quantity,
                            trim_scale(k.stok_maksimum)::text as maximum_quantity,
                            k.kebijakan_pesan_ulang as reordering_policy,
-                           trim_scale(k.jumlah_pesan_ulang)::text as reorder_quantity, k.version,
-                           l.kode as location_code
+                           trim_scale(k.jumlah_pesan_ulang)::text as reorder_quantity,
+                           k.cara_pengadaan as replenishment_system,
+                           case when f.id is null then null
+                                else json_build_object('id', f.id, 'code', f.kode, 'name', f.nama)
+                           end as transfer_from_location,
+                           k.version, l.kode as location_code
                     from gd_m_barang_lokasi k
                     join gd_m_lokasi l on l.tenant_id = k.tenant_id and l.id = k.lokasi_id
+                    left join gd_m_lokasi f on f.tenant_id = k.tenant_id and f.id = k.lokasi_pemasok_id
                     where k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id = $3 and k.deleted_at is null
                 ) units
                 where true`;
@@ -48,6 +55,8 @@ const messages = {
     maximum_quantity: `Isi stok maksimum 0 atau lebih, ${quantityHint}.`,
     reordering_policy: 'Pilih cara pesan ulang dari daftar.',
     reorder_quantity: `Isi jumlah pesan ulang lebih dari 0, ${quantityHint}.`,
+    replenishment_system: 'Pilih cara pengadaan dari daftar.',
+    transfer_from_location_id: 'Pilih lokasi asal amprah dari daftar.',
 };
 
 const storedSchema = z.object({ id: z.string(), item_id: z.string() });
@@ -154,6 +163,11 @@ export class StockkeepingUnits {
         else if (location.transit)
             errors.location_id =
                 'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
+        const replenishment = data.replenishment_system ?? 'beli';
+        const transferFromId =
+            replenishment === 'amprah'
+                ? await this.transferFrom(data, location, errors)
+                : null;
         const minimum = level(data.minimum_quantity);
         const maximum = level(data.maximum_quantity);
         const reorder = level(data.reorder_quantity);
@@ -214,7 +228,71 @@ export class StockkeepingUnits {
             maximum: numeric(maximum),
             policy,
             reorder: numeric(reorder),
+            replenishment,
+            transferFromId,
         };
+    }
+
+    private async transferFrom(
+        data: StockkeepingUnitInput,
+        location: { transit: boolean } | undefined,
+        errors: Record<string, string>,
+    ) {
+        const id = data.transfer_from_location_id ?? null;
+        const from =
+            id && lookupId(id)
+                ? await this.db.one(
+                      z.object({ transit: z.boolean() }),
+                      `select transit from gd_m_lokasi
+                       where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null`,
+                      [this.scope.tenantId, this.scope.legalEntityId, id],
+                  )
+                : undefined;
+        if (!id || !from) {
+            errors.transfer_from_location_id = id
+                ? messages.transfer_from_location_id
+                : 'Pilih lokasi asal amprah untuk cara pengadaan amprah.';
+            return null;
+        }
+        if (from.transit) {
+            errors.transfer_from_location_id =
+                'Pilih lokasi yang bukan lokasi transit. Lokasi transit hanya dipakai mutasi.';
+            return null;
+        }
+        if (!location) return null;
+        if (await this.transferChainReaches(data.item_id, id, data.location_id))
+            errors.transfer_from_location_id =
+                id === data.location_id
+                    ? 'Lokasi asal amprah harus berbeda dengan lokasi ini.'
+                    : 'Lokasi asal ini mengamprah barang ini dari lokasi ini, langsung atau lewat lokasi lain. Pilih lokasi asal lain.';
+        return id;
+    }
+
+    private async transferChainReaches(
+        itemId: string,
+        fromId: string,
+        locationId: string,
+    ) {
+        const found = await this.db.one(
+            z.object({ found: z.boolean() }),
+            `with recursive chain(lokasi_id) as (
+                 select $4::uuid
+                 union
+                 select k.lokasi_pemasok_id
+                 from chain
+                 join gd_m_barang_lokasi k on k.tenant_id = $1 and k.legal_entity_id = $2 and k.barang_id = $3
+                      and k.lokasi_id = chain.lokasi_id and k.deleted_at is null and k.cara_pengadaan = 'amprah'
+             )
+             select exists (select 1 from chain where lokasi_id = $5::uuid) as found`,
+            [
+                this.scope.tenantId,
+                this.scope.legalEntityId,
+                itemId,
+                fromId,
+                locationId,
+            ],
+        );
+        return found?.found ?? false;
     }
 
     private locationTaken(error: unknown): void {
@@ -241,6 +319,8 @@ export class StockkeepingUnits {
                 stok_maksimum: data.maximum,
                 kebijakan_pesan_ulang: data.policy,
                 jumlah_pesan_ulang: data.reorder,
+                cara_pengadaan: data.replenishment,
+                lokasi_pemasok_id: data.transferFromId,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -259,7 +339,8 @@ export class StockkeepingUnits {
         try {
             updated = await this.db.execute(
                 `update gd_m_barang_lokasi set lokasi_id = $1, stok_minimum = $2, stok_maksimum = $3,
-                        kebijakan_pesan_ulang = $8, jumlah_pesan_ulang = $9, updated_at = $4
+                        kebijakan_pesan_ulang = $8, jumlah_pesan_ulang = $9, cara_pengadaan = $10,
+                        lokasi_pemasok_id = $11, updated_at = $4
                  where tenant_id = $5 and id = $6 and version = $7 and deleted_at is null`,
                 [
                     data.locationId,
@@ -271,6 +352,8 @@ export class StockkeepingUnits {
                     expectedVersion(request, body),
                     data.policy,
                     data.reorder,
+                    data.replenishment,
+                    data.transferFromId,
                 ],
             );
         } catch (error) {

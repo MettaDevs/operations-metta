@@ -52,6 +52,8 @@ const planSchema = z.object({
     purchase_unit_id: z.string().nullable(),
     purchase_conversion: z.string().nullable(),
     vendor_id: z.string().nullable(),
+    replenishment_system: z.enum(['beli', 'amprah']),
+    transfer_from_id: z.string().nullable(),
     projected: z.string(),
 });
 type Plan = z.infer<typeof planSchema>;
@@ -63,6 +65,7 @@ const suggestionSchema = z.object({
     unit_id: z.string(),
     quantity: z.string(),
     vendor_id: z.string().nullable(),
+    transfer_from_id: z.string().nullable(),
     request_date: z.string(),
     due_date: z.string(),
     description: z.string().nullable(),
@@ -102,7 +105,9 @@ function ruleOf(plan: Plan): ReorderRule {
 
 function orderUnit(plan: Plan, base: bigint) {
     const conversion =
-        plan.purchase_unit_id && plan.purchase_conversion
+        plan.replenishment_system === 'beli' &&
+        plan.purchase_unit_id &&
+        plan.purchase_conversion
             ? fromNumeric(plan.purchase_conversion, quantityScale)
             : null;
     if (plan.purchase_unit_id && conversion && base % conversion === 0n)
@@ -114,6 +119,35 @@ function orderUnit(plan: Plan, base: bigint) {
     return { unitId: plan.base_unit_id, conversion: one, quantity: base };
 }
 
+function byTransferLevel(plans: Plan[]): Plan[] {
+    const byLocation = new Map(
+        plans.map((plan) => [`${plan.item_id}:${plan.location_id}`, plan]),
+    );
+    const levels = new Map<Plan, number>();
+    const transferLevel = (plan: Plan, seen: Set<Plan>): number => {
+        const known = levels.get(plan);
+        if (known !== undefined) return known;
+        const from =
+            plan.transfer_from_id === null
+                ? undefined
+                : byLocation.get(`${plan.item_id}:${plan.transfer_from_id}`);
+        const found =
+            from === undefined || seen.has(from)
+                ? 0
+                : transferLevel(from, new Set([...seen, plan])) + 1;
+        levels.set(plan, found);
+        return found;
+    };
+    return plans
+        .map((plan, index) => ({
+            plan,
+            index,
+            level: transferLevel(plan, new Set([plan])),
+        }))
+        .sort((a, b) => b.level - a.level || a.index - b.index)
+        .map(({ plan }) => plan);
+}
+
 const planSql = (allowed: string) => `
     select k.barang_id as item_id, k.lokasi_id as location_id, l.operating_unit_id,
            k.kebijakan_pesan_ulang as policy, k.stok_minimum::text as reorder_point,
@@ -122,6 +156,7 @@ const planSql = (allowed: string) => `
            case when b.satuan_beli_id is null or b.satuan_beli_id = b.satuan_dasar_id then null
                 else b.satuan_beli_id end as purchase_unit_id,
            purchase.konversi::text as purchase_conversion,
+           k.cara_pengadaan as replenishment_system, k.lokasi_pemasok_id as transfer_from_id,
            (select v.id from bl_tr_penerimaan_detail d
             join bl_tr_penerimaan h on h.tenant_id = d.tenant_id and h.id = d.penerimaan_id
             left join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id and v.status = 'active'
@@ -140,7 +175,12 @@ const planSql = (allowed: string) => `
              + coalesce((select sum(r.jumlah * r.konversi) from bl_tr_permintaan r
                          where r.tenant_id = k.tenant_id and r.legal_entity_id = k.legal_entity_id
                            and r.barang_id = k.barang_id and r.lokasi_id = k.lokasi_id
-                           and r.deleted_at is null and r.order_detail_id is null
+                           and r.deleted_at is null and r.diproses_pada is null
+                           and r.saran is distinct from 'baru'), 0)
+             - coalesce((select sum(r.jumlah * r.konversi) from bl_tr_permintaan r
+                         where r.tenant_id = k.tenant_id and r.legal_entity_id = k.legal_entity_id
+                           and r.barang_id = k.barang_id and r.lokasi_pemasok_id = k.lokasi_id
+                           and r.deleted_at is null and r.diproses_pada is null
                            and r.saran is distinct from 'baru'), 0)
              + coalesce((select sum((d.jumlah_diminta - d.jumlah_diterima) * d.konversi) from gd_tr_amprahan_detail d
                          join gd_tr_amprahan a on a.tenant_id = d.tenant_id and a.id = d.amprahan_id
@@ -182,12 +222,13 @@ export async function calculatePlan(
         const suggestions = await db.rows(
             suggestionSchema,
             `select id, barang_id as item_id, lokasi_id as location_id, satuan_id as unit_id,
-                    trim_scale(jumlah)::text as quantity, vendor_id, tanggal_permintaan::text as request_date,
+                    trim_scale(jumlah)::text as quantity, vendor_id, lokasi_pemasok_id as transfer_from_id,
+                    tanggal_permintaan::text as request_date,
                     tanggal_dibutuhkan::text as due_date,
                     keterangan as description
              from bl_tr_permintaan
              where tenant_id = $1 and legal_entity_id = $2 and saran = 'baru' and deleted_at is null
-               and order_detail_id is null
+               and diproses_pada is null
                and ${allowedLocationsSql(workspace, suggestionBindings, ['lokasi_id'])}
              for update`,
             suggestionBindings,
@@ -207,11 +248,24 @@ export async function calculatePlan(
             planBindings,
         );
         const stamp = nowSql();
-        for (const plan of plans) {
+        const transferDemand = new Map<string, bigint>();
+        for (const plan of byTransferLevel(plans)) {
             const rule = ruleOf(plan);
-            const projected = fromNumeric(plan.projected, quantityScale);
+            const projected =
+                fromNumeric(plan.projected, quantityScale) -
+                (transferDemand.get(`${plan.item_id}:${plan.location_id}`) ??
+                    0n);
             const base = reorderQuantity(rule, projected);
             if (base === null) continue;
+            const vendorId =
+                plan.transfer_from_id === null ? plan.vendor_id : null;
+            if (plan.transfer_from_id !== null) {
+                const supplier = `${plan.item_id}:${plan.transfer_from_id}`;
+                transferDemand.set(
+                    supplier,
+                    (transferDemand.get(supplier) ?? 0n) + base,
+                );
+            }
             const unit = orderUnit(plan, base);
             const description = `Stok yang akan tersedia ${display(projected, quantityScale)} ${plan.base_unit_code}, stok minimum ${display(rule.reorderPoint, quantityScale)} ${plan.base_unit_code}.`;
             const key = `${plan.item_id}:${plan.location_id}`;
@@ -232,7 +286,8 @@ export async function calculatePlan(
                     tanggal_dibutuhkan: dueDate,
                     keterangan: description,
                     diminta_oleh_user_id: workspace.userId,
-                    vendor_id: plan.vendor_id,
+                    vendor_id: vendorId,
+                    lokasi_pemasok_id: plan.transfer_from_id,
                     saran: 'baru',
                     created_at: stamp,
                     updated_at: stamp,
@@ -244,7 +299,8 @@ export async function calculatePlan(
                 existing.unit_id === unit.unitId &&
                 fromNumeric(existing.quantity, quantityScale) ===
                     unit.quantity &&
-                existing.vendor_id === plan.vendor_id &&
+                existing.vendor_id === vendorId &&
+                existing.transfer_from_id === plan.transfer_from_id &&
                 existing.request_date === requestDate &&
                 existing.due_date === dueDate &&
                 existing.description === description
@@ -253,7 +309,7 @@ export async function calculatePlan(
             await db.execute(
                 `update bl_tr_permintaan set operating_unit_id = $1, satuan_id = $2, konversi = $3, jumlah = $4,
                         tanggal_dibutuhkan = $5, keterangan = $6, vendor_id = $7, diminta_oleh_user_id = $8,
-                        updated_at = $9, tanggal_permintaan = $12
+                        updated_at = $9, tanggal_permintaan = $12, lokasi_pemasok_id = $13
                  where tenant_id = $10 and id = $11`,
                 [
                     plan.operating_unit_id,
@@ -262,12 +318,13 @@ export async function calculatePlan(
                     toNumeric(unit.quantity, quantityScale),
                     dueDate,
                     description,
-                    plan.vendor_id,
+                    vendorId,
                     workspace.userId,
                     stamp,
                     scope.tenantId,
                     existing.id,
                     requestDate,
+                    plan.transfer_from_id,
                 ],
             );
             counts.updated++;

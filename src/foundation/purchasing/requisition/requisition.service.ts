@@ -19,6 +19,7 @@ import {
     activeLegalEntity,
     allowedLocationsSql,
     fromNumeric,
+    insertTransferOrder,
     parseInput,
     quantityScale,
     requireLocationAccess,
@@ -45,7 +46,7 @@ const rowSql = `select * from (
                r.tanggal_dibutuhkan::text as due_date,
                r.keterangan as description, requester.name as requested_by, r.disetujui as accepted,
                r.saran is not null as suggested,
-               case when r.order_detail_id is null then 'terbuka' else 'diproses' end as status,
+               case when r.diproses_pada is null then 'terbuka' else 'diproses' end as status,
                json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode) as item,
                json_build_object('id', u.id, 'code', u.kode, 'name', u.nama) as unit,
@@ -54,8 +55,13 @@ const rowSql = `select * from (
                case when v.id is null then null
                     else json_build_object('id', v.id, 'number', v.number, 'name', p.name) end as vendor,
                case when o.id is null then null else json_build_object('id', o.id, 'number', o.nomor) end as "order",
-               b.kode as item_code, b.nama as item_name, l.kode as location_code, p.name as vendor_name,
-               o.nomor as order_number, ${isoSql('r.diproses_pada')} as processed_at
+               case when f.id is null then null
+                    else json_build_object('id', f.id, 'code', f.kode, 'name', f.nama) end as transfer_from_location,
+               case when a.id is null then null
+                    else json_build_object('id', a.id, 'number', a.nomor) end as transfer_order,
+               b.kode as item_code, b.nama as item_name, l.kode as location_code,
+               coalesce(p.name, f.kode) as vendor_name, coalesce(o.nomor, a.nomor) as order_number,
+               ${isoSql('r.diproses_pada')} as processed_at
         from bl_tr_permintaan r
         join gd_m_lokasi l on l.tenant_id = r.tenant_id and l.id = r.lokasi_id
         join gd_m_barang b on b.tenant_id = r.tenant_id and b.id = r.barang_id
@@ -66,6 +72,9 @@ const rowSql = `select * from (
         left join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
         left join bl_tr_order_detail od on od.tenant_id = r.tenant_id and od.id = r.order_detail_id
         left join bl_tr_order o on o.tenant_id = od.tenant_id and o.id = od.order_id
+        left join gd_m_lokasi f on f.tenant_id = r.tenant_id and f.id = r.lokasi_pemasok_id
+        left join gd_tr_amprahan_detail ad on ad.tenant_id = r.tenant_id and ad.id = r.amprahan_detail_id
+        left join gd_tr_amprahan a on a.tenant_id = ad.tenant_id and a.id = ad.amprahan_id
         where r.tenant_id = $1 and r.legal_entity_id = $2 and r.deleted_at is null) requisitions
     where true`;
 
@@ -85,6 +94,7 @@ const purchasingOnly =
     'Hanya petugas pembelian yang mengisi vendor, harga, dan persetujuan.';
 
 const storedSchema = z.object({
+    transfer_from_id: z.string().nullable(),
     vendor_id: z.string().nullable(),
     unit_cost: z.string().nullable(),
     accepted: z.boolean(),
@@ -205,8 +215,12 @@ export class PurchaseRequisitions {
                   ],
               )
             : undefined;
+        const transferFromId = stored?.transfer_from_id ?? null;
         if (!location || location.transit)
             errors.location_id = messages.location_id;
+        else if (location.id === transferFromId)
+            errors.location_id =
+                'Lokasi ini adalah lokasi asal amprah permintaan ini. Pilih lokasi lain.';
         else
             await requireLocationAccess(this.db, this.workspace, [location.id]);
         if (
@@ -266,6 +280,14 @@ export class PurchaseRequisitions {
             storedCost === null || cost === null
                 ? storedCost === cost
                 : fromNumeric(storedCost, quantityScale) === price.unitCost;
+        if (transferFromId !== null) {
+            if (vendorId !== null)
+                errors.vendor_id =
+                    'Permintaan amprah diminta dari lokasi lain, jadi tidak memakai vendor.';
+            if (unitCost !== null)
+                errors.unit_cost =
+                    'Permintaan amprah diminta dari lokasi lain, jadi tidak memakai harga.';
+        }
         if (!this.permissions().process) {
             if (vendorId !== (stored?.vendor_id ?? null))
                 errors.vendor_id = purchasingOnly;
@@ -317,8 +339,8 @@ export class PurchaseRequisitions {
     private async lockOpen(id: string, version: number) {
         const stored = await this.db.one(
             storedSchema,
-            `select vendor_id, harga_satuan::text as unit_cost, disetujui as accepted,
-                    order_detail_id is not null as processed, version
+            `select lokasi_pemasok_id as transfer_from_id, vendor_id, harga_satuan::text as unit_cost,
+                    disetujui as accepted, diproses_pada is not null as processed, version
              from bl_tr_permintaan
              where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null for update`,
             [this.scope.tenantId, this.scope.legalEntityId, id],
@@ -326,7 +348,7 @@ export class PurchaseRequisitions {
         if (!stored) return abort(404, 'Not Found');
         if (stored.processed)
             validation({
-                _form: 'Permintaan ini sudah menjadi purchase order, jadi tidak bisa diubah atau dihapus.',
+                _form: 'Permintaan ini sudah menjadi purchase order atau amprah, jadi tidak bisa diubah atau dihapus.',
             });
         if (stored.version !== version)
             coded(409, 'stale_version', staleMessage);
@@ -406,7 +428,6 @@ export class PurchaseRequisitions {
 
     async carryOut(body: unknown) {
         this.workspace.guard('purchase-requisition', 'process');
-        this.workspace.guard('purchase-order', 'update');
         const input = carryOutInputSchema.safeParse(body);
         if (
             !input.success ||
@@ -423,6 +444,7 @@ export class PurchaseRequisitions {
             const lines = await this.db.rows(
                 z.object({
                     id: z.string(),
+                    transfer_from_id: z.string().nullable(),
                     vendor_id: z.string().nullable(),
                     vendor_active: z.boolean().nullable(),
                     location_id: z.string(),
@@ -434,7 +456,8 @@ export class PurchaseRequisitions {
                     unit_cost: z.string(),
                     due_date: z.string(),
                 }),
-                `select r.id, r.vendor_id, v.status = 'active' as vendor_active, r.lokasi_id as location_id,
+                `select r.id, r.lokasi_pemasok_id as transfer_from_id, r.vendor_id,
+                        v.status = 'active' as vendor_active, r.lokasi_id as location_id,
                         r.operating_unit_id, r.barang_id as item_id, r.satuan_id as unit_id,
                         r.konversi::text as conversion, r.jumlah::text as quantity,
                         coalesce(r.harga_satuan, (
@@ -447,7 +470,7 @@ export class PurchaseRequisitions {
                  from bl_tr_permintaan r
                  left join vendors v on v.tenant_id = r.tenant_id and v.id = r.vendor_id
                  where r.tenant_id = $1 and r.legal_entity_id = $2 and r.deleted_at is null
-                   and r.order_detail_id is null and r.disetujui
+                   and r.diproses_pada is null and r.disetujui
                    and ${allowedLocationsSql(this.workspace, bindings, ['r.lokasi_id'])}
                  order by r.lokasi_id, r.vendor_id, r.tanggal_dibutuhkan, r.id
                  for update of r`,
@@ -457,17 +480,27 @@ export class PurchaseRequisitions {
                 validation({
                     _form: 'Belum ada permintaan yang disetujui. Tandai Disetujui pada permintaan yang akan dipesan.',
                 });
-            const missing = lines.filter((line) => !line.vendor_id).length;
+            const purchases = lines.filter(
+                (line) => line.transfer_from_id === null,
+            );
+            const transfers = lines.filter(
+                (line) => line.transfer_from_id !== null,
+            );
+            if (purchases.length)
+                this.workspace.guard('purchase-order', 'update');
+            if (transfers.length)
+                this.workspace.guard('inventory-transfer', 'update');
+            const missing = purchases.filter((line) => !line.vendor_id).length;
             if (missing)
                 validation({
                     _form: `${missing} permintaan yang disetujui belum punya vendor. Isi vendornya lebih dulu.`,
                 });
-            if (lines.some((line) => !line.vendor_active))
+            if (purchases.some((line) => !line.vendor_active))
                 validation({
                     _form: 'Ada permintaan yang disetujui dengan vendor nonaktif. Ganti vendornya atau aktifkan lagi vendor itu.',
                 });
             const groups = new Map<string, typeof lines>();
-            for (const line of lines) {
+            for (const line of purchases) {
                 const key = `${line.vendor_id}:${line.location_id}`;
                 groups.set(key, [...(groups.get(key) ?? []), line]);
             }
@@ -511,6 +544,52 @@ export class PurchaseRequisitions {
                 for (const [index, line] of group.entries())
                     await this.db.execute(
                         `update bl_tr_permintaan set order_detail_id = $1, diproses_pada = $2, updated_at = $2
+                         where tenant_id = $3 and id = $4`,
+                        [
+                            lineIds[index] ?? null,
+                            stamp,
+                            this.scope.tenantId,
+                            line.id,
+                        ],
+                    );
+                created.push({ id, number });
+            }
+            const transferGroups = new Map<string, typeof lines>();
+            for (const line of transfers) {
+                const key = `${line.transfer_from_id}:${line.location_id}`;
+                transferGroups.set(key, [
+                    ...(transferGroups.get(key) ?? []),
+                    line,
+                ]);
+            }
+            for (const group of transferGroups.values()) {
+                const [first] = group;
+                if (!first?.transfer_from_id) continue;
+                const id = Bun.randomUUIDv7();
+                const { number, lineIds } = await insertTransferOrder(
+                    this.db,
+                    this.scope,
+                    {
+                        id,
+                        fromId: first.transfer_from_id,
+                        toId: first.location_id,
+                        transitId: null,
+                        postingDate: orderDate,
+                        description: 'Dari permintaan pembelian',
+                        lines: group.map((line) => ({
+                            itemId: line.item_id,
+                            unitId: line.unit_id,
+                            conversion: fromNumeric(
+                                line.conversion,
+                                quantityScale,
+                            ),
+                            quantity: fromNumeric(line.quantity, quantityScale),
+                        })),
+                    },
+                );
+                for (const [index, line] of group.entries())
+                    await this.db.execute(
+                        `update bl_tr_permintaan set amprahan_detail_id = $1, diproses_pada = $2, updated_at = $2
                          where tenant_id = $3 and id = $4`,
                         [
                             lineIds[index] ?? null,

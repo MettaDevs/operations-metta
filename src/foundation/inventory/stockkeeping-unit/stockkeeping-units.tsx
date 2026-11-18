@@ -46,6 +46,15 @@ const policyItems = [
 const policyOf = (value: string | null): Policy | null =>
     value === 'jumlah_tetap' || value === 'maksimum' ? value : null;
 
+const replenishmentItems = [
+    { value: 'beli', label: 'Beli dari vendor' },
+    { value: 'amprah', label: 'Amprah dari lokasi lain' },
+];
+const supplyText = (level: Level) =>
+    level.transfer_from_location
+        ? `Amprah dari ${level.transfer_from_location.code}`
+        : 'Beli';
+
 const numberFormat =
     'Tulis angka seperti 12.500 atau 1,5. Titik untuk ribuan, koma untuk desimal.';
 
@@ -75,6 +84,8 @@ function LevelCard({
         reorder: level?.reorder_quantity
             ? displayNumber(level.reorder_quantity)
             : '',
+        transferFrom: level?.transfer_from_location ?? null,
+        transfer: level?.replenishment_system === 'amprah',
     };
     const [form, setForm] = useState<{
         location: Reference | null;
@@ -82,6 +93,8 @@ function LevelCard({
         maximum: string;
         policy: Policy | null;
         reorder: string;
+        transferFrom: Reference | null;
+        transfer: boolean;
     }>(blank);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
@@ -115,6 +128,12 @@ function LevelCard({
             maximum_quantity: amount('maximum_quantity', form.maximum),
             reordering_policy: form.policy,
             reorder_quantity: amount('reorder_quantity', form.reorder),
+            replenishment_system: form.transfer
+                ? ('amprah' as const)
+                : ('beli' as const),
+            transfer_from_location_id: form.transfer
+                ? (form.transferFrom?.id ?? null)
+                : null,
         };
         setMessage(null);
         if (Object.keys(found).length) {
@@ -336,6 +355,50 @@ function LevelCard({
                                 }
                             />
                         </FormControl>
+                        <FormControl
+                            error={errors.replenishment_system?.[0]}
+                            hint="Beli berarti Hitung saran menyarankan purchase order ke vendor. Amprah berarti Hitung saran menyarankan amprah dari lokasi asal, dan jumlahnya ikut menjadi kebutuhan lokasi asal itu."
+                        >
+                            {editing ? (
+                                <Select
+                                    label="Cara pengadaan"
+                                    items={replenishmentItems}
+                                    value={form.transfer ? 'amprah' : 'beli'}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            transfer: value === 'amprah',
+                                        })
+                                    }
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Cara pengadaan"
+                                    readOnly
+                                    value={
+                                        form.transfer
+                                            ? 'Amprah dari lokasi lain'
+                                            : 'Beli dari vendor'
+                                    }
+                                />
+                            )}
+                        </FormControl>
+                        {form.transfer && (
+                            <LocationLookup
+                                label="Amprah dari"
+                                required
+                                transit={false}
+                                field="transfer_from_location_id"
+                                value={form.transferFrom}
+                                onChange={(transferFrom) =>
+                                    setForm({ ...form, transferFrom })
+                                }
+                                disabled={!editing}
+                                error={errors.transfer_from_location_id?.[0]}
+                                portalContainer={portalContainer}
+                            />
+                        )}
                     </FormGrid>
                 </PageDialogBody>
                 {confirmation}
@@ -456,6 +519,14 @@ export function StockkeepingUnits({ item }: { item: Item | null }): ReactNode {
                                     ? displayNumber(row.reorder_quantity)
                                     : ''}
                             </DataTableText>
+                        ),
+                    },
+                    {
+                        id: 'supply',
+                        header: 'Cara pengadaan',
+                        width: 170,
+                        cell: (row) => (
+                            <DataTableText>{supplyText(row)}</DataTableText>
                         ),
                     },
                 ]}

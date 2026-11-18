@@ -83,7 +83,7 @@ const linesSql = `
         select r.barang_id, sum(r.jumlah * r.konversi) as jumlah
         from bl_tr_permintaan r
         where r.tenant_id = $1 and r.legal_entity_id = $2 and r.lokasi_id = $3 and r.deleted_at is null
-          and r.tanggal_permintaan between $4::date and $5::date
+          and r.lokasi_pemasok_id is null and r.tanggal_permintaan between $4::date and $5::date
         group by r.barang_id
     ),
     barang as (
