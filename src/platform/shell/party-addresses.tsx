@@ -31,6 +31,7 @@ import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { api, ApiError, errorText, type ApiBody } from './api.ts';
 import { FormErrorHeader } from './form-error-header.tsx';
+import { CountryLookup } from './reference-lookups.tsx';
 
 /**
  * Alamat dan informasi kontak satu party, dipindah dari address-book-section CoreERP: dipakai kartu party di Buku
@@ -976,19 +977,15 @@ function LocationDialog({
                                 <FormControl
                                     error={first(errors, 'country_region_code')}
                                 >
-                                    <Select
+                                    <CountryLookup
                                         label="Negara"
                                         required
                                         portalContainer={contentRef}
-                                        items={countries.map((country) => ({
-                                            value: country.code,
-                                            label: country.name,
-                                        }))}
-                                        value={form.country_region_code || null}
-                                        searchPlaceholder="Cari negara"
-                                        onValueChange={(value) =>
+                                        items={countries}
+                                        value={form.country_region_code}
+                                        onChange={(code) =>
                                             setForm((current) => ({
-                                                ...blankLocation(value ?? ''),
+                                                ...blankLocation(code),
                                                 name: current.name,
                                                 purposes: current.purposes,
                                                 is_primary: current.is_primary,

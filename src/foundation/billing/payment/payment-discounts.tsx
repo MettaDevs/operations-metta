@@ -4,7 +4,9 @@ import {
     displayNumber,
     parseDisplayNumber,
 } from '@operations-metta/ui/display-number';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { Select } from '@operations-metta/ui/select';
 import type { ReactNode, RefObject } from 'react';
@@ -93,6 +95,66 @@ export const discountPayload = (rows: DiscountRow[]) =>
         note: row.note.trim() || null,
     }));
 
+type ChargeChoice = { id: string; code: string; name: string };
+
+const codeColumn: DataTableColumn<ChargeChoice> = {
+    id: 'code',
+    header: 'Kode',
+    width: 120,
+    cell: (choice) => choice.code,
+};
+const nameColumn: DataTableColumn<ChargeChoice> = {
+    id: 'name',
+    header: 'Nama',
+    width: 240,
+    cell: (choice) => choice.name,
+};
+
+function ChargeLookup({
+    label,
+    required = false,
+    choices,
+    columns,
+    value,
+    onChange,
+    error,
+    field,
+    emptyMessage,
+    portalContainer,
+}: {
+    label: string;
+    required?: boolean;
+    choices: ChargeChoice[];
+    columns: DataTableColumn<ChargeChoice>[];
+    value: string;
+    onChange: (id: string) => void;
+    error: string | undefined;
+    field: string;
+    emptyMessage: string;
+    portalContainer: RefObject<HTMLFormElement | null>;
+}): ReactNode {
+    return (
+        <FormControl error={error} data-error-field={field}>
+            <InlineLookup<ChargeChoice>
+                label={label}
+                required={required}
+                items={choices}
+                value={choices.find((choice) => choice.id === value) ?? null}
+                onValueChange={(choice) => onChange(choice.id)}
+                getItemValue={(choice) => choice.id}
+                getItemLabel={(choice) =>
+                    choice.code
+                        ? `${choice.code} · ${choice.name}`
+                        : choice.name
+                }
+                emptyMessage={emptyMessage}
+                portalContainer={portalContainer}
+                columns={columns}
+            />
+        </FormControl>
+    );
+}
+
 export function PaymentDiscounts({
     form,
     rows,
@@ -119,7 +181,7 @@ export function PaymentDiscounts({
                     charge.doctor_name ?? '',
                 ]),
         ),
-    ].map(([value, label]) => ({ value, label }));
+    ].map(([id, name]) => ({ id, code: '', name }));
     const field = (index: number, name: string) => `discounts.${index}.${name}`;
     return (
         <div className="space-y-4">
@@ -149,10 +211,10 @@ export function PaymentDiscounts({
                             )
                             .map((charge) => [
                                 charge.procedure_id,
-                                `${charge.code} · ${charge.name}`,
+                                { code: charge.code, name: charge.name },
                             ]),
                     ),
-                ].map(([value, label]) => ({ value, label }));
+                ].map(([id, procedure]) => ({ id, ...procedure }));
                 const values = discountRowValues(form, row);
                 return (
                     <FormGrid key={row.key}>
@@ -179,38 +241,45 @@ export function PaymentDiscounts({
                                 portalContainer={portalContainer}
                             />
                         </FormControl>
-                        <FormControl
+                        <ChargeLookup
+                            label="Nama Dokter"
+                            choices={[
+                                { id: '', code: '', name: 'Semua dokter' },
+                                ...doctors,
+                            ]}
+                            columns={[nameColumn]}
+                            value={row.doctorId}
+                            onChange={(doctorId) => set(index, { doctorId })}
                             error={errors[field(index, 'doctor_id')]?.[0]}
-                            data-error-field={field(index, 'doctor_id')}
-                        >
-                            <Select
-                                label="Nama Dokter"
-                                items={doctors}
-                                value={row.doctorId}
-                                onValueChange={(value) =>
-                                    set(index, { doctorId: value ?? '' })
-                                }
-                                emptyMessage="Rincian biaya tanpa dokter."
-                                portalContainer={portalContainer}
-                            />
-                        </FormControl>
-                        <FormControl
+                            field={field(index, 'doctor_id')}
+                            emptyMessage="Tidak ada dokter di rincian biaya ini."
+                            portalContainer={portalContainer}
+                        />
+                        <ChargeLookup
+                            label="Nama Jasa"
+                            required={master?.kind === 'komponen'}
+                            choices={
+                                master?.kind === 'komponen'
+                                    ? procedures
+                                    : [
+                                          {
+                                              id: '',
+                                              code: '',
+                                              name: 'Semua jasa',
+                                          },
+                                          ...procedures,
+                                      ]
+                            }
+                            columns={[codeColumn, nameColumn]}
+                            value={row.procedureId}
+                            onChange={(procedureId) =>
+                                set(index, { procedureId })
+                            }
                             error={errors[field(index, 'procedure_id')]?.[0]}
-                            data-error-field={field(index, 'procedure_id')}
-                        >
-                            <Select
-                                label="Nama Jasa"
-                                required={master?.kind === 'komponen'}
-                                items={procedures}
-                                value={row.procedureId}
-                                onValueChange={(value) =>
-                                    set(index, { procedureId: value ?? '' })
-                                }
-                                searchPlaceholder="Cari jasa"
-                                emptyMessage="Tidak ada jasa yang cocok dengan diskon ini."
-                                portalContainer={portalContainer}
-                            />
-                        </FormControl>
+                            field={field(index, 'procedure_id')}
+                            emptyMessage="Tidak ada jasa yang cocok dengan diskon ini."
+                            portalContainer={portalContainer}
+                        />
                         <FormControl
                             error={errors[field(index, 'percent')]?.[0]}
                             hint={

@@ -155,23 +155,27 @@ function NumberField({
     );
 }
 
-// Pilihan master: yang nonaktif hanya ditawarkan kepada baris yang sudah memegangnya. `none` adalah pilihan kosong
-// dengan teks wildcard sistem lama.
+type Choice = { id: string; name: string; active: boolean };
+
 function choiceItems(
     list: { id: string; name: string; active?: boolean }[],
     held: string | null,
     heldName: string | null,
     none?: string,
-) {
+): Choice[] {
     const items = list
         .filter((item) => item.active !== false || item.id === held)
         .map((item) => ({
-            value: item.id,
-            label: `${item.name}${item.active === false ? ' (nonaktif)' : ''}`,
+            id: item.id,
+            name: item.name,
+            active: item.active !== false,
         }));
     if (held !== null && heldName !== null && !list.some((i) => i.id === held))
-        items.push({ value: held, label: `${heldName} (nonaktif)` });
-    return [...(none ? [{ value: NONE, label: none }] : []), ...items];
+        items.push({ id: held, name: heldName, active: false });
+    return [
+        ...(none ? [{ id: NONE, name: none, active: true }] : []),
+        ...items,
+    ];
 }
 
 type PriceForm = {
@@ -223,7 +227,7 @@ export function PriceDialog({
         price_group_id:
             price?.price_group_id ??
             metadata?.default_price_group_id ??
-            groups[0]?.value ??
+            groups[0]?.id ??
             null,
         care_class_id: price?.care_class_id ?? null,
         specialty_id: price?.specialty_id ?? null,
@@ -244,7 +248,7 @@ export function PriceDialog({
     }));
     const [errors, setErrors] = useState<Errors>({});
     const components = price?.components ?? [];
-    const select = (
+    const lookup = (
         field:
             | 'price_group_id'
             | 'care_class_id'
@@ -252,28 +256,46 @@ export function PriceDialog({
             | 'doctor_id'
             | 'operation_category_id',
         label: string,
-        items: { value: string; label: string }[],
+        items: Choice[],
         required: boolean,
-    ) => (
-        <FormControl error={errors[field]}>
-            <Select
-                label={label}
-                required={required}
-                items={items}
-                value={form[field] ?? NONE}
-                onValueChange={(value) =>
-                    setForm({
-                        ...form,
-                        [field]:
-                            value === null || value === NONE ? null : value,
-                    })
-                }
-                searchPlaceholder={`Cari ${label.toLowerCase()}`}
-                emptyMessage="Pilihan tidak ditemukan."
-                portalContainer={contentRef}
-            />
-        </FormControl>
-    );
+    ) => {
+        const selected =
+            items.find((item) => item.id === (form[field] ?? NONE)) ?? null;
+        return (
+            <FormControl error={errors[field]}>
+                <InlineLookup
+                    label={label}
+                    required={required}
+                    items={items}
+                    value={selected}
+                    displayValue={selected?.name ?? ''}
+                    onValueChange={(item) =>
+                        setForm({
+                            ...form,
+                            [field]: item.id === NONE ? null : item.id,
+                        })
+                    }
+                    getItemValue={(item) => item.id}
+                    getItemLabel={(item) => item.name}
+                    placeholder={`Cari ${label.toLowerCase()}…`}
+                    emptyMessage="Pilihan tidak ditemukan."
+                    portalContainer={contentRef}
+                    columns={[
+                        {
+                            id: 'name',
+                            header: label,
+                            width: 260,
+                            cell: (item) =>
+                                item.active
+                                    ? item.name
+                                    : `${item.name} (nonaktif)`,
+                            sortValue: (item) => item.name,
+                        },
+                    ]}
+                />
+            </FormControl>
+        );
+    };
     const total = (field: keyof typeof priceSumFields) => (
         <NumberField
             label={priceSumFields[field].label}
@@ -325,7 +347,7 @@ export function PriceDialog({
             onConfirm={confirm}
         >
             <FormGrid columns={1}>
-                {select(
+                {lookup(
                     'care_class_id',
                     'Kelas',
                     choiceItems(
@@ -336,8 +358,8 @@ export function PriceDialog({
                     ),
                     true,
                 )}
-                {select('price_group_id', 'Kelompok Harga', groups, true)}
-                {select(
+                {lookup('price_group_id', 'Kelompok Harga', groups, true)}
+                {lookup(
                     'specialty_id',
                     'Spesialis',
                     choiceItems(
@@ -355,7 +377,7 @@ export function PriceDialog({
                         setForm({ ...form, sub_specialty: checked })
                     }
                 />
-                {select(
+                {lookup(
                     'doctor_id',
                     'Dokter',
                     choiceItems(
@@ -366,7 +388,7 @@ export function PriceDialog({
                     ),
                     false,
                 )}
-                {select(
+                {lookup(
                     'operation_category_id',
                     'Kategori Operasi',
                     choiceItems(

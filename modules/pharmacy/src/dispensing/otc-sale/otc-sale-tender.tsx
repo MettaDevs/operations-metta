@@ -13,12 +13,15 @@ import {
     type MasterLookupProps,
     type Reference,
 } from '@operations-metta/ui/master-lookup';
-import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { useId } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { divideRounded, Decimal } from '@core/platform/money/index.ts';
-import { api, type ApiBody } from '@core/platform/shell/index.ts';
+import {
+    api,
+    MerchantLookup,
+    type ApiBody,
+} from '@core/platform/shell/index.ts';
 
 // Tender loket obat bebas, digambar dari jenis bayar kasir Core seperti tab Pembayaran Form Pembayaran: jenis bayar
 // tunai mata uang lokal menjadi uang diterima dengan kembalian, penampung sisa menjadi saklar piutang, dan sisanya baris
@@ -355,29 +358,16 @@ export function OtcSaleTender({
                             </>
                         )}
                         {method.requires_merchant && (
-                            <FormControl
+                            <MerchantLookup
+                                items={options.merchants}
+                                value={line.merchant}
+                                onChange={(merchant) =>
+                                    setLine(method.id, { merchant })
+                                }
                                 error={error(field(index, 'merchant_id'))}
-                                data-error-field={field(index, 'merchant_id')}
-                            >
-                                <Select
-                                    label="Merchan"
-                                    items={options.merchants.map(
-                                        (merchant) => ({
-                                            value: merchant.id,
-                                            label: `${merchant.code} · ${merchant.name}`,
-                                        }),
-                                    )}
-                                    value={line.merchant}
-                                    onValueChange={(value) =>
-                                        setLine(method.id, {
-                                            merchant: value ?? '',
-                                        })
-                                    }
-                                    searchPlaceholder="Cari merchan"
-                                    emptyMessage="Belum ada merchan."
-                                    portalContainer={portalContainer}
-                                />
-                            </FormControl>
+                                field={field(index, 'merchant_id')}
+                                portalContainer={portalContainer}
+                            />
                         )}
                         {method.allows_surcharge && (
                             <FormControl

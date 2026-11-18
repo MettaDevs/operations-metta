@@ -41,6 +41,7 @@ import {
     orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
+import { OperatingUnitLookup } from '../room/operating-unit-lookup.tsx';
 import { isSectionKind, sectionKinds } from './section.kinds.ts';
 import {
     defaultQueueMode,
@@ -124,10 +125,6 @@ function SectionCard({
         editing,
         dirty,
     });
-    const units = metadata.operating_units.map((unit) => ({
-        value: unit.id,
-        label: unit.name,
-    }));
     const rooms = metadata.rooms
         .filter((room) => room.operating_unit_id === form.operating_unit_id)
         .map((room) => ({
@@ -257,24 +254,19 @@ function SectionCard({
                 <FormGrid>
                     <FormControl error={errors.operating_unit_id?.[0]}>
                         {editing ? (
-                            <Select
-                                label="Unit"
-                                required
-                                items={units}
+                            <OperatingUnitLookup
+                                units={metadata.operating_units}
                                 value={form.operating_unit_id}
-                                onValueChange={(value) =>
+                                onChange={(id) =>
                                     setForm({
                                         ...form,
-                                        operating_unit_id: value,
+                                        operating_unit_id: id,
                                         room_ids:
-                                            value === form.operating_unit_id
+                                            id === form.operating_unit_id
                                                 ? form.room_ids
                                                 : [],
                                     })
                                 }
-                                placeholder="Pilih unit"
-                                searchPlaceholder="Cari unit"
-                                emptyMessage="Unit tidak ditemukan."
                                 portalContainer={portalContainer}
                             />
                         ) : (

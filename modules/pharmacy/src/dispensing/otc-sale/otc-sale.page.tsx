@@ -2,6 +2,7 @@ import { ActionButton } from '@operations-metta/ui/action-button';
 import { Button } from '@operations-metta/ui/button';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
     codeColumn,
@@ -11,7 +12,6 @@ import {
     type Reference,
 } from '@operations-metta/ui/master-lookup';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import {
     keepPreviousData,
@@ -394,18 +394,27 @@ function OtcSaleCounter({
                             error={shownErrors.location_id?.[0]}
                             data-error-field="location_id"
                         >
-                            <Select
+                            <InlineLookup<Reference>
                                 label="Lokasi"
                                 required
-                                items={options.locations.map((location) => ({
-                                    value: location.id,
-                                    label: `${location.code} · ${location.name}`,
-                                }))}
-                                value={header.locationId}
-                                onValueChange={(value) => {
-                                    if (value) chooseLocation(value);
-                                }}
+                                items={options.locations}
+                                value={
+                                    options.locations.find(
+                                        (location) =>
+                                            location.id === header.locationId,
+                                    ) ?? null
+                                }
+                                onValueChange={(location) =>
+                                    chooseLocation(location.id)
+                                }
+                                getItemValue={(location) => location.id}
+                                getItemLabel={(location) =>
+                                    `${location.code} · ${location.name}`
+                                }
+                                placeholder="Cari kode atau nama lokasi…"
+                                emptyMessage="Lokasi tidak ditemukan."
                                 portalContainer={portalContainer}
+                                columns={[codeColumn(), nameColumn(220)]}
                             />
                         </FormControl>
                         <MasterLookup<Reference>

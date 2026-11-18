@@ -138,27 +138,30 @@ function PatientTypeCard({
                   active: false,
               }
             : null);
-    const tariffPriceGroups = [
-        { value: SAME_PRICE_GROUP, label: 'Sama dengan kelompok harga' },
-        ...(metadata?.price_groups ?? [])
-            .filter(
-                (group) =>
-                    group.active ||
-                    group.id === type?.procedure_tariff_price_group_id,
-            )
-            .map((group) => ({ value: group.id, label: group.name })),
+    const tariffPriceGroups: PriceGroup[] = [
+        {
+            id: SAME_PRICE_GROUP,
+            code: '',
+            name: 'Sama dengan kelompok harga',
+            active: true,
+        },
+        ...(metadata?.price_groups ?? []).filter(
+            (group) =>
+                group.active ||
+                group.id === type?.procedure_tariff_price_group_id,
+        ),
     ];
     const tariffLabel = isProcedureTariff(form.procedure_tariff)
         ? procedureTariffs[form.procedure_tariff]
         : form.procedure_tariff;
-    const tariffPriceGroupLabel =
+    const tariffPriceGroup =
         tariffPriceGroups.find(
             (item) =>
-                item.value ===
+                item.id ===
                 (form.procedure_tariff_price_group_id ?? SAME_PRICE_GROUP),
-        )?.label ??
-        type?.procedure_tariff_price_group_name ??
-        '';
+        ) ?? null;
+    const tariffPriceGroupLabel =
+        tariffPriceGroup?.name ?? type?.procedure_tariff_price_group_name ?? '';
     const settles = form.behaviors.includes('settles_automatically');
     // Jenis bayar kasir legal entity mana pun. Nama legal entity ikut bila tenant punya lebih dari satu, karena setiap
     // legal entity punya jenis bayarnya sendiri. Jenis bayar nonaktif hanya tampil bila tipe ini sudah memilihnya.
@@ -417,26 +420,44 @@ function PatientTypeCard({
                             hint="Kelompok harga yang tarif tindakannya dipakai pasien bertipe ini, misalnya tipe BPJS yang memakai tarif kelompok Umum. Harga obat tetap mengikuti kelompok harga di atas."
                         >
                             {editing ? (
-                                <Select
+                                <InlineLookup
                                     label="Kelompok harga tarif jasa"
                                     items={tariffPriceGroups}
-                                    value={
-                                        form.procedure_tariff_price_group_id ??
-                                        SAME_PRICE_GROUP
-                                    }
-                                    onValueChange={(value) =>
+                                    value={tariffPriceGroup}
+                                    displayValue={tariffPriceGroupLabel}
+                                    onValueChange={(item) =>
                                         setForm({
                                             ...form,
                                             procedure_tariff_price_group_id:
-                                                value === null ||
-                                                value === SAME_PRICE_GROUP
+                                                item.id === SAME_PRICE_GROUP
                                                     ? null
-                                                    : value,
+                                                    : item.id,
                                         })
                                     }
-                                    searchPlaceholder="Cari kelompok harga"
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    getSearchText={(item) =>
+                                        `${item.code} ${item.name}`
+                                    }
+                                    placeholder="Cari kelompok harga…"
                                     emptyMessage="Kelompok harga tidak ditemukan. Tambahkan di Sys Admin, menu Harga."
                                     portalContainer={portalContainer}
+                                    columns={[
+                                        {
+                                            id: 'code',
+                                            header: 'Kode',
+                                            width: 120,
+                                            cell: (item) => item.code,
+                                            sortValue: (item) => item.code,
+                                        },
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            width: 220,
+                                            cell: (item) => item.name,
+                                            sortValue: (item) => item.name,
+                                        },
+                                    ]}
                                 />
                             ) : (
                                 <Input

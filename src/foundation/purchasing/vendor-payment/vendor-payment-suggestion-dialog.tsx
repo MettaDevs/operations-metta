@@ -18,7 +18,6 @@ import {
     nameColumn,
     type LookupRequest,
 } from '@operations-metta/ui/master-lookup';
-import { Select } from '@operations-metta/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -29,6 +28,7 @@ import {
     errorText,
     FormErrorHeader,
     orpc,
+    PaymentMethodLookup,
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import { loadVendors, today, useLoader } from '../purchase-lines.tsx';
@@ -108,7 +108,17 @@ export function VendorPaymentSuggestionDialog({
                 if (!next && !busy) onClose();
             }}
         >
-            <DialogContent ref={contentRef}>
+            <DialogContent
+                ref={contentRef}
+                onEscapeKeyDown={(event) => {
+                    if (
+                        contentRef.current?.querySelector(
+                            '[role="combobox"][aria-expanded="true"]',
+                        )
+                    )
+                        event.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Saran pembayaran</DialogTitle>
                     <DialogDescription>
@@ -184,24 +194,16 @@ export function VendorPaymentSuggestionDialog({
                                 onValueChange={setPostingDate}
                             />
                         </FormControl>
-                        <FormControl
+                        <PaymentMethodLookup
+                            label="Cara bayar"
+                            required
+                            items={methods ?? []}
+                            value={methodId}
+                            onChange={setMethodId}
                             error={error('payment_method_id')}
-                            data-error-field="payment_method_id"
-                        >
-                            <Select
-                                label="Cara bayar"
-                                required
-                                items={(methods ?? []).map((method) => ({
-                                    value: method.id,
-                                    label: `${method.code} - ${method.name}`,
-                                }))}
-                                value={methodId}
-                                onValueChange={(value) =>
-                                    setMethodId(value ?? '')
-                                }
-                                portalContainer={contentRef}
-                            />
-                        </FormControl>
+                            field="payment_method_id"
+                            portalContainer={contentRef}
+                        />
                         {cash === false && (
                             <MasterLookup<BankAccount>
                                 label="Rekening bank"

@@ -12,7 +12,6 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
@@ -26,8 +25,10 @@ import {
     AddressRegionFields,
     api,
     ApiError,
+    CountryLookup,
     errorText,
     FormErrorHeader,
+    ReferenceValueLookup,
     type AddressRegionValue,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
@@ -88,8 +89,6 @@ type Form = {
 };
 
 const INDONESIA = 'ID';
-// Pilihan kosong pada isian opsional. Select SDK menganggap nilai kosong sebagai belum memilih.
-const UNSET = 'unset';
 // Kode nilai acuan yang memunculkan isian bersyarat, sama dengan form lama: NIK ibu untuk anak, tanggal menikah untuk
 // yang menikah.
 const CHILD = 'child';
@@ -842,27 +841,12 @@ function PatientCardBody({
     ) => (
         <FormControl key={field} error={error(field)} data-error-field={field}>
             {editing ? (
-                <Select
+                <ReferenceValueLookup
                     label={label}
                     required={options.required}
-                    items={[
-                        ...(options.required
-                            ? []
-                            : [{ value: UNSET, label: 'Belum diisi' }]),
-                        ...references(field).map((value) => ({
-                            value: value.code,
-                            label: value.name,
-                        })),
-                    ]}
-                    value={form[field] || (options.required ? null : UNSET)}
-                    onValueChange={(value) =>
-                        set(
-                            field,
-                            value === null || value === UNSET ? '' : value,
-                        )
-                    }
-                    searchPlaceholder={`Cari ${label.toLocaleLowerCase()}`}
-                    emptyMessage="Pilihan tidak ditemukan."
+                    items={references(field)}
+                    value={form[field]}
+                    onChange={(code) => set(field, code)}
                     portalContainer={portalContainer}
                 />
             ) : (
@@ -1130,29 +1114,22 @@ function PatientCardBody({
                                     error={error('nationality_country_code')}
                                 >
                                     {editing ? (
-                                        <Select
+                                        <CountryLookup
                                             label="Warga negara"
                                             portalContainer={portalContainer}
-                                            items={metadata.countries.map(
-                                                (country) => ({
-                                                    value: country.code,
-                                                    label: country.name,
-                                                }),
-                                            )}
+                                            items={metadata.countries}
                                             value={
-                                                form.nationality_country_code ||
-                                                null
+                                                form.nationality_country_code
                                             }
-                                            searchPlaceholder="Cari negara"
-                                            onValueChange={(value) =>
+                                            onChange={(code) =>
                                                 setForm((current) => ({
                                                     ...current,
                                                     nationality_country_code:
-                                                        value ?? '',
+                                                        code,
                                                     // Warga negara asing memakai alamat domisili, seperti form
                                                     // lama.
                                                     has_domicile:
-                                                        value !== INDONESIA ||
+                                                        code !== INDONESIA ||
                                                         current.has_domicile,
                                                 }))
                                             }
