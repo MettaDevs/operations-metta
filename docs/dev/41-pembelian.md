@@ -49,7 +49,7 @@ Data lama tidak punya master termin. Kolom `Term_Pembayaran` di order dan peneri
 
 ## Penerimaan dari purchase order
 
-Penerimaan tetap satu dokumen (`bl_tr_penerimaan`) yang disimpan sebagai draf lalu diposting, dengan atau tanpa order. Bentuknya mengikuti Warehouse Receipt BC dengan Get Source Documents, bukan Post Receive langsung dari order, karena batch, kedaluwarsa, dan sumber dana baru diketahui saat barang datang dan diisi di draf.
+Penerimaan tetap satu dokumen (`bl_tr_penerimaan`) yang disimpan sebagai draf lalu diposting, dengan atau tanpa order. Ada dua jalan dari order. Terima barang membuat draf, seperti Warehouse Receipt BC dengan Get Source Documents, untuk penerimaan yang butuh sumber dana, program, beberapa batch per baris, atau diperiksa dulu sebelum diposting. Posting dari order menulis dan memposting penerimaan itu sekaligus, seperti Post Receive di Purchase Order BC; rinciannya di [Posting dari purchase order](#posting-dari-purchase-order).
 
 - **Terima barang.** `POST /api/v1/purchasing/orders/{id}/receipts` membuat draf penerimaan untuk order yang dirilis. Setiap baris berisi sisa baris order (Outstanding Quantity) dengan harga, diskon, PPN, dan satuan order, dan merujuk baris ordernya lewat `bl_tr_penerimaan_detail.order_detail_id`. Petugas mengubah jumlah yang benar-benar datang dan menghapus baris yang belum datang.
 - **Satu draf per order.** Draf kedua ditolak lewat `refuse` dengan tombol yang membuka draf pertama. Dua draf yang sama-sama berisi sisa penuh hanya akan membuat salah satunya gagal saat posting.
@@ -58,6 +58,18 @@ Penerimaan tetap satu dokumen (`bl_tr_penerimaan`) yang disimpan sebagai draf la
 - **Batal posting.** `unreceiveOnOrder` mengurangi `jumlah_diterima`, dan order `selesai` kembali `dirilis`.
 - **Mengubah order yang sudah diterima sebagian.** Sesudah Buka lagi, baris yang sudah diterima tidak bisa dihapus, barang dan satuannya tetap, dan jumlahnya tidak boleh kurang dari yang sudah diterima, seperti Quantity terhadap Quantity Received di Purchase Line BC. Order yang tidak akan dikirim penuh ditutup dengan mengurangi jumlahnya sampai sama dengan yang sudah diterima, lalu merilisnya: Rilis langsung menjadikannya `selesai`.
 - **Hapus order.** Ditolak bila sebagian sudah diterima, atau bila ada draf penerimaan dari order itu.
+
+## Posting dari purchase order
+
+Purchase Order BC (page 50) membawa Qty. to Receive, Quantity Received, Qty. to Invoice, dan Quantity Invoiced di setiap baris, Vendor Invoice No. di kepala, dan satu tombol Post dengan pilihan Receive, Invoice, atau Receive and Invoice (`ReceiveInvoiceOptionsQst` di codeunit "Posting Selection Management"). Order di sini mendapat jalan yang sama, tanpa menghapus jalan dokumen terpisah: Terima barang dan Ambil baris penerimaan di faktur tetap ada.
+
+- **Layar.** Order Dirilis menampilkan Tanggal posting dan No. faktur vendor di kepala, lalu kolom Diterima sekarang, Difakturkan, dan Difakturkan sekarang di baris. Batch dan Kedaluwarsa tampil bila ada barang yang wajib batch atau kedaluwarsa, sebagai Item Tracking Lines BC dengan satu lot per baris. Order Selesai hanya menampilkan kolom faktur. Tombol Posting membuka pilihan Terima, Faktur, dan Terima dan faktur.
+- **Bawaan.** Diterima sekarang = sisa baris order (Outstanding Quantity, `InitQtyToReceive`). Difakturkan sekarang = diterima + diterima sekarang − sudah difakturkan, seperti `MaxQtyToInvoice` di Purchase Line BC; untuk Faktur saja tanpa Diterima sekarang. Nilainya hanya dikirim saat posting, tidak disimpan di order: BC menyimpannya di baris, tetapi di sini order yang dirilis terkunci dan isiannya hanya berarti untuk satu posting.
+- **Difakturkan** di baris order dihitung dari `jumlah_difaktur` baris penerimaan diposting yang merujuk baris order itu, bukan kolom baru, supaya hanya posting faktur yang menulis jumlah difakturkan.
+- **Posting.** `POST /api/v1/purchasing/orders/{id}/post` (`purchase-order-post.service.ts`) mengunci order dan memeriksa versinya, lalu dalam satu transaksi: Terima membuat penerimaan dari baris yang diisi (`Receipts.receiveOrder`) dan mempostingnya dengan posting penerimaan yang sama; Faktur membagi Difakturkan sekarang ke baris penerimaan order itu yang belum difakturkan, dari penerimaan terlama, lalu membuat dan memposting faktur (`PurchaseInvoices.createAndPost`). Faktur memakai No. faktur vendor, tanggal posting sebagai tanggal faktur vendor, dan termin order. Gagal di salah satu langkah membatalkan semuanya.
+- **Penolakan.** Aturan penerimaan dan faktur tidak ditulis ulang. Penerimaan melebihi sisa order ditolak `receiveOnOrder`, batch dan kedaluwarsa oleh mesin posting, faktur melebihi yang diterima oleh posting faktur, nomor faktur vendor kosong atau dobel oleh faktur. Penolakan itu memakai nomor baris penerimaan atau faktur, dan diterjemahkan ke baris dan kolom order di layar.
+- **Izin.** Terima butuh `core.purchase-receipt.update` dan `.post`, Faktur butuh `core.purchase-invoice.update` dan `.post`, sama dengan membuat dan memposting dokumennya sendiri.
+- **Yang tidak ikut.** Sumber dana, program, dan tahun anggaran per baris, serta beberapa batch untuk satu baris order. Untuk itu pakai Terima barang.
 
 ## Permintaan pembelian
 

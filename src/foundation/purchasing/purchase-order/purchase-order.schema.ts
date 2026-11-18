@@ -38,7 +38,11 @@ export const purchaseOrderInputSchema = z.object({
 export const purchaseOrderLineRowSchema = z.object({
     id: z.string(),
     line_no: z.number(),
-    item: reference.extend({ base_unit: z.string() }),
+    item: reference.extend({
+        base_unit: z.string(),
+        batch_required: z.boolean(),
+        expiry_required: z.boolean(),
+    }),
     unit: reference,
     quantity_per_unit: z.string(),
     quantity: z.string(),
@@ -48,7 +52,34 @@ export const purchaseOrderLineRowSchema = z.object({
     amount: z.string(),
     expected_receipt_date: z.string().nullable(),
     quantity_received: z.string(),
+    quantity_invoiced: z.string(),
     outstanding_quantity: z.string(),
+});
+
+// Post Receive, Invoice, atau Receive and Invoice dari purchase order BC (PostingSelectionManagement).
+export const purchaseOrderPostModes = [
+    'receive',
+    'invoice',
+    'receive_and_invoice',
+] as const;
+
+// Qty. to Receive, Qty. to Invoice, dan Item Tracking Lines satu lot per baris, dikirim saat posting.
+export const purchaseOrderPostInputSchema = z.object({
+    mode: z.enum(purchaseOrderPostModes),
+    posting_date: z.string(),
+    vendor_invoice_number: z.string().nullable().optional(),
+    lines: z
+        .array(
+            z.object({
+                id: z.string(),
+                quantity_to_receive: amount.nullable().optional(),
+                quantity_to_invoice: amount.nullable().optional(),
+                batch_number: z.string().nullable().optional(),
+                expiry_date: z.string().nullable().optional(),
+            }),
+        )
+        .max(500),
+    version: z.number(),
 });
 
 export const purchaseOrderRowSchema = z.object({

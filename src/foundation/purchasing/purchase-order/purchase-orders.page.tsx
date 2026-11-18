@@ -41,6 +41,8 @@ const noPermissions: PurchaseOrderPermissions = {
     update: false,
     release: false,
     receive: false,
+    post_receipt: false,
+    post_invoice: false,
     create_vendor: false,
 };
 

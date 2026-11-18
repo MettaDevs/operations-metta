@@ -78,6 +78,19 @@ const transitions = {
     },
 } as const;
 
+export type OrderLinePick = {
+    orderLineId: string;
+    orderUnitQuantity: string;
+    batchNumber: string | null;
+    expiry: string | null;
+};
+
+type OrderDraft = {
+    postingDate: string;
+    vendorDocument: string | null;
+    picks: readonly OrderLinePick[] | null;
+};
+
 type LineDraft = PriceLine & {
     id: string | null;
     orderLineId: string | null;
@@ -549,9 +562,32 @@ export class Receipts {
             !dateSchema.safeParse(input.data.posting_date).success
         )
             validation({ posting_date: messages.posting_date });
-        const postingDate = input.data.posting_date;
+        const id = await this.draftFromOrder(orderId, {
+            postingDate: input.data.posting_date,
+            vendorDocument: null,
+            picks: null,
+        });
+        return {
+            status: 201,
+            headers: {},
+            body: { data: await this.document(id) },
+        };
+    }
+
+    async receiveOrder(orderId: string, draft: OrderDraft) {
+        this.workspace.guard('purchase-receipt', 'update');
+        this.workspace.guard('purchase-receipt', 'post');
+        return this.db.transaction(async () => {
+            const id = await this.draftFromOrder(orderId, draft);
+            await this.postDraft(id, (await this.lockHeader(id)).version);
+            return id;
+        });
+    }
+
+    private async draftFromOrder(orderId: string, draft: OrderDraft) {
+        const { postingDate, picks } = draft;
         const id = Bun.randomUUIDv7();
-        await this.db.transaction(async () => {
+        return this.db.transaction(async () => {
             const order = lookupId(orderId)
                 ? await this.db.one(
                       z.object({
@@ -582,22 +618,22 @@ export class Receipts {
                 validation({
                     _form: `Semua barang order ${order.number} sudah diterima.`,
                 });
-            const draft = await this.db.one(
+            const pending = await this.db.one(
                 z.object({ id: z.string(), number: z.string() }),
                 `select id, nomor as number from bl_tr_penerimaan
                  where tenant_id = $1 and order_id = $2 and status = 'draf' and deleted_at is null
                  order by nomor limit 1`,
                 [this.scope.tenantId, orderId],
             );
-            if (draft)
+            if (pending)
                 await refuse(this.db, this.workspace, {
-                    message: `Barang order ini sedang diterima lewat draf ${draft.number}. Lanjutkan draf itu, atau hapus drafnya lebih dulu.`,
+                    message: `Barang order ini sedang diterima lewat draf ${pending.number}. Lanjutkan draf itu, atau hapus drafnya lebih dulu.`,
                     open: {
                         page: 'core.purchase-receipt',
-                        recordId: draft.id,
-                        label: `Buka penerimaan ${draft.number}`,
+                        recordId: pending.id,
+                        label: `Buka penerimaan ${pending.number}`,
                     },
-                    otherwise: `Minta petugas gudang memposting atau menghapus draf ${draft.number}.`,
+                    otherwise: `Minta petugas gudang memposting atau menghapus draf ${pending.number}.`,
                 });
             const number = await new NumberIssuer(this.db, {
                 tenantId: this.scope.tenantId,
@@ -620,6 +656,7 @@ export class Receipts {
                 nomor: number,
                 tanggal: postingDate,
                 termasuk_ppn: order.prices_including_vat,
+                no_dokumen_vendor: draft.vendorDocument,
                 created_at: stamp,
                 updated_at: stamp,
             });
@@ -637,15 +674,33 @@ export class Receipts {
                 `select barang_id, satuan_id, konversi::text, (jumlah - jumlah_diterima)::text as jumlah,
                         harga_satuan::text, diskon_persen::text, tarif_ppn::text, id as order_detail_id
                  from bl_tr_order_detail
-                 where tenant_id = $1 and order_id = $2 and deleted_at is null and jumlah > jumlah_diterima
+                 where tenant_id = $1 and order_id = $2 and deleted_at is null ${picks ? '' : 'and jumlah > jumlah_diterima'}
                  order by urutan, id`,
                 [this.scope.tenantId, orderId],
             );
-            if (!outstanding.length)
+            const lines = picks
+                ? picks.flatMap((pick) => {
+                      const line = outstanding.find(
+                          (candidate) =>
+                              candidate.order_detail_id === pick.orderLineId,
+                      );
+                      return line
+                          ? [
+                                {
+                                    ...line,
+                                    jumlah: pick.orderUnitQuantity,
+                                    no_batch: pick.batchNumber,
+                                    kedaluwarsa: pick.expiry,
+                                },
+                            ]
+                          : [];
+                  })
+                : outstanding;
+            if (!lines.length)
                 validation({
                     _form: `Semua barang order ${order.number} sudah diterima.`,
                 });
-            for (const [index, line] of outstanding.entries())
+            for (const [index, line] of lines.entries())
                 await this.db.insert('bl_tr_penerimaan_detail', {
                     id: Bun.randomUUIDv7(),
                     tenant_id: this.scope.tenantId,
@@ -656,12 +711,8 @@ export class Receipts {
                     created_at: stamp,
                     updated_at: stamp,
                 });
+            return id;
         });
-        return {
-            status: 201,
-            headers: {},
-            body: { data: await this.document(id) },
-        };
     }
 
     async create(body: unknown) {
@@ -827,9 +878,17 @@ export class Receipts {
     async post(request: Request, id: string, body: unknown) {
         this.workspace.guard('purchase-receipt', 'post');
         const current = await this.header(id);
-        const version = expectedVersion(request, body);
+        await this.postDraft(current.id, expectedVersion(request, body));
+        return {
+            status: 200,
+            headers: {},
+            body: { data: await this.document(current.id) },
+        };
+    }
+
+    private async postDraft(id: string, version: number) {
         await this.db.transaction(async () => {
-            const claimed = await this.transition(current.id, version, 'post');
+            const claimed = await this.transition(id, version, 'post');
             if (!claimed) return;
             const vendor = await this.activeVendor(claimed.vendor_id);
             if (vendor?.status !== 'active')
@@ -857,7 +916,7 @@ export class Receipts {
                  from bl_tr_penerimaan_detail
                  where tenant_id = $1 and penerimaan_id = $2 and deleted_at is null
                  order by urutan, id`,
-                [this.scope.tenantId, current.id],
+                [this.scope.tenantId, id],
             );
             if (!lines.length)
                 validation({
@@ -901,7 +960,7 @@ export class Receipts {
                     postingDate: claimed.posting_date,
                     source: {
                         type: sourceType,
-                        id: current.id,
+                        id,
                         number: claimed.number,
                     },
                 },
@@ -915,11 +974,6 @@ export class Receipts {
                 ),
             );
         });
-        return {
-            status: 200,
-            headers: {},
-            body: { data: await this.document(current.id) },
-        };
     }
 
     // Dokumen yang dibatalkan tidak kembali ke draf: kunci idempoten barisnya sudah terpakai di kartu gudang, jadi

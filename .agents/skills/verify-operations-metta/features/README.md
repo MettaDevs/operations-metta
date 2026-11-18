@@ -54,6 +54,7 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 - [Saran pesan ulang](./saran-pesan-ulang.md): cara pesan ulang barang per lokasi, Hitung saran yang tidak menggandakan baris, dan saran yang disetujui menjadi purchase order.
 - [Purchase order](./purchase-order.md): order terbuka ke vendor, Rilis yang menguncinya, dan cetak order.
 - [Terima barang dari purchase order](./terima-dari-order.md): draf penerimaan berisi sisa order, terima sebagian, dan order yang selesai.
+- [Posting dari purchase order](./posting-dari-order.md): Terima, Faktur, atau Terima dan faktur langsung dari order, sampai Utang vendor.
 - [Retur ke vendor](./retur-ke-vendor.md): retur sebagian penerimaan yang sudah diposting, penolakan baris yang barangnya sudah habis, Batal posting penerimaan yang ditolak sesudah diretur, dan Batal retur.
 - [Faktur pembelian dan utang vendor](./faktur-pembelian.md): termin di vendor, Ambil baris penerimaan, posting yang mencatat utang dengan jatuh tempo, penerimaan yang terkunci sesudah difakturkan, dan Batal posting faktur.
 - [Pembayaran ke vendor](./pembayaran-vendor.md): cara bayar dari jenis bayar non tunai, bayar sebagian lalu lunas di Utang vendor, faktur yang terkunci sesudah dibayar, bukti pembayaran lewat mesin cetak, dan Batal posting pembayaran dari yang terakhir.
