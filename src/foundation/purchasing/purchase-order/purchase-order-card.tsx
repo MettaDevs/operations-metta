@@ -105,8 +105,6 @@ type Line = {
     quantity_received: string;
     quantity_invoiced: string;
     quantity_to_receive: string;
-    // Kosong berarti Difakturkan sekarang mengikuti bawaan BC: diterima ditambah diterima sekarang, dikurangi yang sudah
-    // difakturkan.
     quantity_to_invoice: string | null;
     batch_number: string;
     expiry_date: string;

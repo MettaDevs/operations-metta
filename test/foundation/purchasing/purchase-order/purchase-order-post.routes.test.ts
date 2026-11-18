@@ -216,7 +216,7 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
              where f.faktur_id = $1 and f.deleted_at is null order by f.urutan`,
             [invoice.id],
         );
-        expect(lines).toEqual([
+        expect([...lines]).toEqual([
             {
                 quantity: '3',
                 receipt: first.posted.receipt?.number ?? '',
@@ -230,9 +230,9 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
                 receipt: second.posted.receipt?.number ?? '',
             },
         ]);
-        // 5 × 150.000 × 90% = 675.000, ditambah 20 × 500 dan PPN 11% atas 10.000.
-        expect(await ledger(invoice.id)).toEqual([
-            { amount: '686100', open: '686100', vendor_no: 'FV-2026-001' },
+        const owed = String(5 * 135000 + 20 * 500 + (20 * 500 * 11) / 100);
+        expect([...(await ledger(invoice.id))]).toEqual([
+            { amount: owed, open: owed, vendor_no: 'FV-2026-001' },
         ]);
         const vendorLedger = await json<{
             data: { document_number: string; vendor_invoice_number: string }[];

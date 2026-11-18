@@ -78,9 +78,9 @@ const transitions = {
     },
 } as const;
 
-// Diterima sekarang satu baris order dalam satuan baris order, beserta satu lot (Item Tracking Lines BC).
 export type OrderLinePick = {
-    quantity: string;
+    orderLineId: string;
+    orderUnitQuantity: string;
     batchNumber: string | null;
     expiry: string | null;
 };
@@ -88,7 +88,7 @@ export type OrderLinePick = {
 type OrderDraft = {
     postingDate: string;
     vendorDocument: string | null;
-    picks: ReadonlyMap<string, OrderLinePick> | null;
+    picks: readonly OrderLinePick[] | null;
 };
 
 type LineDraft = PriceLine & {
@@ -574,8 +574,6 @@ export class Receipts {
         };
     }
 
-    // Post Receive dari purchase order BC: draf berisi baris yang diisi Diterima sekarang, urut seperti picks, langsung
-    // diposting dengan posting penerimaan yang sama.
     async receiveOrder(orderId: string, draft: OrderDraft) {
         this.workspace.guard('purchase-receipt', 'update');
         this.workspace.guard('purchase-receipt', 'post');
@@ -681,16 +679,16 @@ export class Receipts {
                 [this.scope.tenantId, orderId],
             );
             const lines = picks
-                ? [...picks].flatMap(([orderLineId, pick]) => {
+                ? picks.flatMap((pick) => {
                       const line = outstanding.find(
                           (candidate) =>
-                              candidate.order_detail_id === orderLineId,
+                              candidate.order_detail_id === pick.orderLineId,
                       );
                       return line
                           ? [
                                 {
                                     ...line,
-                                    jumlah: pick.quantity,
+                                    jumlah: pick.orderUnitQuantity,
                                     no_batch: pick.batchNumber,
                                     kedaluwarsa: pick.expiry,
                                 },

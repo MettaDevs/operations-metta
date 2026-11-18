@@ -37,9 +37,7 @@ const failureSchema = z.looseObject({
     errors: z.record(z.string(), z.array(z.string())),
 });
 
-// Penolakan dari penerimaan dan faktur memakai nomor baris dokumen itu. Di layar order, penolakan itu harus menunjuk
-// baris order dan kolom yang diisi pengguna.
-async function onOrderLines<T>(
+async function withErrorsOnOrderRows<T>(
     work: () => Promise<T>,
     rows: readonly number[],
     fields: Readonly<Record<string, string>>,
@@ -202,26 +200,22 @@ export class PurchaseOrderPosting {
         data: z.output<typeof purchaseOrderPostInputSchema>,
         planned: PlannedLine[],
     ) {
-        const picks = new Map<string, OrderLinePick>();
-        const rowOf = new Map<string, number>();
-        for (const line of planned)
-            if (line.toReceive > 0n) {
-                picks.set(line.orderLineId, {
-                    quantity: toNumeric(line.toReceive, quantityScale),
-                    batchNumber: line.batchNumber,
-                    expiry: line.expiry,
-                });
-                rowOf.set(line.orderLineId, line.row);
-            }
+        const receiving = planned.filter((line) => line.toReceive > 0n);
+        const picks: OrderLinePick[] = receiving.map((line) => ({
+            orderLineId: line.orderLineId,
+            orderUnitQuantity: toNumeric(line.toReceive, quantityScale),
+            batchNumber: line.batchNumber,
+            expiry: line.expiry,
+        }));
         const receipts = new Receipts(this.db, this.workspace);
-        const id = await onOrderLines(
+        const id = await withErrorsOnOrderRows(
             () =>
                 receipts.receiveOrder(orderId, {
                     postingDate: data.posting_date,
                     vendorDocument: data.vendor_invoice_number?.trim() || null,
                     picks,
                 }),
-            [...rowOf.values()],
+            receiving.map((line) => line.row),
             { quantity: 'quantity_to_receive', item_id: 'quantity_to_receive' },
         );
         const { data: receipt } = await receipts.show(id);
@@ -271,7 +265,7 @@ export class PurchaseOrderPosting {
             }
         }
         if (Object.keys(errors).length) validation(errors);
-        const created = await onOrderLines(
+        const created = await withErrorsOnOrderRows(
             () =>
                 invoices.createAndPost({
                     vendor_id: order.vendor_id,

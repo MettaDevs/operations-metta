@@ -364,8 +364,6 @@ export class PurchaseInvoices {
         };
     }
 
-    // Baris penerimaan diposting dari satu purchase order yang sisanya belum difakturkan, dari penerimaan terlama, untuk
-    // Post Invoice dari order.
     async orderReceiptLines(vendorId: string, orderId: string) {
         const rows = await this.db.rows(
             storedReceiptLineSchema.extend({ order_line_id: z.string() }),
