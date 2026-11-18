@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listParametersSchema } from '../../../platform/http/index.ts';
+import { bankAccountReferenceSchema } from '../../bank/index.ts';
 
 export const vendorPaymentStatuses = [
     'draf',
@@ -13,7 +14,7 @@ export const vendorPaymentInputSchema = z.object({
     vendor_id: z.string(),
     posting_date: z.string(),
     payment_method_id: z.string(),
-    bank: z.string().nullable().optional(),
+    bank_account_id: z.string().nullable().optional(),
     reference: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     lines: z
@@ -32,6 +33,7 @@ export const paymentMethodChoiceSchema = z.object({
     id: z.string(),
     code: z.string(),
     name: z.string(),
+    cash: z.boolean(),
 });
 
 export const vendorPaymentRowSchema = z.object({
@@ -41,6 +43,7 @@ export const vendorPaymentRowSchema = z.object({
     vendor: z.object({ id: z.string(), number: z.string(), name: z.string() }),
     posting_date: z.string(),
     payment_method: paymentMethodChoiceSchema,
+    bank_account: bankAccountReferenceSchema,
     bank: z.string().nullable(),
     reference: z.string().nullable(),
     description: z.string().nullable(),

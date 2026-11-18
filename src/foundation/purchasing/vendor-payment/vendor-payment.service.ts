@@ -16,6 +16,7 @@ import {
     validation,
 } from '../../../platform/http/index.ts';
 import { Decimal, decimalsHint } from '../../../platform/money/index.ts';
+import { bankAccountJson, localBankAccountRefusal } from '../../bank/index.ts';
 import { behaviorsSettledAs } from '../../billing/index.ts';
 import {
     amountInput,
@@ -57,8 +58,10 @@ const rowSql = `select * from (
                     select h.id, h.nomor as number, h.status, h.version,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            p.name as vendor_name, h.tanggal::text as posting_date,
-                           json_build_object('id', j.id, 'code', j.kode, 'name', j.nama) as payment_method,
-                           h.bank, h.no_referensi as reference, h.keterangan as description,
+                           json_build_object('id', j.id, 'code', j.kode, 'name', j.nama,
+                                             'cash', j.perilaku = 'tunai') as payment_method,
+                           ${bankAccountJson('b')} as bank_account, h.bank,
+                           h.no_referensi as reference, h.keterangan as description,
                            coalesce((select trim_scale(sum(d.jumlah)) from ap_tr_pembayaran_detail d
                                      where d.tenant_id = h.tenant_id and d.pembayaran_id = h.id
                                        and d.deleted_at is null), 0)::text as amount,
@@ -67,10 +70,11 @@ const rowSql = `select * from (
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     join jenis_bayar j on j.tenant_id = h.tenant_id and j.id = h.jenis_bayar_id
+                    left join rekening_bank b on b.tenant_id = h.tenant_id and b.id = h.rekening_bank_id
                     where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null) payments
                 where true`;
 
-const paymentMethodSql = `select id, kode as code, nama as name from jenis_bayar
+const paymentMethodSql = `select id, kode as code, nama as name, perilaku = 'tunai' as cash from jenis_bayar
                           where tenant_id = $1 and legal_entity_id = $2 and perilaku = any($3::text[]) and aktif
                             and deleted_at is null`;
 
@@ -91,7 +95,7 @@ const messages = {
     vendor_id: 'Pilih vendor dari daftar.',
     posting_date: 'Isi tanggal bayar yang benar.',
     payment_method_id: 'Pilih cara bayar dari daftar.',
-    bank: 'Isi bank paling banyak 60 karakter.',
+    bank_account_id: 'Pilih rekening bank dari daftar.',
     reference: 'Isi nomor referensi paling banyak 35 karakter.',
     description: 'Isi keterangan paling banyak 200 karakter.',
     lines: 'Satu pembayaran paling banyak 500 baris.',
@@ -297,8 +301,18 @@ export class VendorPayments {
         if (!method) errors.payment_method_id = messages.payment_method_id;
         const text = (value: string | null | undefined) =>
             value?.trim() || null;
-        const bank = text(data.bank);
-        if (bank && bank.length > 60) errors.bank = messages.bank;
+        const bankAccountId = data.bank_account_id || null;
+        if (bankAccountId && method?.cash)
+            errors.bank_account_id =
+                'Pembayaran tunai tidak memakai rekening bank. Kosongkan rekening, atau pilih cara bayar non tunai.';
+        else if (bankAccountId) {
+            const refusal = await localBankAccountRefusal(
+                this.db,
+                this.scope,
+                bankAccountId,
+            );
+            if (refusal) errors.bank_account_id = refusal;
+        }
         const reference = text(data.reference);
         if (reference && reference.length > 35)
             errors.reference = messages.reference;
@@ -375,7 +389,7 @@ export class VendorPayments {
             vendorId: data.vendor_id,
             postingDate: data.posting_date,
             paymentMethodId: method.id,
-            bank,
+            bankAccountId,
             reference,
             description,
             lines,
@@ -456,7 +470,7 @@ export class VendorPayments {
                 nomor: number,
                 tanggal: data.postingDate,
                 jenis_bayar_id: data.paymentMethodId,
-                bank: data.bank,
+                rekening_bank_id: data.bankAccountId,
                 no_referensi: data.reference,
                 keterangan: data.description,
                 created_at: stamp,
@@ -498,14 +512,14 @@ export class VendorPayments {
         await this.db.transaction(async () => {
             await this.lockDraft(current.id, version);
             await this.db.execute(
-                `update ap_tr_pembayaran set vendor_id = $1, tanggal = $2, jenis_bayar_id = $3, bank = $4,
+                `update ap_tr_pembayaran set vendor_id = $1, tanggal = $2, jenis_bayar_id = $3, rekening_bank_id = $4,
                         no_referensi = $5, keterangan = $6, updated_at = $7
                  where tenant_id = $8 and id = $9`,
                 [
                     data.vendorId,
                     data.postingDate,
                     data.paymentMethodId,
-                    data.bank,
+                    data.bankAccountId,
                     data.reference,
                     data.description,
                     nowSql(),
@@ -600,6 +614,31 @@ export class VendorPayments {
         );
     }
 
+    // Uang pembayaran non tunai keluar dari rekening bank (Bal. Account Type Bank Account). Tanpa rekening, baris jurnal
+    // tidak punya lawan dan BC menolaknya karena jurnal tidak seimbang (codeunit "Gen. Jnl.-Check Line").
+    private async checkBalancingAccount(paymentId: string) {
+        const header = await this.db.one(
+            z.object({
+                cash: z.boolean(),
+                bank_account_id: z.string().nullable(),
+            }),
+            `select j.perilaku = 'tunai' as cash, h.rekening_bank_id as bank_account_id
+             from ap_tr_pembayaran h
+             join jenis_bayar j on j.tenant_id = h.tenant_id and j.id = h.jenis_bayar_id
+             where h.tenant_id = $1 and h.id = $2`,
+            [this.scope.tenantId, paymentId],
+        );
+        if (!header || header.cash) return;
+        const refusal = header.bank_account_id
+            ? await localBankAccountRefusal(
+                  this.db,
+                  this.scope,
+                  header.bank_account_id,
+              )
+            : 'Pilih rekening bank asal uang sebelum posting pembayaran non tunai.';
+        if (refusal) validation({ bank_account_id: refusal });
+    }
+
     // Posting Payment Journal dengan Applies-to ID (codeunit "Gen. Jnl.-Post Line", ApplyVendLedgEntry).
     async post(request: Request, id: string, body: unknown) {
         this.workspace.guard('vendor-payment', 'post');
@@ -614,6 +653,7 @@ export class VendorPayments {
                     vendor_id:
                         'Vendor ini nonaktif, jadi pembayarannya tidak bisa diposting. Aktifkan lagi vendornya.',
                 });
+            await this.checkBalancingAccount(current.id);
             const lines = await this.lockedLines(current.id);
             if (!lines.length)
                 validation({

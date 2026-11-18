@@ -51,6 +51,7 @@ import { page as modulesPharmacySrcDrugDrugClassDrugClassesPage } from '../modul
 import { page as modulesPharmacySrcDrugDrugPriceDrugPricesPage } from '../modules/pharmacy/src/drug/drug-price/drug-prices.page.tsx';
 import { page as modulesPharmacySrcDrugDrugDrugsPage } from '../modules/pharmacy/src/drug/drug/drugs.page.tsx';
 import { page as modulesPharmacySrcDrugGradingGroupGradingGroupsPage } from '../modules/pharmacy/src/drug/grading-group/grading-groups.page.tsx';
+import { page as foundationBankBankAccountBankAccountsPage } from './foundation/bank/bank-account/bank-accounts.page.tsx';
 import { page as foundationBillingClerkClerkPage } from './foundation/billing/clerk/clerk.page.tsx';
 import { page as foundationBillingClerkClerksPage } from './foundation/billing/clerk/clerks.page.tsx';
 import { page as foundationBillingDashboardDashboardPage } from './foundation/billing/dashboard/dashboard.page.tsx';
@@ -700,6 +701,14 @@ const modulesPharmacySrcDrugGradingGroupGradingGroupsRoute = createRoute({
     },
 });
 
+const foundationBankBankAccountBankAccountsRoute = createRoute({
+    getParentRoute: () => appLayoutRoute,
+    path: foundationBankBankAccountBankAccountsPage.path,
+    component: foundationBankBankAccountBankAccountsPage.component,
+    validateSearch: foundationBankBankAccountBankAccountsPage.validateSearch,
+    staticData: { title: foundationBankBankAccountBankAccountsPage.title },
+});
+
 const foundationBillingClerkClerkRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationBillingClerkClerkPage.path,
@@ -1290,6 +1299,7 @@ const routeTree = rootRoute.addChildren([
         modulesPharmacySrcDrugDrugPriceDrugPricesRoute,
         modulesPharmacySrcDrugDrugDrugsRoute,
         modulesPharmacySrcDrugGradingGroupGradingGroupsRoute,
+        foundationBankBankAccountBankAccountsRoute,
         foundationBillingClerkClerkRoute,
         foundationBillingClerkClerksRoute,
         foundationBillingDashboardDashboardRoute,

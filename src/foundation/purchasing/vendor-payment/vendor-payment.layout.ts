@@ -17,7 +17,7 @@ function a4(): Uint8Array {
             ['Tanggal bayar', '{posting_date}'],
             ['Vendor', '{vendor_name}'],
             ['Cara bayar', '{payment_method}'],
-            ['Bank', '{bank}'],
+            ['Rekening bank', '{bank}'],
             ['No. referensi', '{reference}'],
             ['Keterangan', '{description}'],
         ],

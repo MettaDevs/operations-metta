@@ -20,7 +20,7 @@ export const vendorPaymentFields = {
     vendor_number: field.text('Nomor vendor'),
     vendor_name: field.text('Vendor'),
     payment_method: field.text('Cara bayar'),
-    bank: field.text('Bank'),
+    bank: field.text('Rekening bank (nama bank dan nomor rekening)'),
     reference: field.text('Nomor referensi'),
     description: field.text('Keterangan'),
     paid_by: field.text('Petugas (pengguna yang memposting pembayaran)'),
@@ -69,13 +69,15 @@ async function vendorPayment(
         paymentSchema,
         `select h.nomor as number, h.tanggal::text as posting_date, h.status = 'draf' as is_draft,
                 h.status = 'dibatalkan' as is_cancelled, v.number as vendor_number, p.name as vendor_name,
-                j.nama as payment_method, h.bank, h.no_referensi as reference, h.keterangan as description,
+                j.nama as payment_method,
+                coalesce(b.nama_bank || ' ' || b.nomor_rekening, h.bank) as bank, h.no_referensi as reference, h.keterangan as description,
                 poster.name as paid_by, coalesce(t.lines, '[]'::json) as lines,
                 trim_scale(coalesce(t.total, 0))::text as total
          from ap_tr_pembayaran h
          join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
          join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
          join jenis_bayar j on j.tenant_id = h.tenant_id and j.id = h.jenis_bayar_id
+         left join rekening_bank b on b.tenant_id = h.tenant_id and b.id = h.rekening_bank_id
          left join users poster on poster.id = h.diposting_oleh_user_id
          left join lateral (
              select json_agg(json_build_object(
@@ -106,7 +108,7 @@ const sample: Values<typeof vendorPaymentFields> = {
     vendor_number: 'V-0001',
     vendor_name: 'PBF Contoh',
     payment_method: 'Transfer',
-    bank: 'Bank Contoh',
+    bank: 'Bank Contoh 1234567890',
     reference: 'TRF-0001',
     description: null,
     paid_by: 'Petugas Pembelian Contoh',
