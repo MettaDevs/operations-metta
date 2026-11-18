@@ -32,20 +32,17 @@ describe.skipIf(!process.env.DB_HOST)('lplpo', () => {
         location: { id: string },
         item: { id: string },
         quantity: number,
-        createdAt: string,
+        requestDate: string,
     ) => {
-        const { data } = await json<{ data: { id: string } }>(
+        await json(
             await business.admin.post('/api/v1/purchasing/requisitions', {
                 location_id: location.id,
                 item_id: item.id,
                 quantity,
+                request_date: requestDate,
                 due_date: '2026-11-25',
             }),
             201,
-        );
-        await pool.unsafe(
-            'update bl_tr_permintaan set created_at = $1 where id = $2',
-            [createdAt, data.id],
         );
     };
 
@@ -165,15 +162,9 @@ describe.skipIf(!process.env.DB_HOST)('lplpo', () => {
             }),
             201,
         );
-        const firstNovemberInEveryIndonesianTimeZone = '2026-10-31 18:00:00';
-        await requested(
-            warehouse,
-            asked,
-            15,
-            firstNovemberInEveryIndonesianTimeZone,
-        );
-        await requested(warehouse, asked, 4, '2026-10-20 03:00:00');
-        await requested(pharmacy, asked, 99, '2026-11-10 03:00:00');
+        await requested(warehouse, asked, 15, '2026-11-01');
+        await requested(warehouse, asked, 4, '2026-10-31');
+        await requested(pharmacy, asked, 99, '2026-11-10');
     });
 
     test('each item with stock, movement, or a request gets opening, received, available, used, closing, optimum, and requested', async () => {

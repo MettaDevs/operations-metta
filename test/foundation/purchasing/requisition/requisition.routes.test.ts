@@ -19,12 +19,26 @@ type Reference = { id: string; code: string; name: string };
 type Requisition = {
     id: string;
     version: number;
+    request_date: string;
     accepted: boolean;
     vendor: { id: string } | null;
     order: { id: string; number: string } | null;
 };
 
 const path = '/api/v1/purchasing/requisitions';
+
+const legalEntityToday = async (
+    pool: ReturnType<typeof operationsTestApp>['pool'],
+    business: Business,
+) => {
+    const [row] = await pool.unsafe<{ date: string }[]>(
+        `select (now() at time zone timezone)::date::text as date
+         from legal_entities where tenant_id = $1 and organization_id = $2`,
+        [business.tenantId, business.legalEntityId],
+    );
+    if (!row) throw new Error('Legal entity not found.');
+    return row.date;
+};
 
 describe.skipIf(!process.env.DB_HOST)('purchase requisitions', () => {
     if (!process.env.DB_HOST) return;
@@ -132,6 +146,54 @@ describe.skipIf(!process.env.DB_HOST)('purchase requisitions', () => {
         ).data;
     const carryOut = () =>
         business.admin.post(`${path}/carry-out`, { order_date: '2026-11-17' });
+
+    test('the request date defaults to today for the legal entity and can be changed until ordered', async () => {
+        const requisition = await asked();
+        expect(requisition.request_date).toBe(
+            await legalEntityToday(pool, business),
+        );
+        const moved = (
+            await json<{ data: Requisition }>(
+                await requester.patch(`${path}/${requisition.id}`, {
+                    location_id: warehouse.id,
+                    item_id: gauze.id,
+                    quantity: 5,
+                    request_date: '2026-10-31',
+                    due_date: '2026-11-20',
+                    version: requisition.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(moved.request_date).toBe('2026-10-31');
+        const kept = (
+            await json<{ data: Requisition }>(
+                await requester.patch(`${path}/${requisition.id}`, {
+                    location_id: warehouse.id,
+                    item_id: gauze.id,
+                    quantity: 6,
+                    due_date: '2026-11-20',
+                    version: moved.version,
+                }),
+                200,
+            )
+        ).data;
+        expect(kept.request_date).toBe('2026-10-31');
+        expect(
+            Object.keys(
+                await refused(
+                    await ask(requester, { request_date: '31-10-2026' }),
+                ),
+            ),
+        ).toEqual(['request_date']);
+        expect(
+            (
+                await requester.delete(`${path}/${requisition.id}`, {
+                    version: kept.version,
+                })
+            ).status,
+        ).toBe(204);
+    });
 
     test('a requester asks for items but cannot pick the vendor, the price, or approve', async () => {
         const errors = await refused(
@@ -502,6 +564,32 @@ describe.skipIf(!process.env.DB_HOST)('reorder suggestions', () => {
                 ),
             ),
         ).toEqual(['due_date']);
+    });
+
+    test('a suggestion carries the day it was calculated as its request date', async () => {
+        await pool.unsafe(
+            `update bl_tr_permintaan set tanggal_permintaan = '2026-01-01'
+             where tenant_id = $1 and saran = 'baru' and deleted_at is null`,
+            [business.tenantId],
+        );
+        const stale = await pool.unsafe<{ count: number }[]>(
+            `select count(*)::int as count from bl_tr_permintaan
+             where tenant_id = $1 and saran = 'baru' and deleted_at is null`,
+            [business.tenantId],
+        );
+        expect(await calculate()).toEqual({
+            created: 0,
+            updated: stale[0]?.count ?? 0,
+            removed: 0,
+        });
+        const dates = await pool.unsafe<{ date: string }[]>(
+            `select distinct tanggal_permintaan::text as date from bl_tr_permintaan
+             where tenant_id = $1 and saran = 'baru' and deleted_at is null`,
+            [business.tenantId],
+        );
+        expect(dates.map((row) => row.date)).toEqual([
+            await legalEntityToday(pool, business),
+        ]);
     });
 
     test('running it again changes nothing, and a request already asked for is counted', async () => {
