@@ -49,6 +49,7 @@ type Form = {
     item: ItemChoice | null;
     unit: UnitChoice | null;
     quantity: string;
+    request_date: string;
     due_date: string;
     description: string;
     vendor: { id: string; number: string; name: string } | null;
@@ -63,6 +64,7 @@ function formOf(requisition: Requisition | null): Form {
             item: null,
             unit: null,
             quantity: '',
+            request_date: today(),
             due_date: today(),
             description: '',
             vendor: null,
@@ -86,6 +88,7 @@ function formOf(requisition: Requisition | null): Form {
         },
         unit,
         quantity: requisition.quantity,
+        request_date: requisition.request_date,
         due_date: requisition.due_date,
         description: requisition.description ?? '',
         vendor: requisition.vendor,
@@ -154,6 +157,7 @@ export function RequisitionCard({
             item_id: form.item?.id ?? '',
             unit_id: form.unit?.id ?? null,
             quantity: form.quantity,
+            request_date: form.request_date,
             due_date: form.due_date,
             description: form.description || null,
             vendor_id: form.vendor?.id ?? null,
@@ -393,6 +397,26 @@ export function RequisitionCard({
                                 set({ quantity: event.target.value })
                             }
                         />
+                    </FormControl>
+                    <FormControl error={error('request_date')}>
+                        {editable ? (
+                            <DatePicker
+                                label="Tanggal permintaan"
+                                required
+                                data-error-field="request_date"
+                                value={form.request_date}
+                                portalContainer={portalContainer}
+                                onValueChange={(request_date) =>
+                                    set({ request_date })
+                                }
+                            />
+                        ) : (
+                            <Input
+                                label="Tanggal permintaan"
+                                readOnly
+                                value={displayDate(form.request_date)}
+                            />
+                        )}
                     </FormControl>
                     <FormControl error={error('due_date')}>
                         {editable ? (

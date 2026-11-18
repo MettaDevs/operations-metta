@@ -63,6 +63,7 @@ const suggestionSchema = z.object({
     unit_id: z.string(),
     quantity: z.string(),
     vendor_id: z.string().nullable(),
+    request_date: z.string(),
     due_date: z.string(),
     description: z.string().nullable(),
 });
@@ -166,7 +167,7 @@ export async function calculatePlan(
     db: Database,
     workspace: Workspace,
     scope: { tenantId: string; legalEntityId: string },
-    dueDate: string,
+    { requestDate, dueDate }: { requestDate: string; dueDate: string },
 ) {
     const counts = { created: 0, updated: 0, removed: 0 };
     await db.transaction(async () => {
@@ -181,7 +182,8 @@ export async function calculatePlan(
         const suggestions = await db.rows(
             suggestionSchema,
             `select id, barang_id as item_id, lokasi_id as location_id, satuan_id as unit_id,
-                    trim_scale(jumlah)::text as quantity, vendor_id, tanggal_dibutuhkan::text as due_date,
+                    trim_scale(jumlah)::text as quantity, vendor_id, tanggal_permintaan::text as request_date,
+                    tanggal_dibutuhkan::text as due_date,
                     keterangan as description
              from bl_tr_permintaan
              where tenant_id = $1 and legal_entity_id = $2 and saran = 'baru' and deleted_at is null
@@ -226,6 +228,7 @@ export async function calculatePlan(
                     satuan_id: unit.unitId,
                     konversi: toNumeric(unit.conversion, quantityScale),
                     jumlah: toNumeric(unit.quantity, quantityScale),
+                    tanggal_permintaan: requestDate,
                     tanggal_dibutuhkan: dueDate,
                     keterangan: description,
                     diminta_oleh_user_id: workspace.userId,
@@ -242,6 +245,7 @@ export async function calculatePlan(
                 fromNumeric(existing.quantity, quantityScale) ===
                     unit.quantity &&
                 existing.vendor_id === plan.vendor_id &&
+                existing.request_date === requestDate &&
                 existing.due_date === dueDate &&
                 existing.description === description
             )
@@ -249,7 +253,7 @@ export async function calculatePlan(
             await db.execute(
                 `update bl_tr_permintaan set operating_unit_id = $1, satuan_id = $2, konversi = $3, jumlah = $4,
                         tanggal_dibutuhkan = $5, keterangan = $6, vendor_id = $7, diminta_oleh_user_id = $8,
-                        updated_at = $9
+                        updated_at = $9, tanggal_permintaan = $12
                  where tenant_id = $10 and id = $11`,
                 [
                     plan.operating_unit_id,
@@ -263,6 +267,7 @@ export async function calculatePlan(
                     stamp,
                     scope.tenantId,
                     existing.id,
+                    requestDate,
                 ],
             );
             counts.updated++;

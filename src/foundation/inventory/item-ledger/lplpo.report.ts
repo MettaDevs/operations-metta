@@ -82,9 +82,8 @@ const linesSql = `
     minta as (
         select r.barang_id, sum(r.jumlah * r.konversi) as jumlah
         from bl_tr_permintaan r
-        join legal_entities e on e.tenant_id = r.tenant_id and e.organization_id = r.legal_entity_id
         where r.tenant_id = $1 and r.legal_entity_id = $2 and r.lokasi_id = $3 and r.deleted_at is null
-          and (r.created_at at time zone 'UTC' at time zone e.timezone)::date between $4::date and $5::date
+          and r.tanggal_permintaan between $4::date and $5::date
         group by r.barang_id
     ),
     barang as (

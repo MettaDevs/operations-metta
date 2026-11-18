@@ -41,7 +41,8 @@ import {
 } from './requisition.schema.ts';
 
 const rowSql = `select * from (
-        select r.id, r.lokasi_id as location_id, r.version, r.tanggal_dibutuhkan::text as due_date,
+        select r.id, r.lokasi_id as location_id, r.version, r.tanggal_permintaan::text as request_date,
+               r.tanggal_dibutuhkan::text as due_date,
                r.keterangan as description, requester.name as requested_by, r.disetujui as accepted,
                r.saran is not null as suggested,
                case when r.order_detail_id is null then 'terbuka' else 'diproses' end as status,
@@ -73,6 +74,7 @@ const messages = {
     item_id: 'Pilih barang dari daftar.',
     unit_id: 'Pilih satuan barang ini dari daftar.',
     quantity: 'Isi jumlah lebih dari 0.',
+    request_date: 'Isi tanggal permintaan yang benar.',
     due_date: 'Isi tanggal dibutuhkan yang benar.',
     description: 'Isi keterangan paling banyak 200 karakter.',
     vendor_id: 'Pilih vendor dari daftar.',
@@ -103,6 +105,17 @@ export class PurchaseRequisitions {
         };
     }
 
+    private async today() {
+        const found = await this.db.one(
+            z.object({ date: z.string() }),
+            `select (now() at time zone l.timezone)::date::text as date
+             from legal_entities l where l.tenant_id = $1 and l.organization_id = $2`,
+            [this.scope.tenantId, this.scope.legalEntityId],
+        );
+        if (!found) throw new Error('Active legal entity not found.');
+        return found.date;
+    }
+
     private permissions() {
         const has = (permission: string) =>
             this.workspace.permissions.has(`core.${permission}`);
@@ -127,6 +140,7 @@ export class PurchaseRequisitions {
             bindings,
             parameters,
             columns: {
+                request_date: 'request_date',
                 due_date: 'due_date',
                 item: 'item_name',
                 location: 'location_code',
@@ -195,6 +209,11 @@ export class PurchaseRequisitions {
             errors.location_id = messages.location_id;
         else
             await requireLocationAccess(this.db, this.workspace, [location.id]);
+        if (
+            data.request_date !== undefined &&
+            !dateSchema.safeParse(data.request_date).success
+        )
+            errors.request_date = messages.request_date;
         if (!dateSchema.safeParse(data.due_date).success)
             errors.due_date = messages.due_date;
         const description = data.description?.trim() || null;
@@ -258,6 +277,7 @@ export class PurchaseRequisitions {
         return {
             location,
             price,
+            requestDate: data.request_date ?? null,
             dueDate: data.due_date,
             description,
             vendorId,
@@ -281,6 +301,7 @@ export class PurchaseRequisitions {
             satuan_id: data.price.unitId,
             konversi: toNumeric(data.price.conversion, quantityScale),
             jumlah: toNumeric(data.price.quantity, quantityScale),
+            tanggal_permintaan: data.requestDate ?? (await this.today()),
             tanggal_dibutuhkan: data.dueDate,
             keterangan: data.description,
             diminta_oleh_user_id: this.workspace.userId,
@@ -323,6 +344,7 @@ export class PurchaseRequisitions {
                 `update bl_tr_permintaan set operating_unit_id = $1, lokasi_id = $2, barang_id = $3, satuan_id = $4,
                         konversi = $5, jumlah = $6, tanggal_dibutuhkan = $7, keterangan = $8, vendor_id = $9,
                         harga_satuan = $10, disetujui = $11, updated_at = $12,
+                        tanggal_permintaan = coalesce($15::date, tanggal_permintaan),
                         saran = case when saran = 'baru' then 'diubah' else saran end
                  where tenant_id = $13 and id = $14`,
                 [
@@ -340,6 +362,7 @@ export class PurchaseRequisitions {
                     nowSql(),
                     this.scope.tenantId,
                     current.id,
+                    data.requestDate,
                 ],
             );
         });
@@ -376,7 +399,7 @@ export class PurchaseRequisitions {
             this.db,
             this.workspace,
             this.scope,
-            input.data.due_date,
+            { requestDate: await this.today(), dueDate: input.data.due_date },
         );
         return { status: 200, headers: {}, body: { data: counts } };
     }

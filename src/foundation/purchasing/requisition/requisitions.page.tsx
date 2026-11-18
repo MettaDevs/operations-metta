@@ -271,6 +271,17 @@ function RequisitionsPage(): ReactNode {
                     }
                     columns={[
                         {
+                            id: 'request_date',
+                            header: 'Tanggal permintaan',
+                            width: 140,
+                            cell: (row) => (
+                                <DataTableText>
+                                    {displayDate(row.request_date)}
+                                </DataTableText>
+                            ),
+                            sortValue: (row) => row.request_date,
+                        },
+                        {
                             id: 'due_date',
                             header: 'Dibutuhkan',
                             width: 120,
