@@ -27,7 +27,7 @@ import {
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { ChevronDown, LockOpen, PackageCheck, Send } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import { Decimal } from '../../../platform/money/index.ts';
@@ -165,11 +165,35 @@ function linesOf(order: PurchaseOrder | null): Line[] {
         quantity_received: line.quantity_received,
         quantity_invoiced: line.quantity_invoiced,
         quantity_to_receive:
-            order?.status === 'dirilis' ? line.outstanding_quantity : '0',
-        quantity_to_invoice: null,
-        batch_number: '',
-        expiry_date: '',
+            line.quantity_to_receive ??
+            (order?.status === 'dirilis' ? line.outstanding_quantity : '0'),
+        quantity_to_invoice: line.quantity_to_invoice,
+        batch_number: line.batch_number ?? '',
+        expiry_date: line.expiry_date ?? '',
     }));
+}
+
+type Posting = { posting_date: string; vendor_invoice_number: string };
+
+function postingOf(order: PurchaseOrder | null): Posting {
+    return {
+        posting_date: order?.posting_date ?? today(),
+        vendor_invoice_number: order?.vendor_invoice_number ?? '',
+    };
+}
+
+function postingPayload(posting: Posting, lines: Line[]) {
+    return {
+        posting_date: posting.posting_date || null,
+        vendor_invoice_number: posting.vendor_invoice_number || null,
+        lines: lines.map((line) => ({
+            id: line.id ?? '',
+            quantity_to_receive: line.quantity_to_receive || null,
+            quantity_to_invoice: line.quantity_to_invoice || null,
+            batch_number: line.batch_number || null,
+            expiry_date: line.expiry_date || null,
+        })),
+    };
 }
 
 const quantityOf = (text: string) => decimalOf(text) ?? Decimal.of('0');
@@ -204,10 +228,7 @@ export function PurchaseOrderCard({
     const editable =
         (order === null || order.status === 'terbuka') && permissions.update;
     const [header, setHeader] = useState(() => headerOf(initial));
-    const [posting, setPosting] = useState({
-        posting_date: today(),
-        vendor_invoice_number: '',
-    });
+    const [posting, setPosting] = useState(() => postingOf(initial));
     const [lines, setLines] = useState(() => linesOf(initial));
     const receivable = order?.status === 'dirilis' && permissions.post_receipt;
     const invoiceable =
@@ -248,7 +269,7 @@ export function PurchaseOrderCard({
             ? `${order.number} ${order.vendor.name}`
             : 'Purchase order baru',
         editing: editable,
-        dirty: !pristine,
+        dirty: editable && !pristine,
     });
 
     const error = (field: string) => errors[field]?.join(' ');
@@ -320,10 +341,67 @@ export function PurchaseOrderCard({
     const adopt = (next: PurchaseOrder) => {
         setOrder(next);
         setHeader(headerOf(next));
+        setPosting(postingOf(next));
         setLines(linesOf(next));
         setSelected([]);
         onSaved(next);
     };
+
+    // Isian posting order yang dirilis tersimpan sendiri, seperti Qty. to Receive di Purchase Line BC, supaya tetap
+    // ada setelah order ditutup dan dibuka lagi. Penyimpanan berantai agar versi order yang dipakai selalu yang terbaru.
+    const latest = useRef({ order, posting, lines });
+    latest.current = { order, posting, lines };
+    const mounted = useRef(true);
+    const saving = useRef<Promise<PurchaseOrder | null>>(Promise.resolve(null));
+    const savePosting = () => {
+        saving.current = saving.current.then(async () => {
+            const current = latest.current;
+            if (!current.order || current.order.status === 'terbuka')
+                return current.order;
+            const wanted = postingPayload(current.posting, current.lines);
+            if (
+                JSON.stringify(wanted) ===
+                JSON.stringify(
+                    postingPayload(
+                        postingOf(current.order),
+                        linesOf(current.order),
+                    ),
+                )
+            )
+                return current.order;
+            try {
+                const { body } = await api.purchasingOrderPostingUpdate({
+                    params: { id: current.order.id },
+                    body: { ...wanted, version: current.order.version },
+                });
+                latest.current = { ...latest.current, order: body.data };
+                if (mounted.current) setOrder(body.data);
+                onSaved(body.data);
+                return body.data;
+            } catch (caught) {
+                if (mounted.current)
+                    failed(caught, 'Isian posting belum disimpan');
+                return null;
+            }
+        });
+        return saving.current;
+    };
+    const flushPosting = useRef(savePosting);
+    flushPosting.current = savePosting;
+    const postingDraft = JSON.stringify(postingPayload(posting, lines));
+    const postingOpen = order !== null && order.status !== 'terbuka';
+    useEffect(() => {
+        if (!postingOpen) return;
+        const timer = setTimeout(() => void flushPosting.current(), 600);
+        return () => clearTimeout(timer);
+    }, [postingDraft, postingOpen]);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            void flushPosting.current();
+        };
+    }, []);
 
     const submit = () =>
         run(async () => {
@@ -397,27 +475,12 @@ export function PurchaseOrderCard({
             setErrors({});
             setErrorActions([]);
             setMessage(null);
-            const receiving = mode !== 'invoice';
+            const saved = await savePosting();
+            if (!saved) return;
             try {
                 const { body } = await api.purchasingOrderPost({
-                    params: { id: order.id },
-                    body: {
-                        mode,
-                        posting_date: posting.posting_date,
-                        vendor_invoice_number:
-                            posting.vendor_invoice_number || null,
-                        version: order.version,
-                        lines: lines.map((line) => ({
-                            id: line.id ?? '',
-                            quantity_to_receive:
-                                line.quantity_to_receive || null,
-                            quantity_to_invoice:
-                                line.quantity_to_invoice ??
-                                invoiceDefault(line, receiving),
-                            batch_number: line.batch_number || null,
-                            expiry_date: line.expiry_date || null,
-                        })),
-                    },
+                    params: { id: saved.id },
+                    body: { mode, version: saved.version },
                 });
                 const documents = [
                     ...(body.posted.receipt
@@ -433,10 +496,6 @@ export function PurchaseOrderCard({
                     `Barang order ${order.number} ${done}: ${documents.join(' dan ')}.`,
                 );
                 adopt(body.data);
-                setPosting((current) => ({
-                    ...current,
-                    vendor_invoice_number: '',
-                }));
             } catch (caught) {
                 failed(caught, 'Order belum diposting');
             }

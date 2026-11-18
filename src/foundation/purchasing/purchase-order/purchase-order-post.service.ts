@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Workspace } from '../../../platform/access/index.ts';
-import type { Database } from '../../../platform/database/index.ts';
+import { nowSql, type Database } from '../../../platform/database/index.ts';
 import {
     abort,
     coded,
@@ -15,20 +15,28 @@ import {
     activeLegalEntity,
     decimalInput,
     display,
+    fromNumeric,
     parseInput,
     quantityScale,
     toNumeric,
 } from '../../inventory/index.ts';
 import { PurchaseInvoices } from '../purchase-invoice/purchase-invoice.service.ts';
 import { Receipts, type OrderLinePick } from '../receipt/receipt.service.ts';
-import { purchaseOrderPostInputSchema } from './purchase-order.schema.ts';
-import { PurchaseOrders } from './purchase-order.service.ts';
+import {
+    purchaseOrderPostInputSchema,
+    purchaseOrderPostingInputSchema,
+} from './purchase-order.schema.ts';
+import {
+    clearPostingFields,
+    PurchaseOrders,
+} from './purchase-order.service.ts';
 
 const messages = {
     mode: 'Pilih Terima, Faktur, atau Terima dan faktur.',
     posting_date: 'Isi tanggal posting yang benar.',
+    vendor_invoice_number: 'Isi nomor faktur vendor paling banyak 35 karakter.',
     lines: 'Satu order paling banyak 500 baris.',
-    version: 'Muat ulang order, lalu ulangi posting.',
+    version: 'Muat ulang order, lalu ulangi perubahanmu.',
 };
 
 const quantityText = (value: bigint) => display(value, quantityScale);
@@ -73,45 +81,89 @@ type PlannedLine = {
     expiry: string | null;
 };
 
+type PostingDocument = { postingDate: string; vendorInvoiceNumber: string };
+
+const storedQuantity = (text: string | null) =>
+    text === null ? null : fromNumeric(text, quantityScale);
+
 // Posting dari purchase order seperti BC (codeunit 90 Purch.-Post lewat PostingSelectionManagement): Terima menulis
-// penerimaan, Faktur menulis faktur pembelian atas barang yang sudah diterima, Terima dan faktur keduanya. Dokumennya
-// dibuat dan diposting dengan posting penerimaan dan faktur yang sama dengan jalur dokumen terpisah, dalam satu
-// transaksi.
+// penerimaan, Faktur menulis faktur pembelian atas barang yang sudah diterima, Terima dan faktur keduanya. Isian posting
+// disimpan di order lebih dulu, seperti Qty. to Receive di Purchase Line, dan posting membaca yang tersimpan.
+// Dokumennya dibuat dan diposting dengan posting penerimaan dan faktur yang sama dengan jalur dokumen terpisah, dalam
+// satu transaksi.
 export class PurchaseOrderPosting {
     constructor(
         private readonly db: Database,
         private readonly workspace: Workspace,
     ) {}
 
-    async post(request: Request, orderId: string, body: unknown) {
-        const data = parseInput(purchaseOrderPostInputSchema, body, messages);
-        const receive = data.mode !== 'invoice';
-        const invoice = data.mode !== 'receive';
-        if (receive) this.workspace.guard('purchase-receipt', 'update');
-        if (invoice) this.workspace.guard('purchase-invoice', 'update');
+    private get scope() {
+        return {
+            tenantId: this.workspace.tenantId,
+            legalEntityId: activeLegalEntity(this.workspace),
+        };
+    }
+
+    private async lockPostable(orderId: string, version: number) {
+        const order = lookupId(orderId)
+            ? await this.db.one(
+                  z.object({
+                      version: z.number(),
+                      status: z.string(),
+                      vendor_id: z.string(),
+                      payment_terms_id: z.string().nullable(),
+                      posting_date: z.string(),
+                      vendor_invoice_number: z.string().nullable(),
+                  }),
+                  `select h.version, h.status, h.vendor_id, h.termin_pembayaran_id as payment_terms_id,
+                          coalesce(h.tanggal_posting, (now() at time zone l.timezone)::date)::text as posting_date,
+                          h.no_faktur_vendor as vendor_invoice_number
+                   from bl_tr_order h
+                   join legal_entities l on l.tenant_id = h.tenant_id and l.organization_id = h.legal_entity_id
+                   where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null
+                   for update of h`,
+                  [this.scope.tenantId, this.scope.legalEntityId, orderId],
+              )
+            : undefined;
+        if (!order) return abort(404, 'Not Found');
+        if (order.version !== version)
+            coded(409, 'stale_version', staleMessage);
+        if (order.status === 'terbuka')
+            validation({
+                _form: 'Order ini sedang dibuka untuk diubah. Rilis ordernya lebih dulu.',
+            });
+        return order;
+    }
+
+    async save(request: Request, orderId: string, body: unknown) {
+        if (!this.workspace.permissions.has('core.purchase-invoice.update'))
+            this.workspace.guard('purchase-receipt', 'update');
+        const data = parseInput(
+            purchaseOrderPostingInputSchema,
+            body,
+            messages,
+        );
         const version = expectedVersion(request, body);
         const errors: Record<string, string> = {};
-        if (!dateSchema.safeParse(data.posting_date).success)
+        const postingDate = data.posting_date?.trim() || null;
+        if (postingDate !== null && !dateSchema.safeParse(postingDate).success)
             errors.posting_date = messages.posting_date;
-        const planned: PlannedLine[] = [];
-        for (const [row, line] of data.lines.entries()) {
+        const vendorInvoiceNumber = data.vendor_invoice_number?.trim() || null;
+        if (vendorInvoiceNumber !== null && vendorInvoiceNumber.length > 35)
+            errors.vendor_invoice_number = messages.vendor_invoice_number;
+        const lines = data.lines.map((line, row) => {
             const quantity = (
                 value: string | number | null | undefined,
                 name: string,
             ) => {
                 if (value === null || value === undefined || value === '')
-                    return 0n;
+                    return null;
                 const parsed = decimalInput(value);
-                if (parsed !== null && parsed >= 0n) return parsed;
+                if (parsed !== null && parsed >= 0n)
+                    return toNumeric(parsed, quantityScale);
                 errors[`lines.${row}.${name}`] = 'Isi jumlah 0 atau lebih.';
-                return 0n;
+                return null;
             };
-            const toReceive = receive
-                ? quantity(line.quantity_to_receive, 'quantity_to_receive')
-                : 0n;
-            const toInvoice = invoice
-                ? quantity(line.quantity_to_invoice, 'quantity_to_invoice')
-                : 0n;
             const batchNumber = line.batch_number?.trim().toUpperCase() || null;
             if (batchNumber && batchNumber.length > 50)
                 errors[`lines.${row}.batch_number`] =
@@ -120,74 +172,133 @@ export class PurchaseOrderPosting {
             if (expiry !== null && !dateSchema.safeParse(expiry).success)
                 errors[`lines.${row}.expiry_date`] =
                     'Isi tanggal kedaluwarsa yang benar.';
-            planned.push({
+            return {
                 row,
-                orderLineId: line.id,
-                toReceive,
-                toInvoice,
+                id: line.id,
+                toReceive: quantity(
+                    line.quantity_to_receive,
+                    'quantity_to_receive',
+                ),
+                toInvoice: quantity(
+                    line.quantity_to_invoice,
+                    'quantity_to_invoice',
+                ),
                 batchNumber,
                 expiry,
-            });
-        }
-        if (receive && !planned.some((line) => line.toReceive > 0n))
-            errors._form =
-                'Isi Diterima sekarang di sedikitnya satu baris, untuk barang yang datang.';
-        else if (invoice && !planned.some((line) => line.toInvoice > 0n))
-            errors._form =
-                'Isi Difakturkan sekarang di sedikitnya satu baris, untuk barang yang ditagih vendor.';
+            };
+        });
         if (Object.keys(errors).length) validation(errors);
 
-        const scope = {
-            tenantId: this.workspace.tenantId,
-            legalEntityId: activeLegalEntity(this.workspace),
+        await this.db.transaction(async () => {
+            await this.lockPostable(orderId, version);
+            await this.db.execute(
+                `update bl_tr_order set tanggal_posting = $1, no_faktur_vendor = $2, updated_at = $3
+                 where tenant_id = $4 and id = $5`,
+                [
+                    postingDate,
+                    vendorInvoiceNumber,
+                    nowSql(),
+                    this.scope.tenantId,
+                    orderId,
+                ],
+            );
+            for (const line of lines) {
+                const updated = lookupId(line.id)
+                    ? await this.db.one(
+                          z.object({ id: z.string() }),
+                          `update bl_tr_order_detail
+                           set jumlah_terima_sekarang = $1, jumlah_faktur_sekarang = $2, no_batch = $3,
+                               tanggal_kedaluwarsa = $4, updated_at = $5
+                           where tenant_id = $6 and order_id = $7 and id = $8 and deleted_at is null
+                           returning id`,
+                          [
+                              line.toReceive,
+                              line.toInvoice,
+                              line.batchNumber,
+                              line.expiry,
+                              nowSql(),
+                              this.scope.tenantId,
+                              orderId,
+                              line.id,
+                          ],
+                      )
+                    : undefined;
+                if (!updated)
+                    validation({
+                        [`lines.${line.row}.quantity_to_receive`]:
+                            'Baris ini sudah tidak ada di order. Muat ulang order, lalu ulangi perubahanmu.',
+                    });
+            }
+        });
+        return {
+            status: 200,
+            headers: {},
+            body: await new PurchaseOrders(this.db, this.workspace).show(
+                orderId,
+            ),
         };
-        const posted = await this.db.transaction(async () => {
-            const order = lookupId(orderId)
-                ? await this.db.one(
-                      z.object({
-                          version: z.number(),
-                          vendor_id: z.string(),
-                          payment_terms_id: z.string().nullable(),
-                      }),
-                      `select version, vendor_id, termin_pembayaran_id as payment_terms_id from bl_tr_order
-                       where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null
-                       for update`,
-                      [scope.tenantId, scope.legalEntityId, orderId],
-                  )
-                : undefined;
-            if (!order) return abort(404, 'Not Found');
-            if (order.version !== version)
-                coded(409, 'stale_version', staleMessage);
-            const orderLines = new Set(
-                (
-                    await this.db.rows(
-                        z.object({ id: z.string() }),
-                        `select id from bl_tr_order_detail
-                         where tenant_id = $1 and order_id = $2 and deleted_at is null`,
-                        [scope.tenantId, orderId],
-                    )
-                ).map((line) => line.id),
-            );
-            const unknown = planned.find(
-                (line) => !orderLines.has(line.orderLineId),
-            );
-            if (unknown)
-                validation({
-                    [`lines.${unknown.row}.quantity_to_receive`]:
-                        'Baris ini sudah tidak ada di order. Muat ulang order, lalu ulangi posting.',
-                });
+    }
 
+    async post(request: Request, orderId: string, body: unknown) {
+        const data = parseInput(purchaseOrderPostInputSchema, body, messages);
+        const receive = data.mode !== 'invoice';
+        const invoice = data.mode !== 'receive';
+        if (receive) this.workspace.guard('purchase-receipt', 'update');
+        if (invoice) this.workspace.guard('purchase-invoice', 'update');
+        const version = expectedVersion(request, body);
+        const orders = new PurchaseOrders(this.db, this.workspace);
+
+        const posted = await this.db.transaction(async () => {
+            const order = await this.lockPostable(orderId, version);
+            const { data: stored } = await orders.show(orderId);
+            const planned: PlannedLine[] = stored.lines.map((line, row) => {
+                const toReceive = receive
+                    ? (storedQuantity(line.quantity_to_receive) ??
+                      (order.status === 'dirilis'
+                          ? fromNumeric(
+                                line.outstanding_quantity,
+                                quantityScale,
+                            )
+                          : 0n))
+                    : 0n;
+                const open =
+                    fromNumeric(line.quantity_received, quantityScale) -
+                    fromNumeric(line.quantity_invoiced, quantityScale) +
+                    toReceive;
+                return {
+                    row,
+                    orderLineId: line.id,
+                    toReceive,
+                    toInvoice: invoice
+                        ? (storedQuantity(line.quantity_to_invoice) ??
+                          (open > 0n ? open : 0n))
+                        : 0n,
+                    batchNumber: line.batch_number,
+                    expiry: line.expiry_date,
+                };
+            });
+            if (receive && !planned.some((line) => line.toReceive > 0n))
+                validation({
+                    _form: 'Isi Diterima sekarang di sedikitnya satu baris, untuk barang yang datang.',
+                });
+            if (invoice && !planned.some((line) => line.toInvoice > 0n))
+                validation({
+                    _form: 'Isi Difakturkan sekarang di sedikitnya satu baris, untuk barang yang ditagih vendor.',
+                });
+            const document = {
+                postingDate: order.posting_date,
+                vendorInvoiceNumber: order.vendor_invoice_number ?? '',
+            };
             const receipt = receive
-                ? await this.receive(orderId, data, planned)
+                ? await this.receive(orderId, document, planned)
                 : null;
             const purchaseInvoice = invoice
-                ? await this.invoice(orderId, order, data, planned)
+                ? await this.invoice(orderId, order, document, planned)
                 : null;
+            await clearPostingFields(this.db, this.scope.tenantId, orderId);
             return { receipt, invoice: purchaseInvoice };
         });
-        const shown = await new PurchaseOrders(this.db, this.workspace).show(
-            orderId,
-        );
+        const shown = await orders.show(orderId);
         return {
             status: 200,
             headers: {},
@@ -197,7 +308,7 @@ export class PurchaseOrderPosting {
 
     private async receive(
         orderId: string,
-        data: z.output<typeof purchaseOrderPostInputSchema>,
+        document: PostingDocument,
         planned: PlannedLine[],
     ) {
         const receiving = planned.filter((line) => line.toReceive > 0n);
@@ -211,8 +322,8 @@ export class PurchaseOrderPosting {
         const id = await withErrorsOnOrderRows(
             () =>
                 receipts.receiveOrder(orderId, {
-                    postingDate: data.posting_date,
-                    vendorDocument: data.vendor_invoice_number?.trim() || null,
+                    postingDate: document.postingDate,
+                    vendorDocument: document.vendorInvoiceNumber || null,
                     picks,
                 }),
             receiving.map((line) => line.row),
@@ -225,7 +336,7 @@ export class PurchaseOrderPosting {
     private async invoice(
         orderId: string,
         order: { vendor_id: string; payment_terms_id: string | null },
-        data: z.output<typeof purchaseOrderPostInputSchema>,
+        document: PostingDocument,
         planned: PlannedLine[],
     ) {
         const invoices = new PurchaseInvoices(this.db, this.workspace);
@@ -269,9 +380,9 @@ export class PurchaseOrderPosting {
             () =>
                 invoices.createAndPost({
                     vendor_id: order.vendor_id,
-                    vendor_invoice_number: data.vendor_invoice_number ?? '',
-                    document_date: data.posting_date,
-                    posting_date: data.posting_date,
+                    vendor_invoice_number: document.vendorInvoiceNumber,
+                    document_date: document.postingDate,
+                    posting_date: document.postingDate,
                     payment_terms_id: order.payment_terms_id,
                     lines,
                 }),

@@ -2673,6 +2673,18 @@
             }
         }
     },
+    "purchasingOrderPostingUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PATCH",
+                "path": "/api/v1/purchasing/orders/{id}/posting",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingOrderPost": {
         "~orpc": {
             "errorMap": {},

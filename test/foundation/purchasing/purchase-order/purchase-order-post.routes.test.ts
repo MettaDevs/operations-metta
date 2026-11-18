@@ -14,6 +14,9 @@ type OrderLine = {
     quantity_received: string;
     quantity_invoiced: string;
     outstanding_quantity: string;
+    quantity_to_receive: string | null;
+    quantity_to_invoice: string | null;
+    batch_number: string | null;
     item: Reference & { batch_required: boolean; expiry_required: boolean };
 };
 type Order = {
@@ -134,14 +137,12 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
             )
         ).data;
     }
-    const post = (
+    const savePosting = (
         order: Order,
-        mode: string,
         lines: PostLine[],
         vendorInvoiceNumber: string | null = null,
     ) =>
-        business.admin.post(`${orders}/${order.id}/post`, {
-            mode,
+        business.admin.patch(`${orders}/${order.id}/posting`, {
             posting_date: '2026-11-12',
             vendor_invoice_number: vendorInvoiceNumber,
             version: order.version,
@@ -150,6 +151,28 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
                 ...lines[index],
             })),
         });
+    const show = async (order: Order) =>
+        (
+            await json<{ data: Order }>(
+                await business.admin.get(`${orders}/${order.id}`),
+                200,
+            )
+        ).data;
+    async function post(
+        order: Order,
+        mode: string,
+        lines: PostLine[],
+        vendorInvoiceNumber: string | null = null,
+    ) {
+        const current = await show(order);
+        const saved = await savePosting(current, lines, vendorInvoiceNumber);
+        if (saved.status !== 200) return saved;
+        const { data } = (await saved.json()) as { data: Order };
+        return business.admin.post(`${orders}/${order.id}/post`, {
+            mode,
+            version: data.version,
+        });
+    }
     const lot = { batch_number: 'b-01', expiry_date: '2028-01-31' };
 
     async function ledger(invoiceId: string) {
@@ -363,13 +386,66 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
         expect(after[0]?.count).toBe((before[0]?.count ?? 0) + 1);
     });
 
+    test('saved posting quantities survive a reload, posting uses them, and posting resets them to the defaults', async () => {
+        const order = await releasedOrder();
+        await json<{ data: Order }>(
+            await savePosting(
+                order,
+                [
+                    { quantity_to_receive: 3, ...lot },
+                    { quantity_to_receive: 0 },
+                ],
+                'FV-2026-009',
+            ),
+            200,
+        );
+        const reopened = await show(order);
+        expect(
+            reopened.lines.map((line) => [
+                line.quantity_to_receive,
+                line.batch_number,
+            ]),
+        ).toEqual([
+            ['3', 'B-01'],
+            ['0', null],
+        ]);
+
+        const posted = await json<Posted>(
+            await business.admin.post(`${orders}/${order.id}/post`, {
+                mode: 'receive',
+                version: reopened.version,
+            }),
+            200,
+        );
+        expect(
+            posted.data.lines.map((line) => [
+                line.quantity_received,
+                line.quantity_to_receive,
+                line.quantity_to_invoice,
+                line.batch_number,
+            ]),
+        ).toEqual([
+            ['3', null, null, null],
+            ['0', null, null, null],
+        ]);
+        const receipt = await pool.unsafe<{ vendor_document: string }[]>(
+            `select no_dokumen_vendor as vendor_document from bl_tr_penerimaan where id = $1`,
+            [posted.posted.receipt?.id ?? ''],
+        );
+        expect(receipt[0]?.vendor_document).toBe('FV-2026-009');
+    });
+
     test('a stale order version is refused', async () => {
         const order = await releasedOrder();
-        const response = await post(
+        const response = await savePosting(
             { ...order, version: order.version - 1 },
-            'receive',
             [{ quantity_to_receive: 1, ...lot }, { quantity_to_receive: 0 }],
         );
         expect(response.status).toBe(409);
+        const posting = await business.admin.post(
+            `${orders}/${order.id}/post`,
+            { mode: 'receive', version: order.version - 1 },
+        );
+        expect(posting.status).toBe(409);
     });
 });
