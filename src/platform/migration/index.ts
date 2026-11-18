@@ -23,19 +23,33 @@ export type MigrateOptions = {
     log?: (line: string) => void;
 };
 
+// Sudah berjalan di lingkungan bersama sebelum penjaga di bawah ada; mengganti namanya membuat catatan yatim.
+const appliedDuplicates = new Set(['healthcare/0032']);
+
 function readOwner(owner: string, directory: string): Migration[] {
-    return readdirSync(directory)
+    const names = readdirSync(directory)
         .filter((name) => name.endsWith('.sql'))
-        .sort()
-        .map((name) => {
-            const bytes = readFileSync(join(directory, name));
-            return {
-                owner,
-                name,
-                sql: bytes.toString('utf8'),
-                checksum: createHash('sha256').update(bytes).digest('hex'),
-            };
-        });
+        .sort();
+    // Dua PR yang mengambil nomor sama lolos merge tanpa konflik, lalu urutan jalannya hanya ditentukan nama sisanya.
+    const seen = new Map<string, string>();
+    for (const name of names) {
+        const number = name.split('_', 1)[0] ?? name;
+        const earlier = seen.get(number);
+        if (earlier && !appliedDuplicates.has(`${owner}/${number}`))
+            throw new Error(
+                `${owner} has two migrations numbered ${number}: ${earlier} and ${name}. Give the newer one the next free number.`,
+            );
+        seen.set(number, name);
+    }
+    return names.map((name) => {
+        const bytes = readFileSync(join(directory, name));
+        return {
+            owner,
+            name,
+            sql: bytes.toString('utf8'),
+            checksum: createHash('sha256').update(bytes).digest('hex'),
+        };
+    });
 }
 
 export function readMigrationSource(root: string): MigrationSource {
