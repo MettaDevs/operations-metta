@@ -32,6 +32,7 @@ import {
     type PurchaseOrder,
     type PurchaseOrderPermissions,
 } from './purchase-order-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 const route = getRouteApi('/_app/sysadmin/purchasing/orders');
 type Row = ApiBody<'purchasingOrderList'>['data'][number];
@@ -55,7 +56,7 @@ function PurchaseOrdersPage(): ReactNode {
     };
     const [permissions, setPermissions] =
         useState<PurchaseOrderPermissions>(noPermissions);
-    const [amountDecimals, setAmountDecimals] = useState(0);
+    const [amountDecimals, setAmountDecimals] = useState<AmountDecimals>(0);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingOrderList(

@@ -32,6 +32,7 @@ import {
     type PurchaseInvoice,
     type PurchaseInvoicePermissions,
 } from './purchase-invoice-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 // Faktur pembelian (Purchase Invoices di BC): tagihan vendor atas barang yang sudah diterima. Draf, diposting, atau
 // dibatalkan postingnya.
@@ -57,7 +58,7 @@ function PurchaseInvoicesPage(): ReactNode {
     };
     const [permissions, setPermissions] =
         useState<PurchaseInvoicePermissions>(noPermissions);
-    const [amountDecimals, setAmountDecimals] = useState(0);
+    const [amountDecimals, setAmountDecimals] = useState<AmountDecimals>(0);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingInvoiceList(

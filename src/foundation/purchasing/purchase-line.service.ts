@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Database } from '../../platform/database/index.ts';
 import {
     decimalsHint,
@@ -15,12 +16,65 @@ import {
     unitConversion,
     unitCostInput,
 } from '../inventory/index.ts';
+import type { AmountDecimals } from '../currency/index.ts';
+import {
+    documentTotals,
+    lineAmount,
+    type PricedLine,
+} from './purchase-line.amounts.ts';
 
 const one = 10n ** BigInt(quantityScale);
 const hundredPercent = 100n * one;
 
-export const lineAmountSql = (alias: string, amountDecimals: number) =>
-    `round(${alias}.jumlah * ${alias}.harga_satuan * (100 - ${alias}.diskon_persen) / 100, ${amountDecimals})`;
+export const pricedLinesSchema = z.array(
+    z.object({
+        quantity: z.string(),
+        unit_cost: z.string(),
+        discount_percent: z.string(),
+        vat_percent: z.string(),
+    }),
+);
+
+export const pricedLinesSql = (
+    table: string,
+    documentColumn: string,
+    header: string,
+) => `coalesce((select json_agg(json_build_object(
+                    'quantity', p.jumlah::text, 'unit_cost', p.harga_satuan::text,
+                    'discount_percent', p.diskon_persen::text, 'vat_percent', p.tarif_ppn::text))
+                from ${table} p
+                where p.tenant_id = ${header}.tenant_id and p.${documentColumn} = ${header}.id
+                  and p.deleted_at is null), '[]'::json)`;
+
+export function withTotals<Row extends { priced_lines: PricedLine[] }>(
+    { priced_lines, ...row }: Row,
+    decimals: AmountDecimals,
+) {
+    const { subtotal, vat } = documentTotals(priced_lines, decimals);
+    return {
+        ...row,
+        amount: subtotal.normalized(),
+        vat_amount: vat.normalized(),
+    };
+}
+
+export const withAmount = <Line extends PricedLine>(
+    line: Line,
+    decimals: AmountDecimals,
+) => ({ ...line, amount: lineAmount(line, decimals).normalized() });
+
+export function pricedDocument<Line extends PricedLine>(
+    lines: Line[],
+    decimals: AmountDecimals,
+) {
+    const { subtotal, vat } = documentTotals(lines, decimals);
+    return {
+        lines: lines.map((line) => withAmount(line, decimals)),
+        subtotal: subtotal.normalized(),
+        vat_amount: vat.normalized(),
+        total: subtotal.plus(vat).normalized(),
+    };
+}
 
 export type PriceLineInput = {
     item_id: string;

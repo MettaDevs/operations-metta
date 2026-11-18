@@ -39,7 +39,6 @@ import {
     useCanReturnToVendor,
 } from '../purchase-return/purchase-returns.tsx';
 import {
-    amountOf,
     itemColumns,
     label,
     loadItems,
@@ -47,7 +46,6 @@ import {
     loadVendors,
     nextKey,
     today,
-    totalsOf,
     UnitLookup,
     unitText,
     useLoader,
@@ -55,7 +53,9 @@ import {
     type Reference,
     type UnitChoice,
 } from '../purchase-lines.tsx';
+import { documentTotals, lineAmount } from '../purchase-line.amounts.ts';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 export type Receipt = ApiBody<'purchasingReceiptShow'>['data'];
 export type ReceiptPermissions =
@@ -185,7 +185,7 @@ export function ReceiptCard({
 }: {
     receipt: Receipt | null;
     permissions: ReceiptPermissions;
-    amountDecimals: number;
+    amountDecimals: AmountDecimals;
     portalContainer: RefObject<HTMLElement | null>;
     onSaved: (receipt: Receipt) => void;
     onClose: () => void;
@@ -241,7 +241,7 @@ export function ReceiptCard({
     const showExpiry = lines.some(
         (line) => line.item?.expiry_required || line.expiry_date,
     );
-    const { subtotal, vat } = totalsOf(lines, amountDecimals);
+    const { subtotal, vat } = documentTotals(lines, amountDecimals);
     const pricesIncludingVatId = useId();
 
     const payload = () => ({
@@ -1129,7 +1129,10 @@ export function ReceiptCard({
                                 cell: ({ line }) =>
                                     text(
                                         displayAmount(
-                                            amountOf(line).normalized(),
+                                            lineAmount(
+                                                line,
+                                                amountDecimals,
+                                            ).normalized(),
                                             amountDecimals,
                                         ),
                                     ),

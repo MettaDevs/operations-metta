@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Database } from '../../platform/database/index.ts';
 import { validation } from '../../platform/http/index.ts';
+import { amountDecimalOptions, type AmountDecimals } from './currency.rules.ts';
 import {
     Decimal,
     localCurrencyCode,
@@ -20,20 +21,21 @@ export {
     decimalsHint,
     exchangeRateDecimals,
     unitAmountDecimalOptions,
+    type AmountDecimals,
 } from './currency.rules.ts';
 export { currencyRoutes } from './currency.routes.ts';
 export { exchangeRateRoutes } from './exchange-rate.routes.ts';
 export { localCurrencyCode } from '../../platform/money/index.ts';
 
 const precisionSchema = z.object({
-    amount_decimals: z.number(),
+    amount_decimals: z.literal(amountDecimalOptions),
     unit_amount_decimals: z.number(),
     invoice_rounding_precision: z.string(),
     invoice_rounding_type: z.string(),
 });
 
 export type Precision = {
-    amount_decimals: number;
+    amount_decimals: AmountDecimals;
     unit_amount_decimals: number;
     // Kelipatan pembulatan total tagihan; 0 berarti tidak dibulatkan.
     invoice_rounding_precision: string;

@@ -33,6 +33,7 @@ import {
     type VendorPayment,
     type VendorPaymentPermissions,
 } from '../vendor-payment/vendor-payment-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 // Utang vendor (Vendor Ledger Entries di BC).
 
@@ -51,7 +52,7 @@ type Opened =
           kind: 'invoice';
           invoice: PurchaseInvoice;
           permissions: PurchaseInvoicePermissions;
-          amountDecimals: number;
+          amountDecimals: AmountDecimals;
       }
     | {
           kind: 'payment';
