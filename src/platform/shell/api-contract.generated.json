@@ -2613,6 +2613,18 @@
             }
         }
     },
+    "purchasingOrderFacts": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/purchasing/orders/{id}/facts",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingOrderCreate": {
         "~orpc": {
             "errorMap": {},

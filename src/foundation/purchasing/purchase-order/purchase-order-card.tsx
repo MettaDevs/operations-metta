@@ -3,6 +3,7 @@ import { Button } from '@operations-metta/ui/button';
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
+import { FactBox } from '@operations-metta/ui/fact-box';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -72,6 +73,7 @@ import {
     type PaymentTermsChoice,
 } from '../payment-terms/payment-terms-lookup.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
+import { PurchaseOrderFacts } from './purchase-order-facts.tsx';
 import type { AmountDecimals } from '../../currency/index.ts';
 
 export type PurchaseOrder = ApiBody<'purchasingOrderShow'>['data'];
@@ -242,6 +244,12 @@ export function PurchaseOrderCard({
                         ) > 0,
                 )));
     const [selected, setSelected] = useState<string[]>([]);
+    const [activeLine, setActiveLine] = useState<string | null>(null);
+    const [factBoxToolbar, setFactBoxToolbar] = useState<HTMLDivElement | null>(
+        null,
+    );
+    const currentLine =
+        lines.find((line) => line.key === activeLine) ?? lines[0];
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
@@ -742,6 +750,10 @@ export function PurchaseOrderCard({
                             label="Purchase order"
                         />
                     )}
+                    <div
+                        ref={setFactBoxToolbar}
+                        className="ms-auto flex items-center gap-1"
+                    />
                 </PageDialogToolbar>
                 <FormErrorHeader
                     errors={errors}
@@ -749,748 +761,861 @@ export function PurchaseOrderCard({
                     message={message}
                     operation={operation}
                 />
-                <PageDialogBody className="space-y-4 py-3">
-                    <FormGrid>
-                        <FormControl
-                            error={error('vendor_id')}
-                            data-error-field="vendor_id"
-                        >
-                            {editable ? (
-                                <InlineLookup<Vendor>
-                                    label="Vendor"
-                                    required
-                                    loadItems={vendorLoader}
-                                    value={
-                                        header.vendor
-                                            ? {
-                                                  ...header.vendor,
-                                                  tax_number: null,
-                                                  payment_terms: null,
-                                                  status: 'active',
-                                                  version: 0,
-                                              }
-                                            : null
-                                    }
-                                    displayValue={header.vendor?.name ?? ''}
-                                    onValueChange={(vendor) =>
-                                        setHeader({
-                                            ...header,
-                                            vendor,
-                                            payment_terms: vendor.payment_terms,
-                                        })
-                                    }
-                                    getItemValue={(vendor) => vendor.id}
-                                    getItemLabel={(vendor) => vendor.name}
-                                    placeholder="Cari nomor atau nama vendor…"
-                                    emptyMessage={
-                                        permissions.create_vendor
-                                            ? 'Vendor tidak ditemukan. Pilih Baru untuk menambahkan.'
-                                            : 'Vendor tidak ditemukan.'
-                                    }
-                                    popupClassName="w-[32rem]"
-                                    showDetails={false}
-                                    portalContainer={portalContainer}
-                                    columns={[
-                                        {
-                                            id: 'number',
-                                            header: 'Nomor',
-                                            width: 130,
-                                            cell: (vendor) => vendor.number,
-                                        },
-                                        {
-                                            id: 'name',
-                                            header: 'Nama',
-                                            width: 260,
-                                            cell: (vendor) => vendor.name,
-                                        },
-                                    ]}
-                                    onCreate={
-                                        permissions.create_vendor
-                                            ? () => setCreatingVendor(true)
-                                            : undefined
-                                    }
-                                />
-                            ) : (
-                                <Input
-                                    label="Vendor"
-                                    readOnly
-                                    value={header.vendor?.name ?? ''}
-                                />
-                            )}
-                        </FormControl>
-                        <FormControl
-                            error={error('location_id')}
-                            data-error-field="location_id"
-                            hint="Lokasi yang menerima barang saat datang."
-                        >
-                            {editable ? (
-                                <InlineLookup<Location>
-                                    label="Dikirim ke"
-                                    required
-                                    loadItems={locationLoader}
-                                    value={
-                                        header.location
-                                            ? {
-                                                  ...header.location,
-                                                  operating_unit: {
-                                                      id: '',
-                                                      name: '',
-                                                  },
-                                                  is_transit: false,
-                                                  restricted_to_employees: false,
-                                                  picking_method: null,
-                                                  transfer_mode: null,
-                                                  version: 0,
-                                              }
-                                            : null
-                                    }
-                                    displayValue={
-                                        header.location
-                                            ? label(header.location)
-                                            : ''
-                                    }
-                                    onValueChange={(location) =>
-                                        setHeader({
-                                            ...header,
-                                            location: {
-                                                id: location.id,
-                                                code: location.code,
-                                                name: location.name,
-                                            },
-                                        })
-                                    }
-                                    getItemValue={(location) => location.id}
-                                    getItemLabel={label}
-                                    placeholder="Cari kode atau nama lokasi…"
-                                    emptyMessage="Lokasi tidak ditemukan."
-                                    popupClassName="w-[32rem]"
-                                    showDetails={false}
-                                    portalContainer={portalContainer}
-                                    columns={[
-                                        {
-                                            id: 'code',
-                                            header: 'Kode',
-                                            width: 110,
-                                            cell: (location) => location.code,
-                                        },
-                                        {
-                                            id: 'name',
-                                            header: 'Nama',
-                                            width: 200,
-                                            cell: (location) => location.name,
-                                        },
-                                        {
-                                            id: 'operating_unit',
-                                            header: 'Unit',
-                                            width: 160,
-                                            cell: (location) =>
-                                                location.operating_unit.name,
-                                        },
-                                    ]}
-                                />
-                            ) : (
-                                <Input
-                                    label="Dikirim ke"
-                                    readOnly
-                                    value={
-                                        header.location
-                                            ? label(header.location)
-                                            : ''
-                                    }
-                                />
-                            )}
-                        </FormControl>
-                        <FormControl error={error('order_date')}>
-                            {editable ? (
-                                <DatePicker
-                                    label="Tanggal order"
-                                    required
-                                    data-error-field="order_date"
-                                    value={header.order_date}
-                                    portalContainer={portalContainer}
-                                    onValueChange={(order_date) =>
-                                        setHeader({ ...header, order_date })
-                                    }
-                                />
-                            ) : (
-                                <Input
-                                    label="Tanggal order"
-                                    readOnly
-                                    value={displayDate(header.order_date)}
-                                />
-                            )}
-                        </FormControl>
-                        <FormControl
-                            error={error('expected_receipt_date')}
-                            hint="Tanggal barang diharapkan datang. Baris yang tanggalnya kosong mengikuti tanggal ini."
-                        >
-                            {editable ? (
-                                <DatePicker
-                                    label="Diharapkan datang"
-                                    data-error-field="expected_receipt_date"
-                                    value={header.expected_receipt_date}
-                                    portalContainer={portalContainer}
-                                    onValueChange={(expected_receipt_date) =>
-                                        setHeader({
-                                            ...header,
-                                            expected_receipt_date,
-                                        })
-                                    }
-                                />
-                            ) : (
-                                <Input
-                                    label="Diharapkan datang"
-                                    readOnly
-                                    value={
-                                        header.expected_receipt_date
-                                            ? displayDate(
-                                                  header.expected_receipt_date,
-                                              )
-                                            : ''
-                                    }
-                                />
-                            )}
-                        </FormControl>
-                        <FormControl hint="Tandai bila harga dari vendor sudah termasuk PPN. Tanda ini ikut tercetak di order.">
-                            <Field
-                                orientation="horizontal"
-                                className="w-auto"
-                                data-error-field="prices_including_vat"
-                            >
-                                <Switch
-                                    id={pricesIncludingVatId}
-                                    checked={header.prices_including_vat}
-                                    disabled={!editable}
-                                    onCheckedChange={(checked) =>
-                                        setHeader({
-                                            ...header,
-                                            prices_including_vat: checked,
-                                        })
-                                    }
-                                />
-                                <FieldLabel
-                                    htmlFor={pricesIncludingVatId}
-                                    className="font-normal"
-                                >
-                                    Harga vendor termasuk PPN
-                                </FieldLabel>
-                            </Field>
-                        </FormControl>
-                        {editable ? (
-                            <PaymentTermsLookup
-                                label="Termin pembayaran"
-                                field="payment_terms_id"
-                                value={header.payment_terms}
-                                onChange={(terms) =>
-                                    setHeader({
-                                        ...header,
-                                        payment_terms:
-                                            paymentTermsChoice(terms),
-                                    })
-                                }
-                                error={error('payment_terms_id')}
-                                hint="Diisi dari termin vendor saat vendor dipilih. Jatuh tempo dihitung di faktur pembelian dari tanggal faktur vendor."
-                                portalContainer={portalContainer}
+                <PageDialogBody className="py-3">
+                    <FactBox
+                        toolbarContainer={factBoxToolbar}
+                        details={
+                            <PurchaseOrderFacts
+                                order={order}
+                                lineId={currentLine?.id ?? null}
+                                amountDecimals={amountDecimals}
+                                canLeave={!editable || pristine}
                             />
-                        ) : (
-                            <FormControl>
-                                <Input
-                                    label="Termin pembayaran"
-                                    readOnly
-                                    value={paymentTermsText(
-                                        header.payment_terms,
-                                    )}
-                                />
-                            </FormControl>
-                        )}
-                        <FormControl error={error('description')}>
-                            <Input
-                                label="Keterangan"
-                                maxLength={200}
-                                data-error-field="description"
-                                value={header.description}
-                                readOnly={!editable}
-                                onChange={(event) =>
-                                    setHeader({
-                                        ...header,
-                                        description: event.target.value,
-                                    })
-                                }
-                            />
-                        </FormControl>
-                        {order && (
-                            <FormControl>
-                                <Input
-                                    label="Status"
-                                    readOnly
-                                    value={
-                                        purchaseOrderStatusLabels[order.status]
-                                    }
-                                />
-                            </FormControl>
-                        )}
-                        {(receivable || invoiceable) && (
-                            <>
-                                <FormControl error={error('posting_date')}>
-                                    <DatePicker
-                                        label="Tanggal posting"
-                                        required
-                                        data-error-field="posting_date"
-                                        value={posting.posting_date}
-                                        portalContainer={portalContainer}
-                                        onValueChange={(posting_date) =>
-                                            setPosting({
-                                                ...posting,
-                                                posting_date,
-                                            })
-                                        }
-                                    />
-                                </FormControl>
+                        }
+                    >
+                        <div className="space-y-4">
+                            <FormGrid>
                                 <FormControl
-                                    error={error('vendor_invoice_number')}
-                                    hint="Nomor di faktur dari vendor. Wajib untuk Faktur dan Terima dan faktur, dan tercatat di utang vendor."
+                                    error={error('vendor_id')}
+                                    data-error-field="vendor_id"
                                 >
-                                    <Input
-                                        label="No. faktur vendor"
-                                        maxLength={35}
-                                        data-error-field="vendor_invoice_number"
-                                        value={posting.vendor_invoice_number}
-                                        onChange={(event) =>
-                                            setPosting({
-                                                ...posting,
-                                                vendor_invoice_number:
-                                                    event.target.value,
-                                            })
-                                        }
-                                    />
-                                </FormControl>
-                            </>
-                        )}
-                    </FormGrid>
-                    <DocumentLines
-                        title="Baris order"
-                        data={lines.map((line, index) => ({ index, line }))}
-                        getRowKey={(row) => row.line.key}
-                        getRowLabel={(row) =>
-                            row.line.item?.name ?? `Barang ${row.index + 1}`
-                        }
-                        showRowNumbers
-                        readOnly={!editable}
-                        disabled={busy}
-                        portalContainer={portalContainer}
-                        selection={
-                            editable
-                                ? {
-                                      selectedKeys: selected,
-                                      onSelectedKeysChange: (keys) =>
-                                          setSelected(keys.map(String)),
-                                  }
-                                : undefined
-                        }
-                        onAddRow={editable ? () => addLines([null]) : undefined}
-                        selectRecords={
-                            editable
-                                ? {
-                                      noun: 'barang',
-                                      loadItems: itemLoader,
-                                      columns: itemColumns,
-                                      getItemValue: (item) => item.id,
-                                      getItemLabel: label,
-                                      focusColumnId: 'quantity',
-                                      onAdd: addLines,
-                                  }
-                                : undefined
-                        }
-                        onDeleteRows={
-                            editable
-                                ? (removed) =>
-                                      setLines((current) =>
-                                          current.filter(
-                                              (line) =>
-                                                  !removed.some(
-                                                      (row) =>
-                                                          row.line.key ===
-                                                          line.key,
-                                                  ),
-                                          ),
-                                      )
-                                : undefined
-                        }
-                        emptyMessage={
-                            editable
-                                ? 'Belum ada barang. Pilih Tambah atau Tambah banyak untuk menambahkan barang yang dipesan.'
-                                : 'Order ini tidak berisi barang.'
-                        }
-                        footer={
-                            <p className="flex flex-wrap justify-end gap-x-6 text-sm">
-                                <span>
-                                    Subtotal{' '}
-                                    {displayAmount(
-                                        subtotal.normalized(),
-                                        amountDecimals,
-                                    )}
-                                </span>
-                                <span>
-                                    PPN{' '}
-                                    {displayAmount(
-                                        vat.normalized(),
-                                        amountDecimals,
-                                    )}
-                                </span>
-                                <span>
-                                    Total nilai{' '}
-                                    <span className="font-semibold">
-                                        {displayAmount(
-                                            subtotal.plus(vat).normalized(),
-                                            amountDecimals,
-                                        )}
-                                    </span>
-                                </span>
-                            </p>
-                        }
-                        columns={[
-                            {
-                                id: 'item_id',
-                                header: 'Barang',
-                                required: true,
-                                content: control,
-                                minWidth: 260,
-                                cell: ({ index, line }) =>
-                                    editable ? (
-                                        <FormControl
-                                            error={error(
-                                                field(index, 'item_id'),
-                                            )}
-                                            data-error-field={field(
-                                                index,
-                                                'item_id',
-                                            )}
-                                        >
-                                            <InlineLookup<ItemChoice>
-                                                label="Barang"
-                                                required
-                                                loadItems={itemLoader}
-                                                value={line.item}
-                                                displayValue={
-                                                    line.item
-                                                        ? label(line.item)
-                                                        : ''
-                                                }
-                                                onValueChange={(item) =>
-                                                    change(index, {
-                                                        item,
-                                                        unit: item.purchase_unit,
-                                                    })
-                                                }
-                                                getItemValue={(item) => item.id}
-                                                getItemLabel={label}
-                                                placeholder="Cari kode atau nama barang…"
-                                                emptyMessage="Barang tidak ditemukan."
-                                                popupClassName="w-[36rem]"
-                                                showDetails={false}
-                                                columns={itemColumns}
-                                            />
-                                        </FormControl>
-                                    ) : (
-                                        text(line.item ? label(line.item) : '')
-                                    ),
-                            },
-                            {
-                                id: 'unit_id',
-                                header: 'Satuan',
-                                required: true,
-                                content: control,
-                                minWidth: 120,
-                                cell: ({ index, line }) =>
-                                    editable && line.item ? (
-                                        <UnitLookup
-                                            itemId={line.item.id}
-                                            value={line.unit}
-                                            field={field(index, 'unit_id')}
-                                            error={error(
-                                                field(index, 'unit_id'),
-                                            )}
-                                            onPick={(unit) =>
-                                                change(index, { unit })
+                                    {editable ? (
+                                        <InlineLookup<Vendor>
+                                            label="Vendor"
+                                            required
+                                            loadItems={vendorLoader}
+                                            value={
+                                                header.vendor
+                                                    ? {
+                                                          ...header.vendor,
+                                                          tax_number: null,
+                                                          payment_terms: null,
+                                                          status: 'active',
+                                                          version: 0,
+                                                      }
+                                                    : null
+                                            }
+                                            displayValue={
+                                                header.vendor?.name ?? ''
+                                            }
+                                            onValueChange={(vendor) =>
+                                                setHeader({
+                                                    ...header,
+                                                    vendor,
+                                                    payment_terms:
+                                                        vendor.payment_terms,
+                                                })
+                                            }
+                                            getItemValue={(vendor) => vendor.id}
+                                            getItemLabel={(vendor) =>
+                                                vendor.name
+                                            }
+                                            placeholder="Cari nomor atau nama vendor…"
+                                            emptyMessage={
+                                                permissions.create_vendor
+                                                    ? 'Vendor tidak ditemukan. Pilih Baru untuk menambahkan.'
+                                                    : 'Vendor tidak ditemukan.'
+                                            }
+                                            popupClassName="w-[32rem]"
+                                            showDetails={false}
+                                            portalContainer={portalContainer}
+                                            columns={[
+                                                {
+                                                    id: 'number',
+                                                    header: 'Nomor',
+                                                    width: 130,
+                                                    cell: (vendor) =>
+                                                        vendor.number,
+                                                },
+                                                {
+                                                    id: 'name',
+                                                    header: 'Nama',
+                                                    width: 260,
+                                                    cell: (vendor) =>
+                                                        vendor.name,
+                                                },
+                                            ]}
+                                            onCreate={
+                                                permissions.create_vendor
+                                                    ? () =>
+                                                          setCreatingVendor(
+                                                              true,
+                                                          )
+                                                    : undefined
                                             }
                                         />
                                     ) : (
-                                        text(
-                                            unitText(
-                                                line.unit,
-                                                line.item?.base_unit.code ?? '',
-                                            ),
-                                        )
-                                    ),
-                            },
-                            {
-                                id: 'quantity',
-                                header: 'Jumlah',
-                                required: true,
-                                content: control,
-                                minWidth: 100,
-                                align: 'right',
-                                cell: ({ index, line }) =>
-                                    editable
-                                        ? numberInput(
-                                              index,
-                                              'quantity',
-                                              'Jumlah',
-                                              { required: true },
-                                          )
-                                        : text(displayNumber(line.quantity)),
-                            },
-                            ...(lines.some(
-                                (line) => Number(line.quantity_received) > 0,
-                            ) || order?.status !== 'terbuka'
-                                ? [
-                                      {
-                                          id: 'quantity_received',
-                                          header: 'Diterima',
-                                          minWidth: 100,
-                                          align: 'right' as const,
-                                          cell: ({ line }: { line: Line }) =>
-                                              text(
-                                                  displayNumber(
-                                                      line.quantity_received,
-                                                  ),
-                                              ),
-                                      },
-                                  ]
-                                : []),
-                            ...(receivable
-                                ? [
-                                      {
-                                          id: 'quantity_to_receive',
-                                          header: 'Diterima sekarang',
-                                          content: 'control' as const,
-                                          minWidth: 120,
-                                          align: 'right' as const,
-                                          cell: ({ index }: Row) =>
-                                              postingNumber(
-                                                  index,
-                                                  'quantity_to_receive',
-                                                  'Diterima sekarang',
-                                              ),
-                                      },
-                                  ]
-                                : []),
-                            ...(invoiceable
-                                ? [
-                                      {
-                                          id: 'quantity_invoiced',
-                                          header: 'Difakturkan',
-                                          minWidth: 100,
-                                          align: 'right' as const,
-                                          cell: ({ line }: Row) =>
-                                              text(
-                                                  displayNumber(
-                                                      line.quantity_invoiced,
-                                                  ),
-                                              ),
-                                      },
-                                      {
-                                          id: 'quantity_to_invoice',
-                                          header: 'Difakturkan sekarang',
-                                          content: 'control' as const,
-                                          minWidth: 130,
-                                          align: 'right' as const,
-                                          cell: ({ index }: Row) =>
-                                              postingNumber(
-                                                  index,
-                                                  'quantity_to_invoice',
-                                                  'Difakturkan sekarang',
-                                              ),
-                                      },
-                                  ]
-                                : []),
-                            ...(receivable && tracked
-                                ? [
-                                      {
-                                          id: 'batch_number',
-                                          header: 'Batch',
-                                          content: 'control' as const,
-                                          minWidth: 130,
-                                          cell: ({ index, line }: Row) => (
-                                              <FormControl
-                                                  error={error(
-                                                      field(
-                                                          index,
-                                                          'batch_number',
-                                                      ),
-                                                  )}
-                                              >
-                                                  <Input
-                                                      label="Batch"
-                                                      required={
-                                                          line.item
-                                                              ?.batch_required
+                                        <Input
+                                            label="Vendor"
+                                            readOnly
+                                            value={header.vendor?.name ?? ''}
+                                        />
+                                    )}
+                                </FormControl>
+                                <FormControl
+                                    error={error('location_id')}
+                                    data-error-field="location_id"
+                                    hint="Lokasi yang menerima barang saat datang."
+                                >
+                                    {editable ? (
+                                        <InlineLookup<Location>
+                                            label="Dikirim ke"
+                                            required
+                                            loadItems={locationLoader}
+                                            value={
+                                                header.location
+                                                    ? {
+                                                          ...header.location,
+                                                          operating_unit: {
+                                                              id: '',
+                                                              name: '',
+                                                          },
+                                                          is_transit: false,
+                                                          restricted_to_employees: false,
+                                                          picking_method: null,
+                                                          transfer_mode: null,
+                                                          version: 0,
                                                       }
-                                                      maxLength={50}
-                                                      data-error-field={field(
-                                                          index,
-                                                          'batch_number',
-                                                      )}
-                                                      value={line.batch_number}
-                                                      onChange={(event) =>
-                                                          change(index, {
-                                                              batch_number:
-                                                                  event.target
-                                                                      .value,
-                                                          })
-                                                      }
-                                                  />
-                                              </FormControl>
-                                          ),
-                                      },
-                                      {
-                                          id: 'expiry_date',
-                                          header: 'Kedaluwarsa',
-                                          content: 'control' as const,
-                                          minWidth: 150,
-                                          cell: ({ index, line }: Row) => (
-                                              <FormControl
-                                                  error={error(
-                                                      field(
-                                                          index,
-                                                          'expiry_date',
-                                                      ),
-                                                  )}
-                                              >
-                                                  <DatePicker
-                                                      label="Kedaluwarsa"
-                                                      required={
-                                                          line.item
-                                                              ?.expiry_required
-                                                      }
-                                                      data-error-field={field(
-                                                          index,
-                                                          'expiry_date',
-                                                      )}
-                                                      value={line.expiry_date}
-                                                      onValueChange={(
-                                                          expiry_date,
-                                                      ) =>
-                                                          change(index, {
-                                                              expiry_date,
-                                                          })
-                                                      }
-                                                  />
-                                              </FormControl>
-                                          ),
-                                      },
-                                  ]
-                                : []),
-                            {
-                                id: 'unit_cost',
-                                header: 'Harga satuan',
-                                required: true,
-                                content: control,
-                                minWidth: 130,
-                                align: 'right',
-                                cell: ({ index, line }) =>
-                                    editable
-                                        ? numberInput(
-                                              index,
-                                              'unit_cost',
-                                              'Harga satuan',
-                                              { required: true },
-                                          )
-                                        : text(displayNumber(line.unit_cost)),
-                            },
-                            {
-                                id: 'discount_percent',
-                                header: 'Diskon %',
-                                content: control,
-                                minWidth: 90,
-                                align: 'right',
-                                cell: ({ index, line }) =>
-                                    editable
-                                        ? numberInput(
-                                              index,
-                                              'discount_percent',
-                                              'Diskon %',
-                                              { max: 100 },
-                                          )
-                                        : optionalNumber(line.discount_percent),
-                            },
-                            {
-                                id: 'vat_percent',
-                                header: 'PPN %',
-                                content: control,
-                                minWidth: 90,
-                                align: 'right',
-                                cell: ({ index, line }) =>
-                                    editable
-                                        ? numberInput(
-                                              index,
-                                              'vat_percent',
-                                              'PPN %',
-                                              { max: 100 },
-                                          )
-                                        : optionalNumber(line.vat_percent),
-                            },
-                            {
-                                id: 'amount',
-                                header: 'Nilai',
-                                minWidth: 130,
-                                align: 'right',
-                                cell: ({ line }) =>
-                                    text(
-                                        displayAmount(
-                                            lineAmount(
-                                                line,
-                                                amountDecimals,
-                                            ).normalized(),
-                                            amountDecimals,
-                                        ),
-                                    ),
-                            },
-                            {
-                                id: 'expected_receipt_date',
-                                header: 'Diharapkan datang',
-                                content: control,
-                                minWidth: 150,
-                                cell: ({ index, line }) =>
-                                    editable ? (
-                                        <FormControl
-                                            error={error(
-                                                field(
-                                                    index,
-                                                    'expected_receipt_date',
-                                                ),
+                                                    : null
+                                            }
+                                            displayValue={
+                                                header.location
+                                                    ? label(header.location)
+                                                    : ''
+                                            }
+                                            onValueChange={(location) =>
+                                                setHeader({
+                                                    ...header,
+                                                    location: {
+                                                        id: location.id,
+                                                        code: location.code,
+                                                        name: location.name,
+                                                    },
+                                                })
+                                            }
+                                            getItemValue={(location) =>
+                                                location.id
+                                            }
+                                            getItemLabel={label}
+                                            placeholder="Cari kode atau nama lokasi…"
+                                            emptyMessage="Lokasi tidak ditemukan."
+                                            popupClassName="w-[32rem]"
+                                            showDetails={false}
+                                            portalContainer={portalContainer}
+                                            columns={[
+                                                {
+                                                    id: 'code',
+                                                    header: 'Kode',
+                                                    width: 110,
+                                                    cell: (location) =>
+                                                        location.code,
+                                                },
+                                                {
+                                                    id: 'name',
+                                                    header: 'Nama',
+                                                    width: 200,
+                                                    cell: (location) =>
+                                                        location.name,
+                                                },
+                                                {
+                                                    id: 'operating_unit',
+                                                    header: 'Unit',
+                                                    width: 160,
+                                                    cell: (location) =>
+                                                        location.operating_unit
+                                                            .name,
+                                                },
+                                            ]}
+                                        />
+                                    ) : (
+                                        <Input
+                                            label="Dikirim ke"
+                                            readOnly
+                                            value={
+                                                header.location
+                                                    ? label(header.location)
+                                                    : ''
+                                            }
+                                        />
+                                    )}
+                                </FormControl>
+                                <FormControl error={error('order_date')}>
+                                    {editable ? (
+                                        <DatePicker
+                                            label="Tanggal order"
+                                            required
+                                            data-error-field="order_date"
+                                            value={header.order_date}
+                                            portalContainer={portalContainer}
+                                            onValueChange={(order_date) =>
+                                                setHeader({
+                                                    ...header,
+                                                    order_date,
+                                                })
+                                            }
+                                        />
+                                    ) : (
+                                        <Input
+                                            label="Tanggal order"
+                                            readOnly
+                                            value={displayDate(
+                                                header.order_date,
                                             )}
+                                        />
+                                    )}
+                                </FormControl>
+                                <FormControl
+                                    error={error('expected_receipt_date')}
+                                    hint="Tanggal barang diharapkan datang. Baris yang tanggalnya kosong mengikuti tanggal ini."
+                                >
+                                    {editable ? (
+                                        <DatePicker
+                                            label="Diharapkan datang"
+                                            data-error-field="expected_receipt_date"
+                                            value={header.expected_receipt_date}
+                                            portalContainer={portalContainer}
+                                            onValueChange={(
+                                                expected_receipt_date,
+                                            ) =>
+                                                setHeader({
+                                                    ...header,
+                                                    expected_receipt_date,
+                                                })
+                                            }
+                                        />
+                                    ) : (
+                                        <Input
+                                            label="Diharapkan datang"
+                                            readOnly
+                                            value={
+                                                header.expected_receipt_date
+                                                    ? displayDate(
+                                                          header.expected_receipt_date,
+                                                      )
+                                                    : ''
+                                            }
+                                        />
+                                    )}
+                                </FormControl>
+                                <FormControl hint="Tandai bila harga dari vendor sudah termasuk PPN. Tanda ini ikut tercetak di order.">
+                                    <Field
+                                        orientation="horizontal"
+                                        className="w-auto"
+                                        data-error-field="prices_including_vat"
+                                    >
+                                        <Switch
+                                            id={pricesIncludingVatId}
+                                            checked={
+                                                header.prices_including_vat
+                                            }
+                                            disabled={!editable}
+                                            onCheckedChange={(checked) =>
+                                                setHeader({
+                                                    ...header,
+                                                    prices_including_vat:
+                                                        checked,
+                                                })
+                                            }
+                                        />
+                                        <FieldLabel
+                                            htmlFor={pricesIncludingVatId}
+                                            className="font-normal"
+                                        >
+                                            Harga vendor termasuk PPN
+                                        </FieldLabel>
+                                    </Field>
+                                </FormControl>
+                                {editable ? (
+                                    <PaymentTermsLookup
+                                        label="Termin pembayaran"
+                                        field="payment_terms_id"
+                                        value={header.payment_terms}
+                                        onChange={(terms) =>
+                                            setHeader({
+                                                ...header,
+                                                payment_terms:
+                                                    paymentTermsChoice(terms),
+                                            })
+                                        }
+                                        error={error('payment_terms_id')}
+                                        hint="Diisi dari termin vendor saat vendor dipilih. Jatuh tempo dihitung di faktur pembelian dari tanggal faktur vendor."
+                                        portalContainer={portalContainer}
+                                    />
+                                ) : (
+                                    <FormControl>
+                                        <Input
+                                            label="Termin pembayaran"
+                                            readOnly
+                                            value={paymentTermsText(
+                                                header.payment_terms,
+                                            )}
+                                        />
+                                    </FormControl>
+                                )}
+                                <FormControl error={error('description')}>
+                                    <Input
+                                        label="Keterangan"
+                                        maxLength={200}
+                                        data-error-field="description"
+                                        value={header.description}
+                                        readOnly={!editable}
+                                        onChange={(event) =>
+                                            setHeader({
+                                                ...header,
+                                                description: event.target.value,
+                                            })
+                                        }
+                                    />
+                                </FormControl>
+                                {order && (
+                                    <FormControl>
+                                        <Input
+                                            label="Status"
+                                            readOnly
+                                            value={
+                                                purchaseOrderStatusLabels[
+                                                    order.status
+                                                ]
+                                            }
+                                        />
+                                    </FormControl>
+                                )}
+                                {(receivable || invoiceable) && (
+                                    <>
+                                        <FormControl
+                                            error={error('posting_date')}
                                         >
                                             <DatePicker
-                                                label="Diharapkan datang"
-                                                data-error-field={field(
-                                                    index,
-                                                    'expected_receipt_date',
-                                                )}
-                                                value={
-                                                    line.expected_receipt_date
+                                                label="Tanggal posting"
+                                                required
+                                                data-error-field="posting_date"
+                                                value={posting.posting_date}
+                                                portalContainer={
+                                                    portalContainer
                                                 }
-                                                onValueChange={(
-                                                    expected_receipt_date,
-                                                ) =>
-                                                    change(index, {
-                                                        expected_receipt_date,
+                                                onValueChange={(posting_date) =>
+                                                    setPosting({
+                                                        ...posting,
+                                                        posting_date,
                                                     })
                                                 }
                                             />
                                         </FormControl>
-                                    ) : (
-                                        text(
-                                            line.expected_receipt_date
-                                                ? displayDate(
-                                                      line.expected_receipt_date,
+                                        <FormControl
+                                            error={error(
+                                                'vendor_invoice_number',
+                                            )}
+                                            hint="Nomor di faktur dari vendor. Wajib untuk Faktur dan Terima dan faktur, dan tercatat di utang vendor."
+                                        >
+                                            <Input
+                                                label="No. faktur vendor"
+                                                maxLength={35}
+                                                data-error-field="vendor_invoice_number"
+                                                value={
+                                                    posting.vendor_invoice_number
+                                                }
+                                                onChange={(event) =>
+                                                    setPosting({
+                                                        ...posting,
+                                                        vendor_invoice_number:
+                                                            event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </FormControl>
+                                    </>
+                                )}
+                            </FormGrid>
+                            <DocumentLines
+                                title="Baris order"
+                                data={lines.map((line, index) => ({
+                                    index,
+                                    line,
+                                }))}
+                                getRowKey={(row) => row.line.key}
+                                getRowLabel={(row) =>
+                                    row.line.item?.name ??
+                                    `Barang ${row.index + 1}`
+                                }
+                                showRowNumbers
+                                activeRowKey={currentLine?.key}
+                                rowActivation="single-click"
+                                onRowClick={(row) =>
+                                    setActiveLine(row.line.key)
+                                }
+                                readOnly={!editable}
+                                disabled={busy}
+                                portalContainer={portalContainer}
+                                selection={
+                                    editable
+                                        ? {
+                                              selectedKeys: selected,
+                                              onSelectedKeysChange: (keys) =>
+                                                  setSelected(keys.map(String)),
+                                          }
+                                        : undefined
+                                }
+                                onAddRow={
+                                    editable
+                                        ? () => addLines([null])
+                                        : undefined
+                                }
+                                selectRecords={
+                                    editable
+                                        ? {
+                                              noun: 'barang',
+                                              loadItems: itemLoader,
+                                              columns: itemColumns,
+                                              getItemValue: (item) => item.id,
+                                              getItemLabel: label,
+                                              focusColumnId: 'quantity',
+                                              onAdd: addLines,
+                                          }
+                                        : undefined
+                                }
+                                onDeleteRows={
+                                    editable
+                                        ? (removed) =>
+                                              setLines((current) =>
+                                                  current.filter(
+                                                      (line) =>
+                                                          !removed.some(
+                                                              (row) =>
+                                                                  row.line
+                                                                      .key ===
+                                                                  line.key,
+                                                          ),
+                                                  ),
+                                              )
+                                        : undefined
+                                }
+                                emptyMessage={
+                                    editable
+                                        ? 'Belum ada barang. Pilih Tambah atau Tambah banyak untuk menambahkan barang yang dipesan.'
+                                        : 'Order ini tidak berisi barang.'
+                                }
+                                footer={
+                                    <p className="flex flex-wrap justify-end gap-x-6 text-sm">
+                                        <span>
+                                            Subtotal{' '}
+                                            {displayAmount(
+                                                subtotal.normalized(),
+                                                amountDecimals,
+                                            )}
+                                        </span>
+                                        <span>
+                                            PPN{' '}
+                                            {displayAmount(
+                                                vat.normalized(),
+                                                amountDecimals,
+                                            )}
+                                        </span>
+                                        <span>
+                                            Total nilai{' '}
+                                            <span className="font-semibold">
+                                                {displayAmount(
+                                                    subtotal
+                                                        .plus(vat)
+                                                        .normalized(),
+                                                    amountDecimals,
+                                                )}
+                                            </span>
+                                        </span>
+                                    </p>
+                                }
+                                columns={[
+                                    {
+                                        id: 'item_id',
+                                        header: 'Barang',
+                                        required: true,
+                                        content: control,
+                                        minWidth: 260,
+                                        cell: ({ index, line }) =>
+                                            editable ? (
+                                                <FormControl
+                                                    error={error(
+                                                        field(index, 'item_id'),
+                                                    )}
+                                                    data-error-field={field(
+                                                        index,
+                                                        'item_id',
+                                                    )}
+                                                >
+                                                    <InlineLookup<ItemChoice>
+                                                        label="Barang"
+                                                        required
+                                                        loadItems={itemLoader}
+                                                        value={line.item}
+                                                        displayValue={
+                                                            line.item
+                                                                ? label(
+                                                                      line.item,
+                                                                  )
+                                                                : ''
+                                                        }
+                                                        onValueChange={(item) =>
+                                                            change(index, {
+                                                                item,
+                                                                unit: item.purchase_unit,
+                                                            })
+                                                        }
+                                                        getItemValue={(item) =>
+                                                            item.id
+                                                        }
+                                                        getItemLabel={label}
+                                                        placeholder="Cari kode atau nama barang…"
+                                                        emptyMessage="Barang tidak ditemukan."
+                                                        popupClassName="w-[36rem]"
+                                                        showDetails={false}
+                                                        columns={itemColumns}
+                                                    />
+                                                </FormControl>
+                                            ) : (
+                                                text(
+                                                    line.item
+                                                        ? label(line.item)
+                                                        : '',
+                                                )
+                                            ),
+                                    },
+                                    {
+                                        id: 'unit_id',
+                                        header: 'Satuan',
+                                        required: true,
+                                        content: control,
+                                        minWidth: 120,
+                                        cell: ({ index, line }) =>
+                                            editable && line.item ? (
+                                                <UnitLookup
+                                                    itemId={line.item.id}
+                                                    value={line.unit}
+                                                    field={field(
+                                                        index,
+                                                        'unit_id',
+                                                    )}
+                                                    error={error(
+                                                        field(index, 'unit_id'),
+                                                    )}
+                                                    onPick={(unit) =>
+                                                        change(index, { unit })
+                                                    }
+                                                />
+                                            ) : (
+                                                text(
+                                                    unitText(
+                                                        line.unit,
+                                                        line.item?.base_unit
+                                                            .code ?? '',
+                                                    ),
+                                                )
+                                            ),
+                                    },
+                                    {
+                                        id: 'quantity',
+                                        header: 'Jumlah',
+                                        required: true,
+                                        content: control,
+                                        minWidth: 100,
+                                        align: 'right',
+                                        cell: ({ index, line }) =>
+                                            editable
+                                                ? numberInput(
+                                                      index,
+                                                      'quantity',
+                                                      'Jumlah',
+                                                      { required: true },
                                                   )
-                                                : '',
-                                        )
-                                    ),
-                            },
-                        ]}
-                    />
+                                                : text(
+                                                      displayNumber(
+                                                          line.quantity,
+                                                      ),
+                                                  ),
+                                    },
+                                    ...(lines.some(
+                                        (line) =>
+                                            Number(line.quantity_received) > 0,
+                                    ) || order?.status !== 'terbuka'
+                                        ? [
+                                              {
+                                                  id: 'quantity_received',
+                                                  header: 'Diterima',
+                                                  minWidth: 100,
+                                                  align: 'right' as const,
+                                                  cell: ({
+                                                      line,
+                                                  }: {
+                                                      line: Line;
+                                                  }) =>
+                                                      text(
+                                                          displayNumber(
+                                                              line.quantity_received,
+                                                          ),
+                                                      ),
+                                              },
+                                          ]
+                                        : []),
+                                    ...(receivable
+                                        ? [
+                                              {
+                                                  id: 'quantity_to_receive',
+                                                  header: 'Diterima sekarang',
+                                                  content: 'control' as const,
+                                                  minWidth: 120,
+                                                  align: 'right' as const,
+                                                  cell: ({ index }: Row) =>
+                                                      postingNumber(
+                                                          index,
+                                                          'quantity_to_receive',
+                                                          'Diterima sekarang',
+                                                      ),
+                                              },
+                                          ]
+                                        : []),
+                                    ...(invoiceable
+                                        ? [
+                                              {
+                                                  id: 'quantity_invoiced',
+                                                  header: 'Difakturkan',
+                                                  minWidth: 100,
+                                                  align: 'right' as const,
+                                                  cell: ({ line }: Row) =>
+                                                      text(
+                                                          displayNumber(
+                                                              line.quantity_invoiced,
+                                                          ),
+                                                      ),
+                                              },
+                                              {
+                                                  id: 'quantity_to_invoice',
+                                                  header: 'Difakturkan sekarang',
+                                                  content: 'control' as const,
+                                                  minWidth: 130,
+                                                  align: 'right' as const,
+                                                  cell: ({ index }: Row) =>
+                                                      postingNumber(
+                                                          index,
+                                                          'quantity_to_invoice',
+                                                          'Difakturkan sekarang',
+                                                      ),
+                                              },
+                                          ]
+                                        : []),
+                                    ...(receivable && tracked
+                                        ? [
+                                              {
+                                                  id: 'batch_number',
+                                                  header: 'Batch',
+                                                  content: 'control' as const,
+                                                  minWidth: 130,
+                                                  cell: ({
+                                                      index,
+                                                      line,
+                                                  }: Row) => (
+                                                      <FormControl
+                                                          error={error(
+                                                              field(
+                                                                  index,
+                                                                  'batch_number',
+                                                              ),
+                                                          )}
+                                                      >
+                                                          <Input
+                                                              label="Batch"
+                                                              required={
+                                                                  line.item
+                                                                      ?.batch_required
+                                                              }
+                                                              maxLength={50}
+                                                              data-error-field={field(
+                                                                  index,
+                                                                  'batch_number',
+                                                              )}
+                                                              value={
+                                                                  line.batch_number
+                                                              }
+                                                              onChange={(
+                                                                  event,
+                                                              ) =>
+                                                                  change(
+                                                                      index,
+                                                                      {
+                                                                          batch_number:
+                                                                              event
+                                                                                  .target
+                                                                                  .value,
+                                                                      },
+                                                                  )
+                                                              }
+                                                          />
+                                                      </FormControl>
+                                                  ),
+                                              },
+                                              {
+                                                  id: 'expiry_date',
+                                                  header: 'Kedaluwarsa',
+                                                  content: 'control' as const,
+                                                  minWidth: 150,
+                                                  cell: ({
+                                                      index,
+                                                      line,
+                                                  }: Row) => (
+                                                      <FormControl
+                                                          error={error(
+                                                              field(
+                                                                  index,
+                                                                  'expiry_date',
+                                                              ),
+                                                          )}
+                                                      >
+                                                          <DatePicker
+                                                              label="Kedaluwarsa"
+                                                              required={
+                                                                  line.item
+                                                                      ?.expiry_required
+                                                              }
+                                                              data-error-field={field(
+                                                                  index,
+                                                                  'expiry_date',
+                                                              )}
+                                                              value={
+                                                                  line.expiry_date
+                                                              }
+                                                              onValueChange={(
+                                                                  expiry_date,
+                                                              ) =>
+                                                                  change(
+                                                                      index,
+                                                                      {
+                                                                          expiry_date,
+                                                                      },
+                                                                  )
+                                                              }
+                                                          />
+                                                      </FormControl>
+                                                  ),
+                                              },
+                                          ]
+                                        : []),
+                                    {
+                                        id: 'unit_cost',
+                                        header: 'Harga satuan',
+                                        required: true,
+                                        content: control,
+                                        minWidth: 130,
+                                        align: 'right',
+                                        cell: ({ index, line }) =>
+                                            editable
+                                                ? numberInput(
+                                                      index,
+                                                      'unit_cost',
+                                                      'Harga satuan',
+                                                      { required: true },
+                                                  )
+                                                : text(
+                                                      displayNumber(
+                                                          line.unit_cost,
+                                                      ),
+                                                  ),
+                                    },
+                                    {
+                                        id: 'discount_percent',
+                                        header: 'Diskon %',
+                                        content: control,
+                                        minWidth: 90,
+                                        align: 'right',
+                                        cell: ({ index, line }) =>
+                                            editable
+                                                ? numberInput(
+                                                      index,
+                                                      'discount_percent',
+                                                      'Diskon %',
+                                                      { max: 100 },
+                                                  )
+                                                : optionalNumber(
+                                                      line.discount_percent,
+                                                  ),
+                                    },
+                                    {
+                                        id: 'vat_percent',
+                                        header: 'PPN %',
+                                        content: control,
+                                        minWidth: 90,
+                                        align: 'right',
+                                        cell: ({ index, line }) =>
+                                            editable
+                                                ? numberInput(
+                                                      index,
+                                                      'vat_percent',
+                                                      'PPN %',
+                                                      { max: 100 },
+                                                  )
+                                                : optionalNumber(
+                                                      line.vat_percent,
+                                                  ),
+                                    },
+                                    {
+                                        id: 'amount',
+                                        header: 'Nilai',
+                                        minWidth: 130,
+                                        align: 'right',
+                                        cell: ({ line }) =>
+                                            text(
+                                                displayAmount(
+                                                    lineAmount(
+                                                        line,
+                                                        amountDecimals,
+                                                    ).normalized(),
+                                                    amountDecimals,
+                                                ),
+                                            ),
+                                    },
+                                    {
+                                        id: 'expected_receipt_date',
+                                        header: 'Diharapkan datang',
+                                        content: control,
+                                        minWidth: 150,
+                                        cell: ({ index, line }) =>
+                                            editable ? (
+                                                <FormControl
+                                                    error={error(
+                                                        field(
+                                                            index,
+                                                            'expected_receipt_date',
+                                                        ),
+                                                    )}
+                                                >
+                                                    <DatePicker
+                                                        label="Diharapkan datang"
+                                                        data-error-field={field(
+                                                            index,
+                                                            'expected_receipt_date',
+                                                        )}
+                                                        value={
+                                                            line.expected_receipt_date
+                                                        }
+                                                        onValueChange={(
+                                                            expected_receipt_date,
+                                                        ) =>
+                                                            change(index, {
+                                                                expected_receipt_date,
+                                                            })
+                                                        }
+                                                    />
+                                                </FormControl>
+                                            ) : (
+                                                text(
+                                                    line.expected_receipt_date
+                                                        ? displayDate(
+                                                              line.expected_receipt_date,
+                                                          )
+                                                        : '',
+                                                )
+                                            ),
+                                    },
+                                ]}
+                            />
+                        </div>
+                    </FactBox>
                 </PageDialogBody>
                 {confirmation}
             </form>
