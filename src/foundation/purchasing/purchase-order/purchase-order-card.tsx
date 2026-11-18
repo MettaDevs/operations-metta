@@ -208,11 +208,18 @@ export function PurchaseOrderCard({
         posting_date: today(),
         vendor_invoice_number: '',
     });
+    const [lines, setLines] = useState(() => linesOf(initial));
     const receivable = order?.status === 'dirilis' && permissions.post_receipt;
     const invoiceable =
-        (order?.status === 'dirilis' || order?.status === 'selesai') &&
-        permissions.post_invoice;
-    const [lines, setLines] = useState(() => linesOf(initial));
+        permissions.post_invoice &&
+        (order?.status === 'dirilis' ||
+            (order?.status === 'selesai' &&
+                lines.some(
+                    (line) =>
+                        quantityOf(line.quantity_received).compare(
+                            quantityOf(line.quantity_invoiced),
+                        ) > 0,
+                )));
     const [selected, setSelected] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
