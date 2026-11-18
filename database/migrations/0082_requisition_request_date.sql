@@ -1,6 +1,5 @@
 -- Tanggal permintaan di permintaan pembelian (Order Date baris Requisition Worksheet BC): hari permintaan diajukan,
--- terpisah dari tanggal dibutuhkan (Due Date). LPLPO menghitung kolom permintaan sebulan dari tanggal ini.
--- Baris lama mendapat tanggal created_at di zona waktu legal entity-nya, sama dengan yang dihitung LPLPO sebelumnya.
+-- terpisah dari tanggal dibutuhkan (Due Date).
 
 ALTER TABLE public.bl_tr_permintaan ADD COLUMN tanggal_permintaan date;
 
