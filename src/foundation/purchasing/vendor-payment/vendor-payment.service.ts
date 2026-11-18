@@ -948,7 +948,7 @@ export async function refusePaidEntry(
         const memo = await appliedCreditMemo(db, workspace.tenantId, entryId);
         if (!memo) validation({ _form: message });
         return refuse(db, workspace, {
-            message: `Utang faktur ini sudah dikurangi nota kredit ${memo.number}, jadi postingnya tidak bisa dibatalkan.`,
+            message: `Utang faktur ini sudah dikurangi nota kredit ${memo.number}, jadi postingnya tidak bisa dibatalkan. Lepas nota itu dari faktur lebih dulu.`,
             open: {
                 page: 'core.purchase-credit-memo',
                 recordId: memo.id,

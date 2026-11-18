@@ -8,6 +8,7 @@ import {
     type Context,
 } from '../../../platform/http/index.ts';
 import type {
+    creditMemoUnapplyInputSchema,
     creditSourceQuerySchema,
     purchaseCreditMemoInputSchema,
     purchaseCreditMemoListQuerySchema,
@@ -16,6 +17,7 @@ import { PurchaseCreditMemos } from './purchase-credit-memo.service.ts';
 
 type Input = z.input<typeof purchaseCreditMemoInputSchema>;
 type SourceQuery = z.input<typeof creditSourceQuerySchema>;
+type UnapplyInput = z.input<typeof creditMemoUnapplyInputSchema>;
 const record = <T>() =>
     z.object({ params: z.object({ id: z.string() }), body: z.custom<T>() });
 
@@ -124,6 +126,15 @@ export function purchaseCreditMemoRoutes() {
             .input(record<{ version: number }>())
             .handler(async ({ context, input }) =>
                 (await memos(context, input.body)).reverse(
+                    context.request,
+                    input.params.id,
+                    input.body,
+                ),
+            ),
+        purchasingCreditMemoUnapply: route('POST', '/{id}/unapply')
+            .input(record<UnapplyInput>())
+            .handler(async ({ context, input }) =>
+                (await memos(context, input.body)).unapply(
                     context.request,
                     input.params.id,
                     input.body,

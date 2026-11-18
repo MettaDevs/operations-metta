@@ -33,6 +33,7 @@ import {
     type PurchaseCreditMemo,
     type PurchaseCreditMemoPermissions,
 } from '../purchase-credit-memo/purchase-credit-memo-card.tsx';
+import { CreditMemoUnapplyDialog } from '../purchase-credit-memo/credit-memo-unapply-dialog.tsx';
 import {
     VendorPaymentCard,
     type VendorPayment,
@@ -90,6 +91,10 @@ function VendorLedgerPage(): ReactNode {
     const [totals, setTotals] = useState({ remaining: '0', overdue: '0' });
     const [amountDecimals, setAmountDecimals] = useState(0);
     const [opened, setOpened] = useState<Opened | null>(null);
+    const [unapplying, setUnapplying] = useState<{
+        memo: PurchaseCreditMemo;
+        amountDecimals: AmountDecimals;
+    } | null>(null);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingVendorLedgerList(
@@ -161,6 +166,19 @@ function VendorLedgerPage(): ReactNode {
             toast.error(errorText(caught, 'Pembayaran belum bisa dibuka.'));
         }
     };
+    const unapply = async (id: string) => {
+        try {
+            const { body } = await api.purchasingCreditMemoShow({
+                params: { id },
+            });
+            setUnapplying({
+                memo: body.data,
+                amountDecimals: body.amount_decimals,
+            });
+        } catch (caught) {
+            toast.error(errorText(caught, 'Nota kredit belum bisa dibuka.'));
+        }
+    };
     const show = (row: Row) => {
         if (row.payment_id) void showPayment(row.payment_id);
         else if (row.credit_memo_id) void showCreditMemo(row.credit_memo_id);
@@ -177,6 +195,9 @@ function VendorLedgerPage(): ReactNode {
                           ? 'Buka nota kredit'
                           : 'Buka faktur',
                   },
+                  ...(row.applied_to_invoice
+                      ? [{ id: 'unapply', label: 'Lepas dari faktur' }]
+                      : []),
                   ...row.payments.map((payment) => ({
                       id: `${paymentAction}${payment.id}`,
                       label: `Buka pembayaran ${payment.number}`,
@@ -261,7 +282,9 @@ function VendorLedgerPage(): ReactNode {
                     actions={[{ id: 'open', label: 'Buka' }]}
                     getRowActions={rowActions}
                     onRowAction={(action, row) => {
-                        if (action.startsWith(paymentAction))
+                        if (action === 'unapply' && row.credit_memo_id)
+                            void unapply(row.credit_memo_id);
+                        else if (action.startsWith(paymentAction))
                             void showPayment(
                                 action.slice(paymentAction.length),
                             );
@@ -404,6 +427,17 @@ function VendorLedgerPage(): ReactNode {
                     ]}
                 />
             </ListPageLayout>
+            {unapplying && (
+                <CreditMemoUnapplyDialog
+                    memo={unapplying.memo}
+                    amountDecimals={unapplying.amountDecimals}
+                    onUnapplied={() => {
+                        setUnapplying(null);
+                        list.reload();
+                    }}
+                    onClose={() => setUnapplying(null)}
+                />
+            )}
             {opened && (
                 <PageDialog
                     open

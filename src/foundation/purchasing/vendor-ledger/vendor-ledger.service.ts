@@ -16,7 +16,12 @@ const rowSql = `select * from (
                            trim_scale(e.jumlah)::text as amount, trim_scale(e.sisa)::text as remaining,
                            coalesce(paid.payments, '[]'::json) as payments,
                            coalesce(trim_scale(paid.amount), 0)::text as paid,
-                           e.sisa <> 0 as open, (current_date - e.jatuh_tempo)::int as days_overdue
+                           e.sisa <> 0 as open, (current_date - e.jatuh_tempo)::int as days_overdue,
+                           exists (select 1 from ap_tr_nota_kredit n
+                                   where n.tenant_id = e.tenant_id and n.id = e.nota_kredit_id
+                                     and e.jenis = 'nota_kredit' and n.status = 'diposting'
+                                     and n.jumlah_diterapkan is not null and n.dilepas_pada is null)
+                               as applied_to_invoice
                     from ap_tr_entri_utang e
                     join vendors v on v.tenant_id = e.tenant_id and v.id = e.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id

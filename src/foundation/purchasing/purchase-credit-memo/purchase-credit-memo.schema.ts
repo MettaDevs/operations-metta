@@ -77,6 +77,9 @@ export const appliesToEntrySchema = z
         document_number: z.string(),
         vendor_invoice_number: z.string(),
         invoice_id: z.string(),
+        // Kosong untuk nota yang kreditnya sudah dipakai pembayaran sebelum jumlah ini dicatat.
+        amount: z.string().nullable(),
+        unapplied_date: z.string().nullable(),
     })
     .nullable();
 
@@ -151,4 +154,9 @@ export const openInvoiceEntryChoiceSchema = z.object({
     vendor_invoice_number: z.string(),
     due_date: z.string(),
     remaining: z.string(),
+});
+
+export const creditMemoUnapplyInputSchema = z.object({
+    posting_date: z.string(),
+    version: z.number(),
 });

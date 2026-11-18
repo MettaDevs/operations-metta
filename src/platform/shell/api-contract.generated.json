@@ -3045,6 +3045,18 @@
             }
         }
     },
+    "purchasingCreditMemoUnapply": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/credit-memos/{id}/unapply",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingVendorLedgerList": {
         "~orpc": {
             "errorMap": {},
