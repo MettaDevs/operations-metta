@@ -104,7 +104,6 @@ function linesOf(payment: VendorPayment | null): Line[] {
     }));
 }
 
-// Hanya rekening yang bisa dipakai pembayaran: tidak diblokir dan bermata uang lokal.
 const loadBankAccounts = async ({ query, cursor, signal }: LookupRequest) => {
     const { body } = await api.bankAccountList(
         { query: { q: query, usable: '1', ...(cursor ? { cursor } : {}) } },

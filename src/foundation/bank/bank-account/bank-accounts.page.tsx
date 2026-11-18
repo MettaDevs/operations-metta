@@ -31,8 +31,6 @@ import {
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 
-// Rekening bank (Bank Account BC): rekening milik legal entity yang dipilih saat membayar vendor.
-
 const route = getRouteApi('/_app/sysadmin/bank/bank-accounts');
 type BankAccountRow = ApiBody<'bankAccountList'>['data'][number];
 type Errors = Record<string, string[]>;

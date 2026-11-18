@@ -49,9 +49,8 @@ export const bankAccountJson = (alias: string) =>
          'id', ${alias}.id, 'code', ${alias}.kode, 'name', ${alias}.nama, 'bank_name', ${alias}.nama_bank,
          'account_number', ${alias}.nomor_rekening) end`;
 
-// Rekening yang dipakai dokumen dalam mata uang lokal: ada, belum dihapus, tidak diblokir, dan bermata uang lokal,
-// seperti PostBankAcc di codeunit "Gen. Jnl.-Post Line" (TestField Blocked false, lalu Currency Code kosong untuk
-// jurnal tanpa mata uang). Pesan penolakannya, atau null bila rekening boleh dipakai.
+// Seperti PostBankAcc di codeunit "Gen. Jnl.-Post Line": TestField Blocked false, lalu Currency Code kosong untuk
+// jurnal tanpa mata uang.
 export async function localBankAccountRefusal(
     db: Database,
     scope: Scope,
@@ -135,7 +134,6 @@ export class BankAccounts {
             validation({ code: 'Kode ini sudah dipakai rekening lain.' });
     }
 
-    // `usable=1` hanya rekening yang bisa dipakai dokumen bermata uang lokal: tidak diblokir dan bermata uang lokal.
     async list(parameters: URLSearchParams) {
         this.workspace.guard('bank-account', 'read');
         const bindings = this.bindings;

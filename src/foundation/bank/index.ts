@@ -1,5 +1,4 @@
-// Bank (folder Bank di BC): rekening bank milik legal entity. Mutasi rekening (Bank Account Ledger Entry) dan
-// rekonsiliasi belum ada.
+// Bank (folder Bank di BC): rekening bank milik legal entity.
 export { bankAccountRoutes } from './bank-account/bank-account.routes.ts';
 export { bankAccountReferenceSchema } from './bank-account/bank-account.schema.ts';
 export {

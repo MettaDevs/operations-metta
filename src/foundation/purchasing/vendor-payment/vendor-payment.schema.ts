@@ -29,7 +29,6 @@ export const vendorPaymentInputSchema = z.object({
     version: z.number().optional(),
 });
 
-// cash: jenis bayar berperilaku tunai, yang uangnya tidak keluar dari rekening bank.
 export const paymentMethodChoiceSchema = z.object({
     id: z.string(),
     code: z.string(),
@@ -45,7 +44,6 @@ export const vendorPaymentRowSchema = z.object({
     posting_date: z.string(),
     payment_method: paymentMethodChoiceSchema,
     bank_account: bankAccountReferenceSchema,
-    // Teks bank pembayaran yang dicatat sebelum ada master rekening bank.
     bank: z.string().nullable(),
     reference: z.string().nullable(),
     description: z.string().nullable(),
