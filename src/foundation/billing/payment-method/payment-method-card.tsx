@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    CurrencyLookup,
     errorText,
     FormErrorHeader,
     type ApiBody,
@@ -386,36 +387,24 @@ export function PaymentMethodCard({
                             <Input label="Pihak" value={partyLabel} readOnly />
                         )}
                     </FormControl>
-                    <FormControl
-                        error={errors.currency_code?.[0]}
-                        hint="Isi bila jenis bayar ini hanya menerima satu mata uang asing, misalnya tunai valuta. Jumlahnya diisi dalam mata uang itu dan dihitung ke mata uang lokal dengan kurs hari pembayaran."
-                        data-error-field="currency_code"
-                    >
-                        {editing && !form.takes_remainder ? (
-                            <Select
-                                label="Mata uang"
-                                items={[
-                                    {
-                                        value: '',
-                                        label: `${currencies.local} (mata uang lokal)`,
-                                    },
-                                    ...currencies.foreign.map((code) => ({
-                                        value: code,
-                                        label: code,
-                                    })),
-                                ]}
-                                value={form.currency_code}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        currency_code: value ?? '',
-                                    })
-                                }
-                                searchPlaceholder="Cari mata uang"
-                                emptyMessage="Pilihan tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
+                    {editing && !form.takes_remainder ? (
+                        <CurrencyLookup
+                            local={currencies.local}
+                            foreign={currencies.foreign}
+                            value={form.currency_code}
+                            onChange={(currency_code) =>
+                                setForm({ ...form, currency_code })
+                            }
+                            error={errors.currency_code?.[0]}
+                            hint="Isi bila jenis bayar ini hanya menerima satu mata uang asing, misalnya tunai valuta. Jumlahnya diisi dalam mata uang itu dan dihitung ke mata uang lokal dengan kurs hari pembayaran."
+                            portalContainer={portalContainer}
+                        />
+                    ) : (
+                        <FormControl
+                            error={errors.currency_code?.[0]}
+                            hint="Isi bila jenis bayar ini hanya menerima satu mata uang asing, misalnya tunai valuta. Jumlahnya diisi dalam mata uang itu dan dihitung ke mata uang lokal dengan kurs hari pembayaran."
+                            data-error-field="currency_code"
+                        >
                             <Input
                                 label="Mata uang"
                                 value={
@@ -424,8 +413,8 @@ export function PaymentMethodCard({
                                 }
                                 readOnly
                             />
-                        )}
-                    </FormControl>
+                        </FormControl>
+                    )}
                     {legacyId !== null && (
                         <FormControl hint="IDBayar jenis bayar ini di sistem lama, dari impor.">
                             <Input

@@ -9,6 +9,8 @@ export {
     type ShellData,
 } from './api.ts';
 export { AreaDashboard } from './area-dashboard.tsx';
+export { MerchantLookup, PaymentMethodLookup } from './billing-lookups.tsx';
+export { CurrencyLookup } from './currency-lookup.tsx';
 export { FormErrorHeader } from './form-error-header.tsx';
 export type { ErrorAction } from '../error-action/index.ts';
 export { definePage, defineRecordPage, type RecordPages } from './page.ts';
@@ -34,6 +36,11 @@ export {
     openInTab,
     PrintAction,
 } from './print-action.tsx';
+export {
+    CountryLookup,
+    ReferenceValueLookup,
+    type ReferenceOption,
+} from './reference-lookups.tsx';
 export { ssoErrorMessage } from './sso-messages.ts';
 export { useAppearance } from './use-appearance.ts';
 export { useUnsavedChangesGuard } from './use-unsaved-changes-guard.tsx';

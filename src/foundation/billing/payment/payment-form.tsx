@@ -7,7 +7,6 @@ import {
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
-import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import {
     Tabs,
@@ -22,6 +21,7 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    MerchantLookup,
     errorText,
     FormErrorHeader,
     type ApiBody,
@@ -387,36 +387,20 @@ export function PaymentForm({
                                         </>
                                     )}
                                 {method.requires_merchant && (
-                                    <FormControl
+                                    <MerchantLookup
+                                        items={form.merchants}
+                                        value={line(method.id).merchant}
+                                        onChange={(merchant) =>
+                                            setLine(method.id, { merchant })
+                                        }
                                         error={
                                             errors[
                                                 field(index, 'merchant_id')
                                             ]?.[0]
                                         }
-                                        data-error-field={field(
-                                            index,
-                                            'merchant_id',
-                                        )}
-                                    >
-                                        <Select
-                                            label="Merchan"
-                                            items={form.merchants.map(
-                                                (merchant) => ({
-                                                    value: merchant.id,
-                                                    label: `${merchant.code} · ${merchant.name}`,
-                                                }),
-                                            )}
-                                            value={line(method.id).merchant}
-                                            onValueChange={(value) =>
-                                                setLine(method.id, {
-                                                    merchant: value ?? '',
-                                                })
-                                            }
-                                            searchPlaceholder="Cari merchan"
-                                            emptyMessage="Belum ada merchan."
-                                            portalContainer={portalContainer}
-                                        />
-                                    </FormControl>
+                                        field={field(index, 'merchant_id')}
+                                        portalContainer={portalContainer}
+                                    />
                                 )}
                                 {method.allows_surcharge && (
                                     <FormControl

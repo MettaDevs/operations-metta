@@ -43,6 +43,8 @@ import {
     isoDay,
     weekStart,
 } from './practice-schedule.days.ts';
+import { NewSessionDialog } from './practice-session-card.tsx';
+import { SessionLookup } from './schedule-lookups.tsx';
 
 // Jadwal praktik bertanggal satu section per minggu, seperti layar jadwal mingguan sistem lama. Setiap jadwal bisa
 // dibatalkan dengan alasan, diberi nakes pengganti, atau diubah kapasitasnya; jadwal yang diubah di sini tidak ditimpa
@@ -344,6 +346,7 @@ function ManualScheduleCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
+    const [creatingSession, setCreatingSession] = useState(false);
     const loader = usePractitionerLoader();
     usePageDialogRecord({
         recordTitle: 'Jadwal tambahan',
@@ -378,108 +381,118 @@ function ManualScheduleCard({
     };
 
     return (
-        <form
-            noValidate
-            className="flex min-h-0 flex-1 flex-col"
-            onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-            }}
-        >
-            <PageDialogToolbar>
-                <ActionButton
-                    action="save"
-                    type="submit"
-                    disabled={busy}
-                    pending={busy}
+        <>
+            <form
+                noValidate
+                className="flex min-h-0 flex-1 flex-col"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void save();
+                }}
+            >
+                <PageDialogToolbar>
+                    <ActionButton
+                        action="save"
+                        type="submit"
+                        disabled={busy}
+                        pending={busy}
+                    />
+                    <ActionButton
+                        action="cancel"
+                        type="button"
+                        disabled={busy}
+                        onClick={onClose}
+                    />
+                </PageDialogToolbar>
+                <FormErrorHeader
+                    errors={errors}
+                    message={message}
+                    operation="Jadwal belum disimpan"
                 />
-                <ActionButton
-                    action="cancel"
-                    type="button"
-                    disabled={busy}
-                    onClick={onClose}
+                <PageDialogBody className="py-3">
+                    <FormGrid>
+                        <FormControl error={errors.date?.[0]}>
+                            <DatePicker
+                                label="Tanggal"
+                                required
+                                data-error-field="date"
+                                value={form.date}
+                                onValueChange={(value) =>
+                                    setForm({ ...form, date: value })
+                                }
+                                portalContainer={portalContainer}
+                            />
+                        </FormControl>
+                        <FormControl error={errors.practitioner_id?.[0]}>
+                            <InlineLookup
+                                label="Nakes"
+                                required
+                                loadItems={loader}
+                                value={form.practitioner}
+                                onValueChange={(practitioner) =>
+                                    setForm({ ...form, practitioner })
+                                }
+                                getItemValue={(item) => item.id}
+                                getItemLabel={(item) => item.name}
+                                placeholder="Cari nakes…"
+                                emptyMessage="Nakes aktif tidak ditemukan."
+                                columns={practitionerColumns}
+                                portalContainer={portalContainer}
+                                showDetails={false}
+                            />
+                        </FormControl>
+                        <FormControl error={errors.session_id?.[0]}>
+                            <SessionLookup
+                                sessions={metadata.sessions}
+                                value={form.session_id}
+                                onChange={(id) =>
+                                    setForm({ ...form, session_id: id })
+                                }
+                                portalContainer={portalContainer}
+                                onCreate={
+                                    metadata.permissions.create
+                                        ? () => setCreatingSession(true)
+                                        : undefined
+                                }
+                            />
+                        </FormControl>
+                        <FormControl
+                            error={errors.capacity?.[0]}
+                            hint="Kosongkan bila tanpa batas."
+                        >
+                            <Input
+                                label="Kapasitas"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                data-error-field="capacity"
+                                value={form.capacity}
+                                placeholder="Tanpa batas"
+                                onChange={(event) =>
+                                    setForm({
+                                        ...form,
+                                        capacity: event.target.value,
+                                    })
+                                }
+                            />
+                        </FormControl>
+                    </FormGrid>
+                </PageDialogBody>
+            </form>
+            {creatingSession && (
+                <NewSessionDialog
+                    permissions={metadata.permissions}
+                    onCreated={(session) => {
+                        setCreatingSession(false);
+                        setForm((current) => ({
+                            ...current,
+                            session_id: session.id,
+                        }));
+                    }}
+                    onClose={() => setCreatingSession(false)}
                 />
-            </PageDialogToolbar>
-            <FormErrorHeader
-                errors={errors}
-                message={message}
-                operation="Jadwal belum disimpan"
-            />
-            <PageDialogBody className="py-3">
-                <FormGrid>
-                    <FormControl error={errors.date?.[0]}>
-                        <DatePicker
-                            label="Tanggal"
-                            required
-                            data-error-field="date"
-                            value={form.date}
-                            onValueChange={(value) =>
-                                setForm({ ...form, date: value })
-                            }
-                            portalContainer={portalContainer}
-                        />
-                    </FormControl>
-                    <FormControl error={errors.practitioner_id?.[0]}>
-                        <InlineLookup
-                            label="Nakes"
-                            required
-                            loadItems={loader}
-                            value={form.practitioner}
-                            onValueChange={(practitioner) =>
-                                setForm({ ...form, practitioner })
-                            }
-                            getItemValue={(item) => item.id}
-                            getItemLabel={(item) => item.name}
-                            placeholder="Cari nakes…"
-                            emptyMessage="Nakes aktif tidak ditemukan."
-                            columns={practitionerColumns}
-                            portalContainer={portalContainer}
-                            showDetails={false}
-                        />
-                    </FormControl>
-                    <FormControl error={errors.session_id?.[0]}>
-                        <Select
-                            label="Sesi"
-                            required
-                            items={metadata.sessions
-                                .filter((session) => session.is_active)
-                                .map((session) => ({
-                                    value: session.id,
-                                    label: `${session.name} (${session.start_time}–${session.end_time})`,
-                                }))}
-                            value={form.session_id}
-                            onValueChange={(value) =>
-                                setForm({ ...form, session_id: value })
-                            }
-                            placeholder="Pilih sesi"
-                            searchPlaceholder="Cari sesi"
-                            emptyMessage="Belum ada sesi aktif."
-                            portalContainer={portalContainer}
-                        />
-                    </FormControl>
-                    <FormControl
-                        error={errors.capacity?.[0]}
-                        hint="Kosongkan bila tanpa batas."
-                    >
-                        <Input
-                            label="Kapasitas"
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            data-error-field="capacity"
-                            value={form.capacity}
-                            placeholder="Tanpa batas"
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    capacity: event.target.value,
-                                })
-                            }
-                        />
-                    </FormControl>
-                </FormGrid>
-            </PageDialogBody>
-        </form>
+            )}
+        </>
     );
 }
 

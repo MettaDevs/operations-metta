@@ -34,6 +34,7 @@ import {
     orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
+import { OperatingUnitLookup } from './operating-unit-lookup.tsx';
 
 // Ruangan: ruang fisik di satu unit, misalnya L1R1 di lantai 1. Section memilih ruangan yang melayaninya, dan petugas
 // yang memanggil pasien kelak memilih ruangannya.
@@ -217,23 +218,12 @@ function RoomCard({
                 <FormGrid>
                     <FormControl error={errors.operating_unit_id?.[0]}>
                         {editing ? (
-                            <Select
-                                label="Unit"
-                                required
-                                items={metadata.operating_units.map((unit) => ({
-                                    value: unit.id,
-                                    label: unit.name,
-                                }))}
+                            <OperatingUnitLookup
+                                units={metadata.operating_units}
                                 value={form.operating_unit_id}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        operating_unit_id: value,
-                                    })
+                                onChange={(id) =>
+                                    setForm({ ...form, operating_unit_id: id })
                                 }
-                                placeholder="Pilih unit"
-                                searchPlaceholder="Cari unit"
-                                emptyMessage="Unit tidak ditemukan."
                                 portalContainer={portalContainer}
                             />
                         ) : (

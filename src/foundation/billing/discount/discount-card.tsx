@@ -1,6 +1,8 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
+import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { Field, FieldLabel } from '@operations-metta/ui/field';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
     PageDialogBody,
@@ -45,6 +47,27 @@ const kindHints: Record<string, string> = {
         'Nilai diskon diketik kasir untuk jasa di kelompok ini; persennya tidak dihitung.',
 };
 
+type ServiceGroup = { id: string; name: string };
+type ChargeComponent = { id: string; code: string; name: string };
+
+const serviceGroupColumns: DataTableColumn<ServiceGroup>[] = [
+    { id: 'name', header: 'Nama', width: 240, cell: (group) => group.name },
+];
+const componentColumns: DataTableColumn<ChargeComponent>[] = [
+    {
+        id: 'code',
+        header: 'Kode',
+        width: 120,
+        cell: (component) => component.code,
+    },
+    {
+        id: 'name',
+        header: 'Nama',
+        width: 240,
+        cell: (component) => component.name,
+    },
+];
+
 const formOf = (discount: Discount | null) => ({
     code: discount?.code ?? '',
     name: discount?.name ?? '',
@@ -85,66 +108,28 @@ export function DiscountCard({
         editing,
         dirty,
     });
-    const components = [
-        ...(metadata?.charge_components ?? [])
-            .filter(
-                (component) =>
-                    component.active ||
-                    component.id === record?.charge_component_id,
-            )
-            .map((component) => ({
-                value: component.id,
-                label: `${component.code} · ${component.name}`,
-            })),
-    ];
     const groups = [
-        ...(metadata?.service_groups ?? []).map((group) => ({
-            value: group.id,
-            label: group.name,
-        })),
+        ...(metadata?.service_groups ?? []),
         ...(record?.service_group_id &&
         !metadata?.service_groups.some(
             (group) => group.id === record.service_group_id,
         )
             ? [
                   {
-                      value: record.service_group_id,
-                      label: record.service_group_name ?? '',
+                      id: record.service_group_id,
+                      name: record.service_group_name ?? '',
                   },
               ]
             : []),
     ];
-
-    // Pilihan yang hanya bisa dibaca tampil sebagai teks, karena Select tidak punya mode baca-saja.
-    const choice = (
-        label: string,
-        items: { value: string; label: string }[],
-        value: string,
-        onChange: (value: string) => void,
-        search?: { placeholder: string; empty: string },
-    ) =>
-        editing ? (
-            <Select
-                label={label}
-                required
-                items={items}
-                value={value}
-                onValueChange={(next) => onChange(next ?? '')}
-                {...(search
-                    ? {
-                          searchPlaceholder: search.placeholder,
-                          emptyMessage: search.empty,
-                      }
-                    : {})}
-                portalContainer={portalContainer}
-            />
-        ) : (
-            <Input
-                label={label}
-                value={items.find((item) => item.value === value)?.label ?? ''}
-                readOnly
-            />
-        );
+    const group =
+        groups.find((item) => item.id === form.service_group_id) ?? null;
+    const components = (metadata?.charge_components ?? []).filter(
+        (component) =>
+            component.active || component.id === record?.charge_component_id,
+    );
+    const component =
+        components.find((item) => item.id === form.charge_component_id) ?? null;
 
     const save = async () => {
         setLastAction('save');
@@ -285,8 +270,23 @@ export function DiscountCard({
                         data-error-field="kind"
                         hint={kindHints[form.kind]}
                     >
-                        {choice('Jenis', kindItems, form.kind, (value) =>
-                            setForm({ ...form, kind: value || 'total' }),
+                        {editing ? (
+                            <Select
+                                label="Jenis"
+                                required
+                                items={kindItems}
+                                value={form.kind}
+                                onValueChange={(next) =>
+                                    setForm({ ...form, kind: next || 'total' })
+                                }
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <Input
+                                label="Jenis"
+                                value={discountKindLabels[form.kind] ?? ''}
+                                readOnly
+                            />
                         )}
                     </FormControl>
                     {form.kind === 'komponen' && (
@@ -294,19 +294,37 @@ export function DiscountCard({
                             error={errors.charge_component_id?.[0]}
                             data-error-field="charge_component_id"
                         >
-                            {choice(
-                                'Komponen biaya',
-                                components,
-                                form.charge_component_id ?? '',
-                                (value) =>
-                                    setForm({
-                                        ...form,
-                                        charge_component_id: value || null,
-                                    }),
-                                {
-                                    placeholder: 'Cari komponen biaya',
-                                    empty: 'Belum ada komponen biaya.',
-                                },
+                            {editing ? (
+                                <InlineLookup<ChargeComponent>
+                                    label="Komponen biaya"
+                                    required
+                                    items={components}
+                                    value={component}
+                                    onValueChange={(next) =>
+                                        setForm({
+                                            ...form,
+                                            charge_component_id: next.id,
+                                        })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) =>
+                                        `${item.code} · ${item.name}`
+                                    }
+                                    placeholder="Cari kode atau nama…"
+                                    emptyMessage="Belum ada komponen biaya."
+                                    portalContainer={portalContainer}
+                                    columns={componentColumns}
+                                />
+                            ) : (
+                                <Input
+                                    label="Komponen biaya"
+                                    value={
+                                        component
+                                            ? `${component.code} · ${component.name}`
+                                            : ''
+                                    }
+                                    readOnly
+                                />
                             )}
                         </FormControl>
                     )}
@@ -316,19 +334,31 @@ export function DiscountCard({
                             data-error-field="service_group_id"
                             hint="Kelompok jasa dari biaya yang sudah dikirim layanan kesehatan ke kasir."
                         >
-                            {choice(
-                                'Kelompok jasa',
-                                groups,
-                                form.service_group_id ?? '',
-                                (value) =>
-                                    setForm({
-                                        ...form,
-                                        service_group_id: value || null,
-                                    }),
-                                {
-                                    placeholder: 'Cari kelompok jasa',
-                                    empty: 'Belum ada biaya berkelompok jasa yang masuk kasir.',
-                                },
+                            {editing ? (
+                                <InlineLookup<ServiceGroup>
+                                    label="Kelompok jasa"
+                                    required
+                                    items={groups}
+                                    value={group}
+                                    onValueChange={(next) =>
+                                        setForm({
+                                            ...form,
+                                            service_group_id: next.id,
+                                        })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari kelompok jasa…"
+                                    emptyMessage="Belum ada biaya berkelompok jasa yang masuk kasir."
+                                    portalContainer={portalContainer}
+                                    columns={serviceGroupColumns}
+                                />
+                            ) : (
+                                <Input
+                                    label="Kelompok jasa"
+                                    value={group?.name ?? ''}
+                                    readOnly
+                                />
                             )}
                         </FormControl>
                     )}

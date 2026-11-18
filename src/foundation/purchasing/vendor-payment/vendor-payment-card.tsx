@@ -19,7 +19,6 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
-import { Select } from '@operations-metta/ui/select';
 import { SelectRecordsDialog } from '@operations-metta/ui/select-records-dialog';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery } from '@tanstack/react-query';
@@ -34,6 +33,7 @@ import {
     errorText,
     FormErrorHeader,
     orpc,
+    PaymentMethodLookup,
     PrintAction,
     type ApiBody,
     type ErrorAction,
@@ -559,45 +559,45 @@ export function VendorPaymentCard({
                             />
                         )}
                     </FormControl>
-                    <FormControl
-                        error={error('payment_method_id')}
-                        data-error-field="payment_method_id"
-                        hint={
-                            editable && methods?.length === 0
-                                ? 'Belum ada jenis bayar tunai atau non tunai. Tambahkan di Kasir › Setup › Jenis bayar.'
-                                : undefined
-                        }
-                    >
-                        {editable ? (
-                            <Select
-                                label="Cara bayar"
-                                required
-                                items={(methods ?? []).map((method) => ({
-                                    value: method.id,
-                                    label: `${method.code} - ${method.name}`,
-                                }))}
-                                value={header.payment_method_id}
-                                onValueChange={(value) =>
-                                    setHeader({
-                                        ...header,
-                                        payment_method_id: value ?? '',
-                                        bank_account: methods?.find(
-                                            (method) => method.id === value,
-                                        )?.cash
-                                            ? null
-                                            : header.bank_account,
-                                    })
-                                }
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
+                    {editable ? (
+                        <PaymentMethodLookup
+                            label="Cara bayar"
+                            required
+                            items={methods ?? []}
+                            value={header.payment_method_id}
+                            onChange={(payment_method_id) =>
+                                setHeader({
+                                    ...header,
+                                    payment_method_id,
+                                    bank_account: methods?.find(
+                                        (method) =>
+                                            method.id === payment_method_id,
+                                    )?.cash
+                                        ? null
+                                        : header.bank_account,
+                                })
+                            }
+                            error={error('payment_method_id')}
+                            hint={
+                                methods?.length === 0
+                                    ? 'Belum ada jenis bayar tunai atau non tunai. Tambahkan di Kasir › Setup › Jenis bayar.'
+                                    : undefined
+                            }
+                            field="payment_method_id"
+                            portalContainer={portalContainer}
+                        />
+                    ) : (
+                        <FormControl
+                            error={error('payment_method_id')}
+                            data-error-field="payment_method_id"
+                        >
                             <Input
                                 label="Cara bayar"
                                 readOnly
                                 value={methodName}
                             />
-                        )}
-                    </FormControl>
+                        </FormControl>
+                    )}
                     {cash === false &&
                         (editable ? (
                             <MasterLookup<BankAccount>

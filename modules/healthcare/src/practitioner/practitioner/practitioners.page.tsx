@@ -22,7 +22,11 @@ import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import {
+    useQuery,
+    useQueryClient,
+    useSuspenseQuery,
+} from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
@@ -37,6 +41,7 @@ import {
     orpc,
     type ApiBody,
 } from '@core/platform/shell/index.ts';
+import { SpecialtyCard } from '../specialty/specialty-card.tsx';
 
 // Tenaga kesehatan (nakes): orang di buku alamat dengan profesi, spesialis, SIP, dan kode dokter BPJS. Nakes baru memakai
 // orang yang sudah ada di buku alamat atau membuat orang baru; nama dan identitasnya sesudah itu diubah di Buku alamat.
@@ -44,7 +49,6 @@ import {
 const route = getRouteApi('/_app/healthcare/practitioner/practitioners');
 const ALL = 'all';
 const UNSET = '__unset__';
-const NONE = { value: UNSET, label: 'Tidak ada' };
 type Practitioner = ApiBody<'healthcarePractitionerList'>['data'][number];
 type Metadata = ApiBody<'healthcarePractitionerMetadata'>;
 type Person = ApiBody<'partyList'>['data'][number];
@@ -116,7 +120,29 @@ function PractitionerCard({
     const specialty =
         metadata.specialties.find((item) => item.id === form.specialtyId) ??
         null;
-    const subspecialties = specialty?.subspecialties ?? [];
+    const specialties = [
+        { id: '', name: 'Tidak ada', subspecialties: [] },
+        ...metadata.specialties,
+    ];
+    const specialtyChoice =
+        specialties.find((item) => item.id === (form.specialtyId ?? '')) ??
+        null;
+    const subspecialties = [
+        { id: '', name: 'Tidak ada' },
+        ...(specialty?.subspecialties ?? []),
+    ];
+    const subspecialty =
+        subspecialties.find(
+            (item) => item.id === (form.subspecialtyId ?? ''),
+        ) ?? null;
+    const queryClient = useQueryClient();
+    const { data: specialtyPermissions } = useQuery(
+        orpc.healthcareSpecialtyMetadata.queryOptions({
+            select: (response) => response.body.permissions,
+        }),
+    );
+    const [creatingSpecialty, setCreatingSpecialty] = useState(false);
+    const specialtyContentRef = useRef<HTMLDivElement>(null);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
@@ -252,354 +278,427 @@ function PractitionerCard({
     );
 
     return (
-        <form
-            noValidate
-            className="flex min-h-0 flex-1 flex-col"
-            onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-            }}
-        >
-            <PageDialogToolbar>
-                {editing && (
-                    <>
-                        <ActionButton
-                            action="save"
-                            type="submit"
-                            disabled={busy}
-                            pending={busy}
-                        />
-                        <ActionButton
-                            action="cancel"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                                if (!practitioner) {
-                                    onClose();
-                                    return;
-                                }
-                                setForm(blank);
-                                setErrors({});
-                            }}
-                        />
-                    </>
-                )}
-                {practitioner && metadata.can_manage && (
-                    <ActionButton
-                        action="archive"
-                        disabled={busy}
-                        onClick={() => void remove()}
-                    />
-                )}
-            </PageDialogToolbar>
-            <FormErrorHeader
-                errors={errors}
-                message={message}
-                operation="Nakes belum disimpan"
-            />
-            <PageDialogBody className="py-3">
-                <FormGrid>
-                    {practitioner === null && metadata.can_pick_party && (
-                        <Field orientation="horizontal" className="w-auto">
-                            <Switch
-                                id="practitioner-existing"
-                                checked={form.existing}
-                                onCheckedChange={(checked) =>
-                                    setForm({ ...form, existing: checked })
-                                }
+        <>
+            <form
+                noValidate
+                className="flex min-h-0 flex-1 flex-col"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void save();
+                }}
+            >
+                <PageDialogToolbar>
+                    {editing && (
+                        <>
+                            <ActionButton
+                                action="save"
+                                type="submit"
+                                disabled={busy}
+                                pending={busy}
                             />
-                            <FieldLabel htmlFor="practitioner-existing">
-                                Orangnya sudah ada di buku alamat
-                            </FieldLabel>
-                        </Field>
+                            <ActionButton
+                                action="cancel"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                    if (!practitioner) {
+                                        onClose();
+                                        return;
+                                    }
+                                    setForm(blank);
+                                    setErrors({});
+                                }}
+                            />
+                        </>
                     )}
-                    {practitioner === null && form.existing ? (
-                        <FormControl error={error('party_id')}>
+                    {practitioner && metadata.can_manage && (
+                        <ActionButton
+                            action="archive"
+                            disabled={busy}
+                            onClick={() => void remove()}
+                        />
+                    )}
+                </PageDialogToolbar>
+                <FormErrorHeader
+                    errors={errors}
+                    message={message}
+                    operation="Nakes belum disimpan"
+                />
+                <PageDialogBody className="py-3">
+                    <FormGrid>
+                        {practitioner === null && metadata.can_pick_party && (
+                            <Field orientation="horizontal" className="w-auto">
+                                <Switch
+                                    id="practitioner-existing"
+                                    checked={form.existing}
+                                    onCheckedChange={(checked) =>
+                                        setForm({ ...form, existing: checked })
+                                    }
+                                />
+                                <FieldLabel htmlFor="practitioner-existing">
+                                    Orangnya sudah ada di buku alamat
+                                </FieldLabel>
+                            </Field>
+                        )}
+                        {practitioner === null && form.existing ? (
+                            <FormControl error={error('party_id')}>
+                                <InlineLookup
+                                    label="Orang"
+                                    required
+                                    loadItems={personLoader}
+                                    value={form.person}
+                                    onValueChange={(person) =>
+                                        setForm({ ...form, person })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari nama di buku alamat…"
+                                    emptyMessage="Orang tidak ditemukan."
+                                    columns={[
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            cell: (item) => item.name,
+                                        },
+                                        {
+                                            id: 'city',
+                                            header: 'Kota',
+                                            cell: (item) => item.city ?? '',
+                                        },
+                                    ]}
+                                    portalContainer={portalContainer}
+                                    showDetails={false}
+                                />
+                            </FormControl>
+                        ) : (
+                            text('name', 'Nama', {
+                                required: true,
+                                maxLength: 200,
+                                readOnly: practitioner !== null,
+                                hint: practitioner
+                                    ? 'Nama dan identitas diubah di Buku alamat, karena orangnya bisa dipakai peran lain.'
+                                    : 'Orang baru dibuat di buku alamat dengan isian ini.',
+                            })
+                        )}
+                        {practitioner === null && !form.existing && (
+                            <>
+                                {text('nik', 'NIK', {
+                                    maxLength: 30,
+                                    inputMode: 'numeric',
+                                })}
+                                <FormControl error={error('gender')}>
+                                    <Select
+                                        label="Jenis kelamin"
+                                        items={[
+                                            {
+                                                value: UNSET,
+                                                label: 'Belum diisi',
+                                            },
+                                            ...metadata.genders.map(
+                                                (gender) => ({
+                                                    value: gender.code,
+                                                    label: gender.name,
+                                                }),
+                                            ),
+                                        ]}
+                                        value={form.gender || UNSET}
+                                        onValueChange={(value) =>
+                                            setForm({
+                                                ...form,
+                                                gender:
+                                                    value === null ||
+                                                    value === UNSET
+                                                        ? ''
+                                                        : value,
+                                            })
+                                        }
+                                        searchPlaceholder="Cari jenis kelamin"
+                                        emptyMessage="Pilihan tidak ditemukan."
+                                        portalContainer={portalContainer}
+                                    />
+                                </FormControl>
+                                {text('phone', 'No. HP', {
+                                    maxLength: 30,
+                                    inputMode: 'tel',
+                                })}
+                            </>
+                        )}
+                        <FormControl
+                            error={error('profession_id')}
+                            data-error-field="profession_id"
+                        >
                             <InlineLookup
-                                label="Orang"
+                                label="Profesi"
                                 required
-                                loadItems={personLoader}
-                                value={form.person}
-                                onValueChange={(person) =>
-                                    setForm({ ...form, person })
+                                disabled={!editing}
+                                items={metadata.professions.filter(
+                                    (item) =>
+                                        item.is_active ||
+                                        item.id === form.professionId,
+                                )}
+                                value={profession}
+                                displayValue={profession?.name ?? ''}
+                                onValueChange={(item) =>
+                                    setForm({ ...form, professionId: item.id })
                                 }
                                 getItemValue={(item) => item.id}
                                 getItemLabel={(item) => item.name}
-                                placeholder="Cari nama di buku alamat…"
-                                emptyMessage="Orang tidak ditemukan."
+                                getSearchText={(item) =>
+                                    `${item.code} ${item.name}`
+                                }
+                                placeholder="Cari profesi…"
+                                emptyMessage="Profesi tidak ditemukan."
+                                showDetails={false}
+                                portalContainer={portalContainer}
                                 columns={[
+                                    {
+                                        id: 'code',
+                                        header: 'Kode',
+                                        width: 120,
+                                        cell: (item) => item.code,
+                                    },
                                     {
                                         id: 'name',
                                         header: 'Nama',
+                                        width: 200,
                                         cell: (item) => item.name,
                                     },
-                                    {
-                                        id: 'city',
-                                        header: 'Kota',
-                                        cell: (item) => item.city ?? '',
-                                    },
                                 ]}
-                                portalContainer={portalContainer}
-                                showDetails={false}
                             />
                         </FormControl>
-                    ) : (
-                        text('name', 'Nama', {
-                            required: true,
-                            maxLength: 200,
-                            readOnly: practitioner !== null,
-                            hint: practitioner
-                                ? 'Nama dan identitas diubah di Buku alamat, karena orangnya bisa dipakai peran lain.'
-                                : 'Orang baru dibuat di buku alamat dengan isian ini.',
-                        })
-                    )}
-                    {practitioner === null && !form.existing && (
-                        <>
-                            {text('nik', 'NIK', {
-                                maxLength: 30,
-                                inputMode: 'numeric',
-                            })}
-                            <FormControl error={error('gender')}>
-                                <Select
-                                    label="Jenis kelamin"
-                                    items={[
-                                        { value: UNSET, label: 'Belum diisi' },
-                                        ...metadata.genders.map((gender) => ({
-                                            value: gender.code,
-                                            label: gender.name,
-                                        })),
+                        <FormControl
+                            error={error('specialty_id')}
+                            data-error-field="specialty_id"
+                        >
+                            {editing ? (
+                                <InlineLookup
+                                    label="Spesialis"
+                                    items={specialties}
+                                    value={specialtyChoice}
+                                    displayValue={specialtyChoice?.name ?? ''}
+                                    onValueChange={(item) => {
+                                        const specialtyId =
+                                            item.id === '' ? null : item.id;
+                                        setForm({
+                                            ...form,
+                                            specialtyId,
+                                            subspecialtyId:
+                                                specialtyId === form.specialtyId
+                                                    ? form.subspecialtyId
+                                                    : null,
+                                        });
+                                    }}
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari spesialis…"
+                                    emptyMessage="Spesialis tidak ditemukan."
+                                    portalContainer={portalContainer}
+                                    onCreate={
+                                        specialtyPermissions?.create
+                                            ? () => setCreatingSpecialty(true)
+                                            : undefined
+                                    }
+                                    columns={[
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            width: 240,
+                                            cell: (item) => item.name,
+                                            sortValue: (item) => item.name,
+                                        },
                                     ]}
-                                    value={form.gender || UNSET}
+                                />
+                            ) : (
+                                <Input
+                                    label="Spesialis"
+                                    value={practitioner.specialty_name ?? ''}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl
+                            error={error('subspecialty_id')}
+                            data-error-field="subspecialty_id"
+                        >
+                            {editing ? (
+                                <InlineLookup
+                                    key={form.specialtyId ?? ''}
+                                    label="Sub Spesialis"
+                                    items={subspecialties}
+                                    value={subspecialty}
+                                    displayValue={subspecialty?.name ?? ''}
+                                    onValueChange={(item) =>
+                                        setForm({
+                                            ...form,
+                                            subspecialtyId:
+                                                item.id === '' ? null : item.id,
+                                        })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari sub spesialis…"
+                                    emptyMessage="Sub spesialis tidak ditemukan."
+                                    portalContainer={portalContainer}
+                                    columns={[
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            width: 240,
+                                            cell: (item) => item.name,
+                                            sortValue: (item) => item.name,
+                                        },
+                                    ]}
+                                />
+                            ) : (
+                                <Input
+                                    label="Sub Spesialis"
+                                    value={practitioner.subspecialty_name ?? ''}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        {text('license_number', 'No. SIP', { maxLength: 100 })}
+                        <FormControl error={error('license_valid_until')}>
+                            {editing ? (
+                                <DatePicker
+                                    label="SIP berlaku sampai"
+                                    data-error-field="license_valid_until"
+                                    value={form.license_valid_until}
                                     onValueChange={(value) =>
                                         setForm({
                                             ...form,
-                                            gender:
-                                                value === null ||
-                                                value === UNSET
-                                                    ? ''
-                                                    : value,
+                                            license_valid_until: value,
                                         })
                                     }
-                                    searchPlaceholder="Cari jenis kelamin"
-                                    emptyMessage="Pilihan tidak ditemukan."
                                     portalContainer={portalContainer}
                                 />
-                            </FormControl>
-                            {text('phone', 'No. HP', {
-                                maxLength: 30,
-                                inputMode: 'tel',
-                            })}
-                        </>
-                    )}
-                    <FormControl
-                        error={error('profession_id')}
-                        data-error-field="profession_id"
-                    >
-                        <InlineLookup
-                            label="Profesi"
-                            required
-                            disabled={!editing}
-                            items={metadata.professions.filter(
-                                (item) =>
-                                    item.is_active ||
-                                    item.id === form.professionId,
+                            ) : (
+                                <Input
+                                    label="SIP berlaku sampai"
+                                    value={displayDate(
+                                        form.license_valid_until,
+                                    )}
+                                    readOnly
+                                />
                             )}
-                            value={profession}
-                            displayValue={profession?.name ?? ''}
-                            onValueChange={(item) =>
-                                setForm({ ...form, professionId: item.id })
-                            }
-                            getItemValue={(item) => item.id}
-                            getItemLabel={(item) => item.name}
-                            getSearchText={(item) =>
-                                `${item.code} ${item.name}`
-                            }
-                            placeholder="Cari profesi…"
-                            emptyMessage="Profesi tidak ditemukan."
-                            showDetails={false}
-                            portalContainer={portalContainer}
-                            columns={[
-                                {
-                                    id: 'code',
-                                    header: 'Kode',
-                                    width: 120,
-                                    cell: (item) => item.code,
-                                },
-                                {
-                                    id: 'name',
-                                    header: 'Nama',
-                                    width: 200,
-                                    cell: (item) => item.name,
-                                },
-                            ]}
+                        </FormControl>
+                        {text('bpjs_doctor_code', 'Kode dokter BPJS', {
+                            maxLength: 50,
+                        })}
+                        <FormControl
+                            error={error('user_id')}
+                            hint="Akun yang dipakai nakes ini untuk masuk ke aplikasi. Boleh dikosongkan."
+                        >
+                            {editing ? (
+                                <InlineLookup
+                                    label="Akun login"
+                                    loadItems={userLoader}
+                                    value={
+                                        form.user
+                                            ? { ...form.user, email: '' }
+                                            : null
+                                    }
+                                    onValueChange={(user) =>
+                                        setForm({
+                                            ...form,
+                                            user: {
+                                                id: user.id,
+                                                name: user.name,
+                                            },
+                                        })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari nama atau email…"
+                                    emptyMessage="Akun tidak ditemukan."
+                                    columns={[
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            cell: (item) => item.name,
+                                        },
+                                        {
+                                            id: 'email',
+                                            header: 'Email',
+                                            cell: (item) => item.email,
+                                        },
+                                    ]}
+                                    portalContainer={portalContainer}
+                                    showDetails={false}
+                                />
+                            ) : (
+                                <Input
+                                    label="Akun login"
+                                    value={form.user?.name ?? ''}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <Field orientation="horizontal" className="w-auto">
+                            <Switch
+                                id="practitioner-active"
+                                checked={form.is_active}
+                                disabled={!editing}
+                                onCheckedChange={(checked) =>
+                                    setForm({ ...form, is_active: checked })
+                                }
+                            />
+                            <FieldLabel htmlFor="practitioner-active">
+                                Aktif
+                            </FieldLabel>
+                        </Field>
+                    </FormGrid>
+                </PageDialogBody>
+                {confirmation}
+            </form>
+            {creatingSpecialty && specialtyPermissions && (
+                <PageDialog
+                    open
+                    onOpenChange={(next) => {
+                        if (!next) setCreatingSpecialty(false);
+                    }}
+                >
+                    <PageDialogContent
+                        ref={specialtyContentRef}
+                        title="Spesialis"
+                    >
+                        <SpecialtyCard
+                            specialty={null}
+                            permissions={specialtyPermissions}
+                            portalContainer={specialtyContentRef}
+                            onSaved={(saved) => {
+                                setCreatingSpecialty(false);
+                                queryClient.setQueryData(
+                                    orpc.healthcarePractitionerMetadata.queryKey(),
+                                    (current) =>
+                                        current && {
+                                            ...current,
+                                            body: {
+                                                ...current.body,
+                                                specialties: [
+                                                    ...current.body.specialties,
+                                                    {
+                                                        id: saved.id,
+                                                        name: saved.name,
+                                                        subspecialties:
+                                                            saved.subspecialties,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                );
+                                setForm({
+                                    ...form,
+                                    specialtyId: saved.id,
+                                    subspecialtyId: null,
+                                });
+                            }}
+                            onClose={() => setCreatingSpecialty(false)}
                         />
-                    </FormControl>
-                    <FormControl
-                        error={error('specialty_id')}
-                        data-error-field="specialty_id"
-                    >
-                        {editing ? (
-                            <Select
-                                label="Spesialis"
-                                items={[
-                                    NONE,
-                                    ...metadata.specialties.map((item) => ({
-                                        value: item.id,
-                                        label: item.name,
-                                    })),
-                                ]}
-                                value={form.specialtyId ?? UNSET}
-                                onValueChange={(value) => {
-                                    const specialtyId =
-                                        value === null || value === UNSET
-                                            ? null
-                                            : value;
-                                    setForm({
-                                        ...form,
-                                        specialtyId,
-                                        subspecialtyId:
-                                            specialtyId === form.specialtyId
-                                                ? form.subspecialtyId
-                                                : null,
-                                    });
-                                }}
-                                searchPlaceholder="Cari spesialis"
-                                emptyMessage="Spesialis tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="Spesialis"
-                                value={practitioner.specialty_name ?? ''}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    <FormControl
-                        error={error('subspecialty_id')}
-                        data-error-field="subspecialty_id"
-                    >
-                        {editing ? (
-                            <Select
-                                label="Sub Spesialis"
-                                items={[
-                                    NONE,
-                                    ...subspecialties.map((item) => ({
-                                        value: item.id,
-                                        label: item.name,
-                                    })),
-                                ]}
-                                value={form.subspecialtyId ?? UNSET}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        subspecialtyId:
-                                            value === null || value === UNSET
-                                                ? null
-                                                : value,
-                                    })
-                                }
-                                searchPlaceholder="Cari sub spesialis"
-                                emptyMessage="Sub spesialis tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="Sub Spesialis"
-                                value={practitioner.subspecialty_name ?? ''}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    {text('license_number', 'No. SIP', { maxLength: 100 })}
-                    <FormControl error={error('license_valid_until')}>
-                        {editing ? (
-                            <DatePicker
-                                label="SIP berlaku sampai"
-                                data-error-field="license_valid_until"
-                                value={form.license_valid_until}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        license_valid_until: value,
-                                    })
-                                }
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="SIP berlaku sampai"
-                                value={displayDate(form.license_valid_until)}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    {text('bpjs_doctor_code', 'Kode dokter BPJS', {
-                        maxLength: 50,
-                    })}
-                    <FormControl
-                        error={error('user_id')}
-                        hint="Akun yang dipakai nakes ini untuk masuk ke aplikasi. Boleh dikosongkan."
-                    >
-                        {editing ? (
-                            <InlineLookup
-                                label="Akun login"
-                                loadItems={userLoader}
-                                value={
-                                    form.user
-                                        ? { ...form.user, email: '' }
-                                        : null
-                                }
-                                onValueChange={(user) =>
-                                    setForm({
-                                        ...form,
-                                        user: { id: user.id, name: user.name },
-                                    })
-                                }
-                                getItemValue={(item) => item.id}
-                                getItemLabel={(item) => item.name}
-                                placeholder="Cari nama atau email…"
-                                emptyMessage="Akun tidak ditemukan."
-                                columns={[
-                                    {
-                                        id: 'name',
-                                        header: 'Nama',
-                                        cell: (item) => item.name,
-                                    },
-                                    {
-                                        id: 'email',
-                                        header: 'Email',
-                                        cell: (item) => item.email,
-                                    },
-                                ]}
-                                portalContainer={portalContainer}
-                                showDetails={false}
-                            />
-                        ) : (
-                            <Input
-                                label="Akun login"
-                                value={form.user?.name ?? ''}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    <Field orientation="horizontal" className="w-auto">
-                        <Switch
-                            id="practitioner-active"
-                            checked={form.is_active}
-                            disabled={!editing}
-                            onCheckedChange={(checked) =>
-                                setForm({ ...form, is_active: checked })
-                            }
-                        />
-                        <FieldLabel htmlFor="practitioner-active">
-                            Aktif
-                        </FieldLabel>
-                    </Field>
-                </FormGrid>
-            </PageDialogBody>
-            {confirmation}
-        </form>
+                    </PageDialogContent>
+                </PageDialog>
+            )}
+        </>
     );
 }
 

@@ -13,7 +13,6 @@ import {
     PageDialogToolbar,
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
-import { Select } from '@operations-metta/ui/select';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery } from '@tanstack/react-query';
 import { Undo2 } from 'lucide-react';
@@ -24,6 +23,8 @@ import { Decimal } from '../../../platform/money/index.ts';
 import {
     api,
     ApiError,
+    MerchantLookup,
+    PaymentMethodLookup,
     errorText,
     FormErrorHeader,
     orpc,
@@ -314,59 +315,42 @@ export function ReceivablePaymentCard({
                                 </>
                             ) : (
                                 <>
-                                    <FormControl
+                                    <PaymentMethodLookup
+                                        label="Jenis Bayar"
+                                        required
+                                        items={(
+                                            metadata?.payment_methods ?? []
+                                        ).map((candidate) => ({
+                                            id: candidate.id,
+                                            code: '',
+                                            name: candidate.label,
+                                        }))}
+                                        value={form.payment_method_id}
+                                        onChange={(payment_method_id) =>
+                                            setForm({
+                                                ...form,
+                                                payment_method_id,
+                                            })
+                                        }
                                         error={errors.payment_method_id?.[0]}
-                                        data-error-field="payment_method_id"
-                                    >
-                                        <Select
-                                            label="Jenis Bayar"
+                                        field="payment_method_id"
+                                        portalContainer={portalContainer}
+                                    />
+                                    {method?.requires_merchant && (
+                                        <MerchantLookup
                                             required
-                                            items={(
-                                                metadata?.payment_methods ?? []
-                                            ).map((candidate) => ({
-                                                value: candidate.id,
-                                                label: candidate.label,
-                                            }))}
-                                            value={form.payment_method_id}
-                                            onValueChange={(value) =>
+                                            items={metadata?.merchants ?? []}
+                                            value={form.merchant_id}
+                                            onChange={(merchant_id) =>
                                                 setForm({
                                                     ...form,
-                                                    payment_method_id:
-                                                        value ?? '',
+                                                    merchant_id,
                                                 })
                                             }
+                                            error={errors.merchant_id?.[0]}
+                                            field="merchant_id"
                                             portalContainer={portalContainer}
                                         />
-                                    </FormControl>
-                                    {method?.requires_merchant && (
-                                        <FormControl
-                                            error={errors.merchant_id?.[0]}
-                                            data-error-field="merchant_id"
-                                        >
-                                            <Select
-                                                label="Merchan"
-                                                required
-                                                items={(
-                                                    metadata?.merchants ?? []
-                                                ).map((merchant) => ({
-                                                    value: merchant.id,
-                                                    label: `${merchant.code} · ${merchant.name}`,
-                                                }))}
-                                                value={form.merchant_id}
-                                                onValueChange={(value) =>
-                                                    setForm({
-                                                        ...form,
-                                                        merchant_id:
-                                                            value ?? '',
-                                                    })
-                                                }
-                                                searchPlaceholder="Cari merchan"
-                                                emptyMessage="Belum ada merchan."
-                                                portalContainer={
-                                                    portalContainer
-                                                }
-                                            />
-                                        </FormControl>
                                     )}
                                     {method?.requires_reference &&
                                         edited('reference', 'No Kartu', {

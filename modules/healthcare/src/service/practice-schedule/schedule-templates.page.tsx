@@ -41,6 +41,8 @@ import {
     type ApiBody,
 } from '@core/platform/shell/index.ts';
 import { dayNames, holidayDay } from './practice-schedule.days.ts';
+import { NewSessionDialog } from './practice-session-card.tsx';
+import { CalendarLookup, SessionLookup } from './schedule-lookups.tsx';
 
 // Template jadwal mingguan satu section: kolom Senin sampai Minggu ditambah Hari libur, setiap kolom berisi nakes dan
 // sesinya. "Generate jadwal" di layar Jadwal praktik menyusun jadwal bertanggal dari template ini.
@@ -108,6 +110,7 @@ function TemplateCard({
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState<Errors>({});
     const [message, setMessage] = useState<string | null>(null);
+    const [creatingSession, setCreatingSession] = useState(false);
     const { confirm, confirmation } = useConfirmation();
     const dirty = JSON.stringify(form) !== JSON.stringify(blank);
     usePageDialogRecord({
@@ -195,244 +198,257 @@ function TemplateCard({
     };
 
     return (
-        <form
-            noValidate
-            className="flex min-h-0 flex-1 flex-col"
-            onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-            }}
-        >
-            <PageDialogToolbar>
-                {editing && (
-                    <>
+        <>
+            <form
+                noValidate
+                className="flex min-h-0 flex-1 flex-col"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void save();
+                }}
+            >
+                <PageDialogToolbar>
+                    {editing && (
+                        <>
+                            <ActionButton
+                                action="save"
+                                type="submit"
+                                disabled={busy}
+                                pending={busy}
+                            />
+                            <ActionButton
+                                action="cancel"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                    if (!template) {
+                                        onClose();
+                                        return;
+                                    }
+                                    setForm(blank);
+                                    setErrors({});
+                                }}
+                            />
+                        </>
+                    )}
+                    {template && permissions.delete && (
                         <ActionButton
-                            action="save"
-                            type="submit"
+                            action="archive"
                             disabled={busy}
-                            pending={busy}
+                            onClick={() => void remove()}
                         />
-                        <ActionButton
-                            action="cancel"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                                if (!template) {
-                                    onClose();
-                                    return;
-                                }
-                                setForm(blank);
-                                setErrors({});
-                            }}
-                        />
-                    </>
-                )}
-                {template && permissions.delete && (
-                    <ActionButton
-                        action="archive"
-                        disabled={busy}
-                        onClick={() => void remove()}
-                    />
-                )}
-            </PageDialogToolbar>
-            <FormErrorHeader
-                errors={errors}
-                message={message}
-                operation="Template belum disimpan"
-            />
-            <PageDialogBody className="py-3">
-                <FormGrid>
-                    <FormControl error={errors.practitioner_id?.[0]}>
-                        {editing ? (
-                            <InlineLookup
-                                label="Nakes"
-                                required
-                                loadItems={loader}
-                                value={form.practitioner}
-                                onValueChange={(practitioner) =>
-                                    setForm({ ...form, practitioner })
-                                }
-                                getItemValue={(item) => item.id}
-                                getItemLabel={(item) => item.name}
-                                placeholder="Cari nakes…"
-                                emptyMessage="Nakes aktif tidak ditemukan."
-                                columns={[
-                                    {
-                                        id: 'name',
-                                        header: 'Nama',
-                                        cell: (item) => item.name,
-                                    },
-                                ]}
-                                portalContainer={portalContainer}
-                                showDetails={false}
-                            />
-                        ) : (
+                    )}
+                </PageDialogToolbar>
+                <FormErrorHeader
+                    errors={errors}
+                    message={message}
+                    operation="Template belum disimpan"
+                />
+                <PageDialogBody className="py-3">
+                    <FormGrid>
+                        <FormControl error={errors.practitioner_id?.[0]}>
+                            {editing ? (
+                                <InlineLookup
+                                    label="Nakes"
+                                    required
+                                    loadItems={loader}
+                                    value={form.practitioner}
+                                    onValueChange={(practitioner) =>
+                                        setForm({ ...form, practitioner })
+                                    }
+                                    getItemValue={(item) => item.id}
+                                    getItemLabel={(item) => item.name}
+                                    placeholder="Cari nakes…"
+                                    emptyMessage="Nakes aktif tidak ditemukan."
+                                    columns={[
+                                        {
+                                            id: 'name',
+                                            header: 'Nama',
+                                            cell: (item) => item.name,
+                                        },
+                                    ]}
+                                    portalContainer={portalContainer}
+                                    showDetails={false}
+                                />
+                            ) : (
+                                <Input
+                                    label="Nakes"
+                                    value={form.practitioner?.name ?? ''}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl error={errors.day?.[0]}>
+                            {editing ? (
+                                <Select
+                                    label="Hari"
+                                    required
+                                    items={days.map((value) => ({
+                                        value: String(value),
+                                        label: dayNames[value] ?? '',
+                                    }))}
+                                    value={form.day}
+                                    onValueChange={(value) =>
+                                        setForm({
+                                            ...form,
+                                            day: value ?? form.day,
+                                        })
+                                    }
+                                    searchPlaceholder="Cari hari"
+                                    emptyMessage="Hari tidak ditemukan."
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Hari"
+                                    value={dayNames[Number(form.day)] ?? ''}
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl error={errors.session_id?.[0]}>
+                            {editing ? (
+                                <SessionLookup
+                                    sessions={metadata.sessions}
+                                    value={form.session_id}
+                                    onChange={(id) =>
+                                        setForm({ ...form, session_id: id })
+                                    }
+                                    portalContainer={portalContainer}
+                                    onCreate={
+                                        permissions.create
+                                            ? () => setCreatingSession(true)
+                                            : undefined
+                                    }
+                                />
+                            ) : (
+                                <Input
+                                    label="Sesi"
+                                    value={
+                                        sessions.find(
+                                            (session) =>
+                                                session.id === form.session_id,
+                                        )?.name ?? ''
+                                    }
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl
+                            error={errors.capacity?.[0]}
+                            hint="Jumlah pasien paling banyak di sesi ini. Kosongkan bila tanpa batas."
+                        >
                             <Input
-                                label="Nakes"
-                                value={form.practitioner?.name ?? ''}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    <FormControl error={errors.day?.[0]}>
-                        {editing ? (
-                            <Select
-                                label="Hari"
-                                required
-                                items={days.map((value) => ({
-                                    value: String(value),
-                                    label: dayNames[value] ?? '',
-                                }))}
-                                value={form.day}
-                                onValueChange={(value) =>
-                                    setForm({ ...form, day: value ?? form.day })
-                                }
-                                searchPlaceholder="Cari hari"
-                                emptyMessage="Hari tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="Hari"
-                                value={dayNames[Number(form.day)] ?? ''}
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    <FormControl error={errors.session_id?.[0]}>
-                        {editing ? (
-                            <Select
-                                label="Sesi"
-                                required
-                                items={sessions.map((session) => ({
-                                    value: session.id,
-                                    label: `${session.name} (${session.start_time}–${session.end_time})`,
-                                }))}
-                                value={form.session_id}
-                                onValueChange={(value) =>
-                                    setForm({ ...form, session_id: value })
-                                }
-                                placeholder="Pilih sesi"
-                                searchPlaceholder="Cari sesi"
-                                emptyMessage="Belum ada sesi. Tambahkan di layar Sesi praktik."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
-                            <Input
-                                label="Sesi"
-                                value={
-                                    sessions.find(
-                                        (session) =>
-                                            session.id === form.session_id,
-                                    )?.name ?? ''
-                                }
-                                readOnly
-                            />
-                        )}
-                    </FormControl>
-                    <FormControl
-                        error={errors.capacity?.[0]}
-                        hint="Jumlah pasien paling banyak di sesi ini. Kosongkan bila tanpa batas."
-                    >
-                        <Input
-                            label="Kapasitas"
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            data-error-field="capacity"
-                            value={form.capacity}
-                            readOnly={!editing}
-                            placeholder="Tanpa batas"
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    capacity: event.target.value,
-                                })
-                            }
-                        />
-                    </FormControl>
-                    <FormControl
-                        error={errors.calendar_id?.[0]}
-                        hint="Pada tanggal yang ditutup kalender ini, jadwal hari itu dibatalkan karena libur. Template Hari libur hanya dipakai pada tanggal itu."
-                    >
-                        {editing ? (
-                            <Select
-                                label="Kalender libur"
-                                required={Number(form.day) === holidayDay}
-                                items={[
-                                    { value: NONE, label: 'Tanpa kalender' },
-                                    ...metadata.calendars.map((calendar) => ({
-                                        value: calendar.id,
-                                        label: `${calendar.code} ${calendar.name}`,
-                                    })),
-                                ]}
-                                value={form.calendar_id}
-                                onValueChange={(value) =>
+                                label="Kapasitas"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                data-error-field="capacity"
+                                value={form.capacity}
+                                readOnly={!editing}
+                                placeholder="Tanpa batas"
+                                onChange={(event) =>
                                     setForm({
                                         ...form,
-                                        calendar_id: value ?? NONE,
+                                        capacity: event.target.value,
                                     })
                                 }
-                                searchPlaceholder="Cari kalender"
-                                emptyMessage="Kalender tidak ditemukan."
+                            />
+                        </FormControl>
+                        <FormControl
+                            error={errors.calendar_id?.[0]}
+                            hint="Pada tanggal yang ditutup kalender ini, jadwal hari itu dibatalkan karena libur. Template Hari libur hanya dipakai pada tanggal itu."
+                        >
+                            {editing ? (
+                                <CalendarLookup
+                                    calendars={metadata.calendars}
+                                    value={
+                                        form.calendar_id === NONE
+                                            ? null
+                                            : form.calendar_id
+                                    }
+                                    onChange={(id) =>
+                                        setForm({
+                                            ...form,
+                                            calendar_id: id ?? NONE,
+                                        })
+                                    }
+                                    required={Number(form.day) === holidayDay}
+                                    portalContainer={portalContainer}
+                                />
+                            ) : (
+                                <Input
+                                    label="Kalender libur"
+                                    value={
+                                        metadata.calendars.find(
+                                            (calendar) =>
+                                                calendar.id ===
+                                                form.calendar_id,
+                                        )?.name ?? 'Tanpa kalender'
+                                    }
+                                    readOnly
+                                />
+                            )}
+                        </FormControl>
+                        <FormControl error={errors.valid_from?.[0]}>
+                            <DatePicker
+                                label="Berlaku mulai"
+                                required
+                                data-error-field="valid_from"
+                                value={form.valid_from}
+                                readOnly={!editing}
+                                onValueChange={(valid_from) =>
+                                    setForm({ ...form, valid_from })
+                                }
                                 portalContainer={portalContainer}
                             />
-                        ) : (
-                            <Input
-                                label="Kalender libur"
-                                value={
-                                    metadata.calendars.find(
-                                        (calendar) =>
-                                            calendar.id === form.calendar_id,
-                                    )?.name ?? 'Tanpa kalender'
+                        </FormControl>
+                        <FormControl
+                            error={errors.valid_to?.[0]}
+                            hint="Kosongkan bila template berlaku terus."
+                        >
+                            <DatePicker
+                                label="Berlaku sampai"
+                                data-error-field="valid_to"
+                                value={form.valid_to}
+                                readOnly={!editing}
+                                onValueChange={(valid_to) =>
+                                    setForm({ ...form, valid_to })
                                 }
-                                readOnly
+                                portalContainer={portalContainer}
                             />
-                        )}
-                    </FormControl>
-                    <FormControl error={errors.valid_from?.[0]}>
-                        <DatePicker
-                            label="Berlaku mulai"
-                            required
-                            data-error-field="valid_from"
-                            value={form.valid_from}
-                            readOnly={!editing}
-                            onValueChange={(valid_from) =>
-                                setForm({ ...form, valid_from })
-                            }
-                            portalContainer={portalContainer}
-                        />
-                    </FormControl>
-                    <FormControl
-                        error={errors.valid_to?.[0]}
-                        hint="Kosongkan bila template berlaku terus."
-                    >
-                        <DatePicker
-                            label="Berlaku sampai"
-                            data-error-field="valid_to"
-                            value={form.valid_to}
-                            readOnly={!editing}
-                            onValueChange={(valid_to) =>
-                                setForm({ ...form, valid_to })
-                            }
-                            portalContainer={portalContainer}
-                        />
-                    </FormControl>
-                    <Field orientation="horizontal" className="w-auto">
-                        <Switch
-                            id="template-active"
-                            checked={form.is_active}
-                            disabled={!editing}
-                            onCheckedChange={(checked) =>
-                                setForm({ ...form, is_active: checked })
-                            }
-                        />
-                        <FieldLabel htmlFor="template-active">Aktif</FieldLabel>
-                    </Field>
-                </FormGrid>
-            </PageDialogBody>
-            {confirmation}
-        </form>
+                        </FormControl>
+                        <Field orientation="horizontal" className="w-auto">
+                            <Switch
+                                id="template-active"
+                                checked={form.is_active}
+                                disabled={!editing}
+                                onCheckedChange={(checked) =>
+                                    setForm({ ...form, is_active: checked })
+                                }
+                            />
+                            <FieldLabel htmlFor="template-active">
+                                Aktif
+                            </FieldLabel>
+                        </Field>
+                    </FormGrid>
+                </PageDialogBody>
+                {confirmation}
+            </form>
+            {creatingSession && (
+                <NewSessionDialog
+                    permissions={metadata.permissions}
+                    onCreated={(session) => {
+                        setCreatingSession(false);
+                        setForm((current) => ({
+                            ...current,
+                            session_id: session.id,
+                        }));
+                    }}
+                    onClose={() => setCreatingSession(false)}
+                />
+            )}
+        </>
     );
 }
 

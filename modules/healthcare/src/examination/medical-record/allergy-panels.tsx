@@ -1,6 +1,7 @@
 import { DataTableText } from '@operations-metta/ui/data-table';
 import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { Select } from '@operations-metta/ui/select';
 import { useState } from 'react';
@@ -177,55 +178,73 @@ export function AllergyLines({
         ]);
     };
     const allergenChoices = (category: 'makanan' | 'udara' | 'obat') =>
-        (category === 'makanan'
+        category === 'makanan'
             ? metadata.allergies.food
             : category === 'udara'
               ? metadata.allergies.airborne
-              : metadata.allergies.drug_classes
-        ).map((row) => ({ value: row.id, label: row.name }));
-    const pickAllergen = (
-        index: number,
-        category: 'makanan' | 'udara' | 'obat',
-        value: string | null,
-    ) => {
-        const choice = allergenChoices(category).find(
-            (item) => item.value === value,
-        );
-        if (choice)
-            pick(
-                index,
-                {
-                    ...noAllergen,
-                    allergen_id: choice.value,
-                    allergen_name: choice.label,
-                },
-                choice.label,
-            );
-    };
+              : metadata.allergies.drug_classes;
     // Golongan obat adalah pilihan kedua di samping obat tertentu, jadi tidak wajib.
     const allergenSelect = (
         index: number,
         row: Allergy,
         category: 'makanan' | 'udara' | 'obat',
-    ) => (
-        <FormControl
-            error={error(index, 'allergen_id')}
-            data-error-field={field(index, 'allergen_id')}
-        >
-            <Select
-                label={category === 'obat' ? 'Atau golongan obat' : 'Alergen'}
-                placeholder={
-                    category === 'obat'
-                        ? 'Pilih golongan obat'
-                        : 'Pilih alergen'
-                }
-                required={category !== 'obat'}
-                items={allergenChoices(category)}
-                value={row.allergen_id}
-                onValueChange={(value) => pickAllergen(index, category, value)}
-            />
-        </FormControl>
-    );
+    ) => {
+        const choices = allergenChoices(category);
+        const selected =
+            choices.find((item) => item.id === row.allergen_id) ?? null;
+        return (
+            <FormControl
+                error={error(index, 'allergen_id')}
+                data-error-field={field(index, 'allergen_id')}
+            >
+                <InlineLookup
+                    label={
+                        category === 'obat' ? 'Atau golongan obat' : 'Alergen'
+                    }
+                    placeholder={
+                        category === 'obat'
+                            ? 'Cari golongan obat…'
+                            : 'Cari alergen…'
+                    }
+                    required={category !== 'obat'}
+                    items={choices}
+                    value={selected}
+                    displayValue={selected?.name ?? row.allergen_name ?? ''}
+                    onValueChange={(choice) =>
+                        pick(
+                            index,
+                            {
+                                ...noAllergen,
+                                allergen_id: choice.id,
+                                allergen_name: choice.name,
+                            },
+                            choice.name,
+                        )
+                    }
+                    getItemValue={(item) => item.id}
+                    getItemLabel={(item) => item.name}
+                    getSearchText={(item) => `${item.code} ${item.name}`}
+                    emptyMessage="Alergen tidak ditemukan."
+                    columns={[
+                        {
+                            id: 'code',
+                            header: 'Kode',
+                            width: 100,
+                            cell: (item) => item.code,
+                            sortValue: (item) => item.code,
+                        },
+                        {
+                            id: 'name',
+                            header: 'Nama',
+                            width: 220,
+                            cell: (item) => item.name,
+                            sortValue: (item) => item.name,
+                        },
+                    ]}
+                />
+            </FormControl>
+        );
+    };
     const allergenControl = (index: number, row: Allergy): ReactNode => {
         switch (row.category) {
             case null:

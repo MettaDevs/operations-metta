@@ -11,7 +11,6 @@ import {
     PageDialogToolbar,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { Check } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -23,6 +22,7 @@ import {
     errorText,
     FormErrorHeader,
     newDraftKey,
+    ReferenceValueLookup,
     type ApiBody,
 } from '../shell/index.ts';
 
@@ -156,19 +156,12 @@ function IdentificationDialog({
                                 data-error-field="type_code"
                             >
                                 {editing === 'new' ? (
-                                    <Select
+                                    <ReferenceValueLookup
                                         label="Jenis"
                                         required
-                                        items={available.map((type) => ({
-                                            value: type.code,
-                                            label: type.name,
-                                        }))}
-                                        value={typeCode || null}
-                                        onValueChange={(value) =>
-                                            value && setTypeCode(value)
-                                        }
-                                        searchPlaceholder="Cari jenis"
-                                        emptyMessage="Jenis tidak ditemukan."
+                                        items={available}
+                                        value={typeCode}
+                                        onChange={setTypeCode}
                                         portalContainer={contentRef}
                                     />
                                 ) : (

@@ -22,7 +22,7 @@ import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
 import {
     api,
@@ -48,7 +48,6 @@ type Metadata = ApiBody<'healthcareProcedureMetadata'>;
 type Group = Metadata['groups'][number];
 type Category = Metadata['categories'][number];
 type ChoiceField = 'benefit_limit_category_id' | 'supporting_device_id';
-const NONE = '__none__';
 
 const flags = Object.entries(procedureFlags).flatMap(([flag, { label }]) =>
     isProcedureFlag(flag) ? [{ flag, label }] : [],
@@ -83,6 +82,60 @@ const options: { option: ProcedureOption; label: string }[] = [
     { option: 'incentive_source', label: 'Sumber Insentif' },
     { option: 'polyclinic', label: 'Poliklinik' },
 ];
+
+type Choice = Metadata['benefit_limit_categories'][number];
+
+function ChoiceLookup({
+    label,
+    items,
+    value,
+    onChange,
+    portalContainer,
+}: {
+    label: string;
+    items: Choice[];
+    value: string | null;
+    onChange: (id: string | null) => void;
+    portalContainer: RefObject<HTMLElement | null>;
+}): ReactNode {
+    const choices = [
+        { id: '', code: '', name: 'Tidak ada', active: true },
+        ...items,
+    ];
+    const selected = choices.find((item) => item.id === (value ?? '')) ?? null;
+    return (
+        <InlineLookup
+            label={label}
+            items={choices}
+            value={selected}
+            displayValue={selected?.name ?? ''}
+            onValueChange={(item) => onChange(item.id === '' ? null : item.id)}
+            getItemValue={(item) => item.id}
+            getItemLabel={(item) => item.name}
+            getSearchText={(item) => `${item.code} ${item.name}`}
+            placeholder="Cari kode atau nama…"
+            emptyMessage="Pilihan tidak ditemukan."
+            portalContainer={portalContainer}
+            columns={[
+                {
+                    id: 'code',
+                    header: 'Kode',
+                    width: 120,
+                    cell: (item) => item.code,
+                    sortValue: (item) => item.code,
+                },
+                {
+                    id: 'name',
+                    header: 'Nama',
+                    width: 220,
+                    cell: (item) =>
+                        item.active ? item.name : `${item.name} (nonaktif)`,
+                    sortValue: (item) => item.name,
+                },
+            ]}
+        />
+    );
+}
 
 // Kartu satu tindakan, susunan kartu Jasa sistem lama: kode, nama, nama internasional, kelompok, dan kategori di
 // Umum, lalu tab Detail Harga, lalu section yang menawarkannya (tab Detail Section). Dipakai daftar tindakan di Setup
@@ -186,15 +239,10 @@ export function ProcedureCard({
     const choiceItems = (
         list: (typeof choices)[number]['list'],
         field: ChoiceField,
-    ) => [
-        { value: NONE, label: 'Tidak ada' },
-        ...(metadata?.[list] ?? [])
-            .filter((item) => item.active || item.id === procedure?.[field])
-            .map((item) => ({
-                value: item.id,
-                label: `${item.name}${item.active ? '' : ' (nonaktif)'}`,
-            })),
-    ];
+    ) =>
+        (metadata?.[list] ?? []).filter(
+            (item) => item.active || item.id === procedure?.[field],
+        );
     const held = new Set(procedure?.sections.map((section) => section.id));
     const sections = (metadata?.sections ?? [])
         .filter((section) => section.active || held.has(section.id))
@@ -485,26 +533,19 @@ export function ProcedureCard({
                                             data-error-field={field}
                                         >
                                             {editing ? (
-                                                <Select
+                                                <ChoiceLookup
                                                     label={label}
                                                     items={choiceItems(
                                                         list,
                                                         field,
                                                     )}
-                                                    value={form[field] ?? NONE}
-                                                    onValueChange={(value) =>
+                                                    value={form[field]}
+                                                    onChange={(id) =>
                                                         setForm({
                                                             ...form,
-                                                            [field]:
-                                                                value ===
-                                                                    null ||
-                                                                value === NONE
-                                                                    ? null
-                                                                    : value,
+                                                            [field]: id,
                                                         })
                                                     }
-                                                    searchPlaceholder={`Cari ${label.toLowerCase()}`}
-                                                    emptyMessage="Pilihan tidak ditemukan."
                                                     portalContainer={
                                                         portalContainer
                                                     }

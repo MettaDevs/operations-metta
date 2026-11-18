@@ -12,7 +12,6 @@ import {
     usePageDialogRecord,
 } from '@operations-metta/ui/page-dialog';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { Switch } from '@operations-metta/ui/switch';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
@@ -25,6 +24,7 @@ import { z } from 'zod';
 import {
     api,
     ApiError,
+    CurrencyLookup,
     definePage,
     errorText,
     FormErrorHeader,
@@ -72,6 +72,8 @@ function BankAccountCard({
     const portalContainer = useRef<HTMLFormElement>(null);
     const blockedId = useId();
     const localLabel = `${currencies.local} (mata uang lokal)`;
+    const currencyHint =
+        'Pilih mata uang lokal bila rekening ini bukan rekening valuta asing. Pembayaran ke vendor hanya memakai rekening dalam mata uang lokal.';
     usePageDialogRecord({
         recordTitle: account
             ? `${account.code} ${account.name}`
@@ -217,40 +219,31 @@ function BankAccountCard({
                     {text('name', 'Nama', 100)}
                     {text('bank_name', 'Nama bank', 100)}
                     {text('account_number', 'Nomor rekening', 30)}
-                    <FormControl
-                        error={errors.currency_code?.[0]}
-                        hint="Kosongkan untuk rekening dalam mata uang lokal. Pembayaran ke vendor hanya memakai rekening dalam mata uang lokal."
-                        data-error-field="currency_code"
-                    >
-                        {editing ? (
-                            <Select
-                                label="Mata uang"
-                                items={[
-                                    { value: '', label: localLabel },
-                                    ...currencies.foreign.map((code) => ({
-                                        value: code,
-                                        label: code,
-                                    })),
-                                ]}
-                                value={form.currency_code}
-                                onValueChange={(value) =>
-                                    setForm({
-                                        ...form,
-                                        currency_code: value ?? '',
-                                    })
-                                }
-                                searchPlaceholder="Cari mata uang"
-                                emptyMessage="Pilihan tidak ditemukan."
-                                portalContainer={portalContainer}
-                            />
-                        ) : (
+                    {editing ? (
+                        <CurrencyLookup
+                            local={currencies.local}
+                            foreign={currencies.foreign}
+                            value={form.currency_code}
+                            onChange={(currency_code) =>
+                                setForm({ ...form, currency_code })
+                            }
+                            error={errors.currency_code?.[0]}
+                            hint={currencyHint}
+                            portalContainer={portalContainer}
+                        />
+                    ) : (
+                        <FormControl
+                            error={errors.currency_code?.[0]}
+                            hint={currencyHint}
+                            data-error-field="currency_code"
+                        >
                             <Input
                                 label="Mata uang"
                                 value={form.currency_code || localLabel}
                                 readOnly
                             />
-                        )}
-                    </FormControl>
+                        </FormControl>
+                    )}
                     <FormControl hint="Rekening yang diblokir tidak bisa dipilih atau diposting di pembayaran. Pembayaran yang sudah memakainya tetap tersimpan.">
                         <Field orientation="horizontal" className="w-auto">
                             <Switch

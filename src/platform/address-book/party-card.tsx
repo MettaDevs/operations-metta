@@ -27,12 +27,14 @@ import { toast } from 'sonner';
 import {
     api,
     ApiError,
+    CountryLookup,
     draftPayload,
     emptyPartyDraft,
     errorText,
     FormErrorHeader,
     PartyAddressesSection,
     PartyContactsSection,
+    ReferenceValueLookup,
     type ApiBody,
     type PartyDraft,
 } from '../shell/index.ts';
@@ -75,10 +77,6 @@ type PartyForm = {
     language: string;
     memo: string;
 };
-
-// Pilihan kosong pada rujukan opsional. Select SDK menganggap nilai kosong sebagai belum memilih, jadi pilihan ini butuh
-// nilai sendiri.
-const UNSET = 'unset';
 
 function formOf(party: Party | null): PartyForm {
     const text = (value: string | null | undefined) => value ?? '';
@@ -472,24 +470,11 @@ function PartyCardBody({
     ) => (
         <FormControl key={field} error={error(field)} data-error-field={field}>
             {editing ? (
-                <Select
+                <ReferenceValueLookup
                     label={label}
-                    items={[
-                        { value: UNSET, label: 'Belum diisi' },
-                        ...references(category).map((value) => ({
-                            value: value.code,
-                            label: value.name,
-                        })),
-                    ]}
-                    value={form[field] || UNSET}
-                    onValueChange={(value) =>
-                        set(
-                            field,
-                            value === null || value === UNSET ? '' : value,
-                        )
-                    }
-                    searchPlaceholder={`Cari ${label.toLocaleLowerCase()}`}
-                    emptyMessage="Pilihan tidak ditemukan."
+                    items={references(category)}
+                    value={form[field]}
+                    onChange={(code) => set(field, code)}
                     portalContainer={portalContainer}
                 />
             ) : (
@@ -743,26 +728,19 @@ function PartyCardBody({
                                         )}
                                     >
                                         {editing ? (
-                                            <Select
+                                            <CountryLookup
                                                 label="Warga negara"
                                                 portalContainer={
                                                     portalContainer
                                                 }
-                                                items={metadata.countries.map(
-                                                    (country) => ({
-                                                        value: country.code,
-                                                        label: country.name,
-                                                    }),
-                                                )}
+                                                items={metadata.countries}
                                                 value={
-                                                    form.nationality_country_code ||
-                                                    null
+                                                    form.nationality_country_code
                                                 }
-                                                searchPlaceholder="Cari negara"
-                                                onValueChange={(value) =>
+                                                onChange={(code) =>
                                                     set(
                                                         'nationality_country_code',
-                                                        value ?? '',
+                                                        code,
                                                     )
                                                 }
                                             />

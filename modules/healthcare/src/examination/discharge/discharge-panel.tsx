@@ -21,10 +21,10 @@ import {
 } from '@operations-metta/ui/dialog';
 import { FieldLegend, FieldSet } from '@operations-metta/ui/field';
 import { FormControl } from '@operations-metta/ui/form-control';
+import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import { Label } from '@operations-metta/ui/label';
 import { RadioGroup, RadioGroupItem } from '@operations-metta/ui/radio-group';
-import { Select } from '@operations-metta/ui/select';
 import { Textarea } from '@operations-metta/ui/textarea';
 import { useQuery } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
@@ -51,6 +51,10 @@ export type ReferralRequest = {
     note: string | null;
 };
 
+type ReferralSchedule = ReferralInput[number]['schedules'][number];
+
+const scheduleLabel = (row: ReferralSchedule) =>
+    `${row.practitioner_name} · ${row.session_name} ${row.start_time}–${row.end_time}${row.full ? ' (penuh)' : ''}`;
 const textOf = (value: string | null) => value ?? '';
 const valueOf = (value: string) => (value.trim() === '' ? null : value);
 
@@ -81,6 +85,9 @@ function ReferralDialog({
     const [busy, setBusy] = useState(false);
     const sections: ReferralInput = options.data ?? [];
     const section = sections.find((row) => row.id === request.section_id);
+    const schedule = section?.schedules.find(
+        (row) => row.id === request.practice_schedule_id,
+    );
     const submit = async () => {
         setBusy(true);
         try {
@@ -105,7 +112,18 @@ function ReferralDialog({
                 if (!open && !busy) onClose();
             }}
         >
-            <DialogContent size="compact" ref={contentRef}>
+            <DialogContent
+                size="compact"
+                ref={contentRef}
+                onEscapeKeyDown={(event) => {
+                    if (
+                        contentRef.current?.querySelector(
+                            '[role="combobox"][aria-expanded="true"]',
+                        )
+                    )
+                        event.preventDefault();
+                }}
+            >
                 <form
                     noValidate
                     className="contents"
@@ -136,27 +154,45 @@ function ReferralDialog({
                             </p>
                         )}
                         <FormControl error={errors.section_id?.join(' ')}>
-                            <Select
+                            <InlineLookup
                                 label="Poli / Ruangan"
                                 required
-                                items={sections.map((row) => ({
-                                    value: row.id,
-                                    label: row.name,
-                                }))}
-                                value={request.section_id}
-                                onValueChange={(value) =>
+                                items={sections}
+                                value={section ?? null}
+                                displayValue={section?.name ?? ''}
+                                onValueChange={(row) =>
                                     setRequest({
                                         ...request,
-                                        section_id: value,
+                                        section_id: row.id,
                                         practice_schedule_id: null,
                                     })
                                 }
+                                getItemValue={(row) => row.id}
+                                getItemLabel={(row) => row.name}
+                                placeholder="Cari poli…"
                                 emptyMessage={
                                     options.isPending
                                         ? 'Memuat poli…'
                                         : 'Tidak ada poli lain di unit ini.'
                                 }
                                 portalContainer={contentRef}
+                                columns={[
+                                    {
+                                        id: 'name',
+                                        header: 'Poli',
+                                        width: 240,
+                                        cell: (row) => row.name,
+                                        sortValue: (row) => row.name,
+                                    },
+                                    {
+                                        id: 'schedules',
+                                        header: 'Jumlah jadwal',
+                                        width: 120,
+                                        cell: (row) => row.schedules.length,
+                                        sortValue: (row) =>
+                                            row.schedules.length,
+                                    },
+                                ]}
                             />
                         </FormControl>
                         {section && !section.schedules.length && (
@@ -169,21 +205,52 @@ function ReferralDialog({
                             <FormControl
                                 error={errors.practice_schedule_id?.join(' ')}
                             >
-                                <Select
+                                <InlineLookup
+                                    key={section.id}
                                     label="Dokter / Tenaga Medis"
                                     required
-                                    items={section.schedules.map((row) => ({
-                                        value: row.id,
-                                        label: `${row.practitioner_name} · ${row.session_name} ${row.start_time}–${row.end_time}${row.full ? ' (penuh)' : ''}`,
-                                    }))}
-                                    value={request.practice_schedule_id}
-                                    onValueChange={(value) =>
+                                    items={section.schedules}
+                                    value={schedule ?? null}
+                                    displayValue={
+                                        schedule ? scheduleLabel(schedule) : ''
+                                    }
+                                    onValueChange={(row) =>
                                         setRequest({
                                             ...request,
-                                            practice_schedule_id: value,
+                                            practice_schedule_id: row.id,
                                         })
                                     }
+                                    getItemValue={(row) => row.id}
+                                    getItemLabel={scheduleLabel}
+                                    placeholder="Cari dokter…"
+                                    emptyMessage="Dokter tidak ditemukan."
                                     portalContainer={contentRef}
+                                    columns={[
+                                        {
+                                            id: 'practitioner_name',
+                                            header: 'Dokter',
+                                            width: 200,
+                                            cell: (row) =>
+                                                row.practitioner_name,
+                                            sortValue: (row) =>
+                                                row.practitioner_name,
+                                        },
+                                        {
+                                            id: 'session_name',
+                                            header: 'Sesi',
+                                            width: 160,
+                                            cell: (row) =>
+                                                `${row.session_name} ${row.start_time}–${row.end_time}`,
+                                            sortValue: (row) => row.start_time,
+                                        },
+                                        {
+                                            id: 'full',
+                                            header: 'Kuota',
+                                            width: 90,
+                                            cell: (row) =>
+                                                row.full ? 'Penuh' : 'Tersedia',
+                                        },
+                                    ]}
                                 />
                             </FormControl>
                         )}
@@ -274,6 +341,8 @@ export function DischargePanel({
     const conditions = metadata.discharge_conditions.filter(
         (row) => row.active || row.id === discharge.condition_id,
     );
+    const condition =
+        conditions.find((row) => row.id === discharge.condition_id) ?? null;
     const deathTimes = metadata.options.waktu_meninggal ?? [];
     const deathAt = discharge.death_date
         ? `${discharge.death_date}T${discharge.death_time ?? ''}`
@@ -341,27 +410,33 @@ export function DischargePanel({
                         <Input
                             label="Keadaan pulang"
                             disabled
-                            value={
-                                conditions.find(
-                                    (row) => row.id === discharge.condition_id,
-                                )?.name ?? ''
-                            }
+                            value={condition?.name ?? ''}
                         />
                     ) : (
-                        <Select
+                        <InlineLookup
                             label="Keadaan pulang"
-                            items={conditions.map((row) => ({
-                                value: row.id,
-                                label: row.name,
-                            }))}
-                            value={discharge.condition_id}
-                            onValueChange={(value) =>
+                            items={conditions}
+                            value={condition}
+                            displayValue={condition?.name ?? ''}
+                            onValueChange={(row) =>
                                 setDischarge({
                                     ...discharge,
-                                    condition_id: value,
+                                    condition_id: row.id,
                                 })
                             }
+                            getItemValue={(row) => row.id}
+                            getItemLabel={(row) => row.name}
+                            placeholder="Cari keadaan pulang…"
                             emptyMessage="Belum ada pilihan keadaan pulang. Tambahkan di Setup → Klinis → Keadaan pulang."
+                            columns={[
+                                {
+                                    id: 'name',
+                                    header: 'Keadaan pulang',
+                                    width: 240,
+                                    cell: (row) => row.name,
+                                    sortValue: (row) => row.name,
+                                },
+                            ]}
                         />
                     )}
                 </FormControl>
