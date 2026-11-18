@@ -206,7 +206,7 @@ function VendorLedgerPage(): ReactNode {
                                 }),
                             label: 'Cari utang',
                             placeholder:
-                                'Cari vendor, nomor faktur, atau nomor faktur vendor...',
+                                'Cari vendor, nomor dokumen, atau nomor dokumen vendor...',
                         }}
                     >
                         <Field orientation="horizontal" className="w-auto">
@@ -323,12 +323,12 @@ function VendorLedgerPage(): ReactNode {
                             sortValue: (row) => row.vendor.name,
                         },
                         {
-                            id: 'vendor_invoice_number',
-                            header: 'No. faktur vendor',
+                            id: 'vendor_document_number',
+                            header: 'No. dokumen vendor',
                             width: 160,
                             cell: (row) => (
                                 <DataTableText>
-                                    {row.vendor_invoice_number ?? ''}
+                                    {row.vendor_document_number ?? ''}
                                 </DataTableText>
                             ),
                         },

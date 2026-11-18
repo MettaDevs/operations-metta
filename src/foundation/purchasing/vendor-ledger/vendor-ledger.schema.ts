@@ -16,7 +16,7 @@ export const vendorLedgerEntrySchema = z.object({
     payment_id: z.string().nullable(),
     credit_memo_id: z.string().nullable(),
     document_number: z.string(),
-    vendor_invoice_number: z.string().nullable(),
+    vendor_document_number: z.string().nullable(),
     posting_date: z.string(),
     due_date: z.string(),
     amount: z.string(),

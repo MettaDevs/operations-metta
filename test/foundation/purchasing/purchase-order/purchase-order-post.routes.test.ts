@@ -180,7 +180,7 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
             { amount: string; open: string; vendor_no: string }[]
         >(
             `select trim_scale(jumlah)::text as amount, trim_scale(sisa)::text as open,
-                    no_faktur_vendor as vendor_no
+                    no_dokumen_vendor as vendor_no
              from ap_tr_entri_utang where faktur_id = $1 and jenis = 'faktur'`,
             [invoiceId],
         );
@@ -258,13 +258,13 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
             { amount: owed, open: owed, vendor_no: 'FV-2026-001' },
         ]);
         const vendorLedger = await json<{
-            data: { document_number: string; vendor_invoice_number: string }[];
+            data: { document_number: string; vendor_document_number: string }[];
         }>(await business.admin.get('/api/v1/purchasing/vendor-ledger'), 200);
         expect(
             vendorLedger.data.some(
                 (entry) =>
                     entry.document_number === invoice.number &&
-                    entry.vendor_invoice_number === 'FV-2026-001',
+                    entry.vendor_document_number === 'FV-2026-001',
             ),
         ).toBe(true);
     });

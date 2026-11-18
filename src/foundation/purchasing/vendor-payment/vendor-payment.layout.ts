@@ -25,8 +25,8 @@ function a4(): Uint8Array {
         columns: [
             { header: 'Faktur', value: '{document_number}', width: 18 },
             {
-                header: 'No. faktur vendor',
-                value: '{vendor_invoice_number}',
+                header: 'No. dokumen vendor',
+                value: '{vendor_document_number}',
                 width: 24,
             },
             { header: 'Jatuh tempo', value: '{due_date}', width: 16 },

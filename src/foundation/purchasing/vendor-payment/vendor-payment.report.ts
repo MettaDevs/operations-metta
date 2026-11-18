@@ -26,7 +26,7 @@ export const vendorPaymentFields = {
     paid_by: field.text('Petugas (pengguna yang memposting pembayaran)'),
     lines: field.lines('Faktur yang dibayar', {
         document_number: field.text('Nomor faktur'),
-        vendor_invoice_number: field.text('Nomor faktur vendor'),
+        vendor_document_number: field.text('Nomor dokumen vendor'),
         due_date: field.date('Jatuh tempo'),
         invoice_amount: field.money('Nilai faktur'),
         amount: field.money('Dibayar'),
@@ -49,7 +49,7 @@ const paymentSchema = z.object({
     lines: z.array(
         z.object({
             document_number: z.string(),
-            vendor_invoice_number: z.string(),
+            vendor_document_number: z.string(),
             due_date: z.string(),
             invoice_amount: z.string(),
             amount: z.string(),
@@ -81,7 +81,7 @@ async function vendorPayment(
          left join users poster on poster.id = h.diposting_oleh_user_id
          left join lateral (
              select json_agg(json_build_object(
-                        'document_number', e.nomor_dokumen, 'vendor_invoice_number', e.no_faktur_vendor,
+                        'document_number', e.nomor_dokumen, 'vendor_document_number', e.no_dokumen_vendor,
                         'due_date', e.jatuh_tempo::text, 'invoice_amount', trim_scale(e.jumlah)::text,
                         'amount', trim_scale(d.jumlah)::text) order by d.urutan) as lines,
                     sum(d.jumlah) as total
@@ -115,7 +115,7 @@ const sample: Values<typeof vendorPaymentFields> = {
     lines: [
         {
             document_number: 'PI-00000001',
-            vendor_invoice_number: 'FKT-7781',
+            vendor_document_number: 'FKT-7781',
             due_date: '2026-12-10',
             invoice_amount: '43013',
             amount: '43013',

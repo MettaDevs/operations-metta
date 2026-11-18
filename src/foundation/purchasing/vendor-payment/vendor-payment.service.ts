@@ -89,7 +89,7 @@ const paymentMethodSql = `select id, kode as code, nama as name, perilaku = 'tun
 const openEntriesSql = `
     select e.id as entry_id, e.vendor_id, e.jenis as kind, e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
            e.nomor_dokumen as document_number,
-           e.no_faktur_vendor as vendor_invoice_number, e.tanggal::text as posting_date,
+           e.no_dokumen_vendor as vendor_document_number, e.tanggal::text as posting_date,
            e.jatuh_tempo::text as due_date, trim_scale(e.jumlah)::text as amount,
            trim_scale(e.sisa)::text as remaining,
            coalesce((select trim_scale(sum(d.jumlah)) from ap_tr_pembayaran_detail d
@@ -227,7 +227,7 @@ export class VendorPayments {
             vendorPaymentLineRowSchema,
             `select d.id, d.urutan as line_no, d.entri_utang_id as entry_id, e.jenis as kind,
                     e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
-                    e.nomor_dokumen as document_number, e.no_faktur_vendor as vendor_invoice_number,
+                    e.nomor_dokumen as document_number, e.no_dokumen_vendor as vendor_document_number,
                     e.tanggal::text as entry_posting_date, e.jatuh_tempo::text as due_date,
                     trim_scale(e.jumlah)::text as entry_amount, trim_scale(e.sisa)::text as remaining,
                     trim_scale(d.jumlah)::text as amount

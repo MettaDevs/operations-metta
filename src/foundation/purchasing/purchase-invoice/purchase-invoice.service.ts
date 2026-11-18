@@ -955,7 +955,7 @@ export class PurchaseInvoices {
                 jenis: 'faktur',
                 tanggal: claimed.posting_date,
                 nomor_dokumen: claimed.number,
-                no_faktur_vendor: claimed.vendor_invoice_number,
+                no_dokumen_vendor: claimed.vendor_invoice_number,
                 jatuh_tempo: claimed.due_date,
                 jumlah: total,
                 sisa: total,
@@ -1022,7 +1022,7 @@ export class PurchaseInvoices {
                 jenis: 'pembatalan',
                 tanggal: claimed.posting_date,
                 nomor_dokumen: claimed.number,
-                no_faktur_vendor: claimed.vendor_invoice_number,
+                no_dokumen_vendor: claimed.vendor_invoice_number,
                 jatuh_tempo: claimed.due_date,
                 jumlah: toNumeric(
                     -fromNumeric(entry.amount, quantityScale),
