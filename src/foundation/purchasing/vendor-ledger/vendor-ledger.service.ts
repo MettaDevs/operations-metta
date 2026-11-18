@@ -11,7 +11,7 @@ const rowSql = `select * from (
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            e.vendor_id, p.name as vendor_name, e.faktur_id as invoice_id,
                            e.pembayaran_id as payment_id, e.nota_kredit_id as credit_memo_id,
-                           e.nomor_dokumen as document_number, e.no_faktur_vendor as vendor_invoice_number,
+                           e.nomor_dokumen as document_number, e.no_dokumen_vendor as vendor_document_number,
                            e.tanggal::text as posting_date, e.jatuh_tempo::text as due_date,
                            trim_scale(e.jumlah)::text as amount, trim_scale(e.sisa)::text as remaining,
                            coalesce(paid.payments, '[]'::json) as payments,
@@ -63,7 +63,7 @@ export class VendorLedger {
             searchColumns: [
                 'vendor_name',
                 'document_number',
-                'vendor_invoice_number',
+                'vendor_document_number',
             ],
             numericColumns: [],
             defaultSort: 'due_date',

@@ -102,7 +102,7 @@ const rowSql = `select * from (
                            h.tanggal_nota::text as document_date, h.tanggal::text as posting_date,
                            case when a.id is null then null else json_build_object(
                                'id', a.id, 'document_number', a.nomor_dokumen,
-                               'vendor_invoice_number', a.no_faktur_vendor, 'invoice_id', a.faktur_id) end
+                               'vendor_invoice_number', a.no_dokumen_vendor, 'invoice_id', a.faktur_id) end
                                as applies_to,
                            h.keterangan as description,
                            ${pricedLinesSql('ap_tr_nota_kredit_detail', 'nota_kredit_id', 'h')} as priced_lines,
@@ -182,7 +182,7 @@ const invoiceLinesSql = `
 
 const openInvoiceEntriesSql = `
     select e.id as entry_id, e.faktur_id as invoice_id, e.nomor_dokumen as document_number,
-           e.no_faktur_vendor as vendor_invoice_number, e.jatuh_tempo::text as due_date,
+           e.no_dokumen_vendor as vendor_invoice_number, e.jatuh_tempo::text as due_date,
            trim_scale(e.sisa)::text as remaining, e.tanggal::text as posting_date
     from ap_tr_entri_utang e
     where e.tenant_id = $1 and e.legal_entity_id = $2 and e.vendor_id = $3 and e.jenis = 'faktur' and e.sisa > 0`;
@@ -997,7 +997,7 @@ export class PurchaseCreditMemos {
                 jenis: 'nota_kredit',
                 tanggal: claimed.posting_date,
                 nomor_dokumen: claimed.number,
-                no_faktur_vendor: claimed.vendor_credit_memo_number,
+                no_dokumen_vendor: claimed.vendor_credit_memo_number,
                 jatuh_tempo: claimed.document_date,
                 jumlah: toNumeric(-credit, quantityScale),
                 sisa: toNumeric(remaining, quantityScale),
@@ -1122,7 +1122,7 @@ export class PurchaseCreditMemos {
                 jenis: 'pembatalan_nota_kredit',
                 tanggal: claimed.posting_date,
                 nomor_dokumen: claimed.number,
-                no_faktur_vendor: claimed.vendor_credit_memo_number,
+                no_dokumen_vendor: claimed.vendor_credit_memo_number,
                 jatuh_tempo: claimed.document_date,
                 jumlah: toNumeric(-scaled(entry.amount), quantityScale),
                 sisa: 0,

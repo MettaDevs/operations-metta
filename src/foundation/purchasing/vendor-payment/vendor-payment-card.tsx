@@ -55,7 +55,7 @@ type Line = {
     id: string | null;
     entry_id: string;
     document_number: string;
-    vendor_invoice_number: string;
+    vendor_document_number: string;
     due_date: string;
     entry_amount: string;
     remaining: string;
@@ -96,7 +96,7 @@ function linesOf(payment: VendorPayment | null): Line[] {
         id: line.id,
         entry_id: line.entry_id,
         document_number: line.document_number,
-        vendor_invoice_number: line.vendor_invoice_number,
+        vendor_document_number: line.vendor_document_number,
         due_date: line.due_date,
         entry_amount: line.entry_amount,
         remaining: line.remaining,
@@ -190,7 +190,7 @@ export function VendorPaymentCard({
                         !needle ||
                         [
                             entry.document_number,
-                            entry.vendor_invoice_number,
+                            entry.vendor_document_number,
                         ].some((value) => value.toLowerCase().includes(needle)),
                 ),
                 nextCursor: null,
@@ -376,7 +376,7 @@ export function VendorPaymentCard({
                     id: null,
                     entry_id: entry.entry_id,
                     document_number: entry.document_number,
-                    vendor_invoice_number: entry.vendor_invoice_number,
+                    vendor_document_number: entry.vendor_document_number,
                     due_date: entry.due_date,
                     entry_amount: entry.amount,
                     remaining: entry.open,
@@ -791,11 +791,11 @@ export function VendorPaymentCard({
                                 ),
                             },
                             {
-                                id: 'vendor_invoice_number',
+                                id: 'vendor_document_number',
                                 header: 'No. dokumen vendor',
                                 minWidth: 150,
                                 cell: ({ line }) =>
-                                    text(line.vendor_invoice_number),
+                                    text(line.vendor_document_number),
                             },
                             {
                                 id: 'due_date',
@@ -886,10 +886,10 @@ export function VendorPaymentCard({
                             cell: (entry) => entry.document_number,
                         },
                         {
-                            id: 'vendor_invoice_number',
+                            id: 'vendor_document_number',
                             header: 'No. dokumen vendor',
                             width: 150,
-                            cell: (entry) => entry.vendor_invoice_number,
+                            cell: (entry) => entry.vendor_document_number,
                         },
                         {
                             id: 'due_date',
