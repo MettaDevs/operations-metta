@@ -5,7 +5,6 @@ import type { DataTableColumn } from '@operations-metta/ui/data-table';
 import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { api, type ApiBody } from '../../platform/shell/index.ts';
-import { Decimal } from '../../platform/money/index.ts';
 
 type Item = ApiBody<'inventoryItemList'>['data'][number];
 type ItemUnit = ApiBody<'inventoryItemUnitList'>['data'][number];
@@ -18,55 +17,12 @@ export type ItemChoice = Reference & {
     batch_required: boolean;
     expiry_required: boolean;
 };
-export type PricedLine = {
-    quantity: string;
-    unit_cost: string;
-    discount_percent: string;
-    vat_percent: string;
-};
 
 export const label = (entry: { code: string; name: string }) =>
     `${entry.code} - ${entry.name}`;
 export const today = () => new Date().toLocaleDateString('sv-SE');
 let keys = 0;
 export const nextKey = () => `baris-${++keys}`;
-
-const hundred = Decimal.of('100');
-const hundredth = Decimal.of('0.01');
-export const decimalOf = (text: string) => {
-    try {
-        return Decimal.of(text.trim() || '0');
-    } catch {
-        return null;
-    }
-};
-
-export function amountOf(line: PricedLine): Decimal {
-    const quantity = decimalOf(line.quantity);
-    const cost = decimalOf(line.unit_cost);
-    const discount = decimalOf(line.discount_percent);
-    return quantity && cost && discount
-        ? quantity
-              .multipliedBy(cost)
-              .multipliedBy(hundred.minus(discount))
-              .multipliedBy(hundredth)
-        : Decimal.of('0');
-}
-
-export function totalsOf(lines: PricedLine[], decimals: number) {
-    let subtotal = Decimal.of('0');
-    let vat = Decimal.of('0');
-    for (const line of lines) {
-        const amount = amountOf(line).rounded(decimals);
-        subtotal = subtotal.plus(amount);
-        const percent = decimalOf(line.vat_percent);
-        if (percent)
-            vat = vat.plus(
-                amount.multipliedBy(percent).multipliedBy(hundredth),
-            );
-    }
-    return { subtotal, vat: vat.rounded(decimals) };
-}
 
 export function useLoader<T>(
     fetch: (

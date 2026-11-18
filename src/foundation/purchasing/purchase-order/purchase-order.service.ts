@@ -28,12 +28,16 @@ import {
     Currency,
     localCurrencyCode,
     unitAmountDecimals,
+    type AmountDecimals,
 } from '../../currency/index.ts';
 import { Decimal } from '../../../platform/money/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
 import {
     checkPriceLine,
-    lineAmountSql,
+    pricedLinesSchema,
+    pricedLinesSql,
+    withAmount,
+    withTotals,
     type PriceLine,
 } from '../purchase-line.service.ts';
 import {
@@ -60,7 +64,12 @@ type LineDraft = PriceLine & {
     expectedReceiptDate: string | null;
 };
 
-const rowSql = (amountDecimals: number) => `select * from (
+const storedRowSchema = purchaseOrderRowSchema
+    .omit({ amount: true, vat_amount: true })
+    .extend({ priced_lines: pricedLinesSchema });
+const storedLineSchema = purchaseOrderLineRowSchema.omit({ amount: true });
+
+const rowSql = `select * from (
                     select h.id, h.nomor as number, h.tanggal::text as order_date,
                            h.tanggal_diharapkan::text as expected_receipt_date, h.status, h.version,
                            h.keterangan as description, h.lokasi_id as location_id,
@@ -68,20 +77,13 @@ const rowSql = (amountDecimals: number) => `select * from (
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            ${paymentTermsJson('pt')} as payment_terms,
-                           coalesce(trim_scale(t.amount)::text, '0') as amount,
-                           coalesce(trim_scale(round(t.vat, ${amountDecimals}))::text, '0') as vat_amount,
+                           ${pricedLinesSql('bl_tr_order_detail', 'order_id', 'h')} as priced_lines,
                            ${isoSql('h.dirilis_pada')} as released_at
                     from bl_tr_order h
                     left join termin_pembayaran pt on pt.tenant_id = h.tenant_id and pt.id = h.termin_pembayaran_id
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     join gd_m_lokasi l on l.tenant_id = h.tenant_id and l.id = h.lokasi_id
-                    left join lateral (
-                        select sum(line.amount) as amount, sum(line.amount * line.tarif_ppn / 100) as vat
-                        from (select ${lineAmountSql('d', amountDecimals)} as amount, d.tarif_ppn
-                              from bl_tr_order_detail d
-                              where d.tenant_id = h.tenant_id and d.order_id = h.id
-                                and d.deleted_at is null) line) t on true
                     where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null) orders
                 where true`;
 
@@ -120,7 +122,7 @@ export class PurchaseOrders {
         );
     }
 
-    private async amountDecimals(): Promise<number> {
+    private async amountDecimals(): Promise<AmountDecimals> {
         return (await this.precision()).amount_decimals;
     }
 
@@ -136,8 +138,9 @@ export class PurchaseOrders {
         let filter = ` and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`;
         if (status.success)
             filter += ` and status = $${bindings.push(status.data)}`;
+        const decimals = await this.amountDecimals();
         const batch = await incrementalList(this.db, {
-            query: `${rowSql(await this.amountDecimals())}${filter}`,
+            query: `${rowSql}${filter}`,
             bindings,
             parameters,
             columns: {
@@ -154,10 +157,12 @@ export class PurchaseOrders {
             defaultDirection: 'desc',
         });
         return {
-            data: batch.data.map((row) => purchaseOrderRowSchema.parse(row)),
+            data: batch.data.map((row) =>
+                withTotals(storedRowSchema.parse(row), decimals),
+            ),
             next_cursor: batch.next_cursor,
             permissions: this.permissions(),
-            amount_decimals: await this.amountDecimals(),
+            amount_decimals: decimals,
         };
     }
 
@@ -176,19 +181,20 @@ export class PurchaseOrders {
         const bindings = [this.scope.tenantId, this.scope.legalEntityId, id];
         const found = lookupId(id)
             ? await this.db.one(
-                  purchaseOrderRowSchema,
-                  `${rowSql(await this.amountDecimals())} and orders.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
+                  storedRowSchema,
+                  `${rowSql} and orders.id = $3 and ${allowedLocationsSql(this.workspace, bindings, ['location_id'])}`,
                   bindings,
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
-        return found;
+        return withTotals(found, await this.amountDecimals());
     }
 
     private async document(id: string) {
         const header = await this.header(id);
+        const decimals = await this.amountDecimals();
         const lines = await this.db.rows(
-            purchaseOrderLineRowSchema,
+            storedLineSchema,
             `select d.id, d.urutan as line_no,
                     json_build_object('id', b.id, 'code', b.kode, 'name', b.nama, 'base_unit', base.kode) as item,
                     json_build_object('id', u.id, 'code', u.kode, 'name', u.nama) as unit,
@@ -196,7 +202,6 @@ export class PurchaseOrders {
                     trim_scale(d.harga_satuan)::text as unit_cost,
                     trim_scale(d.diskon_persen)::text as discount_percent,
                     trim_scale(d.tarif_ppn)::text as vat_percent,
-                    trim_scale(${lineAmountSql('d', await this.amountDecimals())})::text as amount,
                     d.tanggal_diharapkan::text as expected_receipt_date,
                     trim_scale(d.jumlah_diterima)::text as quantity_received,
                     trim_scale(d.jumlah - d.jumlah_diterima)::text as outstanding_quantity
@@ -208,7 +213,10 @@ export class PurchaseOrders {
              order by d.urutan, d.id`,
             [this.scope.tenantId, header.id],
         );
-        return { ...header, lines };
+        return {
+            ...header,
+            lines: lines.map((line) => withAmount(line, decimals)),
+        };
     }
 
     async show(id: string) {

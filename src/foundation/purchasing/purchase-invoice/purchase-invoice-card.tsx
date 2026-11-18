@@ -37,15 +37,14 @@ import {
     paymentTermsText,
     type PaymentTermsChoice,
 } from '../payment-terms/payment-terms-lookup.tsx';
+import { loadVendors, nextKey, today, useLoader } from '../purchase-lines.tsx';
 import {
-    amountOf,
-    loadVendors,
-    nextKey,
-    today,
-    totalsOf,
-    useLoader,
-} from '../purchase-lines.tsx';
+    documentTotals,
+    lineAmount,
+    lineValue,
+} from '../purchase-line.amounts.ts';
 import type { Vendor } from '../vendor/vendor-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 export type PurchaseInvoice = ApiBody<'purchasingInvoiceShow'>['data'];
 export type PurchaseInvoicePermissions =
@@ -128,12 +127,11 @@ function linesOf(invoice: PurchaseInvoice | null): Line[] {
 }
 
 function differenceOf(line: Line) {
-    return amountOf(line).minus(
-        amountOf({
+    return lineValue(line).minus(
+        lineValue({
             quantity: line.quantity,
             unit_cost: line.receipt_unit_cost,
             discount_percent: line.receipt_discount_percent,
-            vat_percent: '0',
         }),
     );
 }
@@ -150,7 +148,7 @@ export function PurchaseInvoiceCard({
 }: {
     invoice: PurchaseInvoice | null;
     permissions: PurchaseInvoicePermissions;
-    amountDecimals: number;
+    amountDecimals: AmountDecimals;
     portalContainer: RefObject<HTMLElement | null>;
     onSaved: (invoice: PurchaseInvoice) => void;
     onClose: () => void;
@@ -221,7 +219,7 @@ export function PurchaseInvoiceCard({
                 at === index ? { ...line, ...patch } : line,
             ),
         );
-    const { subtotal, vat } = totalsOf(lines, amountDecimals);
+    const { subtotal, vat } = documentTotals(lines, amountDecimals);
 
     const payload = () => ({
         vendor_id: header.vendor?.id ?? '',
@@ -987,7 +985,10 @@ export function PurchaseInvoiceCard({
                                 cell: ({ line }) =>
                                     text(
                                         displayAmount(
-                                            amountOf(line).normalized(),
+                                            lineAmount(
+                                                line,
+                                                amountDecimals,
+                                            ).normalized(),
                                             amountDecimals,
                                         ),
                                     ),

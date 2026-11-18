@@ -5,6 +5,7 @@ export { decimalsHint } from '../../platform/money/index.ts';
 // Batas presisi mata uang, sama dengan constraint currency_precisions: jumlah 0 sampai 4, harga satuan 0 sampai 6
 // angka di belakang koma (Amount dan Unit-Amount Decimal Places BC).
 export const amountDecimalOptions = [0, 1, 2, 3, 4] as const;
+export type AmountDecimals = (typeof amountDecimalOptions)[number];
 
 // Kurs disimpan dengan enam angka di belakang koma (kolom numeric(19,6)), cukup untuk mata uang yang satu satuannya
 // bernilai kurang dari satu rupiah. Sys Admin › Kurs dan kurs yang diubah di pembayaran kasir memakai batas yang sama.

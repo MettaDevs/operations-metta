@@ -24,6 +24,7 @@ import {
     Currency,
     localCurrencyCode,
     unitAmountDecimals,
+    type AmountDecimals,
 } from '../../currency/index.ts';
 import {
     activeLegalEntity,
@@ -45,7 +46,13 @@ import {
     paymentTermsJson,
     paymentTermsOf,
 } from '../payment-terms/payment-terms.service.ts';
-import { lineAmountSql } from '../purchase-line.service.ts';
+import { documentTotals, lineAmount } from '../purchase-line.amounts.ts';
+import {
+    pricedLinesSchema,
+    pricedLinesSql,
+    withAmount,
+    withTotals,
+} from '../purchase-line.service.ts';
 import { refusePaidEntry } from '../vendor-payment/vendor-payment.service.ts';
 import {
     purchaseInvoiceInputSchema,
@@ -86,29 +93,27 @@ type LineDraft = {
     vatPercent: bigint;
 };
 
-// Nilai dokumen: jumlah nilai baris dan PPN-nya, dibulatkan sekali, sama dengan purchase order dan penerimaan.
-const totalsSql = (amountDecimals: number) => `left join lateral (
-                        select sum(line.amount) as amount, sum(line.amount * line.tarif_ppn / 100) as vat
-                        from (select ${lineAmountSql('d', amountDecimals)} as amount, d.tarif_ppn
-                              from ap_tr_faktur_detail d
-                              where d.tenant_id = h.tenant_id and d.faktur_id = h.id
-                                and d.deleted_at is null) line) t on true`;
+const storedRowSchema = purchaseInvoiceRowSchema
+    .omit({ amount: true, vat_amount: true })
+    .extend({ priced_lines: pricedLinesSchema });
+const shownLineSchema = purchaseInvoiceLineRowSchema.omit({
+    amount: true,
+    receipt_amount: true,
+});
 
-const rowSql = (amountDecimals: number) => `select * from (
+const rowSql = `select * from (
                     select h.id, h.nomor as number, h.status, h.version,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            p.name as vendor_name, h.no_faktur_vendor as vendor_invoice_number,
                            h.tanggal_faktur::text as document_date, h.tanggal::text as posting_date,
                            h.jatuh_tempo::text as due_date, ${paymentTermsJson('pt')} as payment_terms,
                            h.keterangan as description,
-                           coalesce(trim_scale(t.amount)::text, '0') as amount,
-                           coalesce(trim_scale(round(t.vat, ${amountDecimals}))::text, '0') as vat_amount,
+                           ${pricedLinesSql('ap_tr_faktur_detail', 'faktur_id', 'h')} as priced_lines,
                            ${isoSql('h.diposting_pada')} as posted_at, ${isoSql('h.dibatalkan_pada')} as reversed_at
                     from ap_tr_faktur h
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
                     join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
                     left join termin_pembayaran pt on pt.tenant_id = h.tenant_id and pt.id = h.termin_pembayaran_id
-                    ${totalsSql(amountDecimals)}
                     where h.tenant_id = $1 and h.legal_entity_id = $2 and h.deleted_at is null) invoices
                 where true`;
 
@@ -192,7 +197,7 @@ export class PurchaseInvoices {
         );
     }
 
-    private async amountDecimals(): Promise<number> {
+    private async amountDecimals(): Promise<AmountDecimals> {
         return (await this.precision()).amount_decimals;
     }
 
@@ -220,7 +225,7 @@ export class PurchaseInvoices {
             : '';
         const amountDecimals = await this.amountDecimals();
         const batch = await incrementalList(this.db, {
-            query: `${rowSql(amountDecimals)}${filter}`,
+            query: `${rowSql}${filter}`,
             bindings,
             parameters,
             columns: {
@@ -236,7 +241,9 @@ export class PurchaseInvoices {
             defaultDirection: 'desc',
         });
         return {
-            data: batch.data.map((row) => purchaseInvoiceRowSchema.parse(row)),
+            data: batch.data.map((row) =>
+                withTotals(storedRowSchema.parse(row), amountDecimals),
+            ),
             next_cursor: batch.next_cursor,
             permissions: this.permissions(),
             amount_decimals: amountDecimals,
@@ -246,20 +253,20 @@ export class PurchaseInvoices {
     private async header(id: string) {
         const found = lookupId(id)
             ? await this.db.one(
-                  purchaseInvoiceRowSchema,
-                  `${rowSql(await this.amountDecimals())} and invoices.id = $3`,
+                  storedRowSchema,
+                  `${rowSql} and invoices.id = $3`,
                   [this.scope.tenantId, this.scope.legalEntityId, id],
               )
             : undefined;
         if (!found) abort(404, 'Not Found');
-        return found;
+        return withTotals(found, await this.amountDecimals());
     }
 
     private async document(id: string) {
         const header = await this.header(id);
         const decimals = await this.amountDecimals();
         const lines = await this.db.rows(
-            purchaseInvoiceLineRowSchema,
+            shownLineSchema,
             `select f.id, f.urutan as line_no, f.jenis as kind, f.keterangan as description,
                     f.penerimaan_detail_id as receipt_line_id,
                     case when r.id is null then null
@@ -271,12 +278,9 @@ export class PurchaseInvoices {
                     trim_scale(f.jumlah)::text as quantity, trim_scale(f.harga_satuan)::text as unit_cost,
                     trim_scale(f.diskon_persen)::text as discount_percent,
                     trim_scale(f.tarif_ppn)::text as vat_percent,
-                    trim_scale(${lineAmountSql('f', decimals)})::text as amount,
                     trim_scale(d.harga_satuan)::text as receipt_unit_cost,
                     trim_scale(d.diskon_persen)::text as receipt_discount_percent,
                     trim_scale(d.tarif_ppn)::text as receipt_vat_percent,
-                    trim_scale(round(f.jumlah * d.harga_satuan * (100 - d.diskon_persen) / 100, ${decimals}))::text
-                        as receipt_amount,
                     trim_scale(d.jumlah)::text as received, trim_scale(d.jumlah_difaktur)::text as invoiced
              from ap_tr_faktur_detail f
              left join bl_tr_penerimaan_detail d on d.tenant_id = f.tenant_id and d.id = f.penerimaan_detail_id
@@ -287,7 +291,24 @@ export class PurchaseInvoices {
              order by f.urutan, f.id`,
             [this.scope.tenantId, header.id],
         );
-        return { ...header, lines };
+        return {
+            ...header,
+            lines: lines.map((line) => ({
+                ...withAmount(line, decimals),
+                receipt_amount:
+                    line.receipt_unit_cost === null
+                        ? null
+                        : lineAmount(
+                              {
+                                  quantity: line.quantity,
+                                  unit_cost: line.receipt_unit_cost,
+                                  discount_percent:
+                                      line.receipt_discount_percent ?? '0',
+                              },
+                              decimals,
+                          ).normalized(),
+            })),
+        };
     }
 
     async show(id: string) {
@@ -812,22 +833,23 @@ export class PurchaseInvoices {
     }
 
     private async total(invoiceId: string): Promise<string> {
-        const decimals = await this.amountDecimals();
-        const found = await this.db.one(
-            z.object({ lines: z.number(), total: z.string() }),
-            `select count(*)::int as lines,
-                    (coalesce(sum(t.amount), 0) + round(coalesce(sum(t.amount * t.tarif_ppn / 100), 0), ${decimals}))::text
-                        as total
-             from (select ${lineAmountSql('d', decimals)} as amount, d.tarif_ppn
-                   from ap_tr_faktur_detail d
-                   where d.tenant_id = $1 and d.faktur_id = $2 and d.deleted_at is null) t`,
+        const lines = await this.db.rows(
+            pricedLinesSchema.element,
+            `select jumlah::text as quantity, harga_satuan::text as unit_cost,
+                    diskon_persen::text as discount_percent, tarif_ppn::text as vat_percent
+             from ap_tr_faktur_detail
+             where tenant_id = $1 and faktur_id = $2 and deleted_at is null`,
             [this.scope.tenantId, invoiceId],
         );
-        if (!found?.lines)
+        if (!lines.length)
             validation({
                 lines: 'Tambahkan sedikitnya satu baris sebelum posting.',
             });
-        return found.total;
+        const { subtotal, vat } = documentTotals(
+            lines,
+            await this.amountDecimals(),
+        );
+        return subtotal.plus(vat).normalized();
     }
 
     // Seperti Purch.-Post untuk faktur: vendor harus aktif, setiap baris barang masih punya sisa belum difakturkan di

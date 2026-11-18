@@ -32,13 +32,8 @@ import {
     type ApiBody,
     type ErrorAction,
 } from '../../../platform/shell/index.ts';
-import {
-    decimalOf,
-    loadVendors,
-    nextKey,
-    today,
-    useLoader,
-} from '../purchase-lines.tsx';
+import { loadVendors, nextKey, today, useLoader } from '../purchase-lines.tsx';
+import { decimalOf } from '../purchase-line.amounts.ts';
 import type { Vendor } from '../vendor/vendor-card.tsx';
 
 export type VendorPayment = ApiBody<'purchasingVendorPaymentShow'>['data'];

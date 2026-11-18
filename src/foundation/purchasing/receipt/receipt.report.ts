@@ -13,7 +13,7 @@ import {
 } from '../../../platform/reporting/index.ts';
 import { Currency, localCurrencyCode } from '../../currency/index.ts';
 import { receiptLayouts } from './receipt.layout.ts';
-import { lineAmountSql } from '../purchase-line.service.ts';
+import { pricedDocument } from '../purchase-line.service.ts';
 
 // Penerimaan barang dari vendor, padanan Purchase - Receipt Business Central dengan harga seperti form penerimaan
 // puskesmas: vendor dan nomor dokumennya, lokasi, batch dan kedaluwarsa per baris, sumber dana, diskon, PPN, dan total
@@ -85,10 +85,7 @@ const receiptSchema = z.object({
     prices_including_vat: z.boolean(),
     posted_at: z.string().nullable(),
     received_by: z.string().nullable(),
-    lines: z.array(lineSchema),
-    subtotal: z.string(),
-    vat_amount: z.string(),
-    total: z.string(),
+    lines: z.array(lineSchema.omit({ amount: true })),
 });
 
 async function receipt(db: Database, workspace: Workspace, receiptId: string) {
@@ -107,10 +104,7 @@ async function receipt(db: Database, workspace: Workspace, receiptId: string) {
                 l.kode as location_code, l.nama as location, h.keterangan as description,
                 h.termasuk_ppn as prices_including_vat, ${isoSql('h.diposting_pada')} as posted_at,
                 coalesce(poster.name, creator.name) as received_by,
-                coalesce(t.lines, '[]'::json) as lines,
-                trim_scale(coalesce(t.subtotal, 0))::text as subtotal,
-                trim_scale(coalesce(t.vat, 0))::text as vat_amount,
-                trim_scale(coalesce(t.subtotal, 0) + coalesce(t.vat, 0))::text as total
+                coalesce(t.lines, '[]'::json) as lines
          from bl_tr_penerimaan h
          join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
          join parties p on p.tenant_id = v.tenant_id and p.id = v.party_id
@@ -123,22 +117,22 @@ async function receipt(db: Database, workspace: Workspace, receiptId: string) {
                         'expiry_date', d.kedaluwarsa::text, 'quantity', trim_scale(d.jumlah)::text, 'unit', s.kode,
                         'unit_cost', trim_scale(d.harga_satuan)::text,
                         'discount_percent', trim_scale(d.diskon_persen)::text,
-                        'vat_percent', trim_scale(d.tarif_ppn)::text, 'amount', trim_scale(d.amount)::text,
+                        'vat_percent', trim_scale(d.tarif_ppn)::text,
                         'funding_source', dana.nama, 'procurement_program', program.nama,
                         'budget_year', d.tahun_anggaran::text) order by d.urutan) as lines,
-                    sum(d.amount) as subtotal, round(sum(d.amount * d.tarif_ppn / 100), ${decimals}) as vat
-             from (select x.*, ${lineAmountSql('x', decimals)} as amount from bl_tr_penerimaan_detail x
-                   where x.tenant_id = h.tenant_id and x.penerimaan_id = h.id and x.deleted_at is null) d
+             from bl_tr_penerimaan_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
              left join gd_m_sumber_dana dana on dana.tenant_id = d.tenant_id and dana.id = d.sumber_dana_id
              left join gd_m_program_pengadaan program
-                    on program.tenant_id = d.tenant_id and program.id = d.program_pengadaan_id) t on true
+                    on program.tenant_id = d.tenant_id and program.id = d.program_pengadaan_id
+             where d.tenant_id = h.tenant_id and d.penerimaan_id = h.id and d.deleted_at is null) t on true
          where h.tenant_id = $1 and h.legal_entity_id = $2 and h.id = $3 and h.deleted_at is null and ${allowedLocationsSql(workspace, bindings, ['h.lokasi_id'])}`,
         bindings,
     );
     if (!row) return null;
-    const { operating_unit_id, ...values } = row;
+    const { operating_unit_id, lines, ...header } = row;
+    const values = { ...header, ...pricedDocument(lines, decimals) };
     return {
         legalEntityId: workspace.legalEntityId,
         operatingUnitId: operating_unit_id,

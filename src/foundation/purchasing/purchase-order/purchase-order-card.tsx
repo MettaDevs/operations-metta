@@ -34,7 +34,6 @@ import {
     type ApiBody,
 } from '../../../platform/shell/index.ts';
 import {
-    amountOf,
     itemColumns,
     label,
     loadItems,
@@ -42,7 +41,6 @@ import {
     loadVendors,
     nextKey,
     today,
-    totalsOf,
     UnitLookup,
     unitText,
     useLoader,
@@ -50,6 +48,7 @@ import {
     type Reference,
     type UnitChoice,
 } from '../purchase-lines.tsx';
+import { documentTotals, lineAmount } from '../purchase-line.amounts.ts';
 import {
     ReceiptCard,
     type Receipt,
@@ -62,6 +61,7 @@ import {
     type PaymentTermsChoice,
 } from '../payment-terms/payment-terms-lookup.tsx';
 import { VendorCard, type Vendor } from '../vendor/vendor-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 export type PurchaseOrder = ApiBody<'purchasingOrderShow'>['data'];
 export type PurchaseOrderPermissions =
@@ -148,7 +148,7 @@ export function PurchaseOrderCard({
 }: {
     order: PurchaseOrder | null;
     permissions: PurchaseOrderPermissions;
-    amountDecimals: number;
+    amountDecimals: AmountDecimals;
     portalContainer: RefObject<HTMLElement | null>;
     onSaved: (order: PurchaseOrder) => void;
     onClose: () => void;
@@ -171,7 +171,7 @@ export function PurchaseOrderCard({
     const [receiving, setReceiving] = useState<{
         receipt: Receipt;
         permissions: ReceiptPermissions;
-        amountDecimals: number;
+        amountDecimals: AmountDecimals;
     } | null>(null);
     const receiptDialog = useRef<HTMLDivElement>(null);
     const { confirm, confirmation } = useConfirmation();
@@ -197,7 +197,7 @@ export function PurchaseOrderCard({
                 at === index ? { ...line, ...patch } : line,
             ),
         );
-    const { subtotal, vat } = totalsOf(lines, amountDecimals);
+    const { subtotal, vat } = documentTotals(lines, amountDecimals);
     const pricesIncludingVatId = useId();
 
     const payload = () => ({
@@ -1037,7 +1037,10 @@ export function PurchaseOrderCard({
                                 cell: ({ line }) =>
                                     text(
                                         displayAmount(
-                                            amountOf(line).normalized(),
+                                            lineAmount(
+                                                line,
+                                                amountDecimals,
+                                            ).normalized(),
                                             amountDecimals,
                                         ),
                                     ),

@@ -31,6 +31,7 @@ import {
     type Receipt,
     type ReceiptPermissions,
 } from './receipt-card.tsx';
+import type { AmountDecimals } from '../../currency/index.ts';
 
 // Penerimaan barang dari vendor (Purchase Receipts di BC). Draf, diposting, atau dibatalkan postingnya.
 
@@ -65,7 +66,7 @@ function ReceiptsPage(): ReactNode {
     const [permissions, setPermissions] =
         useState<ReceiptPermissions>(noPermissions);
     // Presisi jumlah mata uang lokal untuk nilai di daftar dan kartu.
-    const [amountDecimals, setAmountDecimals] = useState(0);
+    const [amountDecimals, setAmountDecimals] = useState<AmountDecimals>(0);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingReceiptList(
