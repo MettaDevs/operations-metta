@@ -49,6 +49,7 @@ import {
     withTotals,
 } from '../purchase-line.service.ts';
 import {
+    creditMemoUnapplyInputSchema,
     invoiceLineChoiceSchema,
     openInvoiceEntryChoiceSchema,
     purchaseCreditMemoInputSchema,
@@ -102,7 +103,9 @@ const rowSql = `select * from (
                            h.tanggal_nota::text as document_date, h.tanggal::text as posting_date,
                            case when a.id is null then null else json_build_object(
                                'id', a.id, 'document_number', a.nomor_dokumen,
-                               'vendor_invoice_number', a.no_dokumen_vendor, 'invoice_id', a.faktur_id) end
+                               'vendor_invoice_number', a.no_dokumen_vendor, 'invoice_id', a.faktur_id,
+                               'amount', trim_scale(h.jumlah_diterapkan)::text,
+                               'unapplied_date', h.tanggal_dilepas::text) end
                                as applies_to,
                            h.keterangan as description,
                            ${pricedLinesSql('ap_tr_nota_kredit_detail', 'nota_kredit_id', 'h')} as priced_lines,
@@ -1007,7 +1010,15 @@ export class PurchaseCreditMemos {
                 created_at: stamp,
                 updated_at: stamp,
             });
-            if (target && applied > 0n)
+            if (target && applied > 0n) {
+                await this.db.execute(
+                    `update ap_tr_nota_kredit set jumlah_diterapkan = $1 where tenant_id = $2 and id = $3`,
+                    [
+                        toNumeric(applied, quantityScale),
+                        this.scope.tenantId,
+                        current.id,
+                    ],
+                );
                 await this.db.execute(
                     `update ap_tr_entri_utang
                      set sisa = sisa - $1::numeric,
@@ -1023,6 +1034,7 @@ export class PurchaseCreditMemos {
                         target.id,
                     ],
                 );
+            }
         });
         return {
             status: 200,
@@ -1145,6 +1157,119 @@ export class PurchaseCreditMemos {
         };
     }
 
+    // Unapply Entries pada Vendor Ledger Entry BC (codeunit "VendEntry-Apply Posted Entries", UnApplyVendLedgEntry):
+    // utang faktur dan kredit nota kembali seperti sebelum diterapkan. Ditolak bila pembayaran yang diposting
+    // sesudahnya sudah memakai salah satu entri, seperti BC yang hanya melepas penerapan terakhir.
+    async unapply(request: Request, id: string, body: unknown) {
+        this.workspace.guard('purchase-credit-memo', 'reverse');
+        const data = parseInput(creditMemoUnapplyInputSchema, body, messages);
+        const current = await this.header(id);
+        const version = expectedVersion(request, body);
+        if (!dateSchema.safeParse(data.posting_date).success)
+            validation({ posting_date: messages.posting_date });
+        await this.db.transaction(async () => {
+            const memo = await this.db.one(
+                z.object({
+                    version: z.number(),
+                    status: z.string(),
+                    posted_at: z.string(),
+                    posting_date: z.string(),
+                    applied: z.string().nullable(),
+                    unapplied: z.boolean(),
+                    invoice_entry_id: z.string().nullable(),
+                }),
+                `select version, status, diposting_pada::text as posted_at, tanggal::text as posting_date,
+                        jumlah_diterapkan::text as applied, dilepas_pada is not null as unapplied,
+                        entri_utang_tujuan_id as invoice_entry_id
+                 from ap_tr_nota_kredit
+                 where tenant_id = $1 and legal_entity_id = $2 and id = $3 and deleted_at is null for update`,
+                [this.scope.tenantId, this.scope.legalEntityId, current.id],
+            );
+            if (!memo) return abort(404, 'Not Found');
+            if (memo.version !== version)
+                coded(409, 'stale_version', staleMessage);
+            if (
+                memo.status !== 'diposting' ||
+                memo.unapplied ||
+                memo.applied === null ||
+                memo.invoice_entry_id === null
+            )
+                validation({
+                    _form: memo.unapplied
+                        ? 'Nota kredit ini sudah dilepas dari fakturnya.'
+                        : 'Nota kredit ini tidak sedang mengurangi utang faktur.',
+                });
+            if (data.posting_date < memo.posting_date)
+                validation({
+                    posting_date: `Tanggal lepas tidak boleh sebelum tanggal posting ${current.number}.`,
+                });
+            const ledgerEntries = `select id from ap_tr_entri_utang
+                 where tenant_id = $1 and (id = $2 or (nota_kredit_id = $3 and jenis = 'nota_kredit'))`;
+            await this.db.execute(`${ledgerEntries} order by id for update`, [
+                this.scope.tenantId,
+                memo.invoice_entry_id,
+                current.id,
+            ]);
+            const later = await this.db.one(
+                z.object({ id: z.string(), number: z.string() }),
+                `select h.id, h.nomor as number
+                 from ap_tr_pembayaran_detail d
+                 join ap_tr_pembayaran h on h.tenant_id = d.tenant_id and h.id = d.pembayaran_id
+                 where d.tenant_id = $1 and d.entri_utang_id in (${ledgerEntries}) and d.deleted_at is null
+                   and h.status = 'diposting' and h.diposting_pada >= $4::timestamp
+                 order by h.diposting_pada desc, h.id desc limit 1`,
+                [
+                    this.scope.tenantId,
+                    memo.invoice_entry_id,
+                    current.id,
+                    memo.posted_at,
+                ],
+            );
+            if (later)
+                await refuse(this.db, this.workspace, {
+                    message: `Pembayaran ${later.number} sudah memakai utang faktur atau kredit nota ini sesudah nota diterapkan, jadi nota belum bisa dilepas. Batalkan posting pembayaran itu lebih dulu.`,
+                    open: {
+                        page: 'core.vendor-payment',
+                        recordId: later.id,
+                        label: `Buka pembayaran ${later.number}`,
+                    },
+                    otherwise: `Minta petugas pembelian membatalkan posting pembayaran ${later.number} lebih dulu.`,
+                });
+            const stamp = nowSql();
+            await this.db.execute(
+                `update ap_tr_entri_utang
+                 set sisa = sisa + case when id = $1 then $2::numeric else -$2::numeric end,
+                     ditutup_oleh_entri_id = null, ditutup_pada = null, updated_at = $3
+                 where tenant_id = $4 and (id = $1 or (nota_kredit_id = $5 and jenis = 'nota_kredit'))`,
+                [
+                    memo.invoice_entry_id,
+                    memo.applied,
+                    stamp,
+                    this.scope.tenantId,
+                    current.id,
+                ],
+            );
+            await this.db.execute(
+                `update ap_tr_nota_kredit
+                 set tanggal_dilepas = $1, dilepas_pada = $2, dilepas_oleh_user_id = $3, updated_at = $2,
+                     updated_by_user_id = $3
+                 where tenant_id = $4 and id = $5`,
+                [
+                    data.posting_date,
+                    stamp,
+                    this.workspace.userId,
+                    this.scope.tenantId,
+                    current.id,
+                ],
+            );
+        });
+        return {
+            status: 200,
+            headers: {},
+            body: { data: await this.document(current.id) },
+        };
+    }
+
     private async refuseApplied(
         entryId: string,
         appliesToEntryId: string | null,
@@ -1180,7 +1305,7 @@ export class PurchaseCreditMemos {
             : undefined;
         return validation({
             _form: invoice
-                ? `${message} Kreditnya sudah mengurangi utang faktur ${invoice.number} saat diposting.`
+                ? `${message} Kreditnya mengurangi utang faktur ${invoice.number}. Pilih Lepas dari faktur lebih dulu.`
                 : message,
         });
     }
@@ -1226,6 +1351,7 @@ export async function appliedCreditMemo(
         z.object({ id: z.string(), number: z.string() }),
         `select id, nomor as number from ap_tr_nota_kredit
          where tenant_id = $1 and entri_utang_tujuan_id = $2 and status = 'diposting' and deleted_at is null
+           and jumlah_diterapkan is not null and dilepas_pada is null
          order by diposting_pada desc, id desc limit 1`,
         [tenantId, entryId],
     );

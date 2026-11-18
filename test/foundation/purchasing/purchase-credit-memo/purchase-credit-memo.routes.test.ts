@@ -25,6 +25,7 @@ type CreditMemo = Document & {
     amount: string;
     vat_amount: string;
     remaining: string | null;
+    applies_to: { amount: string | null; unapplied_date: string | null } | null;
 };
 type ReturnLine = {
     return_line_id: string;
@@ -108,6 +109,15 @@ describe.skipIf(!process.env.DB_HOST)('purchase credit memos', () => {
         action: 'post' | 'reverse',
     ) =>
         business.admin.post(`${route}/${document.id}/${action}`, {
+            version: document.version,
+        });
+
+    const unapply = (
+        document: { id: string; version: number },
+        body: Record<string, unknown>,
+    ) =>
+        business.admin.post(`${memos}/${document.id}/unapply`, {
+            ...body,
             version: document.version,
         });
 
@@ -310,6 +320,119 @@ describe.skipIf(!process.env.DB_HOST)('purchase credit memos', () => {
         expect(
             (await refused(await act(invoices, invoice, 'reverse')))._form?.[0],
         ).toContain(`nota kredit ${memo.number}`);
+
+        expect(
+            (
+                await refused(
+                    await unapply(posted, { posting_date: '2026-11-07' }),
+                )
+            ).posting_date?.[0],
+        ).toContain('tidak boleh sebelum');
+        const unapplied = (
+            await json<{ data: CreditMemo }>(
+                await unapply(posted, { posting_date: '2026-11-09' }),
+                200,
+            )
+        ).data;
+        expect(unapplied.applies_to).toMatchObject({
+            amount: '299700',
+            unapplied_date: '2026-11-09',
+        });
+        expect((await invoiceEntry(invoice.id))?.sisa).toBe('1498500');
+        expect(await creditEntries(memo.id)).toEqual([
+            { jenis: 'nota_kredit', jumlah: '-299700', sisa: '-299700' },
+        ]);
+        expect(
+            (
+                await refused(
+                    await unapply(unapplied, { posting_date: '2026-11-09' }),
+                )
+            )._form?.[0],
+        ).toContain('sudah dilepas');
+
+        const reversed = (
+            await json<{ data: CreditMemo }>(
+                await act(memos, unapplied, 'reverse'),
+                200,
+            )
+        ).data;
+        expect(reversed.status).toBe('dibatalkan');
+        await json(await act(invoices, invoice, 'reverse'), 200);
+    });
+
+    test('a credit memo applied to an invoice is unapplied only after a later payment on that invoice is reversed', async () => {
+        const { invoice } = await postedInvoice();
+        const [line] = (
+            await json<{
+                data: { invoice_line_id: string; invoice: { id: string } }[];
+            }>(
+                await business.admin.get(
+                    `/api/v1/purchasing/credit-memo-invoice-lines?vendor_id=${vendor.id}`,
+                ),
+                200,
+            )
+        ).data.filter((choice) => choice.invoice.id === invoice.id);
+        const entry = await invoiceEntry(invoice.id);
+        const memo = await created<CreditMemo>(
+            memos,
+            memoBody(
+                [
+                    {
+                        kind: 'potongan',
+                        invoice_line_id: line?.invoice_line_id,
+                        description: 'Selisih harga',
+                        quantity: 10,
+                        unit_cost: 1000,
+                        vat_percent: 11,
+                    },
+                ],
+                {
+                    vendor_credit_memo_number: 'CN-003',
+                    applies_to_entry_id: entry?.id,
+                },
+            ),
+        );
+        const posted = (
+            await json<{ data: CreditMemo }>(
+                await act(memos, memo, 'post'),
+                200,
+            )
+        ).data;
+        const paid = (
+            await json<{ data: Document }>(
+                await act(
+                    payments,
+                    await created<Document>(payments, {
+                        vendor_id: vendor.id,
+                        posting_date: '2026-11-20',
+                        payment_method_id: cash.id,
+                        lines: [{ entry_id: entry?.id, amount: 100000 }],
+                    }),
+                    'post',
+                ),
+                200,
+            )
+        ).data;
+
+        const blocked = await json<{
+            errors: Record<string, string[]>;
+            actions: { label: string }[];
+        }>(await unapply(posted, { posting_date: '2026-11-20' }), 422);
+        expect(blocked.errors._form?.[0]).toContain(paid.number);
+        expect(blocked.actions[0]?.label).toBe(
+            `Buka pembayaran ${paid.number}`,
+        );
+        expect((await invoiceEntry(invoice.id))?.sisa).toBe('1387400');
+
+        await json(await act(payments, paid, 'reverse'), 200);
+        const unapplied = (
+            await json<{ data: CreditMemo }>(
+                await unapply(posted, { posting_date: '2026-11-20' }),
+                200,
+            )
+        ).data;
+        await json(await act(memos, unapplied, 'reverse'), 200);
+        await json(await act(invoices, invoice, 'reverse'), 200);
     });
 
     test('an open allowance credit is netted in a vendor payment, and cancels only once the payment is reversed', async () => {

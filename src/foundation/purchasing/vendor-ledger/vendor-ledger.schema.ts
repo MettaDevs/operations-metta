@@ -26,6 +26,8 @@ export const vendorLedgerEntrySchema = z.object({
     ),
     paid: z.string(),
     open: z.boolean(),
+    // Entri nota kredit yang sedang mengurangi utang faktur, untuk Lepas dari faktur.
+    applied_to_invoice: z.boolean(),
     // Hari lewat jatuh tempo per hari ini; 0 atau kurang berarti belum jatuh tempo.
     days_overdue: z.number(),
 });

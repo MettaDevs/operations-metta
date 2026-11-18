@@ -20,7 +20,13 @@ import { Select } from '@operations-metta/ui/select';
 import { SelectRecordsDialog } from '@operations-metta/ui/select-records-dialog';
 import { useConfirmation } from '@operations-metta/ui/use-confirmation';
 import { useQuery } from '@tanstack/react-query';
-import { CircleCheck, PackageSearch, TicketPercent, Undo2 } from 'lucide-react';
+import {
+    CircleCheck,
+    PackageSearch,
+    TicketPercent,
+    Undo2,
+    Unlink,
+} from 'lucide-react';
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -37,6 +43,7 @@ import type { AmountDecimals } from '../../currency/index.ts';
 import { documentTotals, lineAmount } from '../purchase-line.amounts.ts';
 import { loadVendors, nextKey, today, useLoader } from '../purchase-lines.tsx';
 import type { Vendor } from '../vendor/vendor-card.tsx';
+import { CreditMemoUnapplyDialog } from './credit-memo-unapply-dialog.tsx';
 
 export type PurchaseCreditMemo = ApiBody<'purchasingCreditMemoShow'>['data'];
 export type PurchaseCreditMemoPermissions =
@@ -136,6 +143,7 @@ export function PurchaseCreditMemoCard({
     const [message, setMessage] = useState<string | null>(null);
     const [operation, setOperation] = useState('Nota kredit belum disimpan');
     const { confirm, confirmation } = useConfirmation();
+    const [unapplying, setUnapplying] = useState(false);
     const vendorLoader = useLoader(loadVendors);
     const pristine =
         JSON.stringify([header, lines]) ===
@@ -454,8 +462,14 @@ export function PurchaseCreditMemoCard({
     const optionalNumber = (value: string) =>
         text(Number(value) ? displayNumber(value) : '');
     const appliesToText = memo?.applies_to
-        ? `${memo.applies_to.document_number} · ${memo.applies_to.vendor_invoice_number}`
+        ? `${memo.applies_to.document_number} · ${memo.applies_to.vendor_invoice_number}${memo.applies_to.unapplied_date ? ` · dilepas ${displayDate(memo.applies_to.unapplied_date)}` : ''}`
         : 'Tidak, kredit dipakai saat membayar';
+    const unapplicable =
+        memo?.status === 'diposting' &&
+        permissions.reverse &&
+        memo.applies_to !== null &&
+        memo.applies_to.amount !== null &&
+        memo.applies_to.unapplied_date === null;
 
     return (
         <form
@@ -504,6 +518,19 @@ export function PurchaseCreditMemoCard({
                     >
                         <CircleCheck aria-hidden="true" />
                         Posting
+                    </Button>
+                )}
+                {unapplicable && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="command"
+                        disabled={busy}
+                        title="Kembalikan utang faktur dan kredit nota seperti sebelum nota ini mengurangi faktur."
+                        onClick={() => setUnapplying(true)}
+                    >
+                        <Unlink aria-hidden="true" />
+                        Lepas dari faktur
                     </Button>
                 )}
                 {memo?.status === 'diposting' && permissions.reverse && (
@@ -1010,6 +1037,17 @@ export function PurchaseCreditMemoCard({
                     />
                 </div>
             </PageDialogBody>
+            {unapplying && memo && (
+                <CreditMemoUnapplyDialog
+                    memo={memo}
+                    amountDecimals={amountDecimals}
+                    onUnapplied={(next) => {
+                        setUnapplying(false);
+                        adopt(next);
+                    }}
+                    onClose={() => setUnapplying(false)}
+                />
+            )}
             {confirmation}
             {picking === 'retur' && (
                 <SelectRecordsDialog<ReturnLine>
