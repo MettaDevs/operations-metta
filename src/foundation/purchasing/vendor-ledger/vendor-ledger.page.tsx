@@ -29,6 +29,11 @@ import {
     type PurchaseInvoicePermissions,
 } from '../purchase-invoice/purchase-invoice-card.tsx';
 import {
+    PurchaseCreditMemoCard,
+    type PurchaseCreditMemo,
+    type PurchaseCreditMemoPermissions,
+} from '../purchase-credit-memo/purchase-credit-memo-card.tsx';
+import {
     VendorPaymentCard,
     type VendorPayment,
     type VendorPaymentPermissions,
@@ -45,6 +50,8 @@ const closedText: Record<Row['kind'], string> = {
     pembatalan: 'Pembatalan',
     pembayaran: 'Pembayaran',
     pembatalan_pembayaran: 'Pembayaran dibatalkan',
+    nota_kredit: 'Kredit terpakai',
+    pembatalan_nota_kredit: 'Nota kredit dibatalkan',
 };
 
 type Opened =
@@ -52,6 +59,12 @@ type Opened =
           kind: 'invoice';
           invoice: PurchaseInvoice;
           permissions: PurchaseInvoicePermissions;
+          amountDecimals: AmountDecimals;
+      }
+    | {
+          kind: 'credit-memo';
+          creditMemo: PurchaseCreditMemo;
+          permissions: PurchaseCreditMemoPermissions;
           amountDecimals: AmountDecimals;
       }
     | {
@@ -118,6 +131,21 @@ function VendorLedgerPage(): ReactNode {
             toast.error(errorText(caught, 'Faktur belum bisa dibuka.'));
         }
     };
+    const showCreditMemo = async (id: string) => {
+        try {
+            const { body } = await api.purchasingCreditMemoShow({
+                params: { id },
+            });
+            setOpened({
+                kind: 'credit-memo',
+                creditMemo: body.data,
+                permissions: body.permissions,
+                amountDecimals: body.amount_decimals,
+            });
+        } catch (caught) {
+            toast.error(errorText(caught, 'Nota kredit belum bisa dibuka.'));
+        }
+    };
     const showPayment = async (id: string) => {
         try {
             const { body } = await api.purchasingVendorPaymentShow({
@@ -135,6 +163,7 @@ function VendorLedgerPage(): ReactNode {
     };
     const show = (row: Row) => {
         if (row.payment_id) void showPayment(row.payment_id);
+        else if (row.credit_memo_id) void showCreditMemo(row.credit_memo_id);
         else if (row.invoice_id) void showInvoice(row.invoice_id);
     };
     const paymentAction = 'payment:';
@@ -142,7 +171,12 @@ function VendorLedgerPage(): ReactNode {
         row.payment_id
             ? [{ id: 'open', label: 'Buka pembayaran' }]
             : [
-                  { id: 'open', label: 'Buka faktur' },
+                  {
+                      id: 'open',
+                      label: row.credit_memo_id
+                          ? 'Buka nota kredit'
+                          : 'Buka faktur',
+                  },
                   ...row.payments.map((payment) => ({
                       id: `${paymentAction}${payment.id}`,
                       label: `Buka pembayaran ${payment.number}`,
@@ -382,13 +416,24 @@ function VendorLedgerPage(): ReactNode {
                         title={
                             opened.kind === 'invoice'
                                 ? 'Faktur pembelian'
-                                : 'Pembayaran ke vendor'
+                                : opened.kind === 'credit-memo'
+                                  ? 'Nota kredit pembelian'
+                                  : 'Pembayaran ke vendor'
                         }
                         defaultExpanded
                     >
                         {opened.kind === 'invoice' ? (
                             <PurchaseInvoiceCard
                                 invoice={opened.invoice}
+                                permissions={opened.permissions}
+                                amountDecimals={opened.amountDecimals}
+                                portalContainer={contentRef}
+                                onSaved={() => undefined}
+                                onClose={closeOpened}
+                            />
+                        ) : opened.kind === 'credit-memo' ? (
+                            <PurchaseCreditMemoCard
+                                creditMemo={opened.creditMemo}
                                 permissions={opened.permissions}
                                 amountDecimals={opened.amountDecimals}
                                 portalContainer={contentRef}

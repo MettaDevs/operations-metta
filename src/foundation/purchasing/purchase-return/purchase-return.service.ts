@@ -31,6 +31,7 @@ import {
     type OutboundLine,
 } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
+import { refuseCreditedReturn } from '../purchase-credit-memo/purchase-credit-memo.service.ts';
 import { sourceType as receiptSource } from '../receipt/receipt.posting.ts';
 import {
     purchaseReturnInputSchema,
@@ -457,6 +458,12 @@ export class PurchaseReturns {
             if (current.status === 'dibatalkan') return;
             if (current.version !== version)
                 coded(409, 'stale_version', staleMessage);
+            await this.db.rows(
+                z.object({ id: z.string() }),
+                'select id from bl_tr_retur_detail where tenant_id = $1 and retur_id = $2 order by id for update',
+                [this.scope.tenantId, returnId],
+            );
+            await refuseCreditedReturn(this.db, this.workspace, returnId);
             const stamp = nowSql();
             await this.db.execute(
                 `update bl_tr_retur set status = 'dibatalkan', dibatalkan_pada = $1, dibatalkan_oleh_user_id = $2,
