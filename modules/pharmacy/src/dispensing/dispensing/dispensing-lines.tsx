@@ -7,7 +7,6 @@ import { DocumentLines } from '@operations-metta/ui/document-lines';
 import { FormControl } from '@operations-metta/ui/form-control';
 import { Input } from '@operations-metta/ui/input';
 import type { Reference } from '@operations-metta/ui/master-lookup';
-import { Select } from '@operations-metta/ui/select';
 import { useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import {
@@ -22,6 +21,7 @@ import {
     type PrescriptionLine,
 } from '../prescription/prescription-facts.tsx';
 import { SubstituteDialog } from './substitute-dialog.tsx';
+import { LineUnitLookup } from '@core/platform/shell/index.ts';
 
 export type Taken = {
     batch_number: string | null;
@@ -117,9 +117,6 @@ type Row = {
     index: number | null;
     draft: LineDraft | null;
 };
-
-const unitLabel = (unit: UnitOption) =>
-    `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`;
 
 // Satu baris per batch yang diambil, supaya batch kedua tidak terpotong di kolom yang sempit.
 function TakenBatches({
@@ -372,23 +369,13 @@ export function DispensingLines({
                         error={error(index, 'unit_id')}
                         data-error-field={field(index ?? 0, 'unit_id')}
                     >
-                        <Select
-                            label="Satuan"
+                        <LineUnitLookup
                             required
-                            items={choices(draft).map((unit) => ({
-                                value: unit.id,
-                                label: unitLabel(unit),
-                            }))}
+                            units={choices(draft)}
                             value={draft.unit.id}
-                            onValueChange={(value) => {
-                                const unit = choices(draft).find(
-                                    (option) => option.id === value,
-                                );
-                                if (unit)
-                                    update(draft.prescriptionLineId, {
-                                        unit,
-                                    });
-                            }}
+                            onPick={(unit) =>
+                                update(draft.prescriptionLineId, { unit })
+                            }
                             portalContainer={portalContainer}
                         />
                     </FormControl>

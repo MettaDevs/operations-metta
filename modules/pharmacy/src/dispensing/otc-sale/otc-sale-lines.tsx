@@ -11,11 +11,14 @@ import {
     nameColumn,
     type LookupRequest,
 } from '@operations-metta/ui/master-lookup';
-import { Select } from '@operations-metta/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { api, type ApiBody } from '@core/platform/shell/index.ts';
+import {
+    api,
+    LineUnitLookup,
+    type ApiBody,
+} from '@core/platform/shell/index.ts';
 import { FeeLines } from '../dispensing-fee/fee-lines.tsx';
 import { typed } from './otc-sale-tender.tsx';
 import {
@@ -391,18 +394,11 @@ export function OtcSaleLines({
                     error={error(index, 'unit_id')}
                     data-error-field={field(index, 'unit_id')}
                 >
-                    <Select
-                        label="Satuan"
+                    <LineUnitLookup
                         required
-                        placeholder="Pilih satuan"
-                        items={(line.drug?.units ?? []).map((unit) => ({
-                            value: unit.id,
-                            label: `${unit.code} · isi ${displayNumber(unit.quantity_per_unit)}`,
-                        }))}
+                        units={line.drug?.units ?? []}
                         value={line.unitId}
-                        onValueChange={(value) =>
-                            update(line.key, { unitId: value ?? '' })
-                        }
+                        onPick={(unit) => update(line.key, { unitId: unit.id })}
                         portalContainer={portalContainer}
                     />
                 </FormControl>
