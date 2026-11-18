@@ -132,5 +132,7 @@ export function errorText(caught: unknown, fallback: string): string {
         return caught.status >= 500
             ? `${fallback} Terjadi gangguan sistem. Hubungi pengelola aplikasi.`
             : caught.message || fallback;
+    // eslint-disable-next-line no-console -- satu-satunya jejak kesalahan di luar API yang bisa dibaca dari peramban.
+    console.error(`[errorText] ${fallback}`, caught);
     return fallback;
 }
