@@ -359,6 +359,12 @@ export const sysAdminArea: NavigationAreaEntry = {
                     permission: 'core.purchase-invoice.read',
                 },
                 {
+                    id: 'credit-memos',
+                    label: 'Nota kredit pembelian',
+                    href: '/sysadmin/purchasing/credit-memos',
+                    permission: 'core.purchase-credit-memo.read',
+                },
+                {
                     id: 'vendor-ledger',
                     label: 'Utang vendor',
                     href: '/sysadmin/purchasing/vendor-ledger',

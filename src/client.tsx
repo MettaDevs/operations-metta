@@ -96,6 +96,10 @@ import { page as foundationPricingChargeComponentChargeComponentsPage } from './
 import { page as foundationPricingPriceGroupPriceGroupsPage } from './foundation/pricing/price-group/price-groups.page.tsx';
 import { page as foundationPurchasingPaymentTermsPaymentTermsPage } from './foundation/purchasing/payment-terms/payment-terms.page.tsx';
 import {
+    page as foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosPage,
+    record as foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosRecord,
+} from './foundation/purchasing/purchase-credit-memo/purchase-credit-memos.page.tsx';
+import {
     page as foundationPurchasingPurchaseInvoicePurchaseInvoicesPage,
     record as foundationPurchasingPurchaseInvoicePurchaseInvoicesRecord,
 } from './foundation/purchasing/purchase-invoice/purchase-invoices.page.tsx';
@@ -1044,6 +1048,19 @@ const foundationPurchasingPaymentTermsPaymentTermsRoute = createRoute({
     },
 });
 
+const foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosRoute =
+    createRoute({
+        getParentRoute: () => appLayoutRoute,
+        path: foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosPage.path,
+        component:
+            foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosPage.component,
+        validateSearch:
+            foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosPage.validateSearch,
+        staticData: {
+            title: foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosPage.title,
+        },
+    });
+
 const foundationPurchasingPurchaseInvoicePurchaseInvoicesRoute = createRoute({
     getParentRoute: () => appLayoutRoute,
     path: foundationPurchasingPurchaseInvoicePurchaseInvoicesPage.path,
@@ -1337,6 +1354,7 @@ const routeTree = rootRoute.addChildren([
         foundationPricingChargeComponentChargeComponentsRoute,
         foundationPricingPriceGroupPriceGroupsRoute,
         foundationPurchasingPaymentTermsPaymentTermsRoute,
+        foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosRoute,
         foundationPurchasingPurchaseInvoicePurchaseInvoicesRoute,
         foundationPurchasingPurchaseOrderPurchaseOrdersRoute,
         foundationPurchasingReceiptReceiptsRoute,
@@ -1435,6 +1453,8 @@ const recordPages = {
     'core.inventory-location':
         foundationInventoryWarehouseEmployeeWarehouseEmployeesRecord,
     'core.payment': foundationBillingInvoicePaymentRecord,
+    'core.purchase-credit-memo':
+        foundationPurchasingPurchaseCreditMemoPurchaseCreditMemosRecord,
     'core.purchase-invoice':
         foundationPurchasingPurchaseInvoicePurchaseInvoicesRecord,
     'core.purchase-order':

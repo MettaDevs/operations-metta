@@ -2,6 +2,7 @@
 export const recordPageKeys = [
     'core.inventory-location',
     'core.payment',
+    'core.purchase-credit-memo',
     'core.purchase-invoice',
     'core.purchase-order',
     'core.purchase-receipt',

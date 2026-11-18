@@ -28,6 +28,7 @@ import {
     FormErrorHeader,
     PrintAction,
     type ApiBody,
+    type ErrorAction,
 } from '../../../platform/shell/index.ts';
 
 type View = ApiBody<'purchasingReturnList'>;
@@ -355,6 +356,9 @@ export function PurchaseReturnsSection({
     const queryClient = useQueryClient();
     const stored = useReturns(receiptId);
     const [message, setMessage] = useState<string | null>(null);
+    const [errorActions, setErrorActions] = useState<readonly ErrorAction[]>(
+        [],
+    );
     const { confirm, confirmation } = useConfirmation();
     const returns = stored.data?.data.returns ?? [];
     const canReverse = stored.data?.permissions.reverse ?? false;
@@ -372,6 +376,7 @@ export function PurchaseReturnsSection({
         )
             return;
         setMessage(null);
+        setErrorActions([]);
         try {
             const { body } = await api.purchasingReturnReverse({
                 params: { id: receiptId, returnId: row.id },
@@ -380,6 +385,7 @@ export function PurchaseReturnsSection({
             queryClient.setQueryData(returnsKey(receiptId), body);
             toast.success(`Retur ${row.number} dibatalkan.`);
         } catch (caught) {
+            if (caught instanceof ApiError) setErrorActions(caught.actions);
             setMessage(
                 caught instanceof ApiError && caught.status === 422
                     ? (Object.values(caught.errors).flat()[0] ?? caught.message)
@@ -393,6 +399,7 @@ export function PurchaseReturnsSection({
             <h3 className="text-sm font-semibold">Retur ke vendor</h3>
             <FormErrorHeader
                 message={message}
+                errorActions={errorActions}
                 operation="Retur belum dibatalkan"
             />
             <DataTable

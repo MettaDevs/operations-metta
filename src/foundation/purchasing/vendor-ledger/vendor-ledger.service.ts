@@ -10,7 +10,7 @@ const rowSql = `select * from (
                     select e.id, e.jenis as kind,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
                            e.vendor_id, p.name as vendor_name, e.faktur_id as invoice_id,
-                           e.pembayaran_id as payment_id,
+                           e.pembayaran_id as payment_id, e.nota_kredit_id as credit_memo_id,
                            e.nomor_dokumen as document_number, e.no_faktur_vendor as vendor_invoice_number,
                            e.tanggal::text as posting_date, e.jatuh_tempo::text as due_date,
                            trim_scale(e.jumlah)::text as amount, trim_scale(e.sisa)::text as remaining,

@@ -53,11 +53,16 @@ export const vendorPaymentRowSchema = z.object({
     version: z.number(),
 });
 
+export const openEntryKinds = ['faktur', 'nota_kredit'] as const;
+
+// amount bertanda sama dengan sisa entrinya: negatif untuk kredit yang dipakai (Amount to Apply BC).
 export const vendorPaymentLineRowSchema = z.object({
     id: z.string(),
     line_no: z.number(),
     entry_id: z.string(),
-    invoice_id: z.string(),
+    kind: z.enum(openEntryKinds),
+    invoice_id: z.string().nullable(),
+    credit_memo_id: z.string().nullable(),
     document_number: z.string(),
     vendor_invoice_number: z.string(),
     entry_posting_date: z.string(),
@@ -79,7 +84,9 @@ export const openEntriesQuerySchema = z.object({
 // Apply Entries.
 export const openEntryChoiceSchema = z.object({
     entry_id: z.string(),
-    invoice_id: z.string(),
+    kind: z.enum(openEntryKinds),
+    invoice_id: z.string().nullable(),
+    credit_memo_id: z.string().nullable(),
     document_number: z.string(),
     vendor_invoice_number: z.string(),
     posting_date: z.string(),

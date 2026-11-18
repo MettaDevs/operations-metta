@@ -1,4 +1,5 @@
 import { paymentTermsRoutes } from './payment-terms/payment-terms.routes.ts';
+import { purchaseCreditMemoRoutes } from './purchase-credit-memo/purchase-credit-memo.routes.ts';
 import { purchaseInvoiceRoutes } from './purchase-invoice/purchase-invoice.routes.ts';
 import { purchaseOrderRoutes } from './purchase-order/purchase-order.routes.ts';
 import { purchaseReturnRoutes } from './purchase-return/purchase-return.routes.ts';
@@ -17,6 +18,7 @@ export function purchasingRoutes() {
         ...receiptRoutes(),
         ...purchaseReturnRoutes(),
         ...purchaseInvoiceRoutes(),
+        ...purchaseCreditMemoRoutes(),
         ...vendorLedgerRoutes(),
         ...vendorPaymentRoutes(),
     };

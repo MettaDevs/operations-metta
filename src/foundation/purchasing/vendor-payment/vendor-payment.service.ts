@@ -25,6 +25,7 @@ import {
 } from '../../currency/index.ts';
 import { activeLegalEntity, parseInput } from '../../inventory/index.ts';
 import { NumberIssuer } from '../../number-sequence/index.ts';
+import { appliedCreditMemo } from '../purchase-credit-memo/purchase-credit-memo.service.ts';
 import {
     openEntryChoiceSchema,
     paymentMethodChoiceSchema,
@@ -54,6 +55,9 @@ const transitions = {
 type Scope = { tenantId: string; legalEntityId: string };
 type LineDraft = { id: string | null; entryId: string; amount: string };
 
+const openRemainingSign = (kind: 'faktur' | 'nota_kredit') =>
+    kind === 'faktur' ? 1 : -1;
+
 const rowSql = `select * from (
                     select h.id, h.nomor as number, h.status, h.version,
                            json_build_object('id', v.id, 'number', v.number, 'name', p.name) as vendor,
@@ -79,7 +83,8 @@ const paymentMethodSql = `select id, kode as code, nama as name, perilaku = 'tun
                             and deleted_at is null`;
 
 const openEntriesSql = `
-    select e.id as entry_id, e.faktur_id as invoice_id, e.nomor_dokumen as document_number,
+    select e.id as entry_id, e.jenis as kind, e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
+           e.nomor_dokumen as document_number,
            e.no_faktur_vendor as vendor_invoice_number, e.tanggal::text as posting_date,
            e.jatuh_tempo::text as due_date, trim_scale(e.jumlah)::text as amount,
            trim_scale(e.sisa)::text as remaining,
@@ -89,7 +94,8 @@ const openEntriesSql = `
                        and h.status = 'draf' and h.deleted_at is null and h.id is distinct from $4::uuid),
                     0)::text as on_drafts
     from ap_tr_entri_utang e
-    where e.tenant_id = $1 and e.legal_entity_id = $2 and e.vendor_id = $3 and e.jenis = 'faktur' and e.sisa > 0`;
+    where e.tenant_id = $1 and e.legal_entity_id = $2 and e.vendor_id = $3
+      and ((e.jenis = 'faktur' and e.sisa > 0) or (e.jenis = 'nota_kredit' and e.sisa < 0))`;
 
 const messages = {
     vendor_id: 'Pilih vendor dari daftar.',
@@ -215,7 +221,8 @@ export class VendorPayments {
         const header = await this.header(id);
         const lines = await this.db.rows(
             vendorPaymentLineRowSchema,
-            `select d.id, d.urutan as line_no, d.entri_utang_id as entry_id, e.faktur_id as invoice_id,
+            `select d.id, d.urutan as line_no, d.entri_utang_id as entry_id, e.jenis as kind,
+                    e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
                     e.nomor_dokumen as document_number, e.no_faktur_vendor as vendor_invoice_number,
                     e.tanggal::text as entry_posting_date, e.jatuh_tempo::text as due_date,
                     trim_scale(e.jumlah)::text as entry_amount, trim_scale(e.sisa)::text as remaining,
@@ -259,7 +266,7 @@ export class VendorPayments {
                 const open = Decimal.of(row.remaining).minus(
                     Decimal.of(row.on_drafts),
                 );
-                return open.compare(zero) > 0
+                return open.compare(zero) * openRemainingSign(row.kind) > 0
                     ? [{ ...row, open: open.normalized() }]
                     : [];
             }),
@@ -333,6 +340,7 @@ export class VendorPayments {
                       await this.db.rows(
                           openEntryChoiceSchema.pick({
                               entry_id: true,
+                              kind: true,
                               remaining: true,
                               on_drafts: true,
                           }),
@@ -347,9 +355,12 @@ export class VendorPayments {
                       )
                   ).map((row) => [
                       row.entry_id,
-                      Decimal.of(row.remaining).minus(
-                          Decimal.of(row.on_drafts),
-                      ),
+                      {
+                          sign: openRemainingSign(row.kind),
+                          open: Decimal.of(row.remaining).minus(
+                              Decimal.of(row.on_drafts),
+                          ),
+                      },
                   ])
                 : [],
         );
@@ -359,29 +370,41 @@ export class VendorPayments {
             const fail = (name: string, message: string) => {
                 errors[`lines.${index}.${name}`] = message;
             };
-            const open = entries.get(line.entry_id);
-            const value = amountInput(line.amount, decimals);
-            if (open === undefined || taken.has(line.entry_id)) {
+            const entry = entries.get(line.entry_id);
+            if (entry === undefined || taken.has(line.entry_id)) {
                 fail('entry_id', messages.entry_id);
                 continue;
             }
             taken.add(line.entry_id);
-            if (value === null || Decimal.of(value).compare(zero) <= 0)
+            const magnitude = amountInput(
+                String(line.amount).trim().replace(/^-/, ''),
+                decimals,
+            );
+            const available =
+                entry.sign > 0 ? entry.open : zero.minus(entry.open);
+            if (magnitude === null || Decimal.of(magnitude).compare(zero) <= 0)
                 fail(
                     'amount',
-                    `Isi jumlah bayar lebih dari 0, ${decimalsHint(decimals)}.`,
+                    `Isi jumlah lebih dari 0, ${decimalsHint(decimals)}.`,
                 );
-            else if (Decimal.of(value).compare(open) > 0)
+            else if (Decimal.of(magnitude).compare(available) > 0)
                 fail(
                     'amount',
-                    open.compare(zero) > 0
-                        ? `Paling banyak ${open.normalized()}: sisa utang yang belum dibayar.`
-                        : 'Utang ini sudah ada di draf pembayaran lain.',
+                    available.compare(zero) <= 0
+                        ? 'Utang atau kredit ini sudah ada di draf pembayaran lain.'
+                        : entry.sign > 0
+                          ? `Paling banyak ${available.normalized()}: sisa utang yang belum dibayar.`
+                          : `Paling banyak ${available.normalized()}: sisa kredit yang belum dipakai.`,
                 );
             lines.push({
                 id: line.id ?? null,
                 entryId: line.entry_id,
-                amount: value ?? '0',
+                amount:
+                    magnitude === null
+                        ? '0'
+                        : entry.sign > 0
+                          ? magnitude
+                          : zero.minus(Decimal.of(magnitude)).normalized(),
             });
         }
         if (Object.keys(errors).length || !method) validation(errors);
@@ -665,20 +688,28 @@ export class VendorPayments {
                 const field = `lines.${line.index}.amount`;
                 const remaining = Decimal.of(line.remaining);
                 total = total.plus(Decimal.of(line.amount));
-                if (
-                    line.kind !== 'faktur' ||
-                    line.vendor_id !== claimed.vendor_id
-                )
+                const sign =
+                    line.kind === 'faktur' || line.kind === 'nota_kredit'
+                        ? openRemainingSign(line.kind)
+                        : 0;
+                const amount = Decimal.of(line.amount);
+                if (sign === 0 || line.vendor_id !== claimed.vendor_id)
                     errors[`lines.${line.index}.entry_id`] =
                         `${line.document_number} bukan utang vendor ini. Hapus baris ini dari pembayaran.`;
-                else if (Decimal.of(line.amount).compare(remaining) > 0)
+                else if (
+                    amount.compare(remaining) * sign > 0 ||
+                    amount.compare(zero) * sign <= 0
+                )
                     errors[field] =
-                        remaining.compare(zero) > 0
-                            ? `Paling banyak ${remaining.normalized()}: sisa utang ${line.document_number} yang belum dibayar.`
-                            : `Utang ${line.document_number} sudah lunas.`;
+                        remaining.compare(zero) * sign > 0
+                            ? `Paling banyak ${(sign > 0 ? remaining : zero.minus(remaining)).normalized()}: sisa ${line.document_number} yang belum dipakai.`
+                            : `${line.document_number} sudah lunas.`;
                 else if (claimed.posting_date < line.entry_posting_date)
                     errors.posting_date = `Tanggal bayar tidak boleh sebelum tanggal posting ${line.document_number}.`;
             }
+            if (!Object.keys(errors).length && total.compare(zero) <= 0)
+                errors.lines =
+                    'Jumlah bayar sesudah dikurangi kredit harus lebih dari 0. Kurangi kredit yang dipakai.';
             if (Object.keys(errors).length) validation(errors);
             const stamp = nowSql();
             const paymentEntryId = Bun.randomUUIDv7();
@@ -828,7 +859,19 @@ export async function refusePaidEntry(
     );
     const message =
         'Utang faktur ini sudah dibayar sebagian atau lunas, jadi postingnya tidak bisa dibatalkan.';
-    if (!payment) validation({ _form: message });
+    if (!payment) {
+        const memo = await appliedCreditMemo(db, workspace.tenantId, entryId);
+        if (!memo) validation({ _form: message });
+        return refuse(db, workspace, {
+            message: `Utang faktur ini sudah dikurangi nota kredit ${memo.number}, jadi postingnya tidak bisa dibatalkan.`,
+            open: {
+                page: 'core.purchase-credit-memo',
+                recordId: memo.id,
+                label: `Buka nota kredit ${memo.number}`,
+            },
+            otherwise: `Minta petugas pembelian memeriksa nota kredit ${memo.number}.`,
+        });
+    }
     await refuse(db, workspace, {
         message: `${message} Batalkan posting pembayaran ${payment.number} lebih dulu.`,
         open: {

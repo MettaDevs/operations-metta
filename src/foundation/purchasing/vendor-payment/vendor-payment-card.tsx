@@ -730,7 +730,7 @@ export function VendorPaymentCard({
                                     disabled={busy || !header.vendor}
                                     title={
                                         header.vendor
-                                            ? 'Pilih faktur vendor ini yang belum lunas.'
+                                            ? 'Pilih faktur vendor ini yang belum lunas, dan nota kredit yang kreditnya belum dipakai.'
                                             : 'Pilih vendor lebih dulu.'
                                     }
                                     onClick={() => setPicking(true)}
@@ -776,7 +776,7 @@ export function VendorPaymentCard({
                         columns={[
                             {
                                 id: 'document_number',
-                                header: 'Faktur',
+                                header: 'Dokumen',
                                 minWidth: 140,
                                 cell: ({ index, line }) => (
                                     <FormControl
@@ -792,7 +792,7 @@ export function VendorPaymentCard({
                             },
                             {
                                 id: 'vendor_invoice_number',
-                                header: 'No. faktur vendor',
+                                header: 'No. dokumen vendor',
                                 minWidth: 150,
                                 cell: ({ line }) =>
                                     text(line.vendor_invoice_number),
@@ -806,7 +806,7 @@ export function VendorPaymentCard({
                             },
                             {
                                 id: 'entry_amount',
-                                header: 'Nilai faktur',
+                                header: 'Nilai',
                                 minWidth: 130,
                                 align: 'right',
                                 cell: ({ line }) => amount(line.entry_amount),
@@ -839,7 +839,6 @@ export function VendorPaymentCard({
                                                 label="Jumlah bayar"
                                                 required
                                                 type="number"
-                                                min={0}
                                                 step="any"
                                                 inputMode="decimal"
                                                 data-error-field={field(
@@ -882,13 +881,13 @@ export function VendorPaymentCard({
                     columns={[
                         {
                             id: 'document_number',
-                            header: 'Faktur',
+                            header: 'Dokumen',
                             width: 140,
                             cell: (entry) => entry.document_number,
                         },
                         {
                             id: 'vendor_invoice_number',
-                            header: 'No. faktur vendor',
+                            header: 'No. dokumen vendor',
                             width: 150,
                             cell: (entry) => entry.vendor_invoice_number,
                         },
@@ -900,7 +899,7 @@ export function VendorPaymentCard({
                         },
                         {
                             id: 'amount',
-                            header: 'Nilai faktur',
+                            header: 'Nilai',
                             width: 130,
                             align: 'right',
                             cell: (entry) =>
@@ -908,7 +907,7 @@ export function VendorPaymentCard({
                         },
                         {
                             id: 'open',
-                            header: 'Belum dibayar',
+                            header: 'Sisa',
                             width: 130,
                             align: 'right',
                             cell: (entry) =>
