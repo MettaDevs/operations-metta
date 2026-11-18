@@ -7,6 +7,7 @@ import {
     typedQuery,
     type Context,
 } from '../../../platform/http/index.ts';
+import { PurchaseOrderFacts } from './purchase-order-facts.service.ts';
 import { PurchaseOrderPosting } from './purchase-order-post.service.ts';
 import type {
     purchaseOrderInputSchema,
@@ -49,6 +50,21 @@ export function purchaseOrderRoutes() {
             .input(z.object({ params: z.object({ id: z.string() }) }))
             .handler(async ({ context, input }) =>
                 ok(await (await orders(context)).show(input.params.id)),
+            ),
+        purchasingOrderFacts: route('GET', '/{id}/facts')
+            .input(
+                z.object({
+                    params: z.object({ id: z.string() }),
+                    query: z.object({ line_id: z.string().optional() }),
+                }),
+            )
+            .handler(async ({ context, input }) =>
+                ok(
+                    await new PurchaseOrderFacts(
+                        context.db,
+                        await coreWorkspace(context),
+                    ).show(input.params.id, input.query.line_id ?? null),
+                ),
             ),
         purchasingOrderCreate: route('POST')
             .input(typedBody<Input>())

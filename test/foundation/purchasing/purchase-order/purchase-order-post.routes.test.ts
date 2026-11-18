@@ -435,6 +435,55 @@ describe.skipIf(!process.env.DB_HOST)('posting from a purchase order', () => {
         expect(receipt[0]?.vendor_document).toBe('FV-2026-009');
     });
 
+    test('the order side panel shows what the vendor is owed and the stock of the selected line', async () => {
+        type Facts = {
+            vendor: {
+                outstanding_orders: string;
+                received_not_invoiced: string;
+                orders: number;
+                receipts: number;
+            } | null;
+            line: {
+                inventory: string;
+                on_order: string;
+                base_unit: string;
+            } | null;
+        };
+        const order = await releasedOrder();
+        const lineId = order.lines[0]?.id ?? '';
+        const facts = async () =>
+            (
+                await json<{ data: Facts }>(
+                    await business.admin.get(
+                        `${orders}/${order.id}/facts?line_id=${lineId}`,
+                    ),
+                    200,
+                )
+            ).data;
+        const before = await facts();
+        await json<Posted>(
+            await post(order, 'receive', [
+                { quantity_to_receive: 3, ...lot },
+                { quantity_to_receive: 0 },
+            ]),
+            200,
+        );
+        const after = await facts();
+        const change = (pick: (value: Facts) => string | number | undefined) =>
+            Number(pick(after)) - Number(pick(before));
+
+        expect(change((value) => value.vendor?.received_not_invoiced)).toBe(
+            3 * 135000,
+        );
+        expect(change((value) => value.vendor?.outstanding_orders)).toBe(
+            -3 * 135000,
+        );
+        expect(change((value) => value.vendor?.receipts)).toBe(1);
+        expect(change((value) => value.line?.inventory)).toBe(300);
+        expect(change((value) => value.line?.on_order)).toBe(-300);
+        expect(after.line?.base_unit).toBe(business.uom.code);
+    });
+
     test('a stale order version is refused', async () => {
         const order = await releasedOrder();
         const response = await savePosting(

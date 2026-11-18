@@ -27,6 +27,7 @@ Tabel `bl_tr_order` dan `bl_tr_order_detail`, nama dari `BL_trOrder` dan `BL_trO
 - **Nomor.** Reference `core.purchase-order-number`, satu sequence per legal entity, awalan `PO-`.
 - **Cetak.** Laporan `core.purchase-order` lewat mesin cetak Core. Order yang belum dirilis tercetak dengan tanda BELUM DIRILIS.
 - **Termin pembayaran.** Order membawa termin dari vendor, seperti Payment Terms Code yang disalin dari kartu vendor di BC, dan boleh diganti selama order terbuka. Rinciannya di [Termin pembayaran](#termin-pembayaran).
+- **Panel samping.** Kartu order memakai FactBox yang sama dengan kartu barang, seperti FactBox page 50 BC. Bagian vendor (Vendor Statistics, page 9094): Sisa utang, Lewat jatuh tempo, Order belum datang (nilai sisa order terbuka dan dirilis), Diterima belum difakturkan (nilai penerimaan diposting yang belum difakturkan), dan Pembayaran terakhir. Riwayat vendor (Buy-from Vendor History, page 9095): jumlah purchase order, penerimaan, faktur, dan nota kredit yang diposting, masing-masing membuka daftarnya dengan pencarian nama vendor. Baris yang diklik (Purchase Line Details, page 9100): stok barang itu di lokasi order dan yang sedang dipesan di order terbuka dan dirilis untuk lokasi itu, dalam satuan dasar. Nilai dihitung dengan rumus total dokumen pembelian yang sama (`documentTotals`). `GET /api/v1/purchasing/orders/{id}/facts?line_id=`; bagian vendor butuh izin lihat faktur pembelian dan bagian baris izin lihat stok, dan masing-masing kosong tanpa izinnya.
 
 ## Termin pembayaran
 
