@@ -1,5 +1,6 @@
 import { ActionButton } from '@operations-metta/ui/action-button';
 import { Badge } from '@operations-metta/ui/badge';
+import { Button } from '@operations-metta/ui/button';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
 import { displayDate } from '@operations-metta/ui/date-picker';
 import { displayAmount } from '@operations-metta/ui/display-number';
@@ -13,6 +14,7 @@ import { useIncrementalList } from '@operations-metta/ui/use-incremental-list';
 import type { ListLoader } from '@operations-metta/ui/use-incremental-list';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
+import { CalendarClock } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -31,6 +33,7 @@ import {
     type VendorPayment,
     type VendorPaymentPermissions,
 } from './vendor-payment-card.tsx';
+import { VendorPaymentSuggestionDialog } from './vendor-payment-suggestion-dialog.tsx';
 
 // Pembayaran ke vendor (Payment Journal BC).
 
@@ -55,6 +58,7 @@ function VendorPaymentsPage(): ReactNode {
     const [permissions, setPermissions] =
         useState<VendorPaymentPermissions>(noPermissions);
     const [amountDecimals, setAmountDecimals] = useState(0);
+    const [suggesting, setSuggesting] = useState(false);
     const loader = useCallback<ListLoader<Row>>(
         async ({ query, cursor, sort, signal }) => {
             const { body } = await api.purchasingVendorPaymentList(
@@ -112,10 +116,22 @@ function VendorPaymentsPage(): ReactNode {
                         }}
                     >
                         {permissions.update && (
-                            <ActionButton
-                                action="create"
-                                onClick={() => openCard('new')}
-                            />
+                            <>
+                                <ActionButton
+                                    action="create"
+                                    onClick={() => openCard('new')}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="command"
+                                    title="Buat draf pembayaran per vendor untuk utang yang sudah jatuh tempo."
+                                    onClick={() => setSuggesting(true)}
+                                >
+                                    <CalendarClock aria-hidden="true" />
+                                    Saran pembayaran
+                                </Button>
+                            </>
                         )}
                     </RecordActionBar>
                 }
@@ -224,6 +240,15 @@ function VendorPaymentsPage(): ReactNode {
                     ]}
                 />
             </ListPageLayout>
+            {suggesting && (
+                <VendorPaymentSuggestionDialog
+                    onClose={() => setSuggesting(false)}
+                    onCreated={() => {
+                        setSuggesting(false);
+                        list.reload();
+                    }}
+                />
+            )}
             {open && (
                 <PageDialog
                     open

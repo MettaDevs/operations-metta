@@ -33,6 +33,7 @@ import {
     vendorPaymentLineRowSchema,
     vendorPaymentRowSchema,
     vendorPaymentStatuses,
+    vendorPaymentSuggestionInputSchema,
 } from './vendor-payment.schema.ts';
 
 const numberReference = 'core.vendor-payment-number';
@@ -54,6 +55,9 @@ const transitions = {
 
 type Scope = { tenantId: string; legalEntityId: string };
 type LineDraft = { id: string | null; entryId: string; amount: string };
+type SuggestedPayment = Awaited<
+    ReturnType<VendorPayments['create']>
+>['body']['data'];
 
 const openRemainingSign = (kind: 'faktur' | 'nota_kredit') =>
     kind === 'faktur' ? 1 : -1;
@@ -83,7 +87,7 @@ const paymentMethodSql = `select id, kode as code, nama as name, perilaku = 'tun
                             and deleted_at is null`;
 
 const openEntriesSql = `
-    select e.id as entry_id, e.jenis as kind, e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
+    select e.id as entry_id, e.vendor_id, e.jenis as kind, e.faktur_id as invoice_id, e.nota_kredit_id as credit_memo_id,
            e.nomor_dokumen as document_number,
            e.no_faktur_vendor as vendor_invoice_number, e.tanggal::text as posting_date,
            e.jatuh_tempo::text as due_date, trim_scale(e.jumlah)::text as amount,
@@ -94,7 +98,7 @@ const openEntriesSql = `
                        and h.status = 'draf' and h.deleted_at is null and h.id is distinct from $4::uuid),
                     0)::text as on_drafts
     from ap_tr_entri_utang e
-    where e.tenant_id = $1 and e.legal_entity_id = $2 and e.vendor_id = $3
+    where e.tenant_id = $1 and e.legal_entity_id = $2 and ($3::uuid is null or e.vendor_id = $3::uuid)
       and ((e.jenis = 'faktur' and e.sisa > 0) or (e.jenis = 'nota_kredit' and e.sisa < 0))`;
 
 const messages = {
@@ -506,6 +510,87 @@ export class VendorPayments {
             headers: {},
             body: { data: await this.document(id) },
         };
+    }
+
+    // Saran pembayaran (report 393 "Suggest Vendor Payments"): satu draf per vendor aktif, berisi faktur dan nota kredit
+    // yang jatuh temponya paling lambat tanggal pilihan dan belum ada di draf lain. Vendor yang utangnya habis dikurangi
+    // kredit dilewati, karena BC tidak membuat baris jurnal bila jumlah per vendor tidak positif.
+    async suggest(body: unknown) {
+        this.workspace.guard('vendor-payment', 'update');
+        const lastDueDate = 'Isi tanggal jatuh tempo terakhir yang benar.';
+        const data = parseInput(vendorPaymentSuggestionInputSchema, body, {
+            ...messages,
+            last_due_date: lastDueDate,
+        });
+        if (!dateSchema.safeParse(data.last_due_date).success)
+            validation({ last_due_date: lastDueDate });
+        const vendorId = data.vendor_id || null;
+        if (vendorId && !lookupId(vendorId))
+            validation({ vendor_id: messages.vendor_id });
+        const rows = await this.db.rows(
+            openEntryChoiceSchema
+                .pick({ entry_id: true, remaining: true, on_drafts: true })
+                .extend({ vendor_id: z.string() }),
+            `${openEntriesSql} and e.jatuh_tempo <= $5::date
+               and exists (select 1 from vendors v where v.tenant_id = e.tenant_id and v.id = e.vendor_id
+                             and v.status = 'active')
+             order by e.vendor_id, e.jatuh_tempo, e.tanggal, e.nomor_dokumen`,
+            [
+                this.scope.tenantId,
+                this.scope.legalEntityId,
+                vendorId,
+                null,
+                data.last_due_date,
+            ],
+        );
+        const byVendor = new Map<
+            string,
+            { lines: { entry_id: string; amount: string }[]; total: Decimal }
+        >();
+        for (const row of rows) {
+            const open = Decimal.of(row.remaining).minus(
+                Decimal.of(row.on_drafts),
+            );
+            if (
+                open.compare(zero) === 0 ||
+                open.compare(zero) !== Decimal.of(row.remaining).compare(zero)
+            )
+                continue;
+            const group = byVendor.get(row.vendor_id) ?? {
+                lines: [],
+                total: zero,
+            };
+            group.lines.push({
+                entry_id: row.entry_id,
+                amount: open.normalized(),
+            });
+            group.total = group.total.plus(open);
+            byVendor.set(row.vendor_id, group);
+        }
+        const payable = [...byVendor].filter(
+            ([, group]) => group.total.compare(zero) > 0,
+        );
+        if (!payable.length)
+            validation({
+                _form: 'Tidak ada utang vendor aktif yang jatuh tempo sampai tanggal itu dan belum ada di draf pembayaran lain.',
+            });
+        const created = await this.db.transaction(async () => {
+            const drafts: SuggestedPayment[] = [];
+            for (const [vendor, group] of payable)
+                drafts.push(
+                    (
+                        await this.create({
+                            vendor_id: vendor,
+                            posting_date: data.posting_date,
+                            payment_method_id: data.payment_method_id,
+                            bank_account_id: data.bank_account_id ?? null,
+                            lines: group.lines,
+                        })
+                    ).body.data,
+                );
+            return drafts;
+        });
+        return { status: 201, headers: {}, body: { data: created } };
     }
 
     private async lockDraft(id: string, version: number) {
