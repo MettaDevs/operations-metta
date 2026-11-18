@@ -104,7 +104,7 @@ async function purchaseOrder(
                         'discount_percent', trim_scale(d.diskon_persen)::text,
                         'vat_percent', trim_scale(d.tarif_ppn)::text,
                         'expected_receipt_date', coalesce(d.tanggal_diharapkan, h.tanggal_diharapkan)::text)
-                        order by d.urutan) as lines,
+                        order by d.urutan) as lines
              from bl_tr_order_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id

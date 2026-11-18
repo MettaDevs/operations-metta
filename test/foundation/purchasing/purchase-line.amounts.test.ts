@@ -46,9 +46,7 @@ const cases: Record<string, PricedLine[]> = {
 
 const decimals: AmountDecimals[] = [0, 1, 2, 3, 4];
 
-// Rumus SQL sebelum nilai baris pindah ke purchase-line.amounts.ts (lineAmountSql dan lateral total di daftar purchase
-// order, penerimaan, dan faktur), dijalankan PostgreSQL atas kolom bertipe sama dengan bl_tr_order_detail.
-const legacySql = `
+const removedLineAmountSql = `
     select coalesce(json_agg(trim_scale(t.amount)::text order by t.position), '[]'::json) as amounts,
            coalesce(trim_scale(sum(t.amount))::text, '0') as subtotal,
            coalesce(trim_scale(round(sum(t.amount * t.tarif_ppn / 100), $2::int))::text, '0') as vat
@@ -59,7 +57,7 @@ const legacySql = `
                as d(position int, jumlah numeric(18,4), harga_satuan numeric(18,4),
                     diskon_persen numeric(7,4), tarif_ppn numeric(7,4))) t`;
 
-const legacySchema = z.object({
+const removedLineAmountSchema = z.object({
     amounts: z.array(z.string()),
     subtotal: z.string(),
     vat: z.string(),
@@ -129,12 +127,12 @@ describe.skipIf(!process.env.DB_HOST)(
                         diskon_persen: entry.discount_percent,
                         tarif_ppn: entry.vat_percent,
                     }));
-                    const [row] = await pool.unsafe(legacySql, [
+                    const [row] = await pool.unsafe(removedLineAmountSql, [
                         JSON.stringify(stored),
                         scale,
                     ]);
                     expect(computed(lines, scale)).toEqual(
-                        legacySchema.parse(row),
+                        removedLineAmountSchema.parse(row),
                     );
                 });
     },

@@ -35,7 +35,6 @@ export const pricedLinesSchema = z.array(
     }),
 );
 
-// Baris harga satu dokumen sebagai json teks, supaya nilainya dihitung documentTotals, bukan SQL.
 export const pricedLinesSql = (
     table: string,
     documentColumn: string,

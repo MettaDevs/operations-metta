@@ -1,10 +1,6 @@
 import { Decimal } from '../../platform/money/index.ts';
 import type { AmountDecimals } from '../currency/index.ts';
 
-// Satu-satunya rumus nilai baris pembelian, dipakai server (daftar, kartu, cetak, posting) dan layar (total sambil
-// mengisi): Line Amount BC = jumlah × harga satuan × (100 − diskon %) / 100, dibulatkan ke presisi jumlah mata uang per
-// baris; PPN dokumen = Σ nilai baris × tarif % / 100, dibulatkan sekali.
-
 export type PricedLine = {
     quantity: string;
     unit_cost: string;
@@ -16,7 +12,6 @@ const zero = Decimal.of('0');
 const hundred = Decimal.of('100');
 const hundredth = Decimal.of('0.01');
 
-// Isian kosong dibaca 0; teks yang bukan angka null.
 export const decimalOf = (text: string) => {
     try {
         return Decimal.of(text.trim() || '0');

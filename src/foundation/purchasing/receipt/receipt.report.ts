@@ -119,7 +119,7 @@ async function receipt(db: Database, workspace: Workspace, receiptId: string) {
                         'discount_percent', trim_scale(d.diskon_persen)::text,
                         'vat_percent', trim_scale(d.tarif_ppn)::text,
                         'funding_source', dana.nama, 'procurement_program', program.nama,
-                        'budget_year', d.tahun_anggaran::text) order by d.urutan) as lines,
+                        'budget_year', d.tahun_anggaran::text) order by d.urutan) as lines
              from bl_tr_penerimaan_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan s on s.tenant_id = d.tenant_id and s.id = d.satuan_id
