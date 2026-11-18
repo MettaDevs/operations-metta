@@ -29,6 +29,14 @@ export const vendorPaymentInputSchema = z.object({
     version: z.number().optional(),
 });
 
+export const vendorPaymentSuggestionInputSchema = z.object({
+    last_due_date: z.string(),
+    vendor_id: z.string().nullable().optional(),
+    posting_date: z.string(),
+    payment_method_id: z.string(),
+    bank_account_id: z.string().nullable().optional(),
+});
+
 export const paymentMethodChoiceSchema = z.object({
     id: z.string(),
     code: z.string(),

@@ -11,6 +11,7 @@ import type {
     openEntriesQuerySchema,
     vendorPaymentInputSchema,
     vendorPaymentListQuerySchema,
+    vendorPaymentSuggestionInputSchema,
 } from './vendor-payment.schema.ts';
 import { VendorPayments } from './vendor-payment.service.ts';
 
@@ -43,6 +44,17 @@ export function vendorPaymentRoutes() {
             .input(typedQuery<z.input<typeof vendorPaymentListQuerySchema>>())
             .handler(async ({ context }) =>
                 ok(await (await payments(context)).list(searchParams(context))),
+            ),
+        purchasingVendorPaymentSuggest: route(
+            'POST',
+            '',
+            '/api/v1/purchasing/vendor-payment-suggestions',
+        )
+            .input(
+                typedBody<z.input<typeof vendorPaymentSuggestionInputSchema>>(),
+            )
+            .handler(async ({ context, input }) =>
+                (await payments(context, input.body)).suggest(input.body),
             ),
         purchasingVendorPaymentMethods: route(
             'GET',

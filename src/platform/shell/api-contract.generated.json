@@ -3057,6 +3057,18 @@
             }
         }
     },
+    "purchasingVendorPaymentSuggest": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "POST",
+                "path": "/api/v1/purchasing/vendor-payment-suggestions",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "purchasingVendorPaymentMethods": {
         "~orpc": {
             "errorMap": {},
