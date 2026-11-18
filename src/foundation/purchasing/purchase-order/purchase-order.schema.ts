@@ -54,6 +54,10 @@ export const purchaseOrderLineRowSchema = z.object({
     quantity_received: z.string(),
     quantity_invoiced: z.string(),
     outstanding_quantity: z.string(),
+    quantity_to_receive: z.string().nullable(),
+    quantity_to_invoice: z.string().nullable(),
+    batch_number: z.string().nullable(),
+    expiry_date: z.string().nullable(),
 });
 
 // Post Receive, Invoice, atau Receive and Invoice dari purchase order BC (PostingSelectionManagement).
@@ -63,10 +67,10 @@ export const purchaseOrderPostModes = [
     'receive_and_invoice',
 ] as const;
 
-// Qty. to Receive, Qty. to Invoice, dan Item Tracking Lines satu lot per baris, dikirim saat posting.
-export const purchaseOrderPostInputSchema = z.object({
-    mode: z.enum(purchaseOrderPostModes),
-    posting_date: z.string(),
+// Qty. to Receive, Qty. to Invoice, dan Item Tracking Lines satu lot per baris, disimpan di order sampai diposting.
+// Kosong berarti bawaan: sisa order, yang diterima belum difakturkan, dan hari ini.
+export const purchaseOrderPostingInputSchema = z.object({
+    posting_date: z.string().nullable().optional(),
     vendor_invoice_number: z.string().nullable().optional(),
     lines: z
         .array(
@@ -79,6 +83,11 @@ export const purchaseOrderPostInputSchema = z.object({
             }),
         )
         .max(500),
+    version: z.number(),
+});
+
+export const purchaseOrderPostInputSchema = z.object({
+    mode: z.enum(purchaseOrderPostModes),
     version: z.number(),
 });
 
@@ -96,6 +105,8 @@ export const purchaseOrderRowSchema = z.object({
     amount: z.string(),
     vat_amount: z.string(),
     released_at: z.string().nullable(),
+    posting_date: z.string().nullable(),
+    vendor_invoice_number: z.string().nullable(),
     version: z.number(),
 });
 

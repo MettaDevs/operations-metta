@@ -12,11 +12,13 @@ import type {
     purchaseOrderInputSchema,
     purchaseOrderListQuerySchema,
     purchaseOrderPostInputSchema,
+    purchaseOrderPostingInputSchema,
 } from './purchase-order.schema.ts';
 import { PurchaseOrders } from './purchase-order.service.ts';
 
 type Input = z.input<typeof purchaseOrderInputSchema>;
 type PostInput = z.input<typeof purchaseOrderPostInputSchema>;
+type PostingInput = z.input<typeof purchaseOrderPostingInputSchema>;
 const record = <T>() =>
     z.object({ params: z.object({ id: z.string() }), body: z.custom<T>() });
 
@@ -88,6 +90,14 @@ export function purchaseOrderRoutes() {
                     input.params.id,
                     input.body,
                 ),
+            ),
+        purchasingOrderPostingUpdate: route('PATCH', '/{id}/posting')
+            .input(record<PostingInput>())
+            .handler(async ({ context, input }) =>
+                new PurchaseOrderPosting(
+                    context.db,
+                    await coreWorkspace(context, input.body),
+                ).save(context.request, input.params.id, input.body),
             ),
         purchasingOrderPost: route('POST', '/{id}/post')
             .input(record<PostInput>())

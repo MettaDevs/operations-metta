@@ -78,7 +78,8 @@ const rowSql = `select * from (
                            json_build_object('id', l.id, 'code', l.kode, 'name', l.nama) as location,
                            ${paymentTermsJson('pt')} as payment_terms,
                            ${pricedLinesSql('bl_tr_order_detail', 'order_id', 'h')} as priced_lines,
-                           ${isoSql('h.dirilis_pada')} as released_at
+                           ${isoSql('h.dirilis_pada')} as released_at,
+                           h.tanggal_posting::text as posting_date, h.no_faktur_vendor as vendor_invoice_number
                     from bl_tr_order h
                     left join termin_pembayaran pt on pt.tenant_id = h.tenant_id and pt.id = h.termin_pembayaran_id
                     join vendors v on v.tenant_id = h.tenant_id and v.id = h.vendor_id
@@ -215,7 +216,10 @@ export class PurchaseOrders {
                         join bl_tr_penerimaan rh on rh.tenant_id = r.tenant_id and rh.id = r.penerimaan_id
                         where r.tenant_id = d.tenant_id and r.order_detail_id = d.id and r.deleted_at is null
                           and rh.status = 'diposting'), 0))::text as quantity_invoiced,
-                    trim_scale(d.jumlah - d.jumlah_diterima)::text as outstanding_quantity
+                    trim_scale(d.jumlah - d.jumlah_diterima)::text as outstanding_quantity,
+                    trim_scale(d.jumlah_terima_sekarang)::text as quantity_to_receive,
+                    trim_scale(d.jumlah_faktur_sekarang)::text as quantity_to_invoice,
+                    d.no_batch as batch_number, d.tanggal_kedaluwarsa::text as expiry_date
              from bl_tr_order_detail d
              join gd_m_barang b on b.tenant_id = d.tenant_id and b.id = d.barang_id
              join gd_m_satuan base on base.tenant_id = b.tenant_id and base.id = b.satuan_dasar_id
@@ -684,6 +688,28 @@ async function settleOrder(db: Database, tenantId: string, orderId: string) {
     );
 }
 
+// Seperti Purch.-Post BC yang memanggil InitQtyToReceive dan InitQtyToInvoice lagi: isian posting yang tersimpan
+// kembali ke bawaan begitu jumlah diterima atau difakturkan berubah.
+export async function clearPostingFields(
+    db: Database,
+    tenantId: string,
+    orderId: string,
+) {
+    await db.execute(
+        `update bl_tr_order_detail
+         set jumlah_terima_sekarang = null, jumlah_faktur_sekarang = null, no_batch = null,
+             tanggal_kedaluwarsa = null, updated_at = $3
+         where tenant_id = $1 and order_id = $2 and deleted_at is null
+           and num_nonnulls(jumlah_terima_sekarang, jumlah_faktur_sekarang, no_batch, tanggal_kedaluwarsa) > 0`,
+        [tenantId, orderId, nowSql()],
+    );
+    await db.execute(
+        `update bl_tr_order set tanggal_posting = null, no_faktur_vendor = null, updated_at = $3
+         where tenant_id = $1 and id = $2 and num_nonnulls(tanggal_posting, no_faktur_vendor) > 0`,
+        [tenantId, orderId, nowSql()],
+    );
+}
+
 export type OrderReceiptLine = {
     index: number;
     orderLineId: string;
@@ -794,6 +820,7 @@ export async function receiveOnOrder(
                 orderLineId,
             ],
         );
+    await clearPostingFields(db, scope.tenantId, orderId);
     await settleOrder(db, scope.tenantId, orderId);
 }
 
@@ -815,6 +842,7 @@ export async function unreceiveOnOrder(
                 line.orderLineId,
             ],
         );
+    await clearPostingFields(db, scope.tenantId, orderId);
     await settleOrder(db, scope.tenantId, orderId);
 }
 
