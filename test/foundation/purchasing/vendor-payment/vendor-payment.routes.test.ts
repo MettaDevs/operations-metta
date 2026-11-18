@@ -55,6 +55,7 @@ const duties = [
     'core.purchase-invoice.manage',
     'core.vendor-payment.manage',
     'core.billing-setup.manage',
+    'core.bank-account.manage',
 ];
 
 describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
@@ -69,6 +70,8 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
     let location: { id: string };
     let transfer: { id: string };
     let receivable: { id: string };
+    let cash: { id: string };
+    let bankAccount: { id: string; version: number };
     let invoiceCount = 0;
 
     const created = async <T = Reference>(
@@ -112,6 +115,17 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
             code: 'BON',
             name: 'Bon',
             behavior: 'piutang',
+        });
+        cash = await created('/api/v1/billing/payment-methods', {
+            code: 'TUNAI',
+            name: 'Tunai',
+            behavior: 'tunai',
+        });
+        bankAccount = await created('/api/v1/bank/accounts', {
+            code: 'BCA-OPS',
+            name: 'Operasional',
+            bank_name: 'BCA',
+            account_number: '1234567890',
         });
     });
 
@@ -180,7 +194,7 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
             vendor_id: vendor.id,
             posting_date: '2026-11-20',
             payment_method_id: transfer.id,
-            bank: 'Bank Contoh',
+            bank_account_id: bankAccount.id,
             reference: 'TRF-1',
             lines,
             ...overrides,
@@ -412,7 +426,10 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
                 200,
             )
         ).data;
-        expect(methods.map((method) => method.code)).toEqual(['TRF']);
+        expect(methods.map((method) => method.code).sort()).toEqual([
+            'TRF',
+            'TUNAI',
+        ]);
         const invalid = await json<Refusal>(
             await draft([{ entry_id: entry.entry_id, amount: 0 }], {
                 payment_method_id: receivable.id,
@@ -444,6 +461,97 @@ describe.skipIf(!process.env.DB_HOST)('vendor payments', () => {
             (await json<Refusal>(await act(payments, empty, 'post'), 422))
                 .errors.lines,
         ).toBeDefined();
+    });
+
+    test('a non-cash payment posts only from an unblocked local bank account, and cash takes none', async () => {
+        const invoice = await postedInvoice();
+        const entry = await entryOf(invoice);
+        const lines = [{ entry_id: entry.entry_id, amount: 1000 }];
+        const cashWithBank = await json<Refusal>(
+            await draft(lines, { payment_method_id: cash.id }),
+            422,
+        );
+        expect(cashWithBank.errors.bank_account_id?.[0]).toContain(
+            'tunai tidak memakai rekening',
+        );
+        const withoutBank = (
+            await json<{ data: Payment }>(
+                await draft(lines, { bank_account_id: null }),
+                201,
+            )
+        ).data;
+        expect(
+            (await json<Refusal>(await act(payments, withoutBank, 'post'), 422))
+                .errors.bank_account_id?.[0],
+        ).toContain('Pilih rekening bank');
+        await business.admin.delete(`${payments}/${withoutBank.id}`, {
+            version: withoutBank.version,
+        });
+
+        const fromBank = (
+            await json<{
+                data: Payment & {
+                    bank_account: { code: string } | null;
+                };
+            }>(await draft(lines), 201)
+        ).data;
+        expect(fromBank.bank_account?.code).toBe('BCA-OPS');
+        const blocked = (
+            await json<{ data: { version: number } }>(
+                await business.admin.patch(
+                    `/api/v1/bank/accounts/${bankAccount.id}`,
+                    {
+                        code: 'BCA-OPS',
+                        name: 'Operasional',
+                        bank_name: 'BCA',
+                        account_number: '1234567890',
+                        blocked: true,
+                        version: bankAccount.version,
+                    },
+                ),
+                200,
+            )
+        ).data;
+        expect(
+            (await json<Refusal>(await act(payments, fromBank, 'post'), 422))
+                .errors.bank_account_id?.[0],
+        ).toContain('diblokir');
+        bankAccount = (
+            await json<{ data: { id: string; version: number } }>(
+                await business.admin.patch(
+                    `/api/v1/bank/accounts/${bankAccount.id}`,
+                    {
+                        code: 'BCA-OPS',
+                        name: 'Operasional',
+                        bank_name: 'BCA',
+                        account_number: '1234567890',
+                        blocked: false,
+                        version: blocked.version,
+                    },
+                ),
+                200,
+            )
+        ).data;
+        const posted = (
+            await json<{ data: Payment }>(
+                await act(payments, fromBank, 'post'),
+                200,
+            )
+        ).data;
+        expect(posted.status).toBe('diposting');
+        const used = await json<Refusal>(
+            await business.admin.delete(
+                `/api/v1/bank/accounts/${bankAccount.id}`,
+                { version: bankAccount.version },
+            ),
+            422,
+        );
+        expect(used.errors._form?.[0]).toContain('sudah dipakai pembayaran');
+        const [row] = await pool.unsafe<{ bank: string | null }[]>(
+            'select bank from ap_tr_pembayaran where id = $1',
+            [posted.id],
+        );
+        expect(row).toEqual({ bank: null });
     });
 
     test('reading payments is separate from posting them', async () => {

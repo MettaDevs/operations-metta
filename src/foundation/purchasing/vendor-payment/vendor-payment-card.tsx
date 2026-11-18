@@ -9,6 +9,12 @@ import { InlineLookup } from '@operations-metta/ui/inline-lookup';
 import type { LookupLoader } from '@operations-metta/ui/inline-lookup';
 import { Input } from '@operations-metta/ui/input';
 import {
+    codeColumn,
+    MasterLookup,
+    nameColumn,
+    type LookupRequest,
+} from '@operations-metta/ui/master-lookup';
+import {
     PageDialogBody,
     PageDialogToolbar,
     usePageDialogRecord,
@@ -39,6 +45,8 @@ import type { Vendor } from '../vendor/vendor-card.tsx';
 export type VendorPayment = ApiBody<'purchasingVendorPaymentShow'>['data'];
 export type VendorPaymentPermissions =
     ApiBody<'purchasingVendorPaymentList'>['permissions'];
+type BankAccount = ApiBody<'bankAccountList'>['data'][number];
+type BankAccountChoice = NonNullable<VendorPayment['bank_account']>;
 type OpenEntry = ApiBody<'purchasingVendorPaymentOpenEntries'>['data'][number];
 type Errors = Record<string, string[]>;
 
@@ -57,7 +65,7 @@ type Header = {
     vendor: { id: string; number: string; name: string } | null;
     posting_date: string;
     payment_method_id: string;
-    bank: string;
+    bank_account: BankAccountChoice | null;
     reference: string;
     description: string;
 };
@@ -76,7 +84,7 @@ function headerOf(payment: VendorPayment | null): Header {
         vendor: payment?.vendor ?? null,
         posting_date: payment?.posting_date ?? today(),
         payment_method_id: payment?.payment_method.id ?? '',
-        bank: payment?.bank ?? '',
+        bank_account: payment?.bank_account ?? null,
         reference: payment?.reference ?? '',
         description: payment?.description ?? '',
     };
@@ -95,6 +103,24 @@ function linesOf(payment: VendorPayment | null): Line[] {
         amount: line.amount,
     }));
 }
+
+// Hanya rekening yang bisa dipakai pembayaran: tidak diblokir dan bermata uang lokal.
+const loadBankAccounts = async ({ query, cursor, signal }: LookupRequest) => {
+    const { body } = await api.bankAccountList(
+        { query: { q: query, usable: '1', ...(cursor ? { cursor } : {}) } },
+        { signal },
+    );
+    return {
+        items: body.data,
+        nextCursor: body.next_cursor,
+        canCreate: body.can_manage,
+    };
+};
+
+const bankAccountText = (account: BankAccountChoice | null) =>
+    account
+        ? `${account.code} · ${account.bank_name} ${account.account_number}`
+        : '';
 
 // Kartu pembayaran ke vendor (Payment Journal yang diterapkan ke Vendor Ledger Entries di BC).
 export function VendorPaymentCard({
@@ -185,7 +211,7 @@ export function VendorPaymentCard({
         vendor_id: header.vendor?.id ?? '',
         posting_date: header.posting_date,
         payment_method_id: header.payment_method_id,
-        bank: header.bank || null,
+        bank_account_id: header.bank_account?.id ?? null,
         reference: header.reference || null,
         description: header.description || null,
         lines: lines.map((line) => ({
@@ -365,6 +391,10 @@ export function VendorPaymentCard({
     const methodName = payment
         ? `${payment.payment_method.code} - ${payment.payment_method.name}`
         : '';
+    const cash = editable
+        ? methods?.find((method) => method.id === header.payment_method_id)
+              ?.cash
+        : payment?.payment_method.cash;
 
     return (
         <form
@@ -552,6 +582,11 @@ export function VendorPaymentCard({
                                     setHeader({
                                         ...header,
                                         payment_method_id: value ?? '',
+                                        bank_account: methods?.find(
+                                            (method) => method.id === value,
+                                        )?.cash
+                                            ? null
+                                            : header.bank_account,
                                     })
                                 }
                                 portalContainer={portalContainer}
@@ -564,24 +599,65 @@ export function VendorPaymentCard({
                             />
                         )}
                     </FormControl>
-                    <FormControl
-                        error={error('bank')}
-                        hint="Bank atau rekening asal uang, misalnya untuk transfer."
-                    >
-                        <Input
-                            label="Bank"
-                            maxLength={60}
-                            data-error-field="bank"
-                            value={header.bank}
-                            readOnly={!editable}
-                            onChange={(event) =>
-                                setHeader({
-                                    ...header,
-                                    bank: event.target.value,
-                                })
-                            }
-                        />
-                    </FormControl>
+                    {cash === false &&
+                        (editable ? (
+                            <MasterLookup<BankAccount>
+                                label="Rekening bank"
+                                noun="Rekening"
+                                field="bank_account_id"
+                                value={header.bank_account}
+                                load={loadBankAccounts}
+                                display={(account) =>
+                                    `${account.code} · ${account.name}`
+                                }
+                                columns={[
+                                    codeColumn(),
+                                    nameColumn(),
+                                    {
+                                        id: 'bank_name',
+                                        header: 'Bank',
+                                        width: 140,
+                                        cell: (account) => account.bank_name,
+                                    },
+                                    {
+                                        id: 'account_number',
+                                        header: 'Nomor rekening',
+                                        width: 160,
+                                        cell: (account) =>
+                                            account.account_number,
+                                    },
+                                ]}
+                                onChange={(account) =>
+                                    setHeader({
+                                        ...header,
+                                        bank_account: {
+                                            id: account.id,
+                                            code: account.code,
+                                            name: account.name,
+                                            bank_name: account.bank_name,
+                                            account_number:
+                                                account.account_number,
+                                        },
+                                    })
+                                }
+                                error={error('bank_account_id')}
+                                hint="Rekening asal uang. Wajib sebelum posting pembayaran non tunai."
+                                portalContainer={portalContainer}
+                            />
+                        ) : (
+                            <FormControl>
+                                <Input
+                                    label="Rekening bank"
+                                    readOnly
+                                    value={bankAccountText(header.bank_account)}
+                                />
+                            </FormControl>
+                        ))}
+                    {payment?.bank && (
+                        <FormControl hint="Bank yang diketik sebelum ada master rekening bank.">
+                            <Input label="Bank" readOnly value={payment.bank} />
+                        </FormControl>
+                    )}
                     <FormControl
                         error={error('reference')}
                         hint="Misalnya nomor bukti transfer atau nomor kuitansi dari vendor."

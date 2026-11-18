@@ -424,6 +424,19 @@ export const sysAdminArea: NavigationAreaEntry = {
             ],
         },
         {
+            id: 'bank',
+            label: 'Bank',
+            icon: 'landmark',
+            items: [
+                {
+                    id: 'bank-accounts',
+                    label: 'Rekening bank',
+                    href: '/sysadmin/bank/bank-accounts',
+                    permission: 'core.bank-account.read',
+                },
+            ],
+        },
+        {
             id: 'calendar',
             label: 'Kalender',
             icon: 'calendar',

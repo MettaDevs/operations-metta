@@ -57,6 +57,7 @@ Urutan di bawah ini urutan satu pasien rawat jalan. `bun scripts/verify.ts journ
 - [Retur ke vendor](./retur-ke-vendor.md): retur sebagian penerimaan yang sudah diposting, penolakan baris yang barangnya sudah habis, Batal posting penerimaan yang ditolak sesudah diretur, dan Batal retur.
 - [Faktur pembelian dan utang vendor](./faktur-pembelian.md): termin di vendor, Ambil baris penerimaan, posting yang mencatat utang dengan jatuh tempo, penerimaan yang terkunci sesudah difakturkan, dan Batal posting faktur.
 - [Pembayaran ke vendor](./pembayaran-vendor.md): cara bayar dari jenis bayar non tunai, bayar sebagian lalu lunas di Utang vendor, faktur yang terkunci sesudah dibayar, bukti pembayaran lewat mesin cetak, dan Batal posting pembayaran dari yang terakhir.
+- [Rekening bank](./rekening-bank.md): master rekening per legal entity, rekening asal uang yang wajib sebelum posting pembayaran non tunai, rekening diblokir, dan Delete yang ditolak untuk rekening terpakai.
 - [Kartu stok](./kartu-stok.md): gerak stok satu barang di satu lokasi dengan jenis gerak dalam bahasa sehari-hari, cetak PDF dan Word lewat mesin cetak, dan saldo yang dicocokkan dengan kartu gudang.
 - [LPLPO](./lplpo.md): laporan pemakaian dan lembar permintaan obat satu lokasi dari Stok per lokasi, dicocokkan dengan kartu gudang dan permintaan pembelian.
 

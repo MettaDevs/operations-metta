@@ -45,6 +45,7 @@ import {
     numberSequenceRoutes,
     registerOrganizationDefaults,
 } from './foundation/number-sequence/index.ts';
+import { bankAccountRoutes } from './foundation/bank/index.ts';
 import { calendarRoutes } from './foundation/calendar/index.ts';
 import {
     billingRoutes,
@@ -192,6 +193,7 @@ export const router = {
     ...pricingRoutes(),
     ...billingRoutes(),
     ...currencyRoutes(),
+    ...bankAccountRoutes(),
     ...exchangeRateRoutes(),
     ...assetManagementRoutes(),
     ...healthcareRoutes(),
