@@ -46,6 +46,8 @@ export const requisitionRowSchema = z.object({
     accepted: z.boolean(),
     suggested: z.boolean(),
     order: z.object({ id: z.string(), number: z.string() }).nullable(),
+    transfer_from_location: reference.nullable(),
+    transfer_order: z.object({ id: z.string(), number: z.string() }).nullable(),
     version: z.number(),
 });
 

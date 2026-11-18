@@ -248,6 +248,113 @@ function pickErrors(lines: PickedLine[], batches: Map<string, BatchStock>) {
     return errors;
 }
 
+type Scope = { tenantId: string; legalEntityId: string };
+
+// Cara mutasi lokasi pemasok, atau legal entity bila lokasi tidak menimpanya.
+async function transferMode(
+    db: Database,
+    scope: Scope,
+    fromLocationId: string,
+) {
+    const found = await db.one(
+        z.object({ mode: z.enum(transferModes) }),
+        `select coalesce(l.cara_mutasi, p.cara_mutasi) as mode
+         from gd_m_lokasi l
+         join gd_m_parameter p on p.tenant_id = l.tenant_id and p.legal_entity_id = l.legal_entity_id
+         where l.tenant_id = $1 and l.legal_entity_id = $2 and l.id = $3`,
+        [scope.tenantId, scope.legalEntityId, fromLocationId],
+    );
+    if (!found) throw new Error(`Location ${fromLocationId} has no mode.`);
+    return found.mode;
+}
+
+// Lokasi transit bawaan: satu-satunya lokasi transit di legal entity ini, bila memang hanya ada satu.
+async function onlyTransit(db: Database, scope: Scope) {
+    const found = await db.rows(
+        z.object({ id: z.string() }),
+        `select id from gd_m_lokasi
+         where tenant_id = $1 and legal_entity_id = $2 and transit and deleted_at is null
+         limit 2`,
+        [scope.tenantId, scope.legalEntityId],
+    );
+    return found.length === 1 && found[0] ? found[0].id : null;
+}
+
+async function defaultTransit(
+    db: Database,
+    scope: Scope,
+    fromLocationId: string,
+) {
+    return (await transferMode(db, scope, fromLocationId)) === 'kirim_terima'
+        ? await onlyTransit(db, scope)
+        : null;
+}
+
+type NewTransferOrder = {
+    id: string;
+    fromId: string;
+    toId: string;
+    transitId: string | null;
+    postingDate: string;
+    description: string | null;
+    lines: {
+        itemId: string;
+        unitId: string;
+        conversion: bigint;
+        quantity: bigint;
+    }[];
+};
+
+export async function insertTransferOrder(
+    db: Database,
+    scope: Scope,
+    order: NewTransferOrder,
+): Promise<{ number: string; lineIds: string[] }> {
+    const number = await new NumberIssuer(db, {
+        tenantId: scope.tenantId,
+        moduleId: 'core',
+    }).issue({
+        reference: transferNumberReferences.order,
+        key: `amprahan:${order.id}`,
+        documentDate: order.postingDate,
+        legalEntityId: scope.legalEntityId,
+    });
+    const stamp = nowSql();
+    await db.insert('gd_tr_amprahan', {
+        id: order.id,
+        tenant_id: scope.tenantId,
+        legal_entity_id: scope.legalEntityId,
+        nomor: number,
+        tanggal: order.postingDate,
+        lokasi_peminta_id: order.toId,
+        lokasi_pemasok_id: order.fromId,
+        lokasi_transit_id:
+            order.transitId ?? (await defaultTransit(db, scope, order.fromId)),
+        keterangan: order.description,
+        created_at: stamp,
+        updated_at: stamp,
+    });
+    const lineIds: string[] = [];
+    for (const [index, line] of order.lines.entries()) {
+        const lineId = Bun.randomUUIDv7();
+        lineIds.push(lineId);
+        await db.insert('gd_tr_amprahan_detail', {
+            id: lineId,
+            tenant_id: scope.tenantId,
+            legal_entity_id: scope.legalEntityId,
+            amprahan_id: order.id,
+            urutan: index + 1,
+            barang_id: line.itemId,
+            satuan_id: line.unitId,
+            konversi: toNumeric(line.conversion, quantityScale),
+            jumlah_diminta: toNumeric(line.quantity, quantityScale),
+            created_at: stamp,
+            updated_at: stamp,
+        });
+    }
+    return { number, lineIds };
+}
+
 // Amprah (Transfer Order di BC): lokasi peminta meminta barang, lokasi pemasok mengirimnya sebagian atau seluruhnya,
 // dan lokasi peminta menerimanya. Cara mutasi diambil dari setelan lokasi pemasok saat posting kirim: langsung
 // memindahkan stok dalam satu posting, kirim-terima lewat lokasi transit dalam dua posting. Setiap posting menjadi
@@ -505,32 +612,6 @@ export class TransferOrders {
             : undefined;
     }
 
-    // Cara mutasi lokasi pemasok, atau legal entity bila lokasi tidak menimpanya.
-    private async transferMode(fromLocationId: string) {
-        const found = await this.db.one(
-            z.object({ mode: z.enum(transferModes) }),
-            `select coalesce(l.cara_mutasi, p.cara_mutasi) as mode
-             from gd_m_lokasi l
-             join gd_m_parameter p on p.tenant_id = l.tenant_id and p.legal_entity_id = l.legal_entity_id
-             where l.tenant_id = $1 and l.legal_entity_id = $2 and l.id = $3`,
-            [this.scope.tenantId, this.scope.legalEntityId, fromLocationId],
-        );
-        if (!found) throw new Error(`Location ${fromLocationId} has no mode.`);
-        return found.mode;
-    }
-
-    // Lokasi transit bawaan: satu-satunya lokasi transit di legal entity ini, bila memang hanya ada satu.
-    private async onlyTransit() {
-        const found = await this.db.rows(
-            z.object({ id: z.string() }),
-            `select id from gd_m_lokasi
-             where tenant_id = $1 and legal_entity_id = $2 and transit and deleted_at is null
-             limit 2`,
-            [this.scope.tenantId, this.scope.legalEntityId],
-        );
-        return found.length === 1 && found[0] ? found[0].id : null;
-    }
-
     private async checked(body: unknown) {
         const data = parseInput(transferOrderInputSchema, body, messages);
         const errors: Record<string, string> = {};
@@ -601,11 +682,7 @@ export class TransferOrders {
         await requireLocationAccess(this.db, this.workspace, [from.id, to.id], {
             anyOf: true,
         });
-        if (
-            transitId === null &&
-            (await this.transferMode(from.id)) === 'kirim_terima'
-        )
-            transitId = await this.onlyTransit();
+        transitId ??= await defaultTransit(this.db, this.scope, from.id);
         return {
             fromId: from.id,
             toId: to.id,
@@ -681,26 +758,7 @@ export class TransferOrders {
         const data = await this.checked(body);
         const id = Bun.randomUUIDv7();
         await this.db.transaction(async () => {
-            const number = await this.issue(
-                transferNumberReferences.order,
-                `amprahan:${id}`,
-                data.postingDate,
-            );
-            const stamp = nowSql();
-            await this.db.insert('gd_tr_amprahan', {
-                id,
-                tenant_id: this.scope.tenantId,
-                legal_entity_id: this.scope.legalEntityId,
-                nomor: number,
-                tanggal: data.postingDate,
-                lokasi_peminta_id: data.toId,
-                lokasi_pemasok_id: data.fromId,
-                lokasi_transit_id: data.transitId,
-                keterangan: data.description,
-                created_at: stamp,
-                updated_at: stamp,
-            });
-            await this.saveLines(id, data.lines);
+            await insertTransferOrder(this.db, this.scope, { id, ...data });
         });
         return {
             status: 201,
@@ -1202,11 +1260,16 @@ export class TransferOrders {
                 ),
             );
             if (Object.keys(errors).length) validation(errors);
-            const mode = await this.transferMode(claimed.from_location_id);
+            const mode = await transferMode(
+                this.db,
+                this.scope,
+                claimed.from_location_id,
+            );
             let transitId: string | null = null;
             if (mode === 'kirim_terima') {
                 transitId =
-                    claimed.transit_location_id ?? (await this.onlyTransit());
+                    claimed.transit_location_id ??
+                    (await onlyTransit(this.db, this.scope));
                 const transit = await this.activeLocation(transitId);
                 if (!transitId || !transit?.transit)
                     validation({

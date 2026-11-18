@@ -10,6 +10,8 @@ const reference = z.object({
 export const reorderingPolicies = ['jumlah_tetap', 'maksimum'] as const;
 export type ReorderingPolicy = (typeof reorderingPolicies)[number];
 
+export const replenishmentSystems = ['beli', 'amprah'] as const;
+
 export const stockkeepingUnitRowSchema = z.object({
     id: z.string(),
     item_id: z.string(),
@@ -18,6 +20,8 @@ export const stockkeepingUnitRowSchema = z.object({
     maximum_quantity: z.string().nullable(),
     reordering_policy: z.enum(reorderingPolicies).nullable(),
     reorder_quantity: z.string().nullable(),
+    replenishment_system: z.enum(replenishmentSystems),
+    transfer_from_location: reference.nullable(),
     version: z.number(),
 });
 
@@ -34,5 +38,7 @@ export const stockkeepingUnitInputSchema = z.object({
     maximum_quantity: quantity,
     reordering_policy: z.enum(reorderingPolicies).nullable().optional(),
     reorder_quantity: quantity,
+    replenishment_system: z.enum(replenishmentSystems).optional(),
+    transfer_from_location_id: z.string().nullable().optional(),
     version: z.number().optional(),
 });

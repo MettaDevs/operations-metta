@@ -44,6 +44,11 @@ const noPermissions: RequisitionPermissions = {
     process: false,
 };
 
+const supplier = (row: Row) =>
+    row.transfer_from_location
+        ? `Amprah dari ${row.transfer_from_location.code}`
+        : (row.vendor?.name ?? '');
+
 function RequisitionsPage(): ReactNode {
     const search = route.useSearch();
     const navigate = route.useNavigate();
@@ -102,7 +107,7 @@ function RequisitionsPage(): ReactNode {
             !(await confirm({
                 title: 'Hitung saran pesan?',
                 description:
-                    'Barang yang stoknya sampai di stok minimum lokasi, setelah ditambah purchase order yang belum datang dan permintaan yang belum dipesan, dibuatkan saran dengan jumlah menurut cara pesan ulangnya. Saran yang belum diubah diganti hasil hitungan baru; permintaan yang sudah diubah atau disetujui tidak disentuh.',
+                    'Barang yang stoknya sampai di stok minimum lokasi, setelah ditambah purchase order dan amprah yang belum datang dan permintaan yang belum dipesan, dibuatkan saran dengan jumlah menurut cara pesan ulangnya. Barang yang cara pengadaannya amprah disarankan diamprah dari lokasi asalnya, dan jumlahnya ikut menjadi kebutuhan lokasi asal itu. Saran yang belum diubah diganti hasil hitungan baru; permintaan yang sudah diubah atau disetujui tidak disentuh.',
                 confirmLabel: 'Hitung saran',
             }))
         )
@@ -140,9 +145,9 @@ function RequisitionsPage(): ReactNode {
     const carryOut = async () => {
         if (
             !(await confirm({
-                title: 'Buat purchase order?',
-                description: `Semua permintaan yang disetujui dibuatkan purchase order terbuka, satu order per vendor dan lokasi. Order bisa diperiksa dan diubah sebelum dirilis.`,
-                confirmLabel: 'Buat purchase order',
+                title: 'Buat dokumen?',
+                description: `Permintaan yang disetujui dibuatkan purchase order terbuka, satu order per vendor dan lokasi, dan permintaan amprah dibuatkan draf amprah, satu per lokasi asal dan lokasi peminta. Keduanya bisa diperiksa dan diubah sebelum diproses lebih lanjut.`,
+                confirmLabel: 'Buat dokumen',
             }))
         )
             return;
@@ -152,14 +157,14 @@ function RequisitionsPage(): ReactNode {
                 body: { order_date: today() },
             });
             toast.success(
-                `Purchase order dibuat: ${body.data.map((order) => order.number).join(', ')}. Buka Purchase order untuk memeriksa dan merilisnya.`,
+                `Dokumen dibuat: ${body.data.map((order) => order.number).join(', ')}. Buka Purchase order atau Amprah untuk memeriksa dan memprosesnya.`,
             );
             list.reload();
         } catch (caught) {
             toast.error(
                 caught instanceof ApiError && caught.status === 422
                     ? Object.values(caught.errors).flat().join(' ')
-                    : errorText(caught, 'Purchase order belum dibuat.'),
+                    : errorText(caught, 'Dokumen belum dibuat.'),
             );
         } finally {
             setBusy(false);
@@ -211,11 +216,11 @@ function RequisitionsPage(): ReactNode {
                                 variant="ghost"
                                 size="command"
                                 disabled={busy || accepted === 0}
-                                title="Buat purchase order dari semua permintaan yang disetujui."
+                                title="Buat purchase order dan amprah dari semua permintaan yang disetujui."
                                 onClick={() => void carryOut()}
                             >
                                 <ClipboardCheck aria-hidden="true" />
-                                Buat purchase order
+                                Buat dokumen
                             </Button>
                         )}
                         <Button
@@ -332,14 +337,12 @@ function RequisitionsPage(): ReactNode {
                         },
                         {
                             id: 'vendor',
-                            header: 'Vendor',
+                            header: 'Vendor atau asal amprah',
                             width: 200,
                             cell: (row) => (
-                                <DataTableText>
-                                    {row.vendor?.name ?? ''}
-                                </DataTableText>
+                                <DataTableText>{supplier(row)}</DataTableText>
                             ),
-                            sortValue: (row) => row.vendor?.name ?? '',
+                            sortValue: supplier,
                         },
                         {
                             id: 'requested_by',
@@ -354,14 +357,15 @@ function RequisitionsPage(): ReactNode {
                         {
                             id: 'order',
                             header:
-                                status === 'diproses'
-                                    ? 'Purchase order'
-                                    : 'Status',
+                                status === 'diproses' ? 'Dokumen' : 'Status',
                             width: 140,
                             cell: (row) =>
-                                row.order ? (
+                                row.order || row.transfer_order ? (
                                     <DataTableText>
-                                        {row.order.number}
+                                        {
+                                            (row.order ?? row.transfer_order)
+                                                ?.number
+                                        }
                                     </DataTableText>
                                 ) : (
                                     <Badge

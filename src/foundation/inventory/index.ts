@@ -37,6 +37,7 @@ export {
     defaultLocation,
     requireLocationAccess,
 } from './warehouse-employee/location-access.ts';
+export { insertTransferOrder } from './transfer/transfer-order.service.ts';
 export { type Funding } from './item-ledger/allocation.ts';
 export {
     entryKinds,

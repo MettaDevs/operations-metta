@@ -448,78 +448,94 @@ export function RequisitionCard({
                             }
                         />
                     </FormControl>
-                    <FormControl
-                        error={error('vendor_id')}
-                        data-error-field="vendor_id"
-                        hint="Diisi petugas pembelian. Permintaan dengan vendor dan lokasi yang sama digabung menjadi satu purchase order."
-                    >
-                        {purchasing ? (
-                            <InlineLookup<Vendor>
-                                label="Vendor"
-                                loadItems={vendorLoader}
-                                value={
-                                    form.vendor
-                                        ? {
-                                              ...form.vendor,
-                                              tax_number: null,
-                                              payment_terms: null,
-                                              status: 'active',
-                                              version: 0,
-                                          }
-                                        : null
-                                }
-                                displayValue={form.vendor?.name ?? ''}
-                                onValueChange={(vendor) => set({ vendor })}
-                                getItemValue={(vendor) => vendor.id}
-                                getItemLabel={(vendor) => vendor.name}
-                                placeholder="Cari nomor atau nama vendor…"
-                                emptyMessage="Vendor tidak ditemukan."
-                                showDetails={false}
-                                portalContainer={portalContainer}
-                                columns={[
-                                    {
-                                        id: 'number',
-                                        header: 'Nomor',
-                                        width: 130,
-                                        cell: (vendor) => vendor.number,
-                                    },
-                                    {
-                                        id: 'name',
-                                        header: 'Nama',
-                                        width: 240,
-                                        cell: (vendor) => vendor.name,
-                                    },
-                                ]}
-                            />
-                        ) : (
+                    {requisition?.transfer_from_location ? (
+                        <FormControl hint="Barang ini diminta dari lokasi lain lewat amprah, sesuai cara pengadaannya di setelan barang per lokasi.">
                             <Input
-                                label="Vendor"
+                                label="Amprah dari"
                                 readOnly
-                                value={form.vendor?.name ?? ''}
+                                value={label(
+                                    requisition.transfer_from_location,
+                                )}
                             />
-                        )}
-                    </FormControl>
-                    <FormControl
-                        error={error('unit_cost')}
-                        hint="Kosongkan untuk memakai harga penerimaan terakhir barang ini."
-                    >
-                        <Input
-                            label="Harga satuan"
-                            type="number"
-                            min={0}
-                            step="any"
-                            inputMode="decimal"
-                            data-error-field="unit_cost"
-                            readOnly={!purchasing}
-                            value={form.unit_cost}
-                            onChange={(event) =>
-                                set({ unit_cost: event.target.value })
-                            }
-                        />
-                    </FormControl>
+                        </FormControl>
+                    ) : (
+                        <>
+                            <FormControl
+                                error={error('vendor_id')}
+                                data-error-field="vendor_id"
+                                hint="Diisi petugas pembelian. Permintaan dengan vendor dan lokasi yang sama digabung menjadi satu purchase order."
+                            >
+                                {purchasing ? (
+                                    <InlineLookup<Vendor>
+                                        label="Vendor"
+                                        loadItems={vendorLoader}
+                                        value={
+                                            form.vendor
+                                                ? {
+                                                      ...form.vendor,
+                                                      tax_number: null,
+                                                      payment_terms: null,
+                                                      status: 'active',
+                                                      version: 0,
+                                                  }
+                                                : null
+                                        }
+                                        displayValue={form.vendor?.name ?? ''}
+                                        onValueChange={(vendor) =>
+                                            set({ vendor })
+                                        }
+                                        getItemValue={(vendor) => vendor.id}
+                                        getItemLabel={(vendor) => vendor.name}
+                                        placeholder="Cari nomor atau nama vendor…"
+                                        emptyMessage="Vendor tidak ditemukan."
+                                        showDetails={false}
+                                        portalContainer={portalContainer}
+                                        columns={[
+                                            {
+                                                id: 'number',
+                                                header: 'Nomor',
+                                                width: 130,
+                                                cell: (vendor) => vendor.number,
+                                            },
+                                            {
+                                                id: 'name',
+                                                header: 'Nama',
+                                                width: 240,
+                                                cell: (vendor) => vendor.name,
+                                            },
+                                        ]}
+                                    />
+                                ) : (
+                                    <Input
+                                        label="Vendor"
+                                        readOnly
+                                        value={form.vendor?.name ?? ''}
+                                    />
+                                )}
+                            </FormControl>
+                            <FormControl
+                                error={error('unit_cost')}
+                                hint="Kosongkan untuk memakai harga penerimaan terakhir barang ini."
+                            >
+                                <Input
+                                    label="Harga satuan"
+                                    type="number"
+                                    min={0}
+                                    step="any"
+                                    inputMode="decimal"
+                                    data-error-field="unit_cost"
+                                    readOnly={!purchasing}
+                                    value={form.unit_cost}
+                                    onChange={(event) =>
+                                        set({ unit_cost: event.target.value })
+                                    }
+                                />
+                            </FormControl>
+                        </>
+                    )}
                     <FormControl
                         error={error('accepted')}
-                        hint="Hanya permintaan yang disetujui yang dibuatkan purchase order."
+                        hint="Hanya permintaan yang disetujui yang dibuatkan purchase order atau amprah."
                     >
                         <Field
                             orientation="horizontal"
