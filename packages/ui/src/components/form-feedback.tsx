@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 
 import { Alert, AlertDescription, AlertTitle } from './alert';
 import { Button } from './button';
+import { CopyButton } from './copy-button';
 import { FieldError } from './field';
 import { Textarea } from './textarea';
 
@@ -696,24 +697,9 @@ function FormErrorNotice({
         mode: 'expanded' | 'collapsed' | 'dismissed';
     } | null>(null);
     const mode = display?.feedback === feedback ? display.mode : 'expanded';
-    const [copyResult, setCopyResult] = React.useState<{
-        feedback: FormFeedback;
-        status: 'copied' | 'manual';
-    } | null>(null);
-    async function copyDetails(current: FormFeedback) {
-        if (!current.details) {
-            return;
-        }
-
-        try {
-            await navigator.clipboard.writeText(current.details);
-            setCopyResult({ feedback: current, status: 'copied' });
-        } catch {
-            setCopyResult({ feedback: current, status: 'manual' });
-        }
-    }
-
-    const copied = copyResult?.feedback === feedback ? copyResult.status : null;
+    const [manualCopy, setManualCopy] = React.useState<FormFeedback | null>(
+        null,
+    );
 
     if (mode === 'dismissed') {
         return (
@@ -818,21 +804,16 @@ function FormErrorNotice({
                             </Button>
                         ))}
                         {feedback.details && (
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void copyDetails(feedback)}
+                            <CopyButton
+                                text={feedback.details}
+                                onError={() => setManualCopy(feedback)}
                             >
                                 Salin detail bantuan
-                            </Button>
+                            </CopyButton>
                         )}
                     </div>
                 )}
-                {copied === 'copied' && (
-                    <p role="status">Rincian sudah disalin.</p>
-                )}
-                {copied === 'manual' && (
+                {manualCopy === feedback && (
                     <div className="flex w-full flex-col gap-2">
                         <p role="status">
                             Belum dapat disalin otomatis. Pilih teks berikut dan
