@@ -5,6 +5,7 @@ export {
     ApiError,
     errorText,
     orpc,
+    shellQuery,
     type ApiBody,
     type ShellData,
 } from './api.ts';
