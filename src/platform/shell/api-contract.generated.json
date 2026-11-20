@@ -94,6 +94,29 @@
             }
         }
     },
+    "preferences": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "GET",
+                "path": "/api/v1/preferences",
+                "outputStructure": "detailed"
+            }
+        }
+    },
+    "preferenceUpdate": {
+        "~orpc": {
+            "errorMap": {},
+            "meta": {},
+            "route": {
+                "method": "PUT",
+                "path": "/api/v1/preferences/{key}",
+                "inputStructure": "detailed",
+                "outputStructure": "detailed"
+            }
+        }
+    },
     "accessPage": {
         "~orpc": {
             "errorMap": {},

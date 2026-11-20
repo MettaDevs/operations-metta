@@ -14,7 +14,12 @@ import {
 type Organization = { id: string; name: string; classification: string };
 type Shell = {
     auth: {
-        user: { id: string; name: string; email: string };
+        user: {
+            id: string;
+            name: string;
+            email: string;
+            preferences: Record<string, string>;
+        };
         membership: {
             id: string;
             tenant_id: string;
@@ -120,6 +125,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                 id: member.userId,
                 name: 'Anggota uji',
                 email: member.email,
+                preferences: expect.any(Object),
             },
             membership: {
                 id: member.membershipId,
@@ -361,6 +367,7 @@ describe.skipIf(!process.env.DB_HOST)('shell data', () => {
                 id: loner.userId,
                 name: 'Tanpa Tenant',
                 email: loner.email,
+                preferences: expect.any(Object),
             },
             membership: null,
         });

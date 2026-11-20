@@ -6,7 +6,7 @@ import {
 } from '@operations-metta/ui/dropdown-menu';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { LogOut, UserRound } from 'lucide-react';
+import { LogOut, Settings, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, errorText } from './api.ts';
 import type { ShellData } from './api.ts';
@@ -42,7 +42,7 @@ export function UserInfo({ user }: { user: User }) {
     );
 }
 
-// Isi menu profil di header: halaman profil (data akun dan tautan akun SSO) dan keluar.
+// Isi menu profil di header: halaman profil (data akun dan tautan akun SSO), setelan pribadi, dan keluar.
 export function UserMenuContent({ user }: { user: User }) {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
@@ -74,6 +74,14 @@ export function UserMenuContent({ user }: { user: User }) {
             >
                 <UserRound className="mr-2" />
                 Profil
+            </DropdownMenuItem>
+            <DropdownMenuItem
+                className="cursor-pointer"
+                onSelect={() => void navigate({ to: '/preferences' })}
+                data-test="preferences-link"
+            >
+                <Settings className="mr-2" />
+                Setelan
             </DropdownMenuItem>
             <DropdownMenuItem
                 className="cursor-pointer"

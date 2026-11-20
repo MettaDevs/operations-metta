@@ -37,6 +37,17 @@ export function AppLayout(): ReactNode {
     useEffect(() => {
         if (areaId) rememberArea(userId, areaId);
     }, [userId, areaId]);
+    const preferences = shell.auth.user.preferences;
+    useEffect(() => {
+        const root = document.documentElement;
+        const entries = Object.entries(preferences);
+        const attribute = (key: string) => `data-${key.replaceAll('_', '-')}`;
+        for (const [key, value] of entries)
+            root.setAttribute(attribute(key), value);
+        return () => {
+            for (const [key] of entries) root.removeAttribute(attribute(key));
+        };
+    }, [preferences]);
     // Data dan draft konteks lama tidak boleh tertinggal ketika workspace berganti.
     const scope = JSON.stringify([
         shell.auth.user.id,

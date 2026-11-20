@@ -14,15 +14,26 @@ Kartu record yang dibuka sebagai halaman bertumpuk di atas daftar yang tetap ter
 4. **Navigasi sekunder**: aksi milik bagian kartu.
 5. **Toolbar form**: Simpan lalu Batal di kiri atas, sebelum body, di dalam form yang sama. Ringkasan error di bawah toolbar, di luar area yang bergulir.
 6. **Body** yang bergulir.
-7. **Tombol tepi**: data sebelumnya/berikutnya sebagai tombol bulat `secondary` di luar sisi kiri dan kanan kartu pada layar lebar, dengan celah 4px dari kartu.
+7. **Tombol tepi**: data sebelumnya/berikutnya sebagai tombol bulat `secondary` pada layar lebar. Letaknya mengikuti [tampilan modal](#tampilan-modal).
 
 ## Tumpukan
 
 - Kartu dibuka di area konten Shell; header dan pencarian Shell tetap bisa dipakai. Di luar Shell kartu memakai viewport.
-- Area konten di belakang ditutup `scrim-page`. Kartu di bawah kartu aktif tetap terpasang, tidak bisa disentuh, diredupkan `scrim-inactive`, dan bergeser `stack-offset` ke kiri per lapis (maksimal 3 lapis). Draft, pilihan, posisi gulir, dan ukurannya bertahan.
-- Lebar maksimum `page-max-width`, di tengah, dengan jarak 40px di atas dan bawah area konten. Pada viewport dengan lebar di bawah 1280px atau tinggi di bawah 768px, kartu memenuhi tinggi area tanpa jarak atas dan bawah. Diperbesar: inset horizontal `page-expanded-inset` (geseran per lapis `stack-offset-expanded`).
+- Area konten di belakang ditutup `scrim-page` dan dikaburkan 4px. Kartu di bawah kartu aktif tetap terpasang, tidak bisa disentuh, diredupkan `scrim-inactive`, dan bergeser `stack-offset` ke kiri per lapis (maksimal 3 lapis). Draft, pilihan, posisi gulir, dan ukurannya bertahan.
+- Lebar maksimum `page-max-width`, di tengah. Jarak atas dan bawahnya mengikuti [tampilan modal](#tampilan-modal). Diperbesar: inset horizontal `page-expanded-inset` (geseran per lapis `stack-offset-expanded`).
 - Area konten lebih sempit dari `breakpoint-page-stack`: kartu memenuhi lebar area, lapisan bawah disembunyikan, tombol perbesar hilang, navigasi data pindah ke bar atas; jumlah lapis tetap terlihat. Kartu selebar `breakpoint-card-narrow` atau kurang: bar atas menjadi dua baris.
 - Gerak geser 160ms ease-out; dimatikan bila pengguna memilih gerak dikurangi.
+
+## Tampilan modal
+
+Setiap pengguna memilih salah satu dari dua tampilan di Setelan (menu profil). Pilihannya disimpan per akun dan sampai ke peramban sebagai atribut `data-dialog-layout` pada `<html>`. Komponen tidak menerima prop untuk ini; yang membedakan hanya CSS.
+
+| | Compact (bawaan) | Full |
+| --- | --- | --- |
+| Jarak atas dan bawah | 40px dari area konten. Pada viewport dengan lebar di bawah 1280px atau tinggi di bawah 768px, kartu memenuhi tinggi area tanpa jarak | Tidak ada; kartu setinggi area konten |
+| Tombol data sebelumnya/berikutnya | Di luar sisi kiri dan kanan kartu, dengan celah 4px dari kartu | Di tepi kiri dan kanan kartu, menumpang 14px di luar tepinya |
+
+Full adalah tampilan sebelum jarak vertikal dan tombol di luar kartu ditambahkan.
 
 ## Alur
 

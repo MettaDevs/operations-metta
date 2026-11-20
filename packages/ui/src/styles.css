@@ -220,6 +220,7 @@
     z-index: 30;
     pointer-events: auto;
     background: rgb(0 0 0 / 22%);
+    backdrop-filter: blur(4px);
 }
 .core-page-dialog-backdrop[data-shell='false'] {
     position: fixed;
@@ -340,6 +341,17 @@
 }
 .core-page-dialog-next {
     left: calc(100% + 4px);
+}
+:root[data-dialog-layout='full'] .core-page-dialog {
+    inset-block: 0;
+}
+:root[data-dialog-layout='full'] .core-page-dialog-previous {
+    right: auto;
+    left: -14px;
+}
+:root[data-dialog-layout='full'] .core-page-dialog-next {
+    left: auto;
+    right: -14px;
 }
 @container shell-content (max-width: 1407px) {
     .core-page-dialog,

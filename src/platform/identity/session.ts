@@ -13,6 +13,7 @@ import type { EnvironmentRoute } from '../environment/index.ts';
 import type { Database } from '../database/index.ts';
 import { abort, HttpFailure, idSchema, validation } from '../http/index.ts';
 import { RateLimiter } from './login-limiter.ts';
+import { preferencesSchema } from './preference.schema.ts';
 import type { ValkeySessions } from './valkey-sessions.ts';
 
 const envelopeSchema = z.object({
@@ -54,6 +55,7 @@ const userSchema = z.object({
     two_factor_secret: z.string().nullable(),
     two_factor_confirmed_at: z.string().nullable(),
     sessions_revoked_epoch: z.number().nullable(),
+    preferences: preferencesSchema,
 });
 export type SessionUser = z.infer<typeof userSchema>;
 // Setiap pembacaan pengguna sesi membawa waktu pencabutan sesinya (back-channel logout) dalam detik epoch.
