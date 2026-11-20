@@ -19,7 +19,7 @@ Kartu record yang dibuka sebagai halaman bertumpuk di atas daftar yang tetap ter
 ## Tumpukan
 
 - Kartu dibuka di area konten Shell; header dan pencarian Shell tetap bisa dipakai. Di luar Shell kartu memakai viewport.
-- Area konten di belakang ditutup `scrim-page` dan dikaburkan 4px. Kartu di bawah kartu aktif tetap terpasang, tidak bisa disentuh, diredupkan `scrim-inactive`, dan bergeser `stack-offset` ke kiri per lapis (maksimal 3 lapis). Draft, pilihan, posisi gulir, dan ukurannya bertahan.
+- Area konten di belakang ditutup `scrim-page` tanpa blur, sama dengan BC. Kartu di bawah kartu aktif tetap terpasang, tidak bisa disentuh, diredupkan `scrim-inactive`, dan bergeser `stack-offset` ke kiri per lapis (maksimal 3 lapis). Draft, pilihan, posisi gulir, dan ukurannya bertahan.
 - Lebar maksimum `page-max-width`, di tengah. Jarak atas dan bawahnya mengikuti [tampilan modal](#tampilan-modal). Diperbesar: inset horizontal `page-expanded-inset` (geseran per lapis `stack-offset-expanded`).
 - Area konten lebih sempit dari `breakpoint-page-stack`: kartu memenuhi lebar area, lapisan bawah disembunyikan, tombol perbesar hilang, navigasi data pindah ke bar atas; jumlah lapis tetap terlihat. Kartu selebar `breakpoint-card-narrow` atau kurang: bar atas menjadi dua baris.
 - Gerak geser 160ms ease-out; dimatikan bila pengguna memilih gerak dikurangi.

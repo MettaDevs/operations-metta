@@ -220,7 +220,6 @@
     z-index: 30;
     pointer-events: auto;
     background: rgb(0 0 0 / 22%);
-    backdrop-filter: blur(4px);
 }
 .core-page-dialog-backdrop[data-shell='false'] {
     position: fixed;
