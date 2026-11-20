@@ -1,6 +1,5 @@
-import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
+import { RadioCardGroup } from '@operations-metta/ui/radio-group';
 import { RecordActionBar } from '@operations-metta/ui/record-action-bar';
-import { Select } from '@operations-metta/ui/select';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -63,27 +62,36 @@ function PreferencesPage(): ReactNode {
                     message={message}
                     operation="Setelan belum disimpan"
                 />
-                <FormGrid>
+                <div className="grid gap-6">
                     {definitions.map((definition) => (
-                        <FormControl
+                        <section
                             key={definition.key}
-                            hint={definition.help}
+                            aria-labelledby={`preference-${definition.key}`}
+                            className="grid gap-2"
                         >
-                            <Select
-                                label={definition.label}
-                                items={definition.options}
-                                value={values[definition.key] ?? null}
+                            <h2
+                                id={`preference-${definition.key}`}
+                                className="text-sm font-medium"
+                            >
+                                {definition.label}
+                            </h2>
+                            {definition.help && (
+                                <p className="text-xs text-muted-foreground">
+                                    {definition.help}
+                                </p>
+                            )}
+                            <RadioCardGroup
+                                aria-labelledby={`preference-${definition.key}`}
+                                options={definition.options}
+                                value={values[definition.key] ?? ''}
                                 onValueChange={(value) => {
-                                    if (
-                                        value &&
-                                        value !== values[definition.key]
-                                    )
+                                    if (value !== values[definition.key])
                                         void save(definition.key, value);
                                 }}
                             />
-                        </FormControl>
+                        </section>
                     ))}
-                </FormGrid>
+                </div>
             </div>
         </div>
     );

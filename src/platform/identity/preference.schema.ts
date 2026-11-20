@@ -3,7 +3,7 @@ import { z } from 'zod';
 type PreferenceDefinition = {
     label: string;
     help?: string;
-    options: { value: string; label: string }[];
+    options: { value: string; label: string; description?: string }[];
 };
 
 const definitions = z.registry<PreferenceDefinition>();
@@ -11,7 +11,7 @@ const definitions = z.registry<PreferenceDefinition>();
 function choice<const Value extends string>(definition: {
     label: string;
     help?: string;
-    options: readonly { value: Value; label: string }[];
+    options: readonly { value: Value; label: string; description?: string }[];
     default: NoInfer<Value>;
 }) {
     const schema = z
@@ -28,10 +28,19 @@ function choice<const Value extends string>(definition: {
 const preferenceFields = z.object({
     dialog_layout: choice({
         label: 'Tampilan modal',
-        help: 'Compact memberi jarak di atas dan bawah kartu data, dengan tombol data sebelumnya dan berikutnya di luar kartu. Full membuat kartu setinggi area kerja, dengan tombol itu di tepi kartu.',
         options: [
-            { value: 'compact', label: 'Compact' },
-            { value: 'full', label: 'Full' },
+            {
+                value: 'compact',
+                label: 'Compact',
+                description:
+                    'Kartu data diberi jarak di atas dan bawah, tombol data sebelumnya dan berikutnya di luar kartu.',
+            },
+            {
+                value: 'full',
+                label: 'Full',
+                description:
+                    'Kartu data setinggi area kerja, tombol data sebelumnya dan berikutnya di tepi kartu.',
+            },
         ],
         default: 'compact',
     }),
