@@ -2,11 +2,22 @@ import { z } from 'zod';
 import { Currency } from '../../foundation/currency/index.ts';
 import { coreWorkspace, type Workspace } from '../access/index.ts';
 import type { Database } from '../database/index.ts';
-import { abort, coded, type Context } from '../http/index.ts';
+import { abort, coded, validation, type Context } from '../http/index.ts';
 import { localCurrencyCode } from '../money/index.ts';
-import { printedFields, type ReportCatalog } from './catalog.ts';
+import {
+    engineFields,
+    engineValues,
+    printedFields,
+    reportShape,
+    type ReportCatalog,
+} from './catalog.ts';
 import { fillDocx } from './docx.ts';
-import { fieldCatalog, templateView, type Locale } from './format.ts';
+import {
+    fieldCatalog,
+    formatDecimal,
+    templateView,
+    type Locale,
+} from './format.ts';
 import { letterhead, letterheadFields } from './letterhead.ts';
 import {
     ReportLayouts,
@@ -14,16 +25,25 @@ import {
     type ResolvedLayout,
 } from './layouts.service.ts';
 import { convertToPdf, RenderFailure } from './pdf.ts';
-import type { DocumentReport, Language, ReportRecord } from './report.ts';
+import type { Language, Report, ReportRecord } from './report.ts';
 import { signerFields, signers } from './signers.ts';
+import {
+    workbookData,
+    workbookReferences,
+    workbookRowCount,
+} from './workbook.ts';
+import { cellFormats, fillWorkbook, xlsxMimeType } from './xlsx.ts';
 
-export const outputFormats = ['pdf', 'docx'] as const;
+export const outputFormats = ['pdf', 'docx', 'xlsx'] as const;
 export type OutputFormat = (typeof outputFormats)[number];
 
 const mimeTypes: Record<OutputFormat, string> = {
     pdf: 'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: xlsxMimeType,
 };
+
+const maxWorkbookRows = 50_000;
 
 async function installed(db: Database, tenantId: string, moduleId: string) {
     if (moduleId === 'core') return true;
@@ -73,13 +93,39 @@ function attachment(bytes: Uint8Array, fileName: string, format: OutputFormat) {
     });
 }
 
+function outputFor(
+    layout: ResolvedLayout,
+    requested: OutputFormat | null,
+): OutputFormat {
+    switch (layout.format) {
+        case 'docx':
+            if (requested === 'xlsx')
+                validation({
+                    format: 'Layout Word dicetak sebagai PDF atau Word.',
+                });
+            return requested ?? 'pdf';
+        case 'xlsx':
+            if (requested !== null && requested !== 'xlsx')
+                validation({
+                    format: 'Layout Excel hanya bisa diunduh sebagai Excel.',
+                });
+            return 'xlsx';
+        default: {
+            const unknown: never = layout;
+            throw new Error(
+                `Format layout tidak dikenal: ${JSON.stringify(unknown)}`,
+            );
+        }
+    }
+}
+
 export class Printing {
     constructor(
         private readonly catalog: ReportCatalog,
         private readonly context: Context,
     ) {}
 
-    private find(code: string): DocumentReport {
+    private find(code: string): Report {
         const report = this.catalog.get(code);
         if (!report) abort(404, 'Laporan tidak ditemukan.');
         return report;
@@ -129,7 +175,7 @@ export class Printing {
         };
     }
 
-    private layoutsOf(report: DocumentReport, workspace: Workspace) {
+    private layoutsOf(report: Report, workspace: Workspace) {
         if (!workspace.legalEntityId)
             abort(422, 'Pilih legal entity di tempat kerja lebih dulu.');
         return new ReportLayouts(
@@ -152,7 +198,7 @@ export class Printing {
     async print(
         code: string,
         recordId: string,
-        format: OutputFormat,
+        format: OutputFormat | null,
         layoutRef: string | null,
         parameters: URLSearchParams,
     ): Promise<File> {
@@ -185,7 +231,7 @@ export class Printing {
             this.context.db,
             reports.map((report) => report.permission),
         );
-        const visible: DocumentReport[] = [];
+        const visible: Report[] = [];
         for (const report of reports)
             if (
                 held.has(report.permission) &&
@@ -203,10 +249,11 @@ export class Printing {
                     name: report.name,
                     fields: [
                         ...fieldCatalog(report.fields),
-                        ...fieldCatalog(letterheadFields, 'letterhead.'),
-                        ...fieldCatalog(printedFields, 'printed.'),
-                        ...fieldCatalog(signerFields),
+                        ...fieldCatalog(engineFields),
                     ],
+                    workbook: workbookReferences(
+                        reportShape(report.fields),
+                    ).map(({ reference, label }) => ({ reference, label })),
                     layouts: await this.layoutsOf(report, workspace).list(),
                 })),
             ),
@@ -257,50 +304,81 @@ export class Printing {
         };
     }
 
-    // Berkas Word sebuah layout, untuk diubah di Word lalu diunggah lagi.
+    // Berkas sebuah layout, untuk diubah lalu diunggah lagi. Layout Excel diunduh berisi data contoh dan kop legal
+    // entity, supaya pivot dan rumusnya terlihat bekerja saat disunting.
     async download(code: string, ref: string): Promise<File> {
-        const { report, layouts } = await this.forManaging(code, 'read');
-        const layout = await layouts.resolve(ref);
-        return attachment(
-            layout.document,
-            `${report.name} - ${layout.name}`,
-            'docx',
+        const { report, workspace, layouts } = await this.forManaging(
+            code,
+            'read',
         );
+        const layout = await layouts.resolve(ref);
+        const fileName = `${report.name} - ${layout.name}`;
+        switch (layout.format) {
+            case 'docx':
+                return attachment(layout.document, fileName, 'docx');
+            case 'xlsx':
+                return this.render(
+                    report,
+                    workspace,
+                    this.sample(report, workspace, fileName),
+                    layout,
+                    'xlsx',
+                );
+            default: {
+                const unknown: never = layout;
+                throw new Error(
+                    `Format layout tidak dikenal: ${JSON.stringify(unknown)}`,
+                );
+            }
+        }
     }
 
     // Pratinjau sebuah layout dengan data contoh laporan dan kop legal entity tempat kerja.
     async preview(
         code: string,
         ref: string,
-        format: OutputFormat,
+        format: OutputFormat | null,
     ): Promise<File> {
         const { report, workspace, layouts } = await this.forManaging(
             code,
             'read',
         );
-        if (!workspace.legalEntityId)
-            abort(422, 'Pilih legal entity di tempat kerja lebih dulu.');
         return this.render(
             report,
             workspace,
-            {
-                ...report.sample,
-                legalEntityId: workspace.legalEntityId,
-                operatingUnitId: null,
-                fileName: `Pratinjau ${report.sample.fileName}`,
-            },
+            this.sample(
+                report,
+                workspace,
+                `Pratinjau ${report.sample.fileName}`,
+            ),
             await layouts.resolve(ref),
             format,
         );
     }
 
-    private async render(
-        report: DocumentReport,
+    private sample(
+        report: Report,
         workspace: Workspace,
-        record: ReportRecord<DocumentReport['fields']>,
+        fileName: string,
+    ): ReportRecord<Report['fields']> {
+        if (!workspace.legalEntityId)
+            abort(422, 'Pilih legal entity di tempat kerja lebih dulu.');
+        return {
+            ...report.sample,
+            legalEntityId: workspace.legalEntityId,
+            operatingUnitId: null,
+            fileName,
+        };
+    }
+
+    private async render(
+        report: Report,
+        workspace: Workspace,
+        record: ReportRecord<Report['fields']>,
         layout: ResolvedLayout,
-        format: OutputFormat,
+        requested: OutputFormat | null,
     ): Promise<File> {
+        const output = outputFor(layout, requested);
         const { db } = this.context;
         const documentLocale = await locale(
             db,
@@ -308,44 +386,86 @@ export class Printing {
             record.legalEntityId,
             layout.language,
         );
-        const view = {
-            ...templateView(report.fields, record.values, documentLocale),
-            ...templateView(
-                signerFields,
-                await signers(
-                    db,
-                    workspace.tenantId,
-                    report.code,
-                    record.legalEntityId,
-                    record.operatingUnitId,
-                ),
-                documentLocale,
+        const engine = {
+            letterhead: await letterhead(
+                db,
+                workspace.tenantId,
+                record.legalEntityId,
+                record.operatingUnitId,
             ),
-            letterhead: templateView(
-                letterheadFields,
-                await letterhead(
-                    db,
-                    workspace.tenantId,
-                    record.legalEntityId,
-                    record.operatingUnitId,
-                ),
-                documentLocale,
-            ),
-            printed: templateView(
-                printedFields,
-                {
-                    at: new Date().toISOString(),
-                    by: await printedBy(db, workspace.userId),
-                },
-                documentLocale,
+            printed: {
+                at: new Date().toISOString(),
+                by: await printedBy(db, workspace.userId),
+            },
+            signers: await signers(
+                db,
+                workspace.tenantId,
+                report.code,
+                record.legalEntityId,
+                record.operatingUnitId,
             ),
         };
-        const docx = fillDocx(layout.document, view);
-        return attachment(
-            format === 'docx' ? docx : await this.pdf(docx, record.fileName),
-            record.fileName,
-            format,
-        );
+        switch (layout.format) {
+            case 'docx': {
+                const view = {
+                    ...templateView(
+                        report.fields,
+                        record.values,
+                        documentLocale,
+                    ),
+                    ...templateView(
+                        signerFields,
+                        engine.signers,
+                        documentLocale,
+                    ),
+                    letterhead: templateView(
+                        letterheadFields,
+                        engine.letterhead,
+                        documentLocale,
+                    ),
+                    printed: templateView(
+                        printedFields,
+                        engine.printed,
+                        documentLocale,
+                    ),
+                };
+                const docx = fillDocx(layout.document, view);
+                return attachment(
+                    output === 'docx'
+                        ? docx
+                        : await this.pdf(docx, record.fileName),
+                    record.fileName,
+                    output,
+                );
+            }
+            case 'xlsx': {
+                const shape = reportShape(report.fields);
+                const values = { ...record.values, ...engineValues(engine) };
+                if (workbookRowCount(shape, values) > maxWorkbookRows)
+                    coded(
+                        422,
+                        'report_too_large',
+                        `Data laporan ini lebih dari ${formatDecimal(String(maxWorkbookRows), 'id')} baris dan terlalu besar untuk diunduh langsung. Persempit periode atau saringannya.`,
+                    );
+                const formats = cellFormats(documentLocale);
+                return attachment(
+                    fillWorkbook(
+                        layout.workbook(shape, formats),
+                        shape,
+                        workbookData(shape, values, documentLocale),
+                        formats,
+                    ),
+                    record.fileName,
+                    'xlsx',
+                );
+            }
+            default: {
+                const unknown: never = layout;
+                throw new Error(
+                    `Format layout tidak dikenal: ${JSON.stringify(unknown)}`,
+                );
+            }
+        }
     }
 
     private async pdf(docx: Uint8Array, fileName: string) {

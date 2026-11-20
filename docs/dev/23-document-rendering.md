@@ -1,6 +1,6 @@
 # Dokumen cetak, layout, dan laporan
 
-Setiap dokumen cetak di repo ini lahir dari satu mesin di Core, `src/platform/reporting/`: pemilik data mendaftarkan dataset dan layout bawaannya, mesin mengisi layout Word, membuat PDF lewat renderer, dan menyajikannya ke satu komponen cetak di layar. Cara menambah dokumen ada di skill [`report-engine`](../../.agents/skills/report-engine/SKILL.md). Halaman ini menyimpan alasannya.
+Setiap dokumen cetak dan laporan tabel di repo ini lahir dari satu mesin di Core, `src/platform/reporting/`: pemilik data mendaftarkan dataset dan layout bawaannya, mesin mengisi layout Word (lalu membuat PDF lewat renderer) atau layout Excel, dan menyajikannya ke satu komponen cetak di layar. Cara menambah laporan ada di skill [`report-engine`](../../.agents/skills/report-engine/SKILL.md). Halaman ini menyimpan alasannya.
 
 Desainnya pindahan mesin CoreERP, `apps/core/app/Platform/Reporting/` di [repo CoreERP](https://github.com/MettaDevs/coreERP), dengan cacatnya diperbaiki. Bagian [Yang berbeda dari CoreERP](#yang-berbeda-dari-coreerp) mencatat perbaikannya.
 
@@ -19,7 +19,7 @@ Dynamics 365 punya dua model. F&O memakai Electronic Reporting: data model abstr
 Repo ini mengambil model BC, dengan satu ide dari F&O: dataset adalah kontrak yang stabil, bukan tabel mentah.
 
 - Skalanya sepadan dengan BC. Electronic Reporting adalah framework tersendiri yang butuh tim untuk merawatnya.
-- On-prem tidak boleh bergantung pada Office 365. Pengguna menyunting `.docx` di Word lokal lalu mengunggahnya.
+- On-prem tidak boleh bergantung pada Office 365. Pengguna menyunting `.docx` di Word lokal atau `.xlsx` di Excel lokal lalu mengunggahnya.
 - Yang berbeda antarklinik adalah tampilan, bukan data. Dengan dataset yang sama, setiap legal entity boleh mengunggah layout-nya sendiri tanpa developer menulis ulang apa pun.
 
 ## Core memegang mesinnya, pemilik data memegang datasetnya
@@ -28,7 +28,7 @@ Repo ini mengambil model BC, dengan satu ide dari F&O: dataset adalah kontrak ya
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Dataset             | Report dataset          | `defineReport` di folder fitur pemilik data, misalnya `payment-receipt.report.ts` dan `drug-label.report.ts` |
 | Katalog laporan     | Report object           | `reportCatalog([...])` di `src/main.ts`, dirakit dari laporan yang di-export Core dan module                 |
-| Layout bawaan       | Extension layout        | `layouts` pada definisi laporan, ditulis dengan `wordDocument`                                               |
+| Layout bawaan       | Extension layout        | `layouts` pada definisi laporan: `wordDocument` untuk Word, `ExcelWorkbook` untuk Excel                      |
 | Layout unggahan     | User-defined layout     | `report_layouts`, per legal entity, isi berkas di kolom `isi`                                                |
 | Layout yang dipakai | Report Layout Selection | `report_layout_defaults`, satu per legal entity dan laporan                                                  |
 | Render PDF          | Report rendering        | Gotenberg di `RENDERER_URL`, tanpa status dan tanpa tenant                                                   |
@@ -71,7 +71,8 @@ Mesin mengisi tag `{#signers}{title} {name} {id_number}{/signers}` untuk setiap 
 
 ## Layout adalah data legal entity
 
-- **Layout bawaan ditulis sebagai kode**, dengan `wordDocument` di `src/platform/reporting/docx.ts`, bukan berkas `.docx` biner. Diff-nya terbaca di review, dan tag-nya diperiksa saat proses mulai. Klinik yang ingin rupa lain mengunduhnya sebagai Word dari Sys Admin › Layout cetak.
+- **Layout bawaan ditulis sebagai kode**, dengan `wordDocument` di `src/platform/reporting/docx.ts` atau `ExcelWorkbook` di `src/platform/reporting/xlsx.ts`, bukan berkas `.docx` atau `.xlsx` biner. Diff-nya terbaca di review, dan tag, nama, serta kolom yang dipakainya diperiksa saat proses mulai. Klinik yang ingin rupa lain mengunduhnya dari Sys Admin › Layout cetak, menyuntingnya di Word atau Excel, lalu mengunggahnya.
+- **Format milik layout, bukan milik laporan.** Satu laporan boleh punya layout Word dan layout Excel sekaligus, sama dengan BC. Format unggahan dibaca dari isi berkasnya dan disimpan di kolom `report_layouts.format`, yang sudah ada sejak baseline.
 - **Unggahan disimpan di database lingkungan**, kolom `report_layouts.isi`. Image runtime tidak punya volume tulis, dan database lingkungan sudah terpisah per tenant dan sudah dicadangkan. Berkasnya paling besar 2 MB.
 - **Baris layout tidak pernah diubah isinya.** Mengganti layout berarti mengunggah baris baru lalu memilihnya. Unggahan berkas yang sama untuk laporan dan legal entity yang sama menemukan baris yang sudah ada.
 - **Pilihan layout dibaca ulang setiap cetak.** Pilihan yang menunjuk layout terhapus atau layout bawaan yang sudah tidak ada jatuh ke layout bawaan pertama, jadi tidak ada pilihan yang perlu diselaraskan saat layout dihapus.
@@ -88,7 +89,7 @@ Tag memakai sintaks [docxtemplater](https://docxtemplater.com/docs/tag-types/):
 - `{$no}`, `{$first}`, dan `{$last}` tersedia di dalam perulangan.
 - Baris baru di dalam nilai teks menjadi baris baru di Word.
 
-Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil gambar dari luar dokumen, sintaks tag-nya rusak, atau memakai tag yang tidak dikenal laporannya. Tag tak dikenal ditolak, bukan diperingatkan: di kertas ia tercetak kosong tanpa ada yang tahu.
+Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil gambar dari luar dokumen, sintaks tag-nya rusak, atau memakai tag yang tidak dikenal laporannya. Tag tak dikenal ditolak, bukan diperingatkan: di kertas ia tercetak kosong tanpa ada yang tahu. Layout Excel membaca dataset lewat nama dan tabel, bukan tag; aturannya di [Laporan tabel: layout Excel](#laporan-tabel-layout-excel).
 
 ## Dokumen yang sudah terdaftar
 
@@ -106,6 +107,7 @@ Unggahan ditolak bila bukan dokumen Word, berisi makro atau ActiveX, mengambil g
 | `core.inventory-adjustment` | Penyesuaian stok                      | Item Journal dengan Reason Code                    | Sys Admin › Persediaan › Penyesuaian stok                              |
 | `core.stock-card`           | Kartu stok satu barang di satu lokasi | Inventory - Transaction Detail (704)               | Sys Admin › Persediaan › Kartu stok, setelah barang dan lokasi dipilih |
 | `core.lplpo`                | LPLPO satu lokasi                     | Inventory Valuation (1001), tanpa kolom permintaan | Sys Admin › Persediaan › Stok per lokasi, setelah lokasi dipilih       |
+| `core.inventory-value`      | Nilai persediaan satu lokasi (Excel)  | Inventory Valuation (1001) dengan saringan lokasi  | Sys Admin › Persediaan › Stok per lokasi, setelah lokasi dipilih       |
 
 Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocument` di `src/foundation/inventory/document-layout.ts`: kop, keterangan dokumen, tabel baris, jumlah, dan kotak tanda tangan. Bentuknya mengikuti dataset BC, bukan form puskesmas lama:
 
@@ -119,7 +121,9 @@ Dokumen persediaan dan pembelian berbagi rupa layout bawaan lewat `inventoryDocu
 
 Sebagian laporan butuh lebih dari id record, seperti request page BC. Kartu stok mencetak satu barang (record-nya), tetapi hanya untuk satu lokasi dan satu periode. Query cetak selain `format` dan `layout` diteruskan ke `load` sebagai `parameters`, dan `PrintAction` menerimanya sebagai `parameters`. Dataset memeriksa parameternya sendiri dengan aturan yang sama dengan layarnya: isian yang salah dijawab 422 per field, dan lokasi yang hanya untuk petugasnya ditolak `requireLocationAccess`.
 
-Laporan berparameter tetap dokumen Word: baris gerak diulang lewat `field.lines`, saldo awal dan akhir field biasa. Ia cocok untuk laporan yang dibaca dan ditandatangani di kertas, sebesar satu barang satu periode. Daftar besar yang diolah di Excel tetap menunggu laporan tabel di bawah.
+Parameter tidak menentukan format. Kartu stok dan LPLPO berlayout Word, karena keduanya dibaca dan ditandatangani di kertas; nilai persediaan berlayout Excel, karena angkanya diolah lagi. Ketiganya memakai `parameters` dengan cara yang sama.
+
+Kontrak lama halaman ini menyebut parameter laporan tabel sebagai schema zod. Itu tidak dibangun: laporan pertama berparameter yang sama dengan LPLPO, dan dua cara untuk satu tugas lebih mahal daripada pemeriksaan tangan di `load`. Parameter tetap `URLSearchParams`, diperiksa dataset sendiri.
 
 ### LPLPO
 
@@ -131,13 +135,29 @@ Kolom dan rumusnya dari prosedur `SIMPUS_LPLPO` sistem lama: stok awal, penerima
 - Barang yang punya stok tanpa gerak tetap tercetak. Prosedur lama hanya memuat barang yang bergerak.
 - Permintaan adalah permintaan pembelian lokasi itu yang tanggal permintaannya (`tanggal_permintaan`, Order Date BC) jatuh dalam periode. Permintaan itu diisi Hitung saran di Permintaan pembelian ([41-pembelian.md](41-pembelian.md#hitung-saran)) atau dibuat petugas di layar yang sama, lalu dipesan lewat purchase order. LPLPO hanya merangkum yang sudah terjadi; memesan tidak dilakukan dari cetakan ini. Prosedur lama menjumlah permintaan semua lokasi. Amprah antarlokasi dan saran amprah dari Hitung saran sengaja tidak ikut, sama dengan prosedur lama: lembar permintaan LPLPO ditujukan ke pemasok di luar klinik, misalnya instalasi farmasi kabupaten, bukan ke gudang sendiri.
 - Penerimaan dirinci per sumber dana di field `received_by_funding_source` (Penerimaan per sumber dana): satu baris per sumber dana yang tercatat di kartu gudang penerimaan itu, berisi nama dari master Sumber dana legal entity dan jumlahnya. Penerimaan tanpa sumber dana, misalnya penyesuaian, menjadi "Tanpa sumber dana". Jumlah rinciannya sama dengan kolom Penerimaan. Prosedur lama memecahnya ke kolom B_Pusat, B_Prov, APBD, Program, dan Lainnya dari id subkategori yang ditulis mati; di sini tidak ada nama atau id sumber dana di kode.
-- Layout bawaan menulis rincian itu dalam satu kolom ("Dana APBD 40, Dana BLUD 25"), bukan satu kolom per sumber dana. Sumber dana berbeda per legal entity, dan layout Word mesin ini hanya bisa mengulang baris tabel, tidak menambah kolom per data. Klinik yang sumber dananya tetap bisa mengunggah layout sendiri.
+- Layout bawaan menulis rincian itu dalam satu kolom ("Dana APBD 40, Dana BLUD 25"), bukan satu kolom per sumber dana. Sumber dana berbeda per legal entity, dan layout Word mesin ini hanya bisa mengulang baris tabel, tidak menambah kolom per data. Layout Excel bisa: tabel `received_by_funding_source` membawa kolom barang induknya, jadi pivot dengan sumber dana di kolom memberi satu kolom per sumber dana. Klinik yang membutuhkannya mengunggah layout Excel untuk LPLPO.
 
 BC tidak punya LPLPO. Padanan terdekatnya report "Inventory Valuation" (1001) dengan saringan lokasi: stok awal, bertambah, berkurang, dan stok akhir per barang dalam periode. Kolom permintaan tidak punya padanan di report itu.
 
+### Nilai persediaan
+
+Nilai persediaan (`core.inventory-value`, `src/foundation/inventory/item-ledger/inventory-value.report.ts`) adalah laporan tabel pertama: nilai stok satu lokasi dalam satu periode, satu baris per barang dan sumber dana, diunduh sebagai Excel. Acuannya Excel nilai persediaan sistem lama (`report_helper::export_excel_inventory_value`): kelompok per Program, kolom nama obat, satuan, harga satuan, stok awal, penerimaan, pengeluaran, dan stok akhir, masing-masing dalam jumlah dan rupiah, ditutup baris TOTAL PERSEDIAAN. Record dan parameternya sama dengan LPLPO, ditambah `category_id` opsional (kelompok barang sistem lama, termasuk subkategorinya). Tombolnya di Stok per lokasi, di sebelah LPLPO, membawa saringan kategori layar itu.
+
+Layout bawaannya pivot Excel atas tabel `lines`: sumber dana, kode, nama barang, satuan, dan harga satuan di baris, delapan nilai di kolom, total per sumber dana, dan total akhir berjudul TOTAL PERSEDIAAN. Kop, lokasi, periode, kategori, dan waktu cetak dibaca dari nama `Report.*`. Sheet tabel `lines` ikut tampil, untuk diurutkan dan disaring sendiri.
+
+Yang sengaja berbeda dari sistem lama:
+
+- Rupiah adalah nilai kartu gudang, biaya sebenarnya setiap gerak (FIFO per batch), bukan jumlah dikali satu harga dari master (keputusan pemilik produk, 20 November 2026). Inventory Valuation BC memakai nilai entri yang sama.
+- Program lama dipetakan ke sumber dana kartu gudang. Sumber dana ikut baris keluar dari baris masuk yang diambilnya, jadi pengeluaran pun terpecah per sumber dana. Stok tanpa sumber dana menjadi "Tanpa sumber dana", sama dengan LPLPO; nama sumber dana lain datang dari master Sumber dana.
+- Harga satuan adalah nilai stok akhir dibagi jumlahnya, kosong bila stok akhirnya nol. Di pivot ia ditaruh di baris, bukan dijumlah, jadi baris berstok nol menampilkan "(blank)".
+- Tidak ada kolom No, karena pivot tidak memberi nomor urut.
+- Stok awal adalah jumlah kartu gudang sebelum periode, sama dengan LPLPO.
+
+Yang sengaja berbeda dari Inventory Valuation (1001) BC: penerimaan dan pengeluaran dipisah menurut tanda jumlah, sama dengan LPLPO, bukan menurut jenis entri. Pembatalan penerimaan yang diposting dalam periode tercatat sebagai penerimaan dan pengeluaran, bukan saling meniadakan di kolom penerimaan; dua laporan dari kartu gudang yang sama di layar yang sama tetap memberi angka yang sama. Stok akhir selalu sama dengan jumlah kartu gudang sampai tanggal akhir. BC mengelompokkan per inventory posting group; di sini per sumber dana, dengan kategori barang sebagai kolom untuk pivot sendiri.
+
 ## Cetak dokumen berjalan sinkron
 
-`GET /api/v1/reports/{code}/records/{id}?format=pdf|docx&layout=` menjawab berkasnya langsung. Mengisi layout butuh 3 sampai 5 ms, dan konversi PDF median 317 sampai 372 ms setelah LibreOffice hangat (diukur dengan Gotenberg 8.36 di laptop pengembang; tabel di bagian Renderer). Antrean, penyimpanan hasil, dan polling seperti CoreERP tidak sepadan untuk satu dokumen.
+`GET /api/v1/reports/{code}/records/{id}?format=pdf|docx|xlsx&layout=` menjawab berkasnya langsung. Tanpa `format`, keluarannya mengikuti layout yang dipakai: layout Word menjadi PDF, layout Excel menjadi `.xlsx`. Format yang tidak cocok dengan layout-nya, misalnya PDF dari layout Excel, dijawab 422 per field `format`. Mengisi layout butuh 3 sampai 5 ms, dan konversi PDF median 317 sampai 372 ms setelah LibreOffice hangat (diukur dengan Gotenberg 8.36 di laptop pengembang; tabel di bagian Renderer). Antrean, penyimpanan hasil, dan polling seperti CoreERP tidak sepadan untuk satu dokumen.
 
 - Renderer yang tidak diisi atau tidak menjawab dijawab `503` berkode `renderer_unavailable`. `PrintAction` lalu menawarkan unduh Word, karena berkas Word tetap bisa dibuat tanpa renderer.
 - LibreOffice butuh sekitar 13 detik untuk konversi pertamanya. Gotenberg dijalankan dengan `--libreoffice-auto-start`, supaya waktu itu habis saat container mulai, bukan pada klik cetak pertama. `RENDERER_TIMEOUT_SECONDS` (bawaan 30) menutup sisanya.
@@ -159,16 +179,81 @@ PDF dibuat LibreOffice di dalam [Gotenberg](https://gotenberg.dev/), container t
 - **On-prem** butuh container yang sama di compose server klien. Selama belum ada, cetak di server itu hanya bisa berupa Word.
 - **Laptop** memakai container yang sama lewat Docker; `bun scripts/verify.ts up` menyalakannya per run.
 
-## Laporan tabel: kontrak, belum dibangun
+## Laporan tabel: layout Excel
 
-Laporan tabel, misalnya daftar penjualan atau mutasi semua barang dalam satu periode, memakai field yang sama tanpa `field.lines`: satu baris dataset satu baris laporan. Bedanya dengan dokumen:
+Laporan tabel, misalnya nilai persediaan atau daftar penjualan, bukan jenis laporan kedua. Ia laporan biasa (`defineReport`, field, `load`, izin, dan route yang sama) yang layout-nya Excel. Modelnya layout Excel Business Central, seperti layout app Excel Reports di BCApps, misalnya `CustomerTopListExcel.xlsx`. Platform menulis ulang sheet data dan metadata, sheet buatan penulis layout tidak disentuh, dan pivot di-refresh saat berkas dibuka. Semua yang terlihat di laporan, yaitu kolom, pengelompokan, judul, total, dan pivot, milik layout. Legal entity menggantinya dengan mengunggah workbook, tanpa developer.
 
-- Parameter laporan (periode, lokasi) dinyatakan sebagai schema zod, sumber validasi dan tipe untuk layar pemilihnya.
-- Baris dialirkan per halaman, bukan dimuat sekaligus.
-- Layout-nya `.xlsx`. Angka dan tanggal masuk sel sebagai nilai asli, supaya bisa dijumlah dan diurutkan.
-- Daftar besar berjalan lewat antrean `report_exports` di worker, dengan hak pengguna diperiksa ulang saat job berjalan, masa sewa per baris antrean, dan hasil yang punya masa simpan.
+Kontrak lama halaman ini merencanakan jenis laporan kedua tanpa `field.lines`, dengan baris yang dialirkan. Itu ditinggalkan: dua jenis laporan berarti dua katalog, dua route, dan dua tombol, padahal yang berbeda hanya format layout-nya. Dengan format milik layout, LPLPO, kartu stok, dan kuitansi juga bisa diberi layout Excel tanpa kode.
 
-Bagian ini dibangun saat laporan tabel pertama diminta.
+### Nama dan tabel di workbook
+
+Dataset dilihat layout Excel lewat nama dan tabel Excel, diturunkan dari field yang sama dengan tag Word (`src/platform/reporting/workbook.ts`):
+
+| Di Excel                                                 | Isinya                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `=Report.location_name`                                  | satu field skalar di akar dataset                                                    |
+| `=Report.letterhead.name`, `=Report.printed.at`          | bagian yang diisi mesin, dengan kunci yang sama dengan tag Word-nya                  |
+| `=Report.total_words`                                    | terbilang uang yang ditandai `words`, dalam bahasa layout                            |
+| `=Caption.location_name`, `=Caption.lines.closing_value` | label field, jadi layout tidak perlu menulis ulang judul kolom                       |
+| `lines[closing_value]`                                   | tabel Excel bernama kunci `field.lines`-nya, untuk pivot dan rumus                   |
+| `received_by_funding_source[item_code]`                  | tabel bersarang membawa kolom baris induknya; kolom sendiri menang bila namanya sama |
+| `signers[name]`                                          | penanda tangan dari Sys Admin › Kop surat                                            |
+
+Awalan `Report.` dan `Caption.` meniru `ReportRequest.*` dan `Caption.*` BC. Nama tidak bisa tertukar dengan alamat sel atau nama fungsi Excel, dan mesin tahu nama mana miliknya. Setiap nama menunjuk sel di sheet tersembunyi "Keterangan laporan", yang sekaligus mencatat arti setiap nama dan kolom di dalam berkasnya. Karena legal entity mana pun boleh mengunggah layout Excel untuk laporan mana pun, kunci setiap field di setiap laporan harus sah sebagai nama Excel; kunci seperti `a1` atau `r` menghentikan proses saat mulai.
+
+Nilai masuk sel sebagai nilai asli, supaya bisa dijumlah, diurutkan, dan dipivot. Uang dan harga satuan dibulatkan ke presisi mata uang tenant dan ditulis sebagai angka dari teks desimalnya, dengan format angka sesuai presisi itu. Jumlah barang ditulis apa adanya dengan format General. Tanggal menjadi serial Excel tanpa geser zona, waktu menjadi jam dinding di zona waktu legal entity dokumen, dan ya/tidak menjadi boolean. Teks selalu inline string dan tidak pernah menjadi rumus. Pemisah ribuan dan nama bulan mengikuti setelan Excel pembacanya, jadi bahasa layout Excel hanya menentukan terbilang. Aturan per jenis field ada di `cellOf` (`format.ts`), di sebelah aturan Word, dengan pemeriksaan nilai yang sama.
+
+### Yang ditulis mesin saat mengisi
+
+Workbook layout punya dua penulis, mesin dan penulis layout, dan masing-masing memegang bagian sendiri. Mesin (`fillWorkbook` di `xlsx.ts`) hanya menulis:
+
+- sheet tempat setiap tabel laporan berada: isi sheet dan definisi tabelnya ditulis ulang. Nama sheet, tampil atau tersembunyi, id tabel, id kolom, gaya tabel, dan format kolom dipertahankan, supaya slicer dan rumus tetap menunjuk kolom yang sama. Tabel yang belum ada dibuat di sheet tersembunyi;
+- sheet "Keterangan laporan" dan semua nama berawalan `Report.` dan `Caption.`. Nama yang hilang dari dataset ikut terbuang, jadi rumus yang memakainya tampil `#NAME?`, bukan diam-diam membaca sel lain;
+- gaya angka mesin, dicari dulu lalu ditambahkan di ujung `styles.xml`, sehingga indeks gaya penulis layout tidak bergeser;
+- tanda hitung ulang: `calcChain` dibuang, `fullCalcOnLoad`, dan `refreshOnLoad` pada setiap pivot cache;
+- hasil tersimpan setiap rumus dan isi setiap pivot di sheet penulis layout, yang dikosongkan.
+
+Bagian terakhir perlu karena layout yang pernah disimpan Excel membawa hasil dari data contoh, dan dua pembaca menampilkannya apa adanya:
+
+- Excel di Protected View, yang muncul untuk berkas unduhan, tidak menghitung ulang. Layout yang disimpan Excel tampil dengan lokasi dan total pivot dari data contoh; hasil isian mesin tampil kosong sampai Enable Editing, lalu dihitung.
+- LibreOffice 26.2 di Gotenberg 8.36 mencetak sel `=Report.location_name` yang masih membawa hasil lama dengan lokasi dari data contoh, walau nama itu sudah menunjuk lokasi baru dan `fullCalcOnLoad` dipasang. Tanpa hasil tersimpan, LibreOffice menghitung rumusnya saat berkas dibuka.
+
+Bagian lain disalin apa adanya. Hasil isian hanya bergantung pada layout tersimpan dan datanya, dan mengisi hasil isian lagi memberi workbook yang sama, tanpa sheet, nama, atau gaya yang menumpuk. Penulisnya pizzip dan XML yang ditulis tangan, tanpa pustaka xlsx: exceljs dan SheetJS membaca workbook lalu menyimpannya ulang, dan cara itu membuang pivot, slicer, dan chart, padahal itulah isi kustomisasi legal entity.
+
+LibreOffice menyimpan sumber pivot sebagai rentang sel (`A1:P5` di sheet tabel), bukan nama tabel. Sumber seperti itu yang persis rentang sebuah tabel laporan dibaca sebagai tabel itu dan dikembalikan ke nama tabelnya saat diisi. Tanpa itu pivot hanya membaca baris sebanyak data contoh saat berkas disimpan.
+
+### Pemeriksaan unggahan dan saat mulai
+
+`inspectWorkbook` menolak workbook dengan alasan bertipe, dan layanan layout menulis teksnya untuk pengguna lewat switch yang lengkap. Yang ditolak:
+
+- bukan workbook `.xlsx` yang terbaca, berisi makro, objek tertanam, atau ActiveX;
+- mengambil data dari luar berkas: tautan ke workbook lain, koneksi data, query table, Power Query, atau relasi ke alamat luar selain hyperlink;
+- fungsi yang menghubungi luar berkas (`WEBSERVICE`, `IMAGE`, `RTD`, `CALL`, `REGISTER.ID`), karena `fullCalcOnLoad` menjalankannya dengan data laporan setiap kali berkas dibuka;
+- sheet tabel laporan yang berisi hal lain, atau tabel laporan dengan Total Row atau kolom tambahan, karena semuanya hilang saat diisi;
+- nama `Report.*`, `Caption.*`, atau kolom tabel laporan yang tidak dikenal laporannya, di rumus, nama, format bersyarat, validasi, chart, atau pivot;
+- rumus atau pivot yang membaca sheet tabel atau Keterangan laporan lewat alamat sel, karena isinya berubah setiap unduhan;
+- nama milik penulis layout yang sama dengan tabel laporan.
+
+Workbook tanpa tabel laporan tetap sah: sheet-nya boleh hanya membaca nama. Pemeriksaan yang sama dijalankan katalog atas setiap layout Excel bawaan saat proses mulai, setelah layout itu ditulis dan diisi data contoh, jadi CI ikut gagal.
+
+### Layout bawaan dan unduhan Sys Admin
+
+Layout Excel bawaan ditulis sebagai data (`ExcelWorkbook`): sheet, sel berisi teks, nama, atau rumus, satu pivot per sheet (baris, nilai, subtotal pada baris terluar, judul total akhir), dan tabel laporan yang sheet-nya tampil. Mesin menulisnya setiap kali dipakai dengan format angka tenant, karena format angka pivot tidak mengikuti sel sumbernya. Pivot bawaan ditulis dengan cache kosong dan `refreshOnLoad`, jadi isinya selalu dibangun aplikasi pembacanya dari tabel laporan.
+
+Unduh layout Excel di Sys Admin › Layout cetak memberi layout yang diisi data contoh laporan dan kop legal entity, supaya pivot dan rumusnya terlihat bekerja saat disunting. Isi sheet tabel dan Keterangan laporan diganti lagi setiap kali laporan diunduh.
+
+### Unduhan langsung, batas 50.000 baris
+
+Unduhan Excel berjalan sinkron di request yang sama dengan cetak dokumen (keputusan pemilik produk, 20 November 2026). Laporan yang tabelnya lebih dari 50.000 baris dijawab 422 berkode `report_too_large` dengan pesan untuk mempersempit periode atau saringannya. Antrean `report_exports` (hak pengguna diperiksa ulang saat job berjalan, masa sewa per baris antrean, hasil yang punya masa simpan) dibangun saat ada laporan yang memang sebesar itu.
+
+PDF dari layout Excel tidak ditawarkan. LibreOffice di renderer memang membangun pivot-nya, tetapi tanpa judul pivot buatan mesin (lihat di bawah), jadi PDF-nya tidak sama dengan yang dilihat pengguna di Excel.
+
+### Membuka hasilnya
+
+Diperiksa dengan Excel desktop 16.0 lewat otomasi COM dan LibreOffice 26.2 di Gotenberg 8.36, termasuk layout yang disimpan ulang oleh Excel dan oleh LibreOffice lalu diisi data lain:
+
+- Excel membuka berkasnya tanpa perbaikan dan me-refresh pivot saat dibuka. Di Protected View rumus dan pivot kosong sampai Enable Editing.
+- LibreOffice membangun ulang pivot dari tabel saat berkas dibuka, dengan angka yang sama. Ia mengabaikan judul pivot buatan mesin: total akhir tertulis "Total Result", bukan TOTAL PERSEDIAAN, dan judul baris memakai kunci kolom seperti `funding_source_name`.
 
 ## Yang berbeda dari CoreERP
 

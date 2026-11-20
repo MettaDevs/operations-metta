@@ -78,6 +78,7 @@ function a4(): Uint8Array {
 
 export const receiptLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4-landscape',
         name: 'Penerimaan barang A4 mendatar',
         language: 'id',

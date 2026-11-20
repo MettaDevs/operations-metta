@@ -12,7 +12,7 @@ import { Letterheads, type LetterheadInput } from './letterheads.service.ts';
 import { outputFormats, Printing } from './printing.service.ts';
 
 const printQuerySchema = z.object({
-    format: z.enum(outputFormats).default('pdf'),
+    format: z.enum(outputFormats).optional(),
     layout: z.string().min(1).max(200).optional(),
 });
 
@@ -67,7 +67,8 @@ export function reportingRoutes(catalog: ReportCatalog) {
             .handler(async ({ context, input }) =>
                 ok(await printing(context).layouts(input.params.code)),
             ),
-        // Berkas satu dokumen: PDF (bawaan) atau Word. GET supaya peramban bisa membukanya langsung di tab baru.
+        // Berkas satu laporan: PDF atau Word dari layout Word, Excel dari layout Excel; tanpa `format`, format layout yang
+        // dipakai. GET supaya peramban bisa membukanya langsung di tab baru.
         reportPrint: route('GET', '/reports/{code}/records/{id}')
             .input(
                 typedQuery<z.input<typeof printQuerySchema>>().extend({
@@ -83,7 +84,7 @@ export function reportingRoutes(catalog: ReportCatalog) {
                     await printing(context).print(
                         input.params.code,
                         input.params.id,
-                        parsed.data.format,
+                        parsed.data.format ?? null,
                         parsed.data.layout ?? null,
                         reportParameters(context),
                     ),
@@ -153,7 +154,7 @@ export function reportingRoutes(catalog: ReportCatalog) {
                     await printing(context).preview(
                         input.params.code,
                         input.params.ref,
-                        parsed.data.format,
+                        parsed.data.format ?? null,
                     ),
                 );
             }),

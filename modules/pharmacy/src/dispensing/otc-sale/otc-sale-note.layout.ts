@@ -244,8 +244,15 @@ function thermal(): Uint8Array {
 }
 
 export const otcSaleNoteLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
-    { key: 'a4', name: 'Nota A4', language: 'id', document: a4 },
     {
+        format: 'docx',
+        key: 'a4',
+        name: 'Nota A4',
+        language: 'id',
+        document: a4,
+    },
+    {
+        format: 'docx',
         key: 'thermal-76',
         name: 'Struk 76 mm',
         language: 'id',

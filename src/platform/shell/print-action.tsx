@@ -8,21 +8,28 @@ import {
     DropdownMenuTrigger,
 } from '@operations-metta/ui/dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, FileText, LoaderCircle, Printer } from 'lucide-react';
+import {
+    ChevronDown,
+    FileSpreadsheet,
+    FileText,
+    LoaderCircle,
+    Printer,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ApiError, errorText, orpc } from './api.ts';
 
-type Format = 'pdf' | 'docx';
+type Format = 'pdf' | 'docx' | 'xlsx';
 
 function fileUrl(
     report: string,
     recordId: string,
     parameters: Record<string, string>,
-    format: Format,
+    format: Format | null,
     layout: string | null,
 ) {
-    const query = new URLSearchParams({ ...parameters, format });
+    const query = new URLSearchParams(parameters);
+    if (format) query.set('format', format);
     if (layout) query.set('layout', layout);
     return `/api/v1/reports/${encodeURIComponent(report)}/records/${encodeURIComponent(recordId)}?${query.toString()}`;
 }
@@ -53,13 +60,17 @@ export function download({ blob, name }: { blob: Blob; name: string }) {
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
 }
 
-// Berkas dari server dibuka di tab baru. Tab dibuka sebelum menunggu server, supaya tidak ditahan pemblokir pop-up;
-// gagal menutup tab itu lagi dan melempar ApiError ke pemanggil.
-export async function openInTab(url: string): Promise<void> {
+// Tab dibuka sebelum menunggu server, supaya tidak ditahan pemblokir pop-up.
+export async function openOrDownload(url: string): Promise<void> {
     const tab = window.open('', '_blank');
     try {
-        const { blob } = await fetchFile(url);
-        const objectUrl = URL.createObjectURL(blob);
+        const file = await fetchFile(url);
+        if (file.blob.type !== 'application/pdf') {
+            tab?.close();
+            download(file);
+            return;
+        }
+        const objectUrl = URL.createObjectURL(file.blob);
         if (tab) tab.location.href = objectUrl;
         else window.location.href = objectUrl;
     } catch (caught) {
@@ -68,9 +79,10 @@ export async function openInTab(url: string): Promise<void> {
     }
 }
 
-// Satu-satunya tombol cetak di layar. Layar hanya menyebut laporan dan record-nya; isi, layout, kop, dan PDF milik mesin
-// cetak di server (src/platform/reporting/). Klik membuka PDF layout bawaan legal entity di tab baru, tempat penampil
-// PDF peramban menyediakan Cetak dan Unduh. Menu di sebelahnya memilih layout lain atau mengunduh berkas Word.
+// Satu-satunya tombol cetak di layar. Layar hanya menyebut laporan dan record-nya; isi, layout, kop, PDF, dan Excel milik
+// mesin cetak di server (src/platform/reporting/). Klik memakai layout bawaan legal entity: layout Word dibuka sebagai
+// PDF di tab baru, tempat penampil PDF peramban menyediakan Cetak dan Unduh, dan layout Excel diunduh. Menu di
+// sebelahnya memilih layout lain atau mengunduh berkas Word.
 export function PrintAction({
     report,
     recordId,
@@ -82,32 +94,31 @@ export function PrintAction({
     parameters?: Record<string, string>;
     label?: string;
 }): ReactNode {
-    const [menuOpen, setMenuOpen] = useState(false);
     const [pending, setPending] = useState(false);
     const layouts = useQuery({
         ...orpc.reportLayouts.queryOptions({
             input: { params: { code: report } },
             select: (response) => response.body.data,
         }),
-        enabled: menuOpen,
         staleTime: 60_000,
     });
+    const chosen = layouts.data?.find((layout) => layout.is_default);
+    const url = (format: Format | null, layout: string | null) =>
+        fileUrl(report, recordId, parameters, format, layout);
 
-    async function openPdf(layout: string | null) {
+    async function run(work: () => Promise<void>, failure: string) {
         setPending(true);
         try {
-            await openInTab(
-                fileUrl(report, recordId, parameters, 'pdf', layout),
-            );
+            await work();
         } catch (caught) {
             const rendererDown =
                 caught instanceof ApiError &&
                 caught.errorCode === 'renderer_unavailable';
-            toast.error(errorText(caught, 'Dokumen belum bisa dicetak.'), {
+            toast.error(errorText(caught, failure), {
                 action: rendererDown
                     ? {
                           label: 'Unduh Word',
-                          onClick: () => void saveWord(layout),
+                          onClick: () => void saveWord(null),
                       }
                     : undefined,
             });
@@ -116,20 +127,27 @@ export function PrintAction({
         }
     }
 
-    async function saveWord(layout: string | null) {
-        setPending(true);
-        try {
-            download(
-                await fetchFile(
-                    fileUrl(report, recordId, parameters, 'docx', layout),
-                ),
-            );
-        } catch (caught) {
-            toast.error(errorText(caught, 'Dokumen belum bisa diunduh.'));
-        } finally {
-            setPending(false);
-        }
-    }
+    const printDefault = () =>
+        run(async () => {
+            if (chosen?.format === 'xlsx')
+                download(await fetchFile(url(null, null)));
+            else await openOrDownload(url(null, null));
+        }, 'Laporan belum bisa dibuat.');
+    const openPdf = (layout: string) =>
+        run(
+            () => openOrDownload(url('pdf', layout)),
+            'Dokumen belum bisa dicetak.',
+        );
+    const saveExcel = (layout: string) =>
+        run(
+            async () => download(await fetchFile(url('xlsx', layout))),
+            'Laporan belum bisa diunduh.',
+        );
+    const saveWord = (layout: string | null) =>
+        run(
+            async () => download(await fetchFile(url('docx', layout))),
+            'Dokumen belum bisa diunduh.',
+        );
 
     return (
         <div className="flex items-center">
@@ -138,16 +156,18 @@ export function PrintAction({
                 variant="ghost"
                 size="command"
                 disabled={pending}
-                onClick={() => void openPdf(null)}
+                onClick={() => void printDefault()}
             >
                 {pending ? (
                     <LoaderCircle aria-hidden="true" className="animate-spin" />
+                ) : chosen?.format === 'xlsx' ? (
+                    <FileSpreadsheet aria-hidden="true" />
                 ) : (
                     <Printer aria-hidden="true" />
                 )}
                 {label}
             </Button>
-            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
                         type="button"
@@ -174,22 +194,38 @@ export function PrintAction({
                             )}
                         </DropdownMenuItem>
                     )}
-                    {layouts.data?.map((layout) => (
-                        <DropdownMenuItem
-                            key={layout.ref}
-                            onSelect={() => void openPdf(layout.ref)}
-                        >
-                            <Printer aria-hidden="true" />
-                            {layout.name}
-                            {layout.paper &&
-                                ` · ${layout.paper.widthMm}×${layout.paper.heightMm} mm`}
-                        </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => void saveWord(null)}>
-                        <FileText aria-hidden="true" />
-                        Unduh Word
-                    </DropdownMenuItem>
+                    {layouts.data?.map((layout) =>
+                        layout.format === 'xlsx' ? (
+                            <DropdownMenuItem
+                                key={layout.ref}
+                                onSelect={() => void saveExcel(layout.ref)}
+                            >
+                                <FileSpreadsheet aria-hidden="true" />
+                                {layout.name} · Excel
+                            </DropdownMenuItem>
+                        ) : (
+                            <DropdownMenuItem
+                                key={layout.ref}
+                                onSelect={() => void openPdf(layout.ref)}
+                            >
+                                <Printer aria-hidden="true" />
+                                {layout.name}
+                                {layout.paper &&
+                                    ` · ${layout.paper.widthMm}×${layout.paper.heightMm} mm`}
+                            </DropdownMenuItem>
+                        ),
+                    )}
+                    {chosen?.format !== 'xlsx' && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onSelect={() => void saveWord(null)}
+                            >
+                                <FileText aria-hidden="true" />
+                                Unduh Word
+                            </DropdownMenuItem>
+                        </>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>

@@ -1,10 +1,14 @@
 import type { Workspace } from '../access/index.ts';
 import type { Database } from '../database/index.ts';
 import type { Context } from '../http/index.ts';
+import type { ExcelWorkbook } from './xlsx.ts';
 
 // Bahasa sebuah layout. Bahasa menentukan pemisah angka, nama bulan, dan terbilang; teks lain ditulis di layout-nya.
 export const languages = ['id', 'en'] as const;
 export type Language = (typeof languages)[number];
+
+export const layoutFormats = ['docx', 'xlsx'] as const;
+export type LayoutFormat = (typeof layoutFormats)[number];
 
 // Arti sebuah field, bukan rupanya. Rupanya milik mesin, per bahasa layout dan per legal entity dokumen.
 export type ScalarKind =
@@ -87,15 +91,27 @@ export type ReportRecord<S extends Fields> = {
     values: Values<S>;
 };
 
-// Layout bawaan ikut repo sebagai kode yang menulis dokumen Word (docx.ts), jadi perubahannya terbaca di diff.
-export type BuiltinLayout = {
+// Layout bawaan ikut repo sebagai kode, jadi perubahannya terbaca di diff: dokumen Word ditulis wordDocument (docx.ts),
+// workbook Excel dinyatakan sebagai data yang ditulis xlsx.ts.
+export type WordLayout = {
+    format: 'docx';
     key: string;
     name: string;
     language: Language;
     document: () => Uint8Array;
 };
+export type ExcelLayout = {
+    format: 'xlsx';
+    key: string;
+    name: string;
+    // Bahasa terbilang (`<key>_words`). Angka, tanggal, dan ya/tidak ditulis sebagai nilai asli; Excel pembacanya yang
+    // memformatnya menurut setelan bahasanya.
+    language: Language;
+    workbook: ExcelWorkbook;
+};
+export type BuiltinLayout = WordLayout | ExcelLayout;
 
-export type DocumentReport<S extends Fields = Fields> = {
+export type Report<S extends Fields = Fields> = {
     // `<module>.<nama>`, misalnya `core.payment-receipt` atau `pharmacy.drug-label`.
     code: string;
     name: string;
@@ -120,12 +136,6 @@ export type DocumentReport<S extends Fields = Fields> = {
     ) => Promise<ReportRecord<S> | null>;
 };
 
-export function defineReport<S extends Fields>(
-    report: DocumentReport<S>,
-): DocumentReport<S> {
+export function defineReport<S extends Fields>(report: Report<S>): Report<S> {
     return report;
 }
-
-// Laporan tabel (daftar penjualan, mutasi semua barang) baru kontrak. Ia memakai field yang sama tanpa `lines`, parameter
-// dari schema zod, baris yang dialirkan, layout .xlsx, dan antrean `report_exports` untuk daftar besar. Rinciannya di
-// docs/dev/23-document-rendering.md, bagian Laporan tabel.

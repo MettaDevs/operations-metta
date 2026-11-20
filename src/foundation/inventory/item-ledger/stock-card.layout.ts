@@ -47,6 +47,7 @@ function a4(): Uint8Array {
 
 export const stockCardLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Kartu stok A4',
         language: 'id',

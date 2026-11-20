@@ -66,6 +66,7 @@ function a4(): Uint8Array {
 
 export const purchaseOrderLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4-portrait',
         name: 'Purchase order A4 tegak',
         language: 'id',

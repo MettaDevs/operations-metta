@@ -78,6 +78,16 @@ function invalid(path: string, expected: string): never {
     throw new Error(`Dataset laporan: ${path} harus ${expected}.`);
 }
 
+function textValue(value: unknown, path: string): string {
+    if (value !== null && typeof value !== 'string') invalid(path, 'teks');
+    return value ?? '';
+}
+
+function flagValue(value: unknown, path: string): boolean {
+    if (typeof value !== 'boolean') invalid(path, 'true atau false');
+    return value;
+}
+
 function decimalText(value: unknown, path: string): string | null {
     if (value === null) return null;
     if (typeof value !== 'string') return invalid(path, 'teks desimal');
@@ -86,6 +96,45 @@ function decimalText(value: unknown, path: string): string | null {
     } catch {
         return invalid(path, 'teks desimal');
     }
+    return value;
+}
+
+function roundedAmount(
+    spec: ScalarField,
+    value: unknown,
+    path: string,
+    locale: Locale,
+): string | null {
+    const text = decimalText(value, path);
+    const decimals =
+        spec.kind === 'money'
+            ? locale.amountDecimals
+            : locale.unitAmountDecimals;
+    return text === null ? null : Decimal.of(text).fixed(decimals);
+}
+
+function dateValue(value: unknown, path: string): string | null {
+    if (value === null) return null;
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+        invalid(path, 'tanggal YYYY-MM-DD');
+    return value;
+}
+
+function instantValue(value: unknown, path: string): Date | null {
+    if (value === null) return null;
+    const instant = typeof value === 'string' ? new Date(value) : new Date(NaN);
+    if (Number.isNaN(instant.getTime())) invalid(path, 'waktu ISO 8601');
+    return instant;
+}
+
+export function recordValue(value: unknown, path: string): object {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return invalid(path || 'nilai', 'objek');
+    return value;
+}
+
+export function linesValue(value: unknown, path: string): unknown[] {
+    if (!Array.isArray(value)) invalid(path, 'daftar baris');
     return value;
 }
 
@@ -100,23 +149,14 @@ function scalarView(
     const { language, timeZone } = locale;
     switch (spec.kind) {
         case 'text':
-            if (value !== null && typeof value !== 'string')
-                invalid(path, 'teks');
-            view[key] = value ?? '';
+            view[key] = textValue(value, path);
             return;
         case 'flag':
-            if (typeof value !== 'boolean') invalid(path, 'true atau false');
-            view[key] = value;
+            view[key] = flagValue(value, path);
             return;
         case 'money':
         case 'unit-amount': {
-            const text = decimalText(value, path);
-            const decimals =
-                spec.kind === 'money'
-                    ? locale.amountDecimals
-                    : locale.unitAmountDecimals;
-            const rounded =
-                text === null ? null : Decimal.of(text).fixed(decimals);
+            const rounded = roundedAmount(spec, value, path, locale);
             view[key] =
                 rounded === null ? '' : formatDecimal(rounded, language);
             if (spec.words)
@@ -133,28 +173,19 @@ function scalarView(
             return;
         }
         case 'date': {
-            if (value === null) {
-                view[key] = '';
-                return;
-            }
-            if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-                invalid(path, 'tanggal YYYY-MM-DD');
-            view[key] = longDate(
-                new Date(`${value}T00:00:00Z`),
-                language,
-                'UTC',
-            );
+            const date = dateValue(value, path);
+            view[key] =
+                date === null
+                    ? ''
+                    : longDate(new Date(`${date}T00:00:00Z`), language, 'UTC');
             return;
         }
         case 'datetime': {
-            if (value === null) {
+            const instant = instantValue(value, path);
+            if (instant === null) {
                 view[key] = view[`${key}_date`] = view[`${key}_time`] = '';
                 return;
             }
-            const instant =
-                typeof value === 'string' ? new Date(value) : new Date(NaN);
-            if (Number.isNaN(instant.getTime()))
-                invalid(path, 'waktu ISO 8601');
             const date = longDate(instant, language, timeZone);
             const time = `${clock(instant, language, timeZone)} ${zoneLabel(timeZone, instant)}`;
             view[key] = `${date} ${time}`;
@@ -177,20 +208,124 @@ export function templateView(
     locale: Locale,
     path = '',
 ): TemplateView {
-    if (values === null || typeof values !== 'object' || Array.isArray(values))
-        return invalid(path || 'nilai', 'objek');
+    const record = recordValue(values, path);
     const view: TemplateView = {};
     for (const [key, spec] of Object.entries(fields)) {
-        const value: unknown = Reflect.get(values, key);
+        const value: unknown = Reflect.get(record, key);
         const at = path ? `${path}.${key}` : key;
-        if (spec.kind === 'lines') {
-            if (!Array.isArray(value)) invalid(at, 'daftar baris');
-            view[key] = value.map((line: unknown, index) =>
+        if (spec.kind === 'lines')
+            view[key] = linesValue(value, at).map((line, index) =>
                 templateView(spec.fields, line, locale, `${at}[${index}]`),
             );
-        } else scalarView(view, key, spec, value, at, locale);
+        else scalarView(view, key, spec, value, at, locale);
     }
     return view;
+}
+
+type NumberStyle = 'money' | 'unit-amount' | 'quantity';
+export type Cell =
+    | { readonly kind: 'empty' }
+    | { readonly kind: 'text'; readonly text: string }
+    | { readonly kind: 'flag'; readonly value: boolean }
+    | {
+          readonly kind: 'number';
+          readonly decimal: string;
+          readonly style: NumberStyle;
+      }
+    | { readonly kind: 'date'; readonly serial: number }
+    | { readonly kind: 'datetime'; readonly serial: number };
+
+const emptyCell: Cell = { kind: 'empty' };
+const excelEpoch = Date.UTC(1899, 11, 30);
+const dayMs = 86_400_000;
+
+function wallClockSerial(instant: Date, timeZone: string): number {
+    const parts = new Map(
+        new Intl.DateTimeFormat('en-US', {
+            timeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+        })
+            .formatToParts(instant)
+            .map((part) => [part.type, Number(part.value)]),
+    );
+    const at = (type: Intl.DateTimeFormatPartTypes) => parts.get(type) ?? 0;
+    return (
+        (Date.UTC(
+            at('year'),
+            at('month') - 1,
+            at('day'),
+            at('hour'),
+            at('minute'),
+            at('second'),
+        ) -
+            excelEpoch) /
+        dayMs
+    );
+}
+
+export function cellOf(
+    spec: ScalarField,
+    value: unknown,
+    path: string,
+    locale: Locale,
+    words = false,
+): Cell {
+    switch (spec.kind) {
+        case 'text': {
+            const text = textValue(value, path);
+            return text === '' ? emptyCell : { kind: 'text', text };
+        }
+        case 'flag':
+            return { kind: 'flag', value: flagValue(value, path) };
+        case 'money':
+        case 'unit-amount': {
+            const rounded = roundedAmount(spec, value, path, locale);
+            if (rounded === null) return emptyCell;
+            return words
+                ? { kind: 'text', text: amountWords(rounded, locale.language) }
+                : { kind: 'number', decimal: rounded, style: spec.kind };
+        }
+        case 'quantity': {
+            const text = decimalText(value, path);
+            return text === null
+                ? emptyCell
+                : {
+                      kind: 'number',
+                      decimal: Decimal.of(text).normalized(),
+                      style: 'quantity',
+                  };
+        }
+        case 'date': {
+            const date = dateValue(value, path);
+            return date === null
+                ? emptyCell
+                : {
+                      kind: 'date',
+                      serial:
+                          (Date.parse(`${date}T00:00:00Z`) - excelEpoch) /
+                          dayMs,
+                  };
+        }
+        case 'datetime': {
+            const instant = instantValue(value, path);
+            return instant === null
+                ? emptyCell
+                : {
+                      kind: 'datetime',
+                      serial: wallClockSerial(instant, locale.timeZone),
+                  };
+        }
+        default: {
+            const unknown: never = spec.kind;
+            throw new Error(`Jenis field tidak dikenal: ${String(unknown)}`);
+        }
+    }
 }
 
 // Setiap tag yang boleh dipakai layout beserta artinya, dari field yang sama dengan templateView: `<key>`,

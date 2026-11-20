@@ -262,18 +262,21 @@ function thermal(): Uint8Array {
 
 export const paymentReceiptLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Kuitansi A4',
         language: 'id',
         document: () => a4('id'),
     },
     {
+        format: 'docx',
         key: 'a4-en',
         name: 'Receipt A4 (English)',
         language: 'en',
         document: () => a4('en'),
     },
     {
+        format: 'docx',
         key: 'thermal-76',
         name: 'Struk 76 mm',
         language: 'id',

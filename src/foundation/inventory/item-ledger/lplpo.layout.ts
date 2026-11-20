@@ -70,5 +70,11 @@ function a4(): Uint8Array {
 }
 
 export const lplpoLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
-    { key: 'a4', name: 'LPLPO A4', language: 'id', document: a4 },
+    {
+        format: 'docx',
+        key: 'a4',
+        name: 'LPLPO A4',
+        language: 'id',
+        document: a4,
+    },
 ];

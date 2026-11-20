@@ -114,12 +114,14 @@ function result(): Uint8Array {
 
 export const stockCountSheetLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Lembar hitung dengan stok tercatat',
         language: 'id',
         document: sheet(true),
     },
     {
+        format: 'docx',
         key: 'a4-blind',
         name: 'Lembar hitung buta (tanpa stok tercatat)',
         language: 'id',
@@ -129,6 +131,7 @@ export const stockCountSheetLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
 
 export const stockCountResultLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4-landscape',
         name: 'Hasil opname A4 mendatar',
         language: 'id',
