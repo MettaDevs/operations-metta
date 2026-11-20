@@ -142,6 +142,22 @@ Module HR belum ada di repo ini. Acuan perilakunya di [Identity dan access CoreE
 
 `PUT /api/v1/workspace-context` memilih keanggotaan, legal entity, dan operating unit aktif. Server memvalidasi pilihan terhadap organisasi yang terjangkau batas data sebelum menyimpannya di sesi. Pilihan workspace menentukan konteks transaksi baru dan nilai awal saringan; ia tidak menambah atau mengurangi izin. Endpoint tetap memeriksa batas data penuh dan tidak menerima unit dari peramban sebagai bukti hak. Rinciannya di [Tenant dan hierarki organisasi](01a-tenant-and-org-hierarchy.md#workspace-aktif).
 
+## Setelan pribadi
+
+Setelan pribadi, padanan My Settings BC, mengubah cara aplikasi tampil untuk satu pengguna tanpa menyentuh hak atau data bisnis. Layarnya Setelan (`/preferences`), dibuka dari menu profil di bawah Profil. Setelan disimpan per akun di `users.preferences` (`jsonb`), bukan di peramban, karena satu komputer klinik dipakai bergantian oleh beberapa petugas. Tema terang/gelap tetap di localStorage peramban (`src/platform/shell/use-appearance.ts`).
+
+- **Satu daftar.** Setiap setelan beserta label, bantuan, pilihan, dan nilai bawaannya ditulis sekali di `preferenceFields` (`src/platform/identity/preference.schema.ts`). Validasi simpan, nilai bawaan, data Shell, dan isi layar Setelan dibaca dari sana.
+- **Yang tersimpan hanya pilihan yang pernah diubah.** `PUT /api/v1/preferences/{key}` menggabungkan satu kunci ke kolom itu. Setelan yang belum pernah dipilih mengikuti nilai bawaan saat dibaca, jadi bawaan yang kelak berubah ikut sampai ke pengguna itu. Kunci yang tidak dikenal ditolak 404, nilai di luar pilihan ditolak 422. Nilai tersimpan yang tidak lagi ada di pilihan, dan kunci yang sudah dihapus, dibaca sebagai bawaannya.
+- **Sampai ke layar lewat data Shell.** Pengguna sesi sudah dibaca setiap request, jadi `GET /api/v1/shell` membawa `auth.user.preferences` yang sudah terisi bawaannya tanpa query tambahan. `AppLayout` memasang setiap setelan sebagai atribut `data-<kunci>` pada `<html>`, dengan garis bawah menjadi tanda hubung (`dialog_layout: 'full'` menjadi `data-dialog-layout="full"`). Setelah simpan, layar Setelan menulis nilai baru ke cache data Shell, jadi perubahannya berlaku tanpa memuat ulang.
+
+Menambah setelan:
+
+1. Tambah satu entri `choice({ label, help, options, default })` di `preferenceFields`. Nilai bawaan menggambarkan perilaku hari ini, supaya pengguna yang tidak memilih tidak melihat perubahan.
+2. Pasang pemakainya. Setelan tampilan cukup CSS yang membaca atributnya, misalnya `:root[data-dialog-layout='full'] .core-page-dialog` di `packages/ui/src/styles.css`, sehingga komponen tidak mendapat prop baru. Kode server membaca nilai bertipe dari `session.requireUser().preferences`.
+3. Tambah test perilakunya di `test/platform/identity/preference.routes.test.ts` bila setelan itu membawa aturan selain pilihan tetap.
+
+Migration tidak diperlukan, dan layar Setelan, menu, serta route tidak perlu diubah.
+
 ## Module di launcher
 
 Katalog aplikasi di Shell menampilkan module yang dihak tenant dan sudah tercatat terpasang di `core_module_installations`. Module yang dihak tetapi belum terpasang tampil nonaktif dengan keterangan "Belum dipasang", dan module yang tidak dihak tidak tampil. Data Shell datang dari `GET /api/v1/shell` di `src/platform/access/shell.routes.ts`.
