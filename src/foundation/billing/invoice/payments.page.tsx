@@ -1,6 +1,7 @@
 import { Badge } from '@operations-metta/ui/badge';
 import { DataTable, DataTableText } from '@operations-metta/ui/data-table';
-import { DatePicker, displayDate } from '@operations-metta/ui/date-picker';
+import { displayDate } from '@operations-metta/ui/date-picker';
+import { DateRangePicker } from '@operations-metta/ui/date-range-picker';
 import { FilterPane } from '@operations-metta/ui/filter-pane';
 import { FormControl, FormGrid } from '@operations-metta/ui/form-control';
 import { ListPageLayout } from '@operations-metta/ui/list-page-layout';
@@ -171,23 +172,13 @@ function PaymentsPage(): ReactNode {
                         <div className="p-4">
                             <FormGrid columns={1}>
                                 <FormControl>
-                                    <DatePicker
-                                        label="Dari Tanggal"
-                                        value={from ?? range.from}
-                                        onValueChange={(next) => {
-                                            if (datePattern.test(next))
-                                                setSearch({ from: next });
+                                    <DateRangePicker
+                                        label="Periode"
+                                        value={{
+                                            from: from ?? range.from,
+                                            to: to ?? range.to,
                                         }}
-                                    />
-                                </FormControl>
-                                <FormControl>
-                                    <DatePicker
-                                        label="Sampai Tanggal"
-                                        value={to ?? range.to}
-                                        onValueChange={(next) => {
-                                            if (datePattern.test(next))
-                                                setSearch({ to: next });
-                                        }}
+                                        onValueChange={setSearch}
                                     />
                                 </FormControl>
                                 <FormControl>
