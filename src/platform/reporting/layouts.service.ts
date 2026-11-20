@@ -5,7 +5,7 @@ import { isoSql, nowSql, type Database } from '../database/index.ts';
 import { abort, validation } from '../http/index.ts';
 import { unknownTags } from './catalog.ts';
 import { layoutTags, paperOf, type Paper } from './docx.ts';
-import { languages, type DocumentReport, type Language } from './report.ts';
+import { languages, type Report, type Language } from './report.ts';
 
 // Layout sebuah laporan untuk satu legal entity: layout bawaan dari kode ditambah unggahan legal entity itu, dan satu
 // pilihan bawaan per laporan (Report Layout Selection BC). Pilihan bawaan dibaca ulang setiap kali, jadi pilihan yang
@@ -48,7 +48,7 @@ export class ReportLayouts {
     constructor(
         private readonly db: Database,
         private readonly scope: { tenantId: string; legalEntityId: string },
-        private readonly report: DocumentReport,
+        private readonly report: Report,
     ) {}
 
     private async uploads() {
@@ -281,10 +281,7 @@ export class ReportLayouts {
 }
 
 // Pemeriksaan unggahan, juga dipakai test. Mengembalikan ukuran kertasnya.
-export function inspectLayout(
-    report: DocumentReport,
-    bytes: Uint8Array,
-): Paper {
+export function inspectLayout(report: Report, bytes: Uint8Array): Paper {
     let zip: PizZip;
     try {
         zip = new PizZip(bytes);

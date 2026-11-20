@@ -49,6 +49,7 @@ function a4(): Uint8Array {
 
 export const purchaseReturnLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Retur ke vendor A4',
         language: 'id',

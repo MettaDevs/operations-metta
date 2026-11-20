@@ -87,15 +87,18 @@ export type ReportRecord<S extends Fields> = {
     values: Values<S>;
 };
 
-// Layout bawaan ikut repo sebagai kode yang menulis dokumen Word (docx.ts), jadi perubahannya terbaca di diff.
-export type BuiltinLayout = {
+// Layout bawaan ikut repo sebagai kode yang menulis dokumen Word (docx.ts), jadi perubahannya terbaca di diff. Format
+// milik layout, bukan milik laporan, sama dengan Report Layouts Business Central.
+export type WordLayout = {
+    format: 'docx';
     key: string;
     name: string;
     language: Language;
     document: () => Uint8Array;
 };
+export type BuiltinLayout = WordLayout;
 
-export type DocumentReport<S extends Fields = Fields> = {
+export type Report<S extends Fields = Fields> = {
     // `<module>.<nama>`, misalnya `core.payment-receipt` atau `pharmacy.drug-label`.
     code: string;
     name: string;
@@ -120,9 +123,7 @@ export type DocumentReport<S extends Fields = Fields> = {
     ) => Promise<ReportRecord<S> | null>;
 };
 
-export function defineReport<S extends Fields>(
-    report: DocumentReport<S>,
-): DocumentReport<S> {
+export function defineReport<S extends Fields>(report: Report<S>): Report<S> {
     return report;
 }
 

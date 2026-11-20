@@ -51,6 +51,7 @@ function a4(): Uint8Array {
 
 export const vendorPaymentLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Bukti pembayaran ke vendor A4',
         language: 'id',

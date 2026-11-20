@@ -54,6 +54,7 @@ function a4(): Uint8Array {
 
 export const adjustmentLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Penyesuaian stok A4',
         language: 'id',

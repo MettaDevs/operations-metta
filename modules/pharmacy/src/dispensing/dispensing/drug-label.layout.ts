@@ -88,6 +88,7 @@ function label96x200(): Uint8Array {
 
 export const drugLabelLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'label-96x200',
         name: 'Etiket 96 × 200 mm',
         language: 'id',

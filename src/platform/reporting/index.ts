@@ -18,11 +18,12 @@ export {
     defineReport,
     field,
     type BuiltinLayout,
-    type DocumentReport,
     type Fields,
     type Language,
+    type Report,
     type ReportRecord,
     type Values,
+    type WordLayout,
 } from './report.ts';
 export { reportingRoutes } from './reporting.routes.ts';
 export { signatureBlocks, type SignatureParty } from './signers.ts';

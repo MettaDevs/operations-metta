@@ -1,7 +1,7 @@
 import { layoutTags } from './docx.ts';
 import { fieldTags, templateView } from './format.ts';
 import { letterheadFields } from './letterhead.ts';
-import { field, type DocumentReport, type Fields } from './report.ts';
+import { field, type Report, type Fields } from './report.ts';
 import { signerFields } from './signers.ts';
 
 export const printedFields = {
@@ -46,15 +46,13 @@ export function unknownTags(fields: Fields, layout: Uint8Array): string[] {
     });
 }
 
-export type ReportCatalog = ReadonlyMap<string, DocumentReport>;
+export type ReportCatalog = ReadonlyMap<string, Report>;
 
 // Dirakit sekali di src/main.ts dari laporan yang di-export Core dan module, sama seperti router. Laporan yang salah
 // bentuk menggagalkan proses saat mulai, dan karena test memuat src/main.ts, menggagalkan CI juga: kode ganda, izin di
 // luar module pemiliknya, contoh data yang tidak sesuai field, atau layout bawaan dengan tag yang tidak dikenal.
-export function reportCatalog(
-    reports: readonly DocumentReport[],
-): ReportCatalog {
-    const catalog = new Map<string, DocumentReport>();
+export function reportCatalog(reports: readonly Report[]): ReportCatalog {
+    const catalog = new Map<string, Report>();
     for (const report of reports) {
         if (catalog.has(report.code))
             throw new Error(`Laporan ${report.code} didaftarkan dua kali.`);

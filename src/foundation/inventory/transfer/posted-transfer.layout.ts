@@ -90,6 +90,7 @@ function receipt(): Uint8Array {
 
 export const transferShipmentLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4-landscape',
         name: 'Mutasi A4 mendatar',
         language: 'id',
@@ -99,6 +100,7 @@ export const transferShipmentLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
 
 export const transferReceiptLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4-landscape',
         name: 'Penerimaan mutasi A4 mendatar',
         language: 'id',

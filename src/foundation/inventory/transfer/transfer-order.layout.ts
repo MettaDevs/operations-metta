@@ -53,6 +53,7 @@ function a4(): Uint8Array {
 
 export const transferOrderLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
+        format: 'docx',
         key: 'a4',
         name: 'Permintaan barang A4',
         language: 'id',

@@ -53,6 +53,7 @@ function report(
 }
 
 const builtin = (document: Uint8Array): BuiltinLayout => ({
+    format: 'docx',
     key: 'a4',
     name: 'A4',
     language: 'id',

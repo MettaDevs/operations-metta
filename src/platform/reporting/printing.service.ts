@@ -14,7 +14,7 @@ import {
     type ResolvedLayout,
 } from './layouts.service.ts';
 import { convertToPdf, RenderFailure } from './pdf.ts';
-import type { DocumentReport, Language, ReportRecord } from './report.ts';
+import type { Report, Language, ReportRecord } from './report.ts';
 import { signerFields, signers } from './signers.ts';
 
 export const outputFormats = ['pdf', 'docx'] as const;
@@ -79,7 +79,7 @@ export class Printing {
         private readonly context: Context,
     ) {}
 
-    private find(code: string): DocumentReport {
+    private find(code: string): Report {
         const report = this.catalog.get(code);
         if (!report) abort(404, 'Laporan tidak ditemukan.');
         return report;
@@ -129,7 +129,7 @@ export class Printing {
         };
     }
 
-    private layoutsOf(report: DocumentReport, workspace: Workspace) {
+    private layoutsOf(report: Report, workspace: Workspace) {
         if (!workspace.legalEntityId)
             abort(422, 'Pilih legal entity di tempat kerja lebih dulu.');
         return new ReportLayouts(
@@ -185,7 +185,7 @@ export class Printing {
             this.context.db,
             reports.map((report) => report.permission),
         );
-        const visible: DocumentReport[] = [];
+        const visible: Report[] = [];
         for (const report of reports)
             if (
                 held.has(report.permission) &&
@@ -295,9 +295,9 @@ export class Printing {
     }
 
     private async render(
-        report: DocumentReport,
+        report: Report,
         workspace: Workspace,
-        record: ReportRecord<DocumentReport['fields']>,
+        record: ReportRecord<Report['fields']>,
         layout: ResolvedLayout,
         format: OutputFormat,
     ): Promise<File> {
