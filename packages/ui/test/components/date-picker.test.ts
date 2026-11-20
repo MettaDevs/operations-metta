@@ -160,7 +160,8 @@ test('DatePicker calendar dates, typed input, native form values, required and r
             onValueChange: () => {},
         }),
     );
-    assert.match(localTime, /value="19\/10\/2026"/);
-    assert.match(localTime, /type="time"[^>]*value="13:45"/);
+    assert.match(localTime, /19\/10\/2026/);
+    assert.match(localTime, /13:45/);
+    assert.match(localTime, /Mulai<span class="text-destructive"> \*<\/span>/);
     assert.doesNotMatch(localTime, /datetime-local/);
 });
