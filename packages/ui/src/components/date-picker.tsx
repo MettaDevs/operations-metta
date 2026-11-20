@@ -1,7 +1,8 @@
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, ChevronDownIcon } from 'lucide-react';
 import * as React from 'react';
 import { id as indonesian } from 'react-day-picker/locale';
 
+import { cn } from '../utils';
 import { Button } from './button';
 import { Calendar } from './calendar';
 import { Input } from './input';
@@ -108,6 +109,70 @@ export function formatDateInput(
     return { text: formatted, caret: nextCaret };
 }
 
+export type PortalContainer =
+    HTMLElement | null | React.RefObject<HTMLElement | null>;
+
+/** Popover pemilih tanggal di dalam Sheet atau dialog harus dirender di overlay itu, kalau tidak isinya tidak bisa diklik. */
+export function useOverlayContainer(portalContainer?: PortalContainer) {
+    const [host, setHost] = React.useState<HTMLElement | null>(null);
+    const explicit =
+        portalContainer && 'current' in portalContainer
+            ? portalContainer.current
+            : portalContainer;
+    const container =
+        explicit ??
+        host?.closest<HTMLElement>(
+            '[data-slot="page-dialog-content"], [data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="popover-content"]',
+        );
+
+    return { setHost, container };
+}
+
+/** Label pemicu sejajar dengan label melayang Input, supaya pemilih tanggal tampak sama dengan isian lain di form. */
+export function PickerTrigger({
+    label,
+    required,
+    empty,
+    children,
+    className,
+    ...props
+}: Omit<React.ComponentProps<typeof Button>, 'variant'> & {
+    label?: string;
+    required?: boolean;
+    empty: boolean;
+}) {
+    return (
+        <Button
+            type="button"
+            variant="outline"
+            className={cn(
+                'relative h-9 w-full min-w-0 justify-start gap-2 border-[#d9dfe7] bg-white px-3 font-normal text-[#1f2937] dark:border-input dark:bg-input/30 dark:text-foreground dark:aria-invalid:border-destructive',
+                className,
+            )}
+            {...props}
+        >
+            {children}
+            {label && (
+                <span
+                    className={cn(
+                        'pointer-events-none text-foreground',
+                        empty
+                            ? 'text-sm text-[#8a94a6]'
+                            : 'absolute start-3 top-0 z-10 -translate-y-1/2 bg-white px-1 text-xs leading-none dark:bg-input/30',
+                    )}
+                >
+                    {label}
+                    {required && <span className="text-destructive"> *</span>}
+                </span>
+            )}
+            <ChevronDownIcon
+                aria-hidden="true"
+                className="ms-auto text-muted-foreground"
+            />
+        </Button>
+    );
+}
+
 type DatePickerProps = Omit<
     React.ComponentProps<typeof Input>,
     'type' | 'value' | 'defaultValue' | 'onChange' | 'min' | 'max'
@@ -118,7 +183,7 @@ type DatePickerProps = Omit<
     onValueChange?: (value: string) => void;
     min?: string;
     max?: string;
-    portalContainer?: HTMLElement | null | React.RefObject<HTMLElement | null>;
+    portalContainer?: PortalContainer;
 };
 
 /** Input dan Calendar SDK menjaga format tanggal serta portal overlay tetap sama di semua form. */
@@ -143,7 +208,7 @@ export function DatePicker({
         text: displayDate(committed),
     });
     const [open, setOpen] = React.useState(false);
-    const [host, setHost] = React.useState<HTMLDivElement | null>(null);
+    const { setHost, container } = useOverlayContainer(portalContainer);
     const inputRef = React.useRef<HTMLInputElement>(null);
     const text =
         draft.source === committed ? draft.text : displayDate(committed);
@@ -154,15 +219,6 @@ export function DatePicker({
     const selected = parseDate(committed);
     const earliest = parseDate(min ?? '');
     const latest = parseDate(max ?? '');
-    const explicitContainer =
-        portalContainer && 'current' in portalContainer
-            ? portalContainer.current
-            : portalContainer;
-    const container =
-        explicitContainer ??
-        host?.closest<HTMLElement>(
-            '[data-slot="page-dialog-content"], [data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="popover-content"]',
-        );
 
     function commit(next: string) {
         setInternalValue(next);
