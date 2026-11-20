@@ -3,7 +3,9 @@ import type { Cell, Locale } from './format.ts';
 import {
     captionPrefix,
     columnKind,
+    definedNames,
     valuePrefix,
+    workbookReferences,
     type WorkbookColumn,
     type WorkbookData,
     type WorkbookShape,
@@ -302,8 +304,12 @@ type SheetEntry = {
 type TableEntry = {
     readonly name: string;
     readonly path: string;
+    readonly ref: string;
     readonly sheet: SheetEntry;
 };
+
+const rangeKey = (sheet: string, ref: string) =>
+    `${sheet.toLowerCase()}!${ref.replaceAll('$', '').toUpperCase()}`;
 
 // Workbook yang sedang diisi: paket beserta bagian yang dibaca berulang.
 class Book {
@@ -349,6 +355,7 @@ class Book {
                         attribute(root, 'name') ??
                         '',
                     path,
+                    ref: attribute(root, 'ref') ?? '',
                     sheet,
                 };
             }),
@@ -694,56 +701,14 @@ function writeTables(
     return owned;
 }
 
-type InfoRow = {
-    readonly reference: string;
-    readonly label: string;
-    readonly value: Cell;
-    readonly names: readonly { name: string; column: 'B' | 'C' }[];
-};
-
-function infoRows(shape: WorkbookShape, data: WorkbookData): InfoRow[] {
-    const empty: Cell = { kind: 'empty' };
-    return [
-        ...shape.names.map((name, index) => ({
-            reference: `=${valuePrefix}${name.name}`,
-            label: name.label,
-            value: data.names[index] ?? empty,
-            names: [
-                { name: valuePrefix + name.name, column: 'C' as const },
-                { name: captionPrefix + name.name, column: 'B' as const },
-            ],
-        })),
-        ...shape.tables.flatMap((table) => [
-            {
-                reference: table.name,
-                label: `${table.label} (tabel)`,
-                value: empty,
-                names: [
-                    { name: captionPrefix + table.name, column: 'B' as const },
-                ],
-            },
-            ...table.columns.map((column: WorkbookColumn) => ({
-                reference: `${table.name}[${column.name}]`,
-                label: column.label,
-                value: empty,
-                names: [
-                    {
-                        name: `${captionPrefix}${table.name}.${column.name}`,
-                        column: 'B' as const,
-                    },
-                ],
-            })),
-        ]),
-    ];
-}
-
 function writeInfoSheet(
     book: Book,
     shape: WorkbookShape,
     data: WorkbookData,
     styles: EngineStyles,
 ): { sheet: SheetEntry; names: string } {
-    const rows = infoRows(shape, data);
+    const rows = workbookReferences(shape);
+    const empty: Cell = { kind: 'empty' };
     const header = ['Nama', 'Arti', 'Nilai']
         .map((text, index) =>
             textCell(`${columnName(index)}1`, text, styles.general),
@@ -752,7 +717,7 @@ function writeInfoSheet(
     const sheetData = `<sheetData><row r="1">${header}</row>${rows
         .map((row, index) => {
             const line = index + 2;
-            return `<row r="${line}">${textCell(`A${line}`, row.reference, styles.general)}${textCell(`B${line}`, row.label, styles.general)}${cellXml(`C${line}`, row.value, styles)}</row>`;
+            return `<row r="${line}">${textCell(`A${line}`, row.reference, styles.general)}${textCell(`B${line}`, row.label, styles.general)}${cellXml(`C${line}`, row.value ? (data.names[row.value.index] ?? empty) : empty, styles)}</row>`;
         })
         .join('')}</sheetData>`;
     const range = `A1:C${rows.length + 1}`;
@@ -768,12 +733,12 @@ function writeInfoSheet(
         sheet.path,
         replaceSheetData(book.pack.read(sheet.path), sheetData, range),
     );
+    const at = (column: string, index: number) =>
+        `${escapeXml(quotedSheet(sheet.name))}!$${column}$${index + 2}`;
     const names = rows
-        .flatMap((row, index) =>
-            row.names.map(
-                ({ name, column }) =>
-                    `<definedName name="${name}">${escapeXml(quotedSheet(sheet.name))}!$${column}$${index + 2}</definedName>`,
-            ),
+        .map(
+            (row, index) =>
+                `<definedName name="${row.caption}">${at('B', index)}</definedName>${row.value ? `<definedName name="${row.value.name}">${at('C', index)}</definedName>` : ''}`,
         )
         .join('');
     return { sheet, names };
@@ -852,7 +817,40 @@ function clearRange(sheet: string, range: string): string {
     );
 }
 
-function refreshDerived(book: Book, owned: ReadonlySet<string>): void {
+// Tabel sumber sebuah pivot cache: lewat namanya, atau lewat rentang yang persis rentang tabel itu. LibreOffice menyimpan
+// sumber pivot sebagai rentang; tanpa dikembalikan ke nama tabel, pivot hanya membaca baris sebanyak contoh saat disimpan.
+function pivotSource(
+    xml: string,
+    ranges: ReadonlyMap<string, string>,
+): string | null {
+    const source = startTag(xml, 'worksheetSource') ?? '';
+    const name = attribute(source, 'name');
+    if (name) return name;
+    const sheet = attribute(source, 'sheet');
+    const ref = attribute(source, 'ref');
+    return sheet && ref ? (ranges.get(rangeKey(sheet, ref)) ?? null) : null;
+}
+
+function tableRanges(book: Book, shape: WorkbookShape): Map<string, string> {
+    const names = new Set(
+        shape.tables.map((table) => table.name.toLowerCase()),
+    );
+    return new Map(
+        book
+            .tables()
+            .filter((table) => names.has(table.name.toLowerCase()))
+            .map((table) => [
+                rangeKey(table.sheet.name, table.ref),
+                table.name,
+            ]),
+    );
+}
+
+function refreshDerived(
+    book: Book,
+    owned: ReadonlySet<string>,
+    ranges: ReadonlyMap<string, string>,
+): void {
     for (const sheet of book.sheets) {
         if (owned.has(sheet.path)) continue;
         let xml = clearFormulaResults(book.pack.read(sheet.path));
@@ -867,13 +865,18 @@ function refreshDerived(book: Book, owned: ReadonlySet<string>): void {
         book.workbookPath,
         'pivotCacheDefinition',
     )) {
-        const xml = book.pack.read(cache);
+        let xml = book.pack.read(cache);
         const root = startTag(xml, 'pivotCacheDefinition');
         if (root)
-            book.pack.write(
-                cache,
-                xml.replace(root, withAttribute(root, 'refreshOnLoad', '1')),
+            xml = xml.replace(root, withAttribute(root, 'refreshOnLoad', '1'));
+        const source = startTag(xml, 'worksheetSource');
+        const table = pivotSource(xml, ranges);
+        if (source && table && attribute(source, 'name') === null)
+            xml = xml.replace(
+                source,
+                `<worksheetSource name="${escapeXml(table)}"/>`,
             );
+        book.pack.write(cache, xml);
     }
     for (const chain of book.related(book.workbookPath, 'calcChain')) {
         book.pack.remove(chain);
@@ -892,14 +895,268 @@ export function fillWorkbook(
     formats: CellFormats,
 ): Uint8Array {
     const book = new Book(new Package(new PizZip(layout)));
+    const ranges = tableRanges(book, shape);
     const styles = engineStyles(book, formats);
     const owned = writeTables(book, shape, data, styles);
     const info = writeInfoSheet(book, shape, data, styles);
     owned.add(info.sheet.path);
     book.workbook = requestRecalculation(writeNames(book.workbook, info.names));
-    refreshDerived(book, owned);
+    refreshDerived(book, owned, ranges);
     book.pack.write(book.workbookPath, book.workbook);
     return book.pack.bytes();
+}
+
+// Alasan sebuah workbook ditolak sebagai layout. Teks untuk pengguna ditulis layouts.service.ts, bukan di sini.
+export type WorkbookRefusal =
+    | { readonly reason: 'not-workbook' }
+    | { readonly reason: 'macro' }
+    | { readonly reason: 'embedded-object' }
+    | { readonly reason: 'external-source' }
+    | { readonly reason: 'external-function'; readonly functions: string[] }
+    | { readonly reason: 'name-taken'; readonly names: string[] }
+    | { readonly reason: 'crowded-sheet'; readonly sheet: string }
+    | { readonly reason: 'totals-row'; readonly table: string }
+    | {
+          readonly reason: 'unknown-columns';
+          readonly table: string;
+          readonly columns: string[];
+      }
+    | { readonly reason: 'unknown-references'; readonly references: string[] }
+    | { readonly reason: 'sheet-reference'; readonly sheets: string[] };
+
+// Fungsi yang menghubungi luar berkas. fullCalcOnLoad menjalankannya dengan data laporan setiap kali berkas dibuka.
+const externalFunctions =
+    /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.|_xlws\.)?(WEBSERVICE|IMAGE|RTD|CALL|REGISTER\.ID)\s*\(/gi;
+const engineReference =
+    /(?:^|[^A-Za-z0-9_.])((?:Report|Caption)\.[A-Za-z0-9_.]+)/gi;
+const structuredReference =
+    /(?:^|[^A-Za-z0-9_.\]])([A-Za-z_\\][A-Za-z0-9_.]*)\[((?:[^[\]]|\[[^[\]]*\])*)\]/g;
+const sheetReference = /(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))!/g;
+const specialItems = /^#(all|data|headers|totals|this row)$/i;
+// Bagian sheet yang hilang bila sheet itu ditulis ulang mesin.
+const sheetExtras =
+    /<(?:mergeCells|conditionalFormatting|dataValidations|hyperlinks|drawing|legacyDrawing|picture|oleObjects|controls|x14:conditionalFormattings|x14:dataValidations|x14:sparklineGroups)\b/;
+
+function formulasOf(book: Book): { text: string; owner: string | null }[] {
+    const formulas: { text: string; owner: string | null }[] = [];
+    for (const path of book.pack.paths())
+        if (/^xl\/(worksheets|charts|chartsheets)\/[^/]+\.xml$/.test(path))
+            for (const [, , text] of book.pack
+                .read(path)
+                .matchAll(
+                    /<(?:[A-Za-z0-9]+:)?(f|formula|formula1|formula2)\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?\1>/g,
+                ))
+                formulas.push({ text: unescapeXml(text ?? ''), owner: null });
+    for (const [, attributes, text] of book.workbook.matchAll(
+        /<definedName\b([^>]*)>([\s\S]*?)<\/definedName>/g,
+    ))
+        formulas.push({
+            text: unescapeXml(text ?? ''),
+            owner: attribute(attributes ?? '', 'name') ?? '',
+        });
+    return formulas;
+}
+
+// Diperiksa saat unggah dan, untuk layout bawaan, saat proses mulai; null berarti layout bisa dipakai. Workbook tanpa
+// tabel laporan tetap sah: sheet-nya boleh hanya membaca nama, dan tabel yang belum ada dibuat mesin saat mengisi.
+export function inspectWorkbook(
+    bytes: Uint8Array,
+    shape: WorkbookShape,
+): WorkbookRefusal | null {
+    let pack: Package;
+    try {
+        pack = new Package(new PizZip(bytes));
+    } catch {
+        return { reason: 'not-workbook' };
+    }
+    const paths = pack.paths();
+    const types = pack.has('[Content_Types].xml')
+        ? pack.read('[Content_Types].xml')
+        : '';
+    if (
+        /macroEnabled/i.test(types) ||
+        paths.some((path) => /vbaProject/i.test(path))
+    )
+        return { reason: 'macro' };
+    let book: Book;
+    try {
+        book = new Book(pack);
+    } catch {
+        return { reason: 'not-workbook' };
+    }
+    if (
+        !types.includes(contentType('sheet.main')) ||
+        !startTag(book.workbook, 'workbook') ||
+        book.related(book.workbookPath, 'styles').length === 0
+    )
+        return { reason: 'not-workbook' };
+    if (paths.some((path) => /^xl\/(embeddings|activeX)\//i.test(path)))
+        return { reason: 'embedded-object' };
+    const external = paths
+        .filter((path) => path.endsWith('.rels'))
+        .some((path) =>
+            [...pack.read(path).matchAll(/<Relationship\b[^>]*>/g)].some(
+                ([tag]) =>
+                    attribute(tag, 'TargetMode') === 'External' &&
+                    attribute(tag, 'Type') !== relationshipType('hyperlink'),
+            ),
+        );
+    if (
+        external ||
+        paths.some((path) =>
+            /^xl\/(externalLinks\/|queryTables\/|connections\.xml$)/i.test(
+                path,
+            ),
+        )
+    )
+        return { reason: 'external-source' };
+
+    const formulas = formulasOf(book).map((formula) => ({
+        ...formula,
+        bare: formula.text.replace(/"(?:[^"]|"")*"/g, '""'),
+    }));
+    const called = new Set(
+        formulas.flatMap(({ bare }) =>
+            [...bare.matchAll(externalFunctions)].map(([, name]) =>
+                (name ?? '').toUpperCase(),
+            ),
+        ),
+    );
+    if (called.size)
+        return { reason: 'external-function', functions: [...called] };
+
+    const lower = (name: string) => name.toLowerCase();
+    const engineTables = new Map(
+        shape.tables.map((table) => [lower(table.name), table]),
+    );
+    const engineNames = new Set(definedNames(shape).map(lower));
+    const tables = book.tables();
+    const authorNames = formulas.flatMap(({ owner }) =>
+        owner !== null && !isEngineName(owner) ? [owner] : [],
+    );
+    const taken = [
+        ...authorNames.filter((name) => engineTables.has(lower(name))),
+        ...tables
+            .map((table) => table.name)
+            .filter((name) => engineNames.has(lower(name))),
+    ];
+    if (taken.length) return { reason: 'name-taken', names: taken };
+
+    const ownedSheets = new Set([lower(infoSheetName)]);
+    for (const table of tables) {
+        const shapeTable = engineTables.get(lower(table.name));
+        if (!shapeTable) continue;
+        ownedSheets.add(lower(table.sheet.name));
+        const xml = pack.read(table.path);
+        const root = startTag(xml, 'table') ?? '';
+        if (Number(attribute(root, 'totalsRowCount') ?? 0) > 0)
+            return { reason: 'totals-row', table: table.name };
+        const known = new Set(
+            shapeTable.columns.map((column) => lower(column.name)),
+        );
+        const extra = [...xml.matchAll(/<tableColumn\b[^>]*>/g)]
+            .map(([tag]) => attribute(tag, 'name') ?? '')
+            .filter((name) => !known.has(lower(name)));
+        if (extra.length)
+            return {
+                reason: 'unknown-columns',
+                table: table.name,
+                columns: extra,
+            };
+        const sheet = pack.read(table.sheet.path);
+        const range = attribute(root, 'ref') ?? '';
+        const outside = [...sheet.matchAll(cellPattern)].some(
+            ([element]) =>
+                /<(v|f|is)\b/.test(element) &&
+                !inRange(
+                    attribute(startTag(element, 'c') ?? '', 'r') ?? '',
+                    range,
+                ),
+        );
+        const others = pack
+            .relationships(table.sheet.path)
+            .filter(
+                (item) => item.type !== relationshipType('printerSettings'),
+            );
+        if (outside || sheetExtras.test(sheet) || others.length !== 1)
+            return { reason: 'crowded-sheet', sheet: table.sheet.name };
+    }
+    const info = book.sheetNamed(infoSheetName);
+    if (
+        info &&
+        pack
+            .relationships(info.path)
+            .some((item) => item.type !== relationshipType('printerSettings'))
+    )
+        return { reason: 'crowded-sheet', sheet: info.name };
+
+    const unknown = new Set<string>();
+    const referencedSheets = new Set<string>();
+    for (const { bare, owner } of formulas) {
+        for (const [, name] of bare.matchAll(engineReference))
+            if (name && !engineNames.has(lower(name))) unknown.add(name);
+        for (const [, tableName, inner] of bare.matchAll(structuredReference)) {
+            const table = engineTables.get(lower(tableName ?? ''));
+            if (!table) continue;
+            const known = new Set(
+                table.columns.map((column) => lower(column.name)),
+            );
+            const items = (inner ?? '').includes('[')
+                ? [...(inner ?? '').matchAll(/\[([^\]]*)\]/g)].map(
+                      ([, item]) => item ?? '',
+                  )
+                : [inner ?? ''];
+            for (const item of items) {
+                const column = item.replace(/^@/, '').trim();
+                if (
+                    column &&
+                    !specialItems.test(column) &&
+                    !known.has(lower(column))
+                )
+                    unknown.add(`${tableName ?? ''}[${column}]`);
+            }
+        }
+        if (
+            owner === null ||
+            (!isEngineName(owner) && !owner.startsWith('_xlnm.'))
+        )
+            for (const [, quoted, plain] of bare.matchAll(sheetReference)) {
+                const sheet = quoted?.replaceAll("''", "'") ?? plain ?? '';
+                if (ownedSheets.has(lower(sheet))) referencedSheets.add(sheet);
+            }
+    }
+    const ranges = tableRanges(book, shape);
+    for (const cache of book.related(
+        book.workbookPath,
+        'pivotCacheDefinition',
+    )) {
+        const xml = pack.read(cache);
+        const table = engineTables.get(lower(pivotSource(xml, ranges) ?? ''));
+        const sourceSheet = attribute(
+            startTag(xml, 'worksheetSource') ?? '',
+            'sheet',
+        );
+        if (!table && sourceSheet && ownedSheets.has(lower(sourceSheet)))
+            referencedSheets.add(sourceSheet);
+        if (!table) continue;
+        const known = new Set(
+            table.columns.map((column) => lower(column.name)),
+        );
+        for (const [field] of xml.matchAll(/<cacheField\b[^>]*>/g)) {
+            const name = attribute(field, 'name') ?? '';
+            if (
+                attribute(field, 'formula') === null &&
+                attribute(field, 'databaseField') !== '0' &&
+                !known.has(lower(name))
+            )
+                unknown.add(`${table.name}[${name}]`);
+        }
+    }
+    if (unknown.size)
+        return { reason: 'unknown-references', references: [...unknown] };
+    if (referencedSheets.size)
+        return { reason: 'sheet-reference', sheets: [...referencedSheets] };
+    return null;
 }
 
 // Isi sel layout bawaan. Nilai laporan selalu lewat nama (`{ name: 'location_name' }` menjadi `=Report.location_name`)

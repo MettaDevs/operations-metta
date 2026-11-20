@@ -1,27 +1,54 @@
 import { layoutTags } from './docx.ts';
-import { fieldTags, templateView } from './format.ts';
+import { fieldTags, templateView, type Locale } from './format.ts';
 import { letterheadFields } from './letterhead.ts';
-import { field, type Report, type Fields } from './report.ts';
+import { field, type Fields, type Report, type Values } from './report.ts';
 import { signerFields } from './signers.ts';
+import { workbookData, workbookShape, type WorkbookShape } from './workbook.ts';
+import {
+    cellFormats,
+    excelWorkbook,
+    fillWorkbook,
+    inspectWorkbook,
+} from './xlsx.ts';
 
 export const printedFields = {
     at: field.datetime('Waktu cetak'),
     by: field.text('Dicetak oleh'),
 };
 
-// Tag yang diisi mesin untuk setiap laporan, di luar dataset.
-export const engineTags = [
-    'letterhead',
-    ...fieldTags(letterheadFields, 'letterhead.'),
-    'printed',
-    ...fieldTags(printedFields, 'printed.'),
-    ...fieldTags(signerFields),
-];
-const engineRoots = new Set([
-    'letterhead',
-    'printed',
-    ...Object.keys(signerFields),
-]);
+function prefixed<T>(
+    prefix: string,
+    record: Readonly<Record<string, T>>,
+): Record<string, T> {
+    return Object.fromEntries(
+        Object.entries(record).map(([key, value]) => [prefix + key, value]),
+    );
+}
+
+// Field yang diisi mesin untuk setiap laporan, di luar dataset, dengan kunci yang sama dengan tag Word-nya: kop surat,
+// waktu dan pencetak, dan penanda tangan. Tag Word, daftar field di Sys Admin, dan nama Excel diturunkan dari sini.
+export const engineFields: Fields = {
+    ...prefixed('letterhead.', letterheadFields),
+    ...prefixed('printed.', printedFields),
+    ...signerFields,
+};
+
+export function engineValues(values: {
+    letterhead: Values<typeof letterheadFields>;
+    printed: Values<typeof printedFields>;
+    signers: Values<typeof signerFields>;
+}): Record<string, unknown> {
+    return {
+        ...prefixed('letterhead.', values.letterhead),
+        ...prefixed('printed.', values.printed),
+        ...values.signers,
+    };
+}
+
+export const engineTags = ['letterhead', 'printed', ...fieldTags(engineFields)];
+const engineRoots = new Set(
+    Object.keys(engineFields).map((key) => key.split('.', 1)[0] ?? key),
+);
 const loopTags = new Set(['$first', '$last', '$no']);
 
 // Tag yang tidak dikenal layout. Tag di dalam `{#…}` dicari seperti docxtemplater mencarinya: dari baris paling dalam
@@ -46,11 +73,46 @@ export function unknownTags(fields: Fields, layout: Uint8Array): string[] {
     });
 }
 
+// Bentuk Excel sebuah laporan: dataset ditambah bagian yang diisi mesin.
+export function reportShape(fields: Fields): WorkbookShape {
+    return workbookShape({ ...fields, ...engineFields });
+}
+
 export type ReportCatalog = ReadonlyMap<string, Report>;
+
+const bootLocale: Locale = {
+    language: 'id',
+    timeZone: 'Asia/Jakarta',
+    amountDecimals: 2,
+    unitAmountDecimals: 2,
+};
+
+// Nilai kosong yang sah untuk setiap field, pengganti kop, waktu cetak, dan penanda tangan saat pemeriksaan katalog.
+function emptyValues(fields: Fields): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(fields).map(([key, spec]) => [
+            key,
+            spec.kind === 'lines' ? [] : spec.kind === 'flag' ? false : null,
+        ]),
+    );
+}
+
+// Kesalahan bentuk dari pemeriksaan katalog, dengan laporan atau layout yang menyebabkannya.
+function within<T>(owner: string, work: () => T): T {
+    try {
+        return work();
+    } catch (error) {
+        throw new Error(
+            `${owner}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+}
 
 // Dirakit sekali di src/main.ts dari laporan yang di-export Core dan module, sama seperti router. Laporan yang salah
 // bentuk menggagalkan proses saat mulai, dan karena test memuat src/main.ts, menggagalkan CI juga: kode ganda, izin di
-// luar module pemiliknya, contoh data yang tidak sesuai field, atau layout bawaan dengan tag yang tidak dikenal.
+// luar module pemiliknya, contoh data yang tidak sesuai field, kunci field yang tidak bisa menjadi nama Excel, atau
+// layout bawaan yang memakai tag, nama, atau kolom yang tidak dikenal. Bentuk Excel diperiksa untuk setiap laporan,
+// karena legal entity mana pun boleh mengunggah layout Excel untuk laporan mana pun.
 export function reportCatalog(reports: readonly Report[]): ReportCatalog {
     const catalog = new Map<string, Report>();
     for (const report of reports) {
@@ -71,24 +133,53 @@ export function reportCatalog(reports: readonly Report[]): ReportCatalog {
             throw new Error(
                 `Izin laporan ${report.code} harus milik ${report.moduleId}.`,
             );
-        templateView(report.fields, report.sample.values, {
-            language: 'id',
-            timeZone: 'Asia/Jakarta',
-            amountDecimals: 2,
-            unitAmountDecimals: 2,
-        });
+        templateView(report.fields, report.sample.values, bootLocale);
+        const shape = within(`Laporan ${report.code}`, () =>
+            reportShape(report.fields),
+        );
+        const sample = workbookData(
+            shape,
+            { ...report.sample.values, ...emptyValues(engineFields) },
+            bootLocale,
+        );
         const keys = new Set<string>();
         for (const layout of report.layouts) {
+            const name = `${report.code}/${layout.key}`;
             if (keys.has(layout.key))
-                throw new Error(
-                    `Layout ${report.code}/${layout.key} didaftarkan dua kali.`,
-                );
+                throw new Error(`Layout ${name} didaftarkan dua kali.`);
             keys.add(layout.key);
-            const unknown = unknownTags(report.fields, layout.document());
-            if (unknown.length)
-                throw new Error(
-                    `Layout bawaan ${report.code}/${layout.key} memakai tag yang tidak dikenal: ${unknown.join(', ')}.`,
-                );
+            switch (layout.format) {
+                case 'docx': {
+                    const unknown = unknownTags(
+                        report.fields,
+                        layout.document(),
+                    );
+                    if (unknown.length)
+                        throw new Error(
+                            `Layout bawaan ${name} memakai tag yang tidak dikenal: ${unknown.join(', ')}.`,
+                        );
+                    break;
+                }
+                case 'xlsx': {
+                    const formats = cellFormats(bootLocale);
+                    const bytes = within(`Layout bawaan ${name}`, () =>
+                        excelWorkbook(shape, formats, layout.workbook),
+                    );
+                    const refusal = inspectWorkbook(bytes, shape);
+                    if (refusal)
+                        throw new Error(
+                            `Layout bawaan ${name} ditolak pemeriksaan Excel: ${JSON.stringify(refusal)}.`,
+                        );
+                    fillWorkbook(bytes, shape, sample, formats);
+                    break;
+                }
+                default: {
+                    const unknown: never = layout;
+                    throw new Error(
+                        `Format layout tidak dikenal: ${JSON.stringify(unknown)}`,
+                    );
+                }
+            }
         }
         catalog.set(report.code, report);
     }

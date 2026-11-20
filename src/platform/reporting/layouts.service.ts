@@ -3,9 +3,23 @@ import PizZip from 'pizzip';
 import { z } from 'zod';
 import { isoSql, nowSql, type Database } from '../database/index.ts';
 import { abort, validation } from '../http/index.ts';
-import { unknownTags } from './catalog.ts';
+import { reportShape, unknownTags } from './catalog.ts';
 import { layoutTags, paperOf, type Paper } from './docx.ts';
-import { languages, type Report, type Language } from './report.ts';
+import {
+    languages,
+    layoutFormats,
+    type BuiltinLayout,
+    type Language,
+    type LayoutFormat,
+    type Report,
+} from './report.ts';
+import type { WorkbookShape } from './workbook.ts';
+import {
+    excelWorkbook,
+    inspectWorkbook,
+    type CellFormats,
+    type WorkbookRefusal,
+} from './xlsx.ts';
 
 // Layout sebuah laporan untuk satu legal entity: layout bawaan dari kode ditambah unggahan legal entity itu, dan satu
 // pilihan bawaan per laporan (Report Layout Selection BC). Pilihan bawaan dibaca ulang setiap kali, jadi pilihan yang
@@ -14,7 +28,9 @@ import { languages, type Report, type Language } from './report.ts';
 export type LayoutChoice = {
     ref: string;
     name: string;
+    format: LayoutFormat;
     language: Language;
+    // Ukuran kertas layout Word; layout Excel tidak punya.
     paper: Paper | null;
     source: 'builtin' | 'upload';
     is_default: boolean;
@@ -22,12 +38,23 @@ export type LayoutChoice = {
     uploaded_at: string | null;
 };
 
-export type ResolvedLayout = {
-    ref: string;
-    name: string;
-    language: Language;
-    document: Uint8Array;
-};
+// Layout yang dipakai satu cetak. Workbook bawaan ditulis per cetak dengan bentuk laporan dan format angka tenant,
+// karena format angka pivot tidak mengikuti sel sumbernya; unggahan mengembalikan berkas tersimpannya.
+export type ResolvedLayout =
+    | {
+          format: 'docx';
+          ref: string;
+          name: string;
+          language: Language;
+          document: Uint8Array;
+      }
+    | {
+          format: 'xlsx';
+          ref: string;
+          name: string;
+          language: Language;
+          workbook: (shape: WorkbookShape, formats: CellFormats) => Uint8Array;
+      };
 
 const builtinPrefix = 'builtin:';
 const maxBytes = 2 * 1024 * 1024;
@@ -37,12 +64,34 @@ const uuidPattern =
 const uploadRowSchema = z.object({
     id: z.string(),
     name: z.string(),
+    format: z.enum(layoutFormats),
     bahasa: z.enum(languages),
     kertas_lebar_mm: z.number().nullable(),
     kertas_tinggi_mm: z.number().nullable(),
     uploaded_by: z.string().nullable(),
     uploaded_at: z.string().nullable(),
 });
+
+function resolvedBuiltin(ref: string, layout: BuiltinLayout): ResolvedLayout {
+    const common = { ref, name: layout.name, language: layout.language };
+    switch (layout.format) {
+        case 'docx':
+            return { ...common, format: 'docx', document: layout.document() };
+        case 'xlsx':
+            return {
+                ...common,
+                format: 'xlsx',
+                workbook: (shape, formats) =>
+                    excelWorkbook(shape, formats, layout.workbook),
+            };
+        default: {
+            const unknown: never = layout;
+            throw new Error(
+                `Format layout tidak dikenal: ${JSON.stringify(unknown)}`,
+            );
+        }
+    }
+}
 
 export class ReportLayouts {
     constructor(
@@ -54,7 +103,7 @@ export class ReportLayouts {
     private async uploads() {
         return this.db.rows(
             uploadRowSchema,
-            `select l.id, l.name, l.bahasa, l.kertas_lebar_mm, l.kertas_tinggi_mm, u.name as uploaded_by,
+            `select l.id, l.name, l.format, l.bahasa, l.kertas_lebar_mm, l.kertas_tinggi_mm, u.name as uploaded_by,
                     ${isoSql('l.created_at')} as uploaded_at
              from report_layouts l left join users u on u.id = l.created_by_user_id
              where l.tenant_id = $1 and l.legal_entity_id = $2 and l.report_code = $3 and l.isi is not null
@@ -79,8 +128,9 @@ export class ReportLayouts {
         const builtins = this.report.layouts.map((layout) => ({
             ref: `${builtinPrefix}${layout.key}`,
             name: layout.name,
+            format: layout.format,
             language: layout.language,
-            paper: paperOf(layout.document()),
+            paper: layout.format === 'docx' ? paperOf(layout.document()) : null,
             source: 'builtin' as const,
             uploaded_by: null,
             uploaded_at: null,
@@ -88,6 +138,7 @@ export class ReportLayouts {
         const uploaded = uploads.map((row) => ({
             ref: row.id,
             name: row.name,
+            format: row.format,
             language: row.bahasa,
             paper:
                 row.kertas_lebar_mm && row.kertas_tinggi_mm
@@ -118,21 +169,16 @@ export class ReportLayouts {
             this.report.layouts.find((layout) => layout.key === key);
         if (wanted?.startsWith(builtinPrefix)) {
             const layout = builtin(wanted.slice(builtinPrefix.length));
-            if (layout)
-                return {
-                    ref: wanted,
-                    name: layout.name,
-                    language: layout.language,
-                    document: layout.document(),
-                };
+            if (layout) return resolvedBuiltin(wanted, layout);
         } else if (wanted && uuidPattern.test(wanted)) {
             const row = await this.db.one(
                 z.object({
                     name: z.string(),
+                    format: z.enum(layoutFormats),
                     bahasa: z.enum(languages),
                     isi: z.instanceof(Uint8Array),
                 }),
-                `select name, bahasa, isi from report_layouts
+                `select name, format, bahasa, isi from report_layouts
                  where tenant_id = $1 and legal_entity_id = $2 and report_code = $3 and id = $4
                    and isi is not null and deleted_at is null`,
                 [
@@ -142,26 +188,39 @@ export class ReportLayouts {
                     wanted,
                 ],
             );
-            if (row)
-                return {
+            if (row) {
+                const stored = new Uint8Array(row.isi);
+                const common = {
                     ref: wanted,
                     name: row.name,
                     language: row.bahasa,
-                    document: new Uint8Array(row.isi),
                 };
+                switch (row.format) {
+                    case 'docx':
+                        return { ...common, format: 'docx', document: stored };
+                    case 'xlsx':
+                        return {
+                            ...common,
+                            format: 'xlsx',
+                            workbook: () => stored,
+                        };
+                    default: {
+                        const unknown: never = row.format;
+                        throw new Error(
+                            `Format layout tidak dikenal: ${String(unknown)}`,
+                        );
+                    }
+                }
+            }
         }
         if (ref) validation({ layout: 'Layout cetak ini sudah tidak ada.' });
         const [first] = this.report.layouts;
-        return {
-            ref: `${builtinPrefix}${first.key}`,
-            name: first.name,
-            language: first.language,
-            document: first.document(),
-        };
+        return resolvedBuiltin(`${builtinPrefix}${first.key}`, first);
     }
 
-    // Unggahan diperiksa sebelum disimpan: berkas Word tanpa makro, ukurannya wajar, sintaks tag-nya utuh, dan setiap
-    // tag dikenal laporan ini. Tag yang tidak dikenal ditolak, karena di kertas ia tercetak kosong tanpa ada yang tahu.
+    // Unggahan diperiksa sebelum disimpan, Word maupun Excel: tanpa makro, ukurannya wajar, dan setiap tag, nama, atau
+    // kolom yang dipakainya dikenal laporan ini. Yang tidak dikenal ditolak, karena di kertas atau di sel ia tampil
+    // kosong tanpa ada yang tahu. Format dibaca dari isi berkas, bukan dari nama berkasnya.
     async upload(input: {
         file: unknown;
         name: unknown;
@@ -176,13 +235,14 @@ export class ReportLayouts {
         if (!language.success)
             errors.language = 'Pilih bahasa layout: Indonesia atau Inggris.';
         if (!(input.file instanceof Blob))
-            errors.file = 'Pilih berkas Word (.docx) yang akan diunggah.';
+            errors.file =
+                'Pilih berkas Word (.docx) atau Excel (.xlsx) yang akan diunggah.';
         else if (input.file.size > maxBytes)
             errors.file = 'Berkas layout paling besar 2 MB.';
         if (Object.keys(errors).length || !(input.file instanceof Blob))
             validation(errors);
         const bytes = new Uint8Array(await input.file.arrayBuffer());
-        const paper = inspectLayout(this.report, bytes);
+        const { format, paper } = inspectLayout(this.report, bytes);
         const sha256 = createHash('sha256').update(bytes).digest('hex');
         const stamp = nowSql();
         const id = Bun.randomUUIDv7();
@@ -190,7 +250,7 @@ export class ReportLayouts {
             `insert into report_layouts (id, tenant_id, legal_entity_id, report_code, name, format, file_size, isi,
                                          sha256, bahasa, kertas_lebar_mm, kertas_tinggi_mm, created_by_user_id,
                                          created_at, updated_at)
-             values ($1, $2, $3, $4, $5, 'docx', $6, $7, $8, $9, $10, $11, $12, $13, $13)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
              on conflict (tenant_id, legal_entity_id, report_code, sha256)
                  where deleted_at is null and sha256 is not null do nothing`,
             [
@@ -199,12 +259,13 @@ export class ReportLayouts {
                 this.scope.legalEntityId,
                 this.report.code,
                 name,
+                format,
                 bytes.length,
                 bytes,
                 sha256,
                 language.data ?? 'id',
-                paper.widthMm,
-                paper.heightMm,
+                paper?.widthMm ?? null,
+                paper?.heightMm ?? null,
                 input.userId,
                 stamp,
             ],
@@ -280,8 +341,83 @@ export class ReportLayouts {
     }
 }
 
-// Pemeriksaan unggahan, juga dipakai test. Mengembalikan ukuran kertasnya.
-export function inspectLayout(report: Report, bytes: Uint8Array): Paper {
+// Format sebuah berkas unggahan dari jenis bagian utamanya. Berkas bermakro ikut dikenali, supaya penolakannya menyebut
+// makro, bukan format.
+function packageFormat(bytes: Uint8Array): LayoutFormat | null {
+    let types: string;
+    try {
+        types = new PizZip(bytes).file('[Content_Types].xml')?.asText() ?? '';
+    } catch {
+        return null;
+    }
+    if (/wordprocessingml|ms-word/.test(types)) return 'docx';
+    if (/spreadsheetml|ms-excel/.test(types)) return 'xlsx';
+    return null;
+}
+
+// Pemeriksaan unggahan, juga dipakai test. Mengembalikan format dan, untuk Word, ukuran kertasnya.
+export function inspectLayout(
+    report: Report,
+    bytes: Uint8Array,
+): { format: LayoutFormat; paper: Paper | null } {
+    const format = packageFormat(bytes);
+    switch (format) {
+        case 'docx':
+            return { format, paper: inspectWordLayout(report, bytes) };
+        case 'xlsx': {
+            const refusal = inspectWorkbook(bytes, reportShape(report.fields));
+            if (refusal) validation({ file: refusalMessage(report, refusal) });
+            return { format, paper: null };
+        }
+        case null:
+            return validation({
+                file: 'Berkas ini bukan dokumen Word (.docx) atau workbook Excel (.xlsx).',
+            });
+        default: {
+            const unknown: never = format;
+            throw new Error(`Format layout tidak dikenal: ${String(unknown)}`);
+        }
+    }
+}
+
+// Teks penolakan layout Excel untuk pengguna. Alasan baru di xlsx.ts gagal dikompilasi sampai diberi teks di sini.
+export function refusalMessage(
+    report: Report,
+    refusal: WorkbookRefusal,
+): string {
+    switch (refusal.reason) {
+        case 'not-workbook':
+            return 'Berkas ini bukan workbook Excel (.xlsx) yang bisa dibaca. Buka lalu simpan ulang berkasnya di Excel sebagai .xlsx.';
+        case 'macro':
+            return 'Layout tidak boleh berisi makro. Simpan ulang sebagai .xlsx biasa.';
+        case 'embedded-object':
+            return 'Layout tidak boleh berisi objek tertanam atau ActiveX.';
+        case 'external-source':
+            return 'Layout tidak boleh mengambil data dari luar berkas, misalnya tautan ke workbook lain, koneksi data, atau Power Query.';
+        case 'external-function':
+            return `Layout tidak boleh memakai fungsi yang menghubungi luar berkas: ${refusal.functions.join(', ')}.`;
+        case 'name-taken':
+            return `Nama ini dipakai laporan dan tidak boleh dipakai untuk tabel atau nama lain di workbook: ${refusal.names.join(', ')}.`;
+        case 'crowded-sheet':
+            return `Sheet ${refusal.sheet} diisi ulang setiap kali laporan diunduh, jadi hanya boleh berisi tabel laporannya. Pindahkan isi lainnya ke sheet sendiri.`;
+        case 'totals-row':
+            return `Tabel ${refusal.table} diisi ulang setiap kali laporan diunduh. Matikan Total Row-nya dan buat total di sheet lain.`;
+        case 'unknown-columns':
+            return `Kolom ini tidak dikenal tabel ${refusal.table} laporan ${report.name}: ${refusal.columns.join(', ')}. Hapus kolomnya dan buat hitungannya di sheet lain.`;
+        case 'unknown-references':
+            return `Rumus atau pivot memakai nama atau kolom yang tidak dikenal laporan ${report.name}: ${refusal.references.join(', ')}. Lihat daftar field di layar ini.`;
+        case 'sheet-reference':
+            return `Rumus atau pivot membaca sel di sheet ${refusal.sheets.join(', ')} langsung, padahal sheet itu diisi ulang setiap kali laporan diunduh. Pakai nama tabel dan kolomnya di rumus, bukan alamat sel.`;
+        default: {
+            const unknown: never = refusal;
+            throw new Error(
+                `Penolakan tidak dikenal: ${JSON.stringify(unknown)}`,
+            );
+        }
+    }
+}
+
+function inspectWordLayout(report: Report, bytes: Uint8Array): Paper {
     let zip: PizZip;
     try {
         zip = new PizZip(bytes);

@@ -39,11 +39,13 @@ const languageItems = [
 const languageLabel = (language: string) =>
     languageItems.find((item) => item.value === language)?.label ?? language;
 
+const formatLabels = { docx: 'Word', xlsx: 'Excel' } as const;
+
 const layoutPath = (code: string, ref: string, suffix: string) =>
     `/api/v1/reports/${encodeURIComponent(code)}/layouts/${encodeURIComponent(ref)}/${suffix}`;
 
-// Kartu layout satu dokumen cetak: layout bawaan dan unggahan legal entity tempat kerja, unggah layout baru, pratinjau
-// dengan data contoh, dan field yang boleh dipakai penulis layout di Word.
+// Kartu layout satu laporan: layout bawaan dan unggahan legal entity tempat kerja, unggah layout baru, pratinjau dengan
+// data contoh, dan field yang boleh dipakai penulis layout di Word dan di Excel.
 export function ReportLayoutCard({
     report,
     canManage,
@@ -86,7 +88,11 @@ export function ReportLayoutCard({
 
     const upload = async () => {
         if (!file) {
-            setErrors({ file: ['Pilih berkas Word (.docx) lebih dulu.'] });
+            setErrors({
+                file: [
+                    'Pilih berkas Word (.docx) atau Excel (.xlsx) lebih dulu.',
+                ],
+            });
             return;
         }
         await run(async () => {
@@ -94,7 +100,7 @@ export function ReportLayoutCard({
                 params: { code: report.code },
                 body: {
                     file,
-                    name: name || file.name.replace(/\.docx$/i, ''),
+                    name: name || file.name.replace(/\.(docx|xlsx)$/i, ''),
                     language: language === 'en' ? 'en' : 'id',
                 },
             });
@@ -147,7 +153,7 @@ export function ReportLayoutCard({
         }
     };
 
-    const saveWord = async (layout: Layout) => {
+    const saveFile = async (layout: Layout) => {
         try {
             download(
                 await fetchFile(layoutPath(report.code, layout.ref, 'file')),
@@ -215,6 +221,13 @@ export function ReportLayoutCard({
                                         ),
                                 },
                                 {
+                                    id: 'format',
+                                    header: 'Jenis',
+                                    width: 80,
+                                    cell: (row) =>
+                                        text(formatLabels[row.format]),
+                                },
+                                {
                                     id: 'language',
                                     header: 'Bahasa',
                                     width: 100,
@@ -244,25 +257,27 @@ export function ReportLayoutCard({
                                     width: 300,
                                     cell: (row) => (
                                         <span className="flex flex-wrap gap-1">
+                                            {row.format === 'docx' && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() =>
+                                                        void preview(row)
+                                                    }
+                                                >
+                                                    Pratinjau
+                                                </Button>
+                                            )}
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="xs"
                                                 onClick={() =>
-                                                    void preview(row)
+                                                    void saveFile(row)
                                                 }
                                             >
-                                                Pratinjau
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="xs"
-                                                onClick={() =>
-                                                    void saveWord(row)
-                                                }
-                                            >
-                                                Unduh Word
+                                                Unduh {formatLabels[row.format]}
                                             </Button>
                                             {canManage && !row.is_default && (
                                                 <Button
@@ -303,18 +318,20 @@ export function ReportLayoutCard({
                             title="Unggah layout"
                         >
                             <p className="mb-3 text-sm text-muted-foreground">
-                                Unduh layout yang ada sebagai Word, ubah
-                                rupanya, lalu unggah di sini. Ukuran kertas ikut
-                                setelan halaman dokumen Word. Layout baru
-                                dipakai sesudah dipilih Pakai layout ini.
+                                Unduh layout yang ada, ubah rupanya di Word atau
+                                Excel, lalu unggah di sini. Ukuran kertas ikut
+                                setelan halaman dokumen Word. Layout Excel
+                                diunduh berisi data contoh, supaya pivot dan
+                                rumusnya terlihat bekerja. Layout baru dipakai
+                                sesudah dipilih Pakai layout ini.
                             </p>
                             <FormGrid>
                                 <FormControl error={errors.file?.[0]}>
                                     <Input
                                         ref={fileInput}
                                         type="file"
-                                        label="Berkas Word (.docx)"
-                                        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        label="Berkas Word (.docx) atau Excel (.xlsx)"
+                                        accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                         data-error-field="file"
                                         onChange={(event) =>
                                             setFile(
@@ -336,7 +353,7 @@ export function ReportLayoutCard({
                                 </FormControl>
                                 <FormControl
                                     error={errors.language?.[0]}
-                                    hint="Bahasa menentukan nama bulan, pemisah angka, dan terbilang."
+                                    hint="Bahasa menentukan nama bulan, pemisah angka, dan terbilang di Word. Di Excel bahasa hanya menentukan terbilang; angka dan tanggal mengikuti setelan Excel pembacanya."
                                 >
                                     <Select
                                         label="Bahasa"
@@ -364,10 +381,7 @@ export function ReportLayoutCard({
                             </Button>
                         </CollapsibleSection>
                     )}
-                    <CollapsibleSection
-                        value="fields"
-                        title="Field untuk layout"
-                    >
+                    <CollapsibleSection value="fields" title="Field untuk Word">
                         <p className="mb-3 text-sm text-muted-foreground">
                             Tulis tag di Word persis seperti di kolom Tag. Baris
                             yang berulang ditulis{' '}
@@ -385,6 +399,41 @@ export function ReportLayoutCard({
                                     header: 'Tag',
                                     width: 260,
                                     cell: (row) => text(`{${row.tag}}`),
+                                },
+                                {
+                                    id: 'label',
+                                    header: 'Isi',
+                                    width: 360,
+                                    cell: (row) => text(row.label),
+                                },
+                            ]}
+                        />
+                    </CollapsibleSection>
+                    <CollapsibleSection
+                        value="workbook"
+                        title="Field untuk Excel"
+                    >
+                        <p className="mb-3 text-sm text-muted-foreground">
+                            Tulis nama di rumus, misalnya{' '}
+                            <code>=Report.letterhead.name</code> untuk nama di
+                            kop surat. Setiap daftar baris adalah tabel Excel
+                            dengan nama yang sama, untuk pivot atau rumus
+                            seperti <code>=SUM(tabel[kolom])</code>. Judul
+                            setiap field tersedia sebagai <code>Caption.</code>{' '}
+                            diikuti namanya. Sheet tabel dan sheet Keterangan
+                            laporan diisi ulang setiap kali laporan diunduh,
+                            jadi buat rupa laporan di sheet lain.
+                        </p>
+                        <DataTable
+                            data={report.workbook}
+                            getRowKey={(row) => row.reference}
+                            getRowLabel={(row) => row.reference}
+                            columns={[
+                                {
+                                    id: 'reference',
+                                    header: 'Di Excel',
+                                    width: 260,
+                                    cell: (row) => text(row.reference),
                                 },
                                 {
                                     id: 'label',

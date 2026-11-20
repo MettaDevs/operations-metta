@@ -120,6 +120,60 @@ describe('report catalog', () => {
         );
     });
 
+    test('a field key that cannot be an Excel name stops the process, because any legal entity may upload an Excel layout', () => {
+        const cellLike = defineReport({
+            code: 'test.a',
+            name: 'Uji',
+            moduleId: 'test',
+            permission: 'test.thing.read',
+            workspace: () => Promise.reject(new Error('Tidak dipakai.')),
+            fields: { a1: field.lines('Baris', { drug: field.text('Obat') }) },
+            sample: {
+                legalEntityId: 'x',
+                operatingUnitId: null,
+                fileName: 'Uji',
+                values: { a1: [] },
+            },
+            layouts: [builtin(layout('{#a1}{drug}{/a1}'))],
+            load: () => Promise.resolve(null),
+        });
+        expect(() => reportCatalog([cellLike])).toThrow(
+            'Laporan test.a: Kunci ini tidak bisa menjadi nama di Excel: a1.',
+        );
+    });
+
+    test('an Excel built-in layout that names a column the report does not have stops the process', () => {
+        const excel: BuiltinLayout = {
+            format: 'xlsx',
+            key: 'per-obat',
+            name: 'Per obat',
+            language: 'id',
+            workbook: {
+                sheets: [
+                    {
+                        name: 'Ringkasan',
+                        orientation: 'portrait',
+                        widths: [],
+                        cells: [
+                            { at: 'A1', content: { name: 'patient_name' } },
+                        ],
+                        pivot: {
+                            table: 'items',
+                            at: 'A3',
+                            rows: ['drug'],
+                            values: ['dose'],
+                            grandTotalCaption: 'JUMLAH',
+                        },
+                    },
+                ],
+                dataSheets: [],
+            },
+        };
+        expect(() => reportCatalog([report('test.a', [excel])])).toThrow(
+            'Layout bawaan test.a/per-obat: Pivot layout bawaan memakai kolom items[dose] yang tidak ada.',
+        );
+    });
+
     test('every print action on a screen names a report in the catalog', async () => {
         const used: string[] = [];
         for (const root of ['src', 'modules'])

@@ -111,19 +111,45 @@ const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const cellLike = /^([A-Za-z]{1,3}\d+|[Rr]\d*[Cc]\d*|[RrCc])$/;
 
 // Semua nama yang ditulis mesin ke workbook, untuk pemeriksaan bentrok.
-export function definedNames(shape: WorkbookShape): string[] {
+// Satu hal yang boleh dirujuk penulis layout: cara menulisnya di Excel, artinya, nama Caption untuk judulnya, dan untuk
+// nilai skalar, nama Report beserta urutannya di WorkbookData.names. Sheet Keterangan laporan dan daftar field di
+// Sys Admin › Layout cetak menampilkan daftar yang sama.
+export type WorkbookReference = {
+    readonly reference: string;
+    readonly label: string;
+    readonly caption: string;
+    readonly value: { readonly name: string; readonly index: number } | null;
+};
+
+export function workbookReferences(shape: WorkbookShape): WorkbookReference[] {
     return [
-        ...shape.names.flatMap((name) => [
-            valuePrefix + name.name,
-            captionPrefix + name.name,
-        ]),
+        ...shape.names.map((name, index) => ({
+            reference: `=${valuePrefix}${name.name}`,
+            label: name.label,
+            caption: captionPrefix + name.name,
+            value: { name: valuePrefix + name.name, index },
+        })),
         ...shape.tables.flatMap((table) => [
-            captionPrefix + table.name,
-            ...table.columns.map(
-                (column) => `${captionPrefix}${table.name}.${column.name}`,
-            ),
+            {
+                reference: table.name,
+                label: `${table.label} (tabel)`,
+                caption: captionPrefix + table.name,
+                value: null,
+            },
+            ...table.columns.map((column) => ({
+                reference: `${table.name}[${column.name}]`,
+                label: column.label,
+                caption: `${captionPrefix}${table.name}.${column.name}`,
+                value: null,
+            })),
         ]),
     ];
+}
+
+export function definedNames(shape: WorkbookShape): string[] {
+    return workbookReferences(shape).flatMap((entry) =>
+        entry.value ? [entry.value.name, entry.caption] : [entry.caption],
+    );
 }
 
 function duplicates(names: readonly string[]): string[] {

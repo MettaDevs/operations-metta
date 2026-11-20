@@ -1,10 +1,16 @@
 import type { Workspace } from '../access/index.ts';
 import type { Database } from '../database/index.ts';
 import type { Context } from '../http/index.ts';
+import type { ExcelWorkbook } from './xlsx.ts';
 
 // Bahasa sebuah layout. Bahasa menentukan pemisah angka, nama bulan, dan terbilang; teks lain ditulis di layout-nya.
 export const languages = ['id', 'en'] as const;
 export type Language = (typeof languages)[number];
+
+// Format berkas sebuah layout. Format milik layout, bukan milik laporan, sama dengan Report Layouts Business Central:
+// satu dataset boleh punya layout Word dan layout Excel sekaligus, dan legal entity memilih yang dipakai.
+export const layoutFormats = ['docx', 'xlsx'] as const;
+export type LayoutFormat = (typeof layoutFormats)[number];
 
 // Arti sebuah field, bukan rupanya. Rupanya milik mesin, per bahasa layout dan per legal entity dokumen.
 export type ScalarKind =
@@ -87,8 +93,8 @@ export type ReportRecord<S extends Fields> = {
     values: Values<S>;
 };
 
-// Layout bawaan ikut repo sebagai kode yang menulis dokumen Word (docx.ts), jadi perubahannya terbaca di diff. Format
-// milik layout, bukan milik laporan, sama dengan Report Layouts Business Central.
+// Layout bawaan ikut repo sebagai kode, jadi perubahannya terbaca di diff: dokumen Word ditulis wordDocument (docx.ts),
+// workbook Excel dinyatakan sebagai sheet, sel, dan pivot yang ditulis mesin (xlsx.ts) dengan format angka tenant.
 export type WordLayout = {
     format: 'docx';
     key: string;
@@ -96,7 +102,16 @@ export type WordLayout = {
     language: Language;
     document: () => Uint8Array;
 };
-export type BuiltinLayout = WordLayout;
+export type ExcelLayout = {
+    format: 'xlsx';
+    key: string;
+    name: string;
+    // Bahasa terbilang (`<key>_words`). Angka, tanggal, dan ya/tidak ditulis sebagai nilai asli; Excel pembacanya yang
+    // memformatnya menurut setelan bahasanya.
+    language: Language;
+    workbook: ExcelWorkbook;
+};
+export type BuiltinLayout = WordLayout | ExcelLayout;
 
 export type Report<S extends Fields = Fields> = {
     // `<module>.<nama>`, misalnya `core.payment-receipt` atau `pharmacy.drug-label`.
@@ -111,6 +126,7 @@ export type Report<S extends Fields = Fields> = {
     fields: S;
     // Data sintetis untuk pratinjau layout dan test. Bertipe dari `fields`, jadi tidak bisa tertinggal.
     sample: ReportRecord<S>;
+    // Layout pertama dipakai bila legal entity belum memilih. Word dan Excel boleh bercampur.
     layouts: readonly [BuiltinLayout, ...BuiltinLayout[]];
     // Dataset satu record. Dataset menyaring tenant dan memeriksa izin lewat service pemiliknya; null berarti tidak ada.
     // `parameters` adalah query cetak selain format dan layout, misalnya lokasi dan periode kartu stok satu barang
@@ -126,7 +142,3 @@ export type Report<S extends Fields = Fields> = {
 export function defineReport<S extends Fields>(report: Report<S>): Report<S> {
     return report;
 }
-
-// Laporan tabel (daftar penjualan, mutasi semua barang) baru kontrak. Ia memakai field yang sama tanpa `lines`, parameter
-// dari schema zod, baris yang dialirkan, layout .xlsx, dan antrean `report_exports` untuk daftar besar. Rinciannya di
-// docs/dev/23-document-rendering.md, bagian Laporan tabel.

@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import PizZip from 'pizzip';
 import { paymentReceiptReport } from '../../../src/foundation/billing/index.ts';
+import { reportShape } from '../../../src/platform/reporting/catalog.ts';
 import {
     paragraph,
     wordDocument,
 } from '../../../src/platform/reporting/index.ts';
+import {
+    cellFormats,
+    excelWorkbook,
+} from '../../../src/platform/reporting/xlsx.ts';
 import {
     json,
     legalEntity,
@@ -15,6 +20,7 @@ import {
     type Browser,
 } from '../../support/operations-app.ts';
 import { documentText, paidReceipt } from '../../support/receipt-fixture.ts';
+import { readWorkbook } from '../../support/workbook-reader.ts';
 
 type Layout = {
     ref: string;
@@ -39,11 +45,11 @@ function form(bytes: Uint8Array, name: string, language = 'id') {
     const body = new FormData();
     body.append(
         'file',
-        new File([new Uint8Array(bytes)], `${name}.docx`, {
-            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        new File([new Uint8Array(bytes)], name, {
+            type: 'application/octet-stream',
         }),
     );
-    body.append('name', name);
+    body.append('name', name.replace(/\.(docx|xlsx|xlsm)$/, ''));
     body.append('language', language);
     return body;
 }
@@ -257,6 +263,125 @@ describe.skipIf(!process.env.DB_HOST)('report layouts', () => {
         );
         expect(receipt?.fields.map((entry) => entry.tag)).toContain(
             'letterhead.name',
+        );
+    });
+
+    test('any report takes an uploaded Excel layout: it is listed as Excel, prints as a workbook with real values, and refuses PDF', async () => {
+        const workbook = excelWorkbook(
+            reportShape(paymentReceiptReport.fields),
+            cellFormats({ amountDecimals: 0, unitAmountDecimals: 0 }),
+            {
+                sheets: [
+                    {
+                        name: 'Kuitansi',
+                        orientation: 'portrait',
+                        widths: [24, 20],
+                        cells: [
+                            { at: 'A1', content: { name: 'letterhead.name' } },
+                            { at: 'A2', content: { name: 'number' } },
+                            {
+                                at: 'A3',
+                                content: { formula: 'SUM(services[amount])' },
+                            },
+                        ],
+                    },
+                ],
+                dataSheets: [{ table: 'services', name: 'Layanan' }],
+            },
+        );
+        const uploaded = await json<{ data: Layout & { format: string } }>(
+            await admin.upload(
+                `${base}/layouts`,
+                form(workbook, 'Kuitansi Excel.xlsx'),
+            ),
+            201,
+        );
+        expect(uploaded.data).toMatchObject({
+            name: 'Kuitansi Excel',
+            format: 'xlsx',
+            paper: null,
+            source: 'upload',
+        });
+        const refused = await admin.get(
+            `${base}/records/${fixture.paymentId}?format=pdf&layout=${uploaded.data.ref}`,
+        );
+        expect(refused.status).toBe(422);
+        await json(
+            await admin.put(`${base}/layout-default`, {
+                layout: uploaded.data.ref,
+            }),
+            200,
+        );
+        const printed = await admin
+            .get(`${base}/records/${fixture.paymentId}`)
+            .finally(() =>
+                admin.put(`${base}/layout-default`, { layout: 'builtin:a4' }),
+            );
+        expect(printed.status).toBe(200);
+        expect(printed.headers.get('content-type')).toContain('spreadsheetml');
+        expect(printed.headers.get('content-disposition')).toContain(
+            encodeURIComponent(`Kuitansi ${fixture.paymentNumber}.xlsx`),
+        );
+        const book = readWorkbook(new Uint8Array(await printed.arrayBuffer()));
+        expect(book.value('Report.number').value).toBe(fixture.paymentNumber);
+        expect(book.value('Report.letterhead.name').value).toBe(
+            'Klinik Pratama Uji',
+        );
+        expect(book.value('Report.total')).toMatchObject({
+            kind: 'number',
+            value: '24000',
+            format: '#,##0',
+        });
+        expect(book.value('Report.total_words').value).toBe(
+            'Dua Puluh Empat Ribu',
+        );
+        expect(
+            book
+                .table('services')
+                .rows.map((row) => row.map((cell) => cell.value)),
+        ).toEqual([['Obat dan BHP', '24000']]);
+    });
+
+    test('an Excel layout with a macro or a column the report does not have is refused with the reason', async () => {
+        const refused = async (body: FormData) =>
+            (
+                await json<{ errors: Record<string, string[]> }>(
+                    await admin.upload(`${base}/layouts`, body),
+                    422,
+                )
+            ).errors.file?.[0] ?? '';
+        const shape = reportShape(paymentReceiptReport.fields);
+        const formats = cellFormats({
+            amountDecimals: 0,
+            unitAmountDecimals: 0,
+        });
+        const macro = new PizZip(
+            excelWorkbook(shape, formats, { sheets: [], dataSheets: [] }),
+        );
+        macro.file('xl/vbaProject.bin', 'x');
+        expect(
+            await refused(
+                form(macro.generate({ type: 'uint8array' }), 'Bermakro.xlsm'),
+            ),
+        ).toContain('makro');
+        const unknown = excelWorkbook(shape, formats, {
+            sheets: [
+                {
+                    name: 'Kuitansi',
+                    orientation: 'portrait',
+                    widths: [],
+                    cells: [
+                        {
+                            at: 'A1',
+                            content: { formula: 'SUM(services[harga])' },
+                        },
+                    ],
+                },
+            ],
+            dataSheets: [],
+        });
+        expect(await refused(form(unknown, 'Salah kolom.xlsx'))).toContain(
+            'services[harga]',
         );
     });
 
