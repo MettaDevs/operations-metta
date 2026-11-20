@@ -99,6 +99,7 @@ export function shellRoutes() {
                             id: shell.user.id,
                             name: shell.user.name,
                             email: shell.user.email,
+                            preferences: shell.user.preferences,
                         },
                         membership: shell.membership,
                     },

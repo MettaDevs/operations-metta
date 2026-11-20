@@ -87,6 +87,7 @@ import {
 import { geographyRoutes } from './platform/geography/index.ts';
 import type { loginInputSchema } from './platform/identity/index.ts';
 import {
+    preferenceRoutes,
     profileRoutes,
     Session,
     Sso,
@@ -183,6 +184,7 @@ export const router = {
         }),
     ...shellRoutes(),
     ...profileRoutes(),
+    ...preferenceRoutes(),
     ...accessRoutes(),
     ...organizationRoutes(),
     ...geographyRoutes(),
