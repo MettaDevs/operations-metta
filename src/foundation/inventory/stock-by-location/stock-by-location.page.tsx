@@ -201,6 +201,20 @@ function StockByLocationPage(): ReactNode {
                             label="LPLPO"
                         />
                     )}
+                    {search.location && (
+                        <PrintAction
+                            report="core.inventory-value"
+                            recordId={search.location}
+                            parameters={{
+                                from: `${asOf.slice(0, 7)}-01`,
+                                to: asOf,
+                                ...(search.category
+                                    ? { category_id: search.category }
+                                    : {}),
+                            }}
+                            label="Nilai persediaan"
+                        />
+                    )}
                     {table && table.rows.length > 0 && (
                         <Button
                             type="button"
