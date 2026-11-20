@@ -341,8 +341,6 @@
 .core-page-dialog-next {
     left: calc(100% + 4px);
 }
-/* Setelan pribadi "Tampilan modal" Full: kartu setinggi area tanpa jarak atas dan bawah, dan tombol data
-   sebelumnya/berikutnya menempel di tepi kartu. Bawaannya Compact, yaitu aturan di atas. */
 :root[data-dialog-layout='full'] .core-page-dialog {
     inset-block: 0;
 }

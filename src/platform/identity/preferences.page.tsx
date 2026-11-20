@@ -14,8 +14,6 @@ import {
     shellQuery,
 } from '../shell/index.ts';
 
-// Setelan pribadi pengguna yang sedang masuk, dibuka dari menu profil. Setiap setelan tersimpan begitu dipilih dan
-// langsung berlaku: nilai barunya ditulis ke data Shell, yang memasangnya sebagai atribut pada <html>.
 function PreferencesPage(): ReactNode {
     const queryClient = useQueryClient();
     const { data: definitions } = useSuspenseQuery(

@@ -3,8 +3,6 @@ import { base, ok, typedBody } from '../http/index.ts';
 import { preferenceDefinitions } from './preference.schema.ts';
 import { updatePreference } from './preference.service.ts';
 
-// Setelan pribadi pengguna yang sedang masuk. Nilainya dibaca layar dari data Shell (`auth.user.preferences`); route
-// ini memberi daftar setelan untuk layar Setelan dan menyimpan satu pilihan.
 export function preferenceRoutes() {
     return {
         preferences: base

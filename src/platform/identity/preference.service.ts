@@ -9,8 +9,6 @@ import {
 } from './preference.schema.ts';
 import type { Session } from './session.ts';
 
-// Hanya pilihan yang diubah yang ditulis, digabung ke pilihan lain yang sudah tersimpan. Setelan yang belum pernah
-// dipilih tetap tidak tersimpan, supaya nilai bawaannya yang kelak berubah ikut sampai ke pengguna itu.
 export async function updatePreference(
     db: Database,
     session: Session,

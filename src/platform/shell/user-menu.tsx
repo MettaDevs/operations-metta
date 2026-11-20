@@ -42,7 +42,6 @@ export function UserInfo({ user }: { user: User }) {
     );
 }
 
-// Isi menu profil di header: halaman profil (data akun dan tautan akun SSO), setelan pribadi, dan keluar.
 export function UserMenuContent({ user }: { user: User }) {
     const queryClient = useQueryClient();
     const navigate = useNavigate();

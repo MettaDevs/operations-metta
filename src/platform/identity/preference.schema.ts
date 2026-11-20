@@ -8,7 +8,6 @@ type PreferenceDefinition = {
 
 const definitions = z.registry<PreferenceDefinition>();
 
-// Nilai yang tersimpan tetapi tidak ada di pilihan, misalnya pilihan yang sudah dihapus, dibaca sebagai bawaannya.
 function choice<const Value extends string>(definition: {
     label: string;
     help?: string;
@@ -26,9 +25,6 @@ function choice<const Value extends string>(definition: {
     return schema;
 }
 
-// Setelan pribadi per pengguna, padanan My Settings BC. Ini satu-satunya daftar setelan: validasi, nilai bawaan, data
-// Shell, dan layar Setelan dibaca dari sini. Setiap setelan sampai ke peramban sebagai atribut `data-<kunci>` pada
-// <html> (garis bawah menjadi tanda hubung), jadi setelan tampilan cukup ditambah di sini dan di CSS pemakainya.
 const preferenceFields = z.object({
     dialog_layout: choice({
         label: 'Tampilan modal',
@@ -45,7 +41,6 @@ export type Preferences = z.infer<typeof preferenceFields>;
 export const preferenceKeySchema = preferenceFields.keyof();
 export type PreferenceKey = z.infer<typeof preferenceKeySchema>;
 
-// Isi kolom users.preferences, apa pun bentuknya, menjadi setiap setelan dengan nilainya.
 export const preferencesSchema = z
     .record(z.string(), z.unknown())
     .catch({})

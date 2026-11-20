@@ -37,7 +37,6 @@ export function AppLayout(): ReactNode {
     useEffect(() => {
         if (areaId) rememberArea(userId, areaId);
     }, [userId, areaId]);
-    // Setelan pribadi menjadi atribut data-<kunci> pada <html>, dan CSS pemakainya membaca atribut itu.
     const preferences = shell.auth.user.preferences;
     useEffect(() => {
         const root = document.documentElement;
