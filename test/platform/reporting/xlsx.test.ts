@@ -91,7 +91,7 @@ const spec: ExcelWorkbook = {
             },
         },
     ],
-    dataSheets: [{ table: 'services', name: 'Layanan' }],
+    visibleTables: [{ table: 'services', sheet: 'Layanan' }],
 };
 
 function filled(
@@ -144,13 +144,11 @@ describe('excel layouts', () => {
 
     test('a date keeps its day in any time zone, and a time is the wall clock of the legal entity', () => {
         const book = readWorkbook(filled());
-        // 1 Januari 2026 adalah serial 46023 di Excel; 16 November hari ke-320.
         expect(book.value('Report.visit_date')).toMatchObject({
             kind: 'number',
             value: '46342',
             format: 'date',
         });
-        // 02:30 UTC adalah 10:30 WITA.
         expect(book.value('Report.posted_at')).toMatchObject({
             value: String(46342 + 10.5 / 24),
             format: 'datetime',
@@ -190,7 +188,6 @@ describe('excel layouts', () => {
             hidden: false,
         });
         const components = book.table('components');
-        // Kolom `name` komponen menimpa `name` layanan induknya; kolom induk lain ikut.
         expect(components.header).toEqual([
             'quantity',
             'price',
@@ -257,7 +254,7 @@ describe('excel layouts', () => {
         expect(() =>
             excelWorkbook(shape, formats, {
                 ...spec,
-                dataSheets: [{ table: 'items', name: 'X' }],
+                visibleTables: [{ table: 'items', sheet: 'X' }],
             }),
         ).toThrow('tabel items');
     });
@@ -293,8 +290,6 @@ describe('excel layouts', () => {
     });
 
     test('cached results and pivot output from the layout are cleared, the calculation chain goes, and Excel recalculates on open', () => {
-        // Layout yang pernah disimpan Excel: rumus membawa hasil tersimpan, pivot membawa isi dan rentang penuhnya, dan
-        // ada calcChain.
         const layout = new PizZip(
             excelWorkbook(shape, cellFormats(wita), spec),
         );
@@ -350,7 +345,6 @@ describe('excel layouts', () => {
     });
 });
 
-// Workbook yang disunting di luar mesin: layout bawaan atau hasil unduhannya, lalu diubah seperti penulis layout.
 function edited(
     change: (zip: PizZip, text: (path: string) => string) => void,
     bytes = filled(),

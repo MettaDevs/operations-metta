@@ -166,7 +166,7 @@ describe('report catalog', () => {
                         },
                     },
                 ],
-                dataSheets: [],
+                visibleTables: [],
             },
         };
         expect(() => reportCatalog([report('test.a', [excel])])).toThrow(

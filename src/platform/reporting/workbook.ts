@@ -7,53 +7,35 @@ import {
 } from './format.ts';
 import type { Fields, ScalarField } from './report.ts';
 
-// Wajah Excel sebuah dataset, padanan tag Word. Diturunkan dari peta field yang sama, tidak pernah ditulis sendiri:
-//   - Field skalar di akar menjadi nama `Report.<kunci>` (`=Report.location_name`). Bagian yang diisi mesin memakai
-//     kunci yang sama dengan tag Word-nya: `=Report.letterhead.name`, `=Report.printed.at`.
-//   - Label setiap field menjadi nama `Caption.<kunci>`, kolom tabel `Caption.<tabel>.<kolom>`.
-//   - Setiap field.lines, di kedalaman berapa pun, menjadi satu tabel Excel bernama kuncinya: `lines[closing_value]`.
-//     Kolomnya kolom skalar semua baris induknya lalu kolomnya sendiri, supaya baris bersarang bisa dipivot tanpa kunci
-//     penghubung. Bila nama kolom sendiri sama dengan kolom induk, kolom sendiri yang dipakai.
-//   - Uang dengan terbilang menambah `<kunci>_words`, teks dalam bahasa layout.
-// Awalan `Report.` dan `Caption.` meniru `ReportRequest.*` dan `Caption.*` Business Central: nama tidak bisa tertukar
-// dengan alamat sel atau nama fungsi Excel, dan mesin tahu nama mana miliknya.
-
 export const valuePrefix = 'Report.';
 export const captionPrefix = 'Caption.';
 
 export type WorkbookColumn = {
-    // Kunci kolom tabel atau nama tanpa awalan, misalnya `closing_value` atau `letterhead.name`.
     readonly name: string;
     readonly label: string;
     readonly spec: ScalarField;
     readonly words: boolean;
-    // Field yang dibaca, di baris tabel itu sendiri (0) atau di baris induknya (1, 2, ...).
-    readonly key: string;
-    readonly depth: number;
+    readonly fieldKey: string;
+    readonly rowsUp: number;
 };
 
 export type WorkbookTable = {
     readonly name: string;
     readonly label: string;
-    // Kunci field.lines dari akar dataset sampai tabel ini.
     readonly path: readonly string[];
     readonly columns: readonly WorkbookColumn[];
 };
 
-// Semua yang boleh dirujuk layout Excel sebuah laporan: pemeriksaan unggahan, pemeriksaan katalog saat mulai, layout
-// bawaan, dan daftar field di Sys Admin › Layout cetak membaca bentuk yang sama.
 export type WorkbookShape = {
     readonly names: readonly WorkbookColumn[];
     readonly tables: readonly WorkbookTable[];
 };
 
-// Isi workbook untuk satu cetak, urutannya sama dengan bentuknya.
 export type WorkbookData = {
-    readonly names: readonly Cell[];
-    readonly tables: readonly (readonly (readonly Cell[])[])[];
+    readonly names: ReadonlyMap<string, Cell>;
+    readonly tables: ReadonlyMap<string, readonly (readonly Cell[])[]>;
 };
 
-// Jenis format sel sebuah kolom: terbilang selalu teks.
 export function columnKind(column: WorkbookColumn) {
     return column.words ? 'text' : column.spec.kind;
 }
@@ -66,8 +48,8 @@ function scalarColumns(fields: Fields): WorkbookColumn[] {
             label: spec.label,
             spec,
             words: false,
-            key,
-            depth: 0,
+            fieldKey: key,
+            rowsUp: 0,
         };
         return spec.kind === 'money' && spec.words
             ? [
@@ -95,7 +77,7 @@ function tablesOf(
         const columns = [
             ...inherited
                 .filter((column) => !ownNames.has(column.name))
-                .map((column) => ({ ...column, depth: column.depth + 1 })),
+                .map((column) => ({ ...column, rowsUp: column.rowsUp + 1 })),
             ...own,
         ];
         const tablePath = [...path, key];
@@ -110,24 +92,20 @@ const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Nama tabel yang terbaca sebagai alamat sel (A1, XFD1048576, R1C1, R, C) ditolak Excel.
 const cellLike = /^([A-Za-z]{1,3}\d+|[Rr]\d*[Cc]\d*|[RrCc])$/;
 
-// Semua nama yang ditulis mesin ke workbook, untuk pemeriksaan bentrok.
-// Satu hal yang boleh dirujuk penulis layout: cara menulisnya di Excel, artinya, nama Caption untuk judulnya, dan untuk
-// nilai skalar, nama Report beserta urutannya di WorkbookData.names. Sheet Keterangan laporan dan daftar field di
-// Sys Admin › Layout cetak menampilkan daftar yang sama.
-export type WorkbookReference = {
+type WorkbookReference = {
     readonly reference: string;
     readonly label: string;
     readonly caption: string;
-    readonly value: { readonly name: string; readonly index: number } | null;
+    readonly value: { readonly name: string; readonly column: string } | null;
 };
 
 export function workbookReferences(shape: WorkbookShape): WorkbookReference[] {
     return [
-        ...shape.names.map((name, index) => ({
+        ...shape.names.map((name) => ({
             reference: `=${valuePrefix}${name.name}`,
             label: name.label,
             caption: captionPrefix + name.name,
-            value: { name: valuePrefix + name.name, index },
+            value: { name: valuePrefix + name.name, column: name.name },
         })),
         ...shape.tables.flatMap((table) => [
             {
@@ -162,9 +140,6 @@ function duplicates(names: readonly string[]): string[] {
     });
 }
 
-// Bentuk Excel dari peta field. Melempar bila sebuah kunci tidak bisa menjadi nama Excel atau dua nama bertabrakan
-// tanpa peduli huruf besar, karena Excel menolak workbook seperti itu. Dipanggil katalog untuk setiap laporan saat
-// proses mulai: legal entity mana pun boleh mengunggah layout Excel untuk laporan mana pun.
 export function workbookShape(fields: Fields): WorkbookShape {
     const shape = {
         names: scalarColumns(fields),
@@ -201,7 +176,6 @@ export function workbookShape(fields: Fields): WorkbookShape {
 
 type RowChain = { holder: object; rows: readonly object[]; at: string };
 
-// Setiap baris sebuah tabel beserta baris induknya, dari akar sampai baris itu sendiri.
 function rowChains(root: object, path: readonly string[]): RowChain[] {
     let chains: RowChain[] = [{ holder: root, rows: [], at: '' }];
     for (const key of path)
@@ -218,8 +192,6 @@ function rowChains(root: object, path: readonly string[]): RowChain[] {
     return chains;
 }
 
-// Nilai bertipe untuk setiap nama dan baris tabel. Nilai yang tidak sesuai field-nya menggagalkan unduhan, sama dengan
-// Word: pemeriksaannya satu, di format.ts.
 export function workbookData(
     shape: WorkbookShape,
     values: unknown,
@@ -229,26 +201,31 @@ export function workbookData(
     const cell = (column: WorkbookColumn, row: object, at: string) =>
         cellOf(
             column.spec,
-            Reflect.get(row, column.key),
-            at ? `${at}.${column.key}` : column.key,
+            Reflect.get(row, column.fieldKey),
+            at ? `${at}.${column.fieldKey}` : column.fieldKey,
             locale,
             column.words,
         );
     return {
-        names: shape.names.map((name) => cell(name, root, '')),
-        tables: shape.tables.map((table) =>
-            rowChains(root, table.path).map(({ rows, at }) =>
-                table.columns.map((column) => {
-                    const row = rows[rows.length - 1 - column.depth];
-                    if (!row) throw new Error(`Baris induk ${at} tidak ada.`);
-                    return cell(column, row, at);
-                }),
-            ),
+        names: new Map(
+            shape.names.map((name) => [name.name, cell(name, root, '')]),
+        ),
+        tables: new Map(
+            shape.tables.map((table) => [
+                table.name,
+                rowChains(root, table.path).map(({ rows, at }) =>
+                    table.columns.map((column) => {
+                        const row = rows[rows.length - 1 - column.rowsUp];
+                        if (!row)
+                            throw new Error(`Baris induk ${at} tidak ada.`);
+                        return cell(column, row, at);
+                    }),
+                ),
+            ]),
         ),
     };
 }
 
-// Jumlah baris semua tabel tanpa membangun sel, supaya unduhan yang terlalu besar ditolak sebelum memakan memori.
 export function workbookRowCount(shape: WorkbookShape, values: unknown) {
     const root = recordValue(values, '');
     return shape.tables.reduce(

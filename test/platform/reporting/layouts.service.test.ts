@@ -286,7 +286,7 @@ describe.skipIf(!process.env.DB_HOST)('report layouts', () => {
                         ],
                     },
                 ],
-                dataSheets: [{ table: 'services', name: 'Layanan' }],
+                visibleTables: [{ table: 'services', sheet: 'Layanan' }],
             },
         );
         const uploaded = await json<{ data: Layout & { format: string } }>(
@@ -356,7 +356,14 @@ describe.skipIf(!process.env.DB_HOST)('report layouts', () => {
             unitAmountDecimals: 0,
         });
         const macro = new PizZip(
-            excelWorkbook(shape, formats, { sheets: [], dataSheets: [] }),
+            excelWorkbook(shape, formats, { sheets: [], visibleTables: [] }),
+        );
+        macro.file(
+            '[Content_Types].xml',
+            (macro.file('[Content_Types].xml')?.asText() ?? '').replace(
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
+                'application/vnd.ms-excel.sheet.macroEnabled.main+xml',
+            ),
         );
         macro.file('xl/vbaProject.bin', 'x');
         expect(
@@ -378,7 +385,7 @@ describe.skipIf(!process.env.DB_HOST)('report layouts', () => {
                     ],
                 },
             ],
-            dataSheets: [],
+            visibleTables: [],
         });
         expect(await refused(form(unknown, 'Salah kolom.xlsx'))).toContain(
             'services[harga]',

@@ -246,7 +246,7 @@ Unduh layout Excel di Sys Admin › Layout cetak memberi layout yang diisi data 
 
 Unduhan Excel berjalan sinkron di request yang sama dengan cetak dokumen (keputusan pemilik produk, 20 November 2026). Laporan yang tabelnya lebih dari 50.000 baris dijawab 422 berkode `report_too_large` dengan pesan untuk mempersempit periode atau saringannya. Antrean `report_exports` (hak pengguna diperiksa ulang saat job berjalan, masa sewa per baris antrean, hasil yang punya masa simpan) dibangun saat ada laporan yang memang sebesar itu.
 
-PDF dari layout Excel tidak ditawarkan. Pivot dan rumusnya dihitung aplikasi pembacanya, bukan renderer.
+PDF dari layout Excel tidak ditawarkan. LibreOffice di renderer memang membangun pivot-nya, tetapi tanpa judul pivot buatan mesin (lihat di bawah), jadi PDF-nya tidak sama dengan yang dilihat pengguna di Excel.
 
 ### Membuka hasilnya
 

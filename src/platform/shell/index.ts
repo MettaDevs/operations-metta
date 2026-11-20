@@ -34,7 +34,7 @@ export { PasswordInput } from './password-input.tsx';
 export {
     download,
     fetchFile,
-    openInTab,
+    openOrDownload,
     PrintAction,
 } from './print-action.tsx';
 export {

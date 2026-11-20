@@ -78,9 +78,6 @@ function invalid(path: string, expected: string): never {
     throw new Error(`Dataset laporan: ${path} harus ${expected}.`);
 }
 
-// Pemeriksaan nilai mentah per jenis field, dipakai Word (scalarView) dan Excel (cellOf), supaya kedua format punya satu
-// aturan tentang nilai dataset yang sah.
-
 function textValue(value: unknown, path: string): string {
     if (value !== null && typeof value !== 'string') invalid(path, 'teks');
     return value ?? '';
@@ -130,7 +127,6 @@ function instantValue(value: unknown, path: string): Date | null {
     return instant;
 }
 
-// Satu baris dataset (objek) dan daftar baris, diperiksa sama ketatnya dengan nilai skalar.
 export function recordValue(value: unknown, path: string): object {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return invalid(path || 'nilai', 'objek');
@@ -226,9 +222,7 @@ export function templateView(
     return view;
 }
 
-// Nilai satu sel Excel. Angka ditulis dari teks desimal yang sudah dibulatkan, tidak lewat bilangan JavaScript; teks
-// selalu inline string, tidak pernah menjadi rumus.
-export type NumberStyle = 'money' | 'unit-amount' | 'quantity';
+type NumberStyle = 'money' | 'unit-amount' | 'quantity';
 export type Cell =
     | { readonly kind: 'empty' }
     | { readonly kind: 'text'; readonly text: string }
@@ -245,8 +239,6 @@ const emptyCell: Cell = { kind: 'empty' };
 const excelEpoch = Date.UTC(1899, 11, 30);
 const dayMs = 86_400_000;
 
-// Jam dinding di zona waktu legal entity, sebagai serial tanggal Excel. Excel tidak menyimpan zona, jadi yang ditulis
-// adalah jam yang terbaca di klinik itu.
 function wallClockSerial(instant: Date, timeZone: string): number {
     const parts = new Map(
         new Intl.DateTimeFormat('en-US', {
@@ -277,9 +269,6 @@ function wallClockSerial(instant: Date, timeZone: string): number {
     );
 }
 
-// Rupa Excel sebuah nilai dataset, padanan scalarView untuk Word. Uang dan harga satuan dibulatkan ke presisi mata
-// uang tenant, tanggal menjadi serial tanpa geser zona, dan waktu menjadi serial jam dinding legal entity dokumen.
-// `words` meminta terbilang uang itu, teks dalam bahasa layout.
 export function cellOf(
     spec: ScalarField,
     value: unknown,

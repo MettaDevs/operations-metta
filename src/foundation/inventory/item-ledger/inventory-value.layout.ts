@@ -1,9 +1,5 @@
 import type { BuiltinLayout } from '../../../platform/reporting/index.ts';
 
-// Layout Excel bawaan Nilai persediaan, rupa Excel sistem lama: kop dan keterangan di atas, lalu barang dikelompokkan
-// per sumber dana dengan total setiap kelompok dan TOTAL PERSEDIAAN. Kelompok dan total dibuat pivot Excel atas tabel
-// `lines`, bukan oleh mesin, jadi legal entity bisa mengganti pengelompokan, kolom, judul, dan total di Excel lalu
-// mengunggahnya kembali. Kolom No sistem lama tidak ada, karena pivot tidak memberi nomor urut.
 export const inventoryValueLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
     {
         format: 'xlsx',
@@ -89,7 +85,9 @@ export const inventoryValueLayouts: [BuiltinLayout, ...BuiltinLayout[]] = [
                     printTitleRows: [8, 9],
                 },
             ],
-            dataSheets: [{ table: 'lines', name: 'Barang per sumber dana' }],
+            visibleTables: [
+                { table: 'lines', sheet: 'Barang per sumber dana' },
+            ],
         },
     },
 ];

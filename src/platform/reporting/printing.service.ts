@@ -12,7 +12,12 @@ import {
     type ReportCatalog,
 } from './catalog.ts';
 import { fillDocx } from './docx.ts';
-import { fieldCatalog, templateView, type Locale } from './format.ts';
+import {
+    fieldCatalog,
+    formatDecimal,
+    templateView,
+    type Locale,
+} from './format.ts';
 import { letterhead, letterheadFields } from './letterhead.ts';
 import {
     ReportLayouts,
@@ -38,8 +43,6 @@ const mimeTypes: Record<OutputFormat, string> = {
     xlsx: xlsxMimeType,
 };
 
-// Batas unduhan Excel langsung, jumlah baris semua tabel. Laporan yang melewatinya menunggu antrean report_exports,
-// yang belum dibangun (keputusan pemilik produk, 20 November 2026).
 const maxWorkbookRows = 50_000;
 
 async function installed(db: Database, tenantId: string, moduleId: string) {
@@ -90,8 +93,6 @@ function attachment(bytes: Uint8Array, fileName: string, format: OutputFormat) {
     });
 }
 
-// Keluaran untuk sebuah layout. Tanpa permintaan, format layout itu sendiri: Word menjadi PDF, Excel tetap Excel. PDF
-// dari layout Excel tidak ditawarkan, karena pivot dan rumusnya dihitung Excel pembaca, bukan renderer.
 function outputFor(
     layout: ResolvedLayout,
     requested: OutputFormat | null,
@@ -194,7 +195,6 @@ export class Printing {
 
     // Satu panggilan sinkron: isi layout butuh beberapa milidetik dan konversi PDF sekitar 0,4 detik, jadi dokumen satu
     // record tidak lewat antrean. Renderer yang tidak ada atau tidak menjawab dijawab 503, dan layar menawarkan Word.
-    // `format` kosong berarti format layout yang dipakai.
     async print(
         code: string,
         recordId: string,
@@ -222,8 +222,7 @@ export class Printing {
         );
     }
 
-    // Daftar laporan yang boleh dikelola pengguna ini, beserta field yang boleh dipakai penulis layout: tag untuk Word,
-    // nama dan kolom tabel untuk Excel.
+    // Daftar laporan yang boleh dikelola pengguna ini, beserta field yang boleh dipakai penulis layout.
     async catalogue() {
         const workspace = await coreWorkspace(this.context);
         workspace.guard('report-layout', 'read');
@@ -305,9 +304,8 @@ export class Printing {
         };
     }
 
-    // Berkas sebuah layout untuk diubah lalu diunggah lagi. Word: dokumen bertag apa adanya. Excel: layout yang diisi
-    // data contoh laporan dan kop legal entity tempat kerja, supaya pivot dan rumusnya terlihat bekerja saat disunting;
-    // isi sheet tabel dan Keterangan laporan diganti lagi saat laporan diunduh.
+    // Berkas sebuah layout, untuk diubah lalu diunggah lagi. Layout Excel diunduh berisi data contoh dan kop legal
+    // entity, supaya pivot dan rumusnya terlihat bekerja saat disunting.
     async download(code: string, ref: string): Promise<File> {
         const { report, workspace, layouts } = await this.forManaging(
             code,
@@ -447,7 +445,7 @@ export class Printing {
                     coded(
                         422,
                         'report_too_large',
-                        'Data laporan ini lebih dari 50.000 baris dan terlalu besar untuk diunduh langsung. Persempit periode atau saringannya.',
+                        `Data laporan ini lebih dari ${formatDecimal(String(maxWorkbookRows), 'id')} baris dan terlalu besar untuk diunduh langsung. Persempit periode atau saringannya.`,
                     );
                 const formats = cellFormats(documentLocale);
                 return attachment(

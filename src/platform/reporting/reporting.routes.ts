@@ -67,8 +67,8 @@ export function reportingRoutes(catalog: ReportCatalog) {
             .handler(async ({ context, input }) =>
                 ok(await printing(context).layouts(input.params.code)),
             ),
-        // Berkas satu laporan: PDF atau Word dari layout Word, Excel dari layout Excel. Tanpa `format`, format layout
-        // yang dipakai. GET supaya peramban bisa membukanya langsung di tab baru.
+        // Berkas satu laporan: PDF atau Word dari layout Word, Excel dari layout Excel; tanpa `format`, format layout yang
+        // dipakai. GET supaya peramban bisa membukanya langsung di tab baru.
         reportPrint: route('GET', '/reports/{code}/records/{id}')
             .input(
                 typedQuery<z.input<typeof printQuerySchema>>().extend({

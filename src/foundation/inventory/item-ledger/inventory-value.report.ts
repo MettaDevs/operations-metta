@@ -18,11 +18,6 @@ import { categoryTreeSql, exists } from '../inventory.service.ts';
 import { requireLocationAccess } from '../warehouse-employee/location-access.ts';
 import { inventoryValueLayouts } from './inventory-value.layout.ts';
 
-// Nilai persediaan satu lokasi dalam satu periode, per barang dan sumber dana: padanan Inventory Valuation (1001)
-// Business Central dengan saringan lokasi, dan pengganti Excel nilai persediaan sistem lama. Nilainya nilai kartu
-// gudang, biaya sebenarnya setiap gerak, bukan jumlah dikali satu harga seperti sistem lama (keputusan pemilik produk,
-// 20 November 2026). Sumber dana ikut baris keluar dari baris masuk yang diambilnya, jadi pengeluaran pun terpecah per
-// sumber dana.
 export const inventoryValueFields = {
     location_code: field.text('Kode lokasi'),
     location_name: field.text('Lokasi'),
@@ -80,10 +75,6 @@ const lineSchema = z.object({
     closing_value: z.string(),
 });
 
-// Penerimaan dan pengeluaran dipisah menurut tanda jumlah, sama dengan LPLPO, supaya dua laporan dari kartu gudang yang
-// sama memberi angka yang sama; pembatalan penerimaan terhitung pengeluaran. Stok akhir = stok awal + penerimaan -
-// pengeluaran, sama dengan jumlah kartu gudang sampai tanggal akhir. Harga satuan adalah nilai akhir dibagi jumlah
-// akhir. Baris yang semuanya nol tidak ikut.
 const linesSql = (categoryAt: string | null) => `
     with recursive ${categoryAt ? `${categoryTreeSql(categoryAt)},` : ''}
     gerak as (

@@ -25,7 +25,7 @@ import {
     errorText,
     fetchFile,
     FormErrorHeader,
-    openInTab,
+    openOrDownload,
     type ApiBody,
 } from '../shell/index.ts';
 
@@ -147,7 +147,9 @@ export function ReportLayoutCard({
 
     const preview = async (layout: Layout) => {
         try {
-            await openInTab(layoutPath(report.code, layout.ref, 'preview'));
+            await openOrDownload(
+                layoutPath(report.code, layout.ref, 'preview'),
+            );
         } catch (caught) {
             toast.error(errorText(caught, 'Pratinjau belum bisa dibuat.'));
         }

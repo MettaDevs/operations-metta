@@ -1,13 +1,9 @@
 import PizZip from 'pizzip';
 
-// Pembaca .xlsx untuk test: menjawab apa yang dilihat Excel di sebuah berkas, yaitu nama yang menunjuk sel, isi dan
-// format sel, tabel beserta barisnya, dan sheet yang tampil. Bukan pembaca umum; cukup untuk berkas mesin laporan.
-
 export type WorkbookCell = {
     kind: 'empty' | 'text' | 'number' | 'flag' | 'formula';
     value: string;
     format: string;
-    // Hasil rumus yang tersimpan di berkas; Excel di Protected View dan LibreOffice menampilkannya apa adanya.
     cached?: string;
 };
 
@@ -183,7 +179,6 @@ export function readWorkbook(bytes: Uint8Array) {
             Object.keys(zip.files).filter((path) => !zip.files[path]?.dir),
         part,
         cell,
-        // Nilai yang dibaca rumus `=<nama>`: sel yang ditunjuk nama itu.
         value(name: string): WorkbookCell {
             const reference = names.get(name);
             const match = /^'?(.*?)'?!\$([A-Z]+)\$(\d+)$/.exec(reference ?? '');
@@ -196,7 +191,6 @@ export function readWorkbook(bytes: Uint8Array) {
                 `${match[2]}${match[3]}`,
             );
         },
-        // Header dan baris data sebuah tabel Excel, dibaca dari sel di dalam rentangnya.
         table(name: string) {
             const table = tables.find((item) => item.name === name);
             if (!table) throw new Error(`Tabel ${name} tidak ada.`);

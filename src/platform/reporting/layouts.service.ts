@@ -30,7 +30,6 @@ export type LayoutChoice = {
     name: string;
     format: LayoutFormat;
     language: Language;
-    // Ukuran kertas layout Word; layout Excel tidak punya.
     paper: Paper | null;
     source: 'builtin' | 'upload';
     is_default: boolean;
@@ -38,8 +37,6 @@ export type LayoutChoice = {
     uploaded_at: string | null;
 };
 
-// Layout yang dipakai satu cetak. Workbook bawaan ditulis per cetak dengan bentuk laporan dan format angka tenant,
-// karena format angka pivot tidak mengikuti sel sumbernya; unggahan mengembalikan berkas tersimpannya.
 export type ResolvedLayout =
     | {
           format: 'docx';
@@ -53,6 +50,8 @@ export type ResolvedLayout =
           ref: string;
           name: string;
           language: Language;
+          // Workbook bawaan ditulis per cetak dengan format angka tenant, karena format angka pivot tidak mengikuti
+          // sel sumbernya.
           workbook: (shape: WorkbookShape, formats: CellFormats) => Uint8Array;
       };
 
@@ -218,9 +217,9 @@ export class ReportLayouts {
         return resolvedBuiltin(`${builtinPrefix}${first.key}`, first);
     }
 
-    // Unggahan diperiksa sebelum disimpan, Word maupun Excel: tanpa makro, ukurannya wajar, dan setiap tag, nama, atau
-    // kolom yang dipakainya dikenal laporan ini. Yang tidak dikenal ditolak, karena di kertas atau di sel ia tampil
-    // kosong tanpa ada yang tahu. Format dibaca dari isi berkas, bukan dari nama berkasnya.
+    // Unggahan diperiksa sebelum disimpan: tanpa makro, ukurannya wajar, dan setiap tag, nama, atau kolom yang dipakainya
+    // dikenal laporan ini. Yang tidak dikenal ditolak, karena di kertas ia tercetak kosong dan di Excel ia tampil
+    // #NAME? tanpa ada yang tahu sebabnya.
     async upload(input: {
         file: unknown;
         name: unknown;
@@ -341,8 +340,6 @@ export class ReportLayouts {
     }
 }
 
-// Format sebuah berkas unggahan dari jenis bagian utamanya. Berkas bermakro ikut dikenali, supaya penolakannya menyebut
-// makro, bukan format.
 function packageFormat(bytes: Uint8Array): LayoutFormat | null {
     let types: string;
     try {
@@ -355,7 +352,6 @@ function packageFormat(bytes: Uint8Array): LayoutFormat | null {
     return null;
 }
 
-// Pemeriksaan unggahan, juga dipakai test. Mengembalikan format dan, untuk Word, ukuran kertasnya.
 export function inspectLayout(
     report: Report,
     bytes: Uint8Array,
@@ -380,11 +376,7 @@ export function inspectLayout(
     }
 }
 
-// Teks penolakan layout Excel untuk pengguna. Alasan baru di xlsx.ts gagal dikompilasi sampai diberi teks di sini.
-export function refusalMessage(
-    report: Report,
-    refusal: WorkbookRefusal,
-): string {
+function refusalMessage(report: Report, refusal: WorkbookRefusal): string {
     switch (refusal.reason) {
         case 'not-workbook':
             return 'Berkas ini bukan workbook Excel (.xlsx) yang bisa dibaca. Buka lalu simpan ulang berkasnya di Excel sebagai .xlsx.';

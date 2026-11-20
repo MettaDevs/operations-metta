@@ -60,10 +60,8 @@ export function download({ blob, name }: { blob: Blob; name: string }) {
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
 }
 
-// Berkas dari server dibuka di tab baru bila PDF, diunduh bila bukan. Tab dibuka sebelum menunggu server, supaya tidak
-// ditahan pemblokir pop-up; gagal atau berkas yang diunduh menutup tab itu lagi, dan kegagalan dilempar sebagai
-// ApiError ke pemanggil.
-export async function openInTab(url: string): Promise<void> {
+// Tab dibuka sebelum menunggu server, supaya tidak ditahan pemblokir pop-up.
+export async function openOrDownload(url: string): Promise<void> {
     const tab = window.open('', '_blank');
     try {
         const file = await fetchFile(url);
@@ -83,9 +81,8 @@ export async function openInTab(url: string): Promise<void> {
 
 // Satu-satunya tombol cetak di layar. Layar hanya menyebut laporan dan record-nya; isi, layout, kop, PDF, dan Excel milik
 // mesin cetak di server (src/platform/reporting/). Klik memakai layout bawaan legal entity: layout Word dibuka sebagai
-// PDF di tab baru, tempat penampil PDF peramban menyediakan Cetak dan Unduh, dan layout Excel diunduh. Layar tidak
-// memilih format; legal entity yang memilihnya lewat layout. Menu di sebelahnya memilih layout lain atau mengunduh
-// berkas Word.
+// PDF di tab baru, tempat penampil PDF peramban menyediakan Cetak dan Unduh, dan layout Excel diunduh. Menu di
+// sebelahnya memilih layout lain atau mengunduh berkas Word.
 export function PrintAction({
     report,
     recordId,
@@ -130,15 +127,17 @@ export function PrintAction({
         }
     }
 
-    // Selama daftar layout belum dimuat, format bawaan diputuskan server dari layout yang dipakai.
     const printDefault = () =>
         run(async () => {
             if (chosen?.format === 'xlsx')
                 download(await fetchFile(url(null, null)));
-            else await openInTab(url(null, null));
+            else await openOrDownload(url(null, null));
         }, 'Laporan belum bisa dibuat.');
     const openPdf = (layout: string) =>
-        run(() => openInTab(url('pdf', layout)), 'Dokumen belum bisa dicetak.');
+        run(
+            () => openOrDownload(url('pdf', layout)),
+            'Dokumen belum bisa dicetak.',
+        );
     const saveExcel = (layout: string) =>
         run(
             async () => download(await fetchFile(url('xlsx', layout))),

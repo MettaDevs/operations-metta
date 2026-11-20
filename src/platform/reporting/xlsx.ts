@@ -12,21 +12,12 @@ import {
     type WorkbookTable,
 } from './workbook.ts';
 
-// Semua pengetahuan tentang berkas Excel ada di sini: mengisi layout, memeriksa unggahan, dan menulis layout bawaan.
 // Ditulis di atas pizzip tanpa pustaka xlsx: pustaka yang membaca lalu menyimpan ulang workbook (exceljs, SheetJS)
-// membuang pivot, slicer, dan chart buatan legal entity, padahal itulah isi kustomisasinya. Mesin hanya mengganti
-// bagian miliknya dan menyalin setiap bagian lain apa adanya, pola data sheet layout Excel Business Central:
-//   1. sheet tempat setiap tabel laporan berada: isi sheet dan definisi tabelnya ditulis ulang;
-//   2. sheet tersembunyi "Keterangan laporan": nama, arti, dan nilai setiap nama `Report.*` dan `Caption.*`;
-//   3. defined name berawalan `Report.` dan `Caption.`;
-//   4. gaya angka mesin, ditambahkan di ujung styles.xml tanpa menggeser gaya penulis layout;
-//   5. nilai turunan yang basi: calcChain dibuang, rumus dihitung ulang saat dibuka, pivot di-refresh saat dibuka, dan
-//      hasil tersimpan rumus serta isi pivot dikosongkan. Tanpa yang terakhir, berkas yang dibuka di Protected View atau
-//      di LibreOffice (bawaannya tidak menghitung ulang .xlsx) menampilkan angka contoh dari layout.
+// membuang pivot, slicer, dan chart buatan legal entity.
 
 export const xlsxMimeType =
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-export const infoSheetName = 'Keterangan laporan';
+const infoSheetName = 'Keterangan laporan';
 
 const mainNs = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const relationshipNs =
@@ -36,8 +27,7 @@ const contentType = (name: string) =>
     `application/vnd.openxmlformats-officedocument.spreadsheetml.${name}+xml`;
 const declaration = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 
-// Format angka sel yang bergantung pada tenant. Pemisah di kode format bukan pemisah tampilan: Excel berbahasa
-// Indonesia menampilkan 1.234,50.
+// Pemisah di kode format bukan pemisah tampilan: Excel berbahasa Indonesia menampilkan 1.234,50.
 export type CellFormats = {
     readonly money: string;
     readonly unitAmount: string;
@@ -104,16 +94,14 @@ function startTag(xml: string, element: string): string | null {
     return new RegExp(`<${element}\\b[^>]*>`).exec(xml)?.[0] ?? null;
 }
 
-export function columnName(index: number): string {
+function columnName(index: number): string {
     let name = '';
     for (let rest = index + 1; rest > 0; rest = Math.floor((rest - 1) / 26))
         name = String.fromCharCode(65 + ((rest - 1) % 26)) + name;
     return name;
 }
 
-export function parseAddress(
-    address: string,
-): { column: number; row: number } | null {
+function parseAddress(address: string): { column: number; row: number } | null {
     const match = /^\$?([A-Z]{1,3})\$?(\d+)$/.exec(address.toUpperCase());
     if (!match?.[1] || !match[2]) return null;
     let column = 0;
@@ -311,7 +299,6 @@ type TableEntry = {
 const rangeKey = (sheet: string, ref: string) =>
     `${sheet.toLowerCase()}!${ref.replaceAll('$', '').toUpperCase()}`;
 
-// Workbook yang sedang diisi: paket beserta bagian yang dibaca berulang.
 class Book {
     readonly workbookPath: string;
     workbook: string;
@@ -368,7 +355,6 @@ class Book {
         );
     }
 
-    // Sheet baru di ujung daftar sheet. Nama yang sudah dipakai sheet lain diberi nomor.
     addSheet(name: string, xml: string, hidden: boolean): SheetEntry {
         let unique = name.slice(0, 31);
         for (let index = 2; this.sheetNamed(unique); index++)
@@ -416,8 +402,6 @@ type EngineStyles = Record<CellStyle, number>;
 
 const builtinFormats = { general: 0, date: 14, datetime: 22 } as const;
 
-// Format dan gaya sel mesin dicari dulu di styles.xml, baru ditambahkan di ujung bila belum ada, jadi indeks gaya
-// penulis layout tidak bergeser dan mengisi berulang kali tidak menumpuk gaya.
 function engineStyles(book: Book, formats: CellFormats): EngineStyles {
     const [path] = book.related(book.workbookPath, 'styles');
     if (!path) throw new Error('Workbook tanpa styles.xml.');
@@ -591,9 +575,7 @@ function newTableXml(id: number, table: WorkbookTable, range: string): string {
     return `${declaration}<table xmlns="${mainNs}" id="${id}" name="${table.name}" displayName="${table.name}" ref="${range}" totalsRowShown="0"><autoFilter ref="${range}"/>${tableColumnsXml(table)}<tableStyleInfo name="TableStyleLight9" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`;
 }
 
-// Definisi tabel yang sudah ada ditulis ulang: rentang, saringan tanpa kriteria, dan kolom mengikuti bentuk laporan.
-// Id tabel, id kolom yang namanya sama, gaya tabel, dan format kolom dipertahankan, supaya slicer dan rumus tetap
-// menunjuk kolom yang sama.
+// Id tabel dan id kolom yang namanya sama dipertahankan, supaya slicer tetap menunjuk kolom yang sama.
 function rewrittenTableXml(
     xml: string,
     table: WorkbookTable,
@@ -622,8 +604,12 @@ function rewrittenTableXml(
     return `${declaration}${tag}<autoFilter ref="${range}"/>${tableColumnsXml(table, existing)}${styleInfo}${extensions}</table>`;
 }
 
-function tableSheetXml(sheetData: string, range: string): string {
-    return `${declaration}<worksheet xmlns="${mainNs}" xmlns:r="${relationshipNs}"><dimension ref="${range}"/><sheetFormatPr defaultRowHeight="15"/><cols><col min="1" max="50" width="18" customWidth="1"/></cols>${sheetData}<pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
+function tableSheetXml(
+    sheetData: string,
+    range: string,
+    relation: string,
+): string {
+    return `${declaration}<worksheet xmlns="${mainNs}" xmlns:r="${relationshipNs}"><dimension ref="${range}"/><sheetFormatPr defaultRowHeight="15"/><cols><col min="1" max="50" width="18" customWidth="1"/></cols>${sheetData}<pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><tableParts count="1"><tablePart r:id="${relation}"/></tableParts></worksheet>`;
 }
 
 function replaceSheetData(xml: string, sheetData: string, range: string) {
@@ -639,8 +625,6 @@ function replaceSheetData(xml: string, sheetData: string, range: string) {
         : withData;
 }
 
-// Sheet baru berisi satu tabel laporan, dipakai saat mengisi layout yang belum punya tabel itu dan saat menulis layout
-// bawaan.
 function addTableSheet(
     book: Book,
     table: WorkbookTable,
@@ -650,17 +634,17 @@ function addTableSheet(
     hidden: boolean,
 ): SheetEntry {
     const range = tableRange(table, rows.length);
-    const sheet = book.addSheet(
-        sheetName,
-        tableSheetXml(tableSheetData(table, rows, styles), range),
-        hidden,
-    );
     const tablePath = book.pack.freePath(
         (index) => `xl/tables/table${index}.xml`,
     );
     book.pack.write(tablePath, newTableXml(book.nextTableId(), table, range));
     book.pack.declare(tablePath, contentType('table'));
-    book.pack.relate(sheet.path, 'table', tablePath);
+    const sheet = book.addSheet(sheetName, '', hidden);
+    const relation = book.pack.relate(sheet.path, 'table', tablePath);
+    book.pack.write(
+        sheet.path,
+        tableSheetXml(tableSheetData(table, rows, styles), range, relation),
+    );
     return sheet;
 }
 
@@ -674,15 +658,15 @@ function writeTables(
         book.tables().map((table) => [table.name.toLowerCase(), table]),
     );
     const owned = new Set<string>();
-    shape.tables.forEach((table, index) => {
-        const rows = data.tables[index] ?? [];
+    for (const table of shape.tables) {
+        const rows = data.tables.get(table.name) ?? [];
         const range = tableRange(table, rows.length);
         const found = tables.get(table.name.toLowerCase());
         if (!found) {
             owned.add(
                 addTableSheet(book, table, rows, styles, table.name, true).path,
             );
-            return;
+            continue;
         }
         owned.add(found.sheet.path);
         book.pack.write(
@@ -697,7 +681,7 @@ function writeTables(
             found.path,
             rewrittenTableXml(book.pack.read(found.path), table, range),
         );
-    });
+    }
     return owned;
 }
 
@@ -717,7 +701,7 @@ function writeInfoSheet(
     const sheetData = `<sheetData><row r="1">${header}</row>${rows
         .map((row, index) => {
             const line = index + 2;
-            return `<row r="${line}">${textCell(`A${line}`, row.reference, styles.general)}${textCell(`B${line}`, row.label, styles.general)}${cellXml(`C${line}`, row.value ? (data.names[row.value.index] ?? empty) : empty, styles)}</row>`;
+            return `<row r="${line}">${textCell(`A${line}`, row.reference, styles.general)}${textCell(`B${line}`, row.label, styles.general)}${cellXml(`C${line}`, row.value ? (data.names.get(row.value.column) ?? empty) : empty, styles)}</row>`;
         })
         .join('')}</sheetData>`;
     const range = `A1:C${rows.length + 1}`;
@@ -752,8 +736,6 @@ function isEngineName(name: string): boolean {
     );
 }
 
-// Nama mesin dibuang lalu ditulis ulang. Nama yang dulu ada lalu hilang dari dataset ikut terbuang, jadi rumus yang
-// memakainya tampil #NAME?, bukan diam-diam membaca sel yang salah.
 function writeNames(workbook: string, names: string): string {
     const cleaned = workbook.replace(
         /<definedName\b[^>]*>[\s\S]*?<\/definedName>/g,
@@ -794,7 +776,6 @@ function requestRecalculation(workbook: string): string {
     );
 }
 
-// Satu elemen sel, juga yang ditutup sendiri (`<c r="A1" s="2"/>`).
 const cellPattern =
     /<c\b[^>]*\/>|<c\b(?:[^>]*[^/>])?>(?:(?!<\/c>)[\s\S])*<\/c>/g;
 
@@ -817,8 +798,8 @@ function clearRange(sheet: string, range: string): string {
     );
 }
 
-// Tabel sumber sebuah pivot cache: lewat namanya, atau lewat rentang yang persis rentang tabel itu. LibreOffice menyimpan
-// sumber pivot sebagai rentang; tanpa dikembalikan ke nama tabel, pivot hanya membaca baris sebanyak contoh saat disimpan.
+// LibreOffice menyimpan sumber pivot sebagai rentang; tanpa dikembalikan ke nama tabel, pivot hanya membaca baris
+// sebanyak contoh saat disimpan.
 function pivotSource(
     xml: string,
     ranges: ReadonlyMap<string, string>,
@@ -846,6 +827,8 @@ function tableRanges(book: Book, shape: WorkbookShape): Map<string, string> {
     );
 }
 
+// Hasil tersimpan rumus dan isi pivot dikosongkan: tanpa itu, berkas yang dibuka di Protected View atau di LibreOffice
+// (bawaannya tidak menghitung ulang .xlsx) menampilkan angka contoh dari layout.
 function refreshDerived(
     book: Book,
     owned: ReadonlySet<string>,
@@ -885,9 +868,6 @@ function refreshDerived(
     book.pack.unrelate(book.workbookPath, 'calcChain');
 }
 
-// Layout + data -> workbook siap unduh. Layout sudah lolos inspectWorkbook (saat unggah, atau saat proses mulai untuk
-// layout bawaan), jadi bentuk yang dilanggar di sini adalah cacat mesin dan melempar Error biasa. Hasilnya hanya
-// bergantung pada layout tersimpan dan datanya; mengisi hasil isian lagi tidak menumpuk sheet, nama, atau gaya.
 export function fillWorkbook(
     layout: Uint8Array,
     shape: WorkbookShape,
@@ -906,7 +886,6 @@ export function fillWorkbook(
     return book.pack.bytes();
 }
 
-// Alasan sebuah workbook ditolak sebagai layout. Teks untuk pengguna ditulis layouts.service.ts, bukan di sini.
 export type WorkbookRefusal =
     | { readonly reason: 'not-workbook' }
     | { readonly reason: 'macro' }
@@ -933,7 +912,6 @@ const structuredReference =
     /(?:^|[^A-Za-z0-9_.\]])([A-Za-z_\\][A-Za-z0-9_.]*)\[((?:[^[\]]|\[[^[\]]*\])*)\]/g;
 const sheetReference = /(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))!/g;
 const specialItems = /^#(all|data|headers|totals|this row)$/i;
-// Bagian sheet yang hilang bila sheet itu ditulis ulang mesin.
 const sheetExtras =
     /<(?:mergeCells|conditionalFormatting|dataValidations|hyperlinks|drawing|legacyDrawing|picture|oleObjects|controls|x14:conditionalFormattings|x14:dataValidations|x14:sparklineGroups)\b/;
 
@@ -957,8 +935,6 @@ function formulasOf(book: Book): { text: string; owner: string | null }[] {
     return formulas;
 }
 
-// Diperiksa saat unggah dan, untuk layout bawaan, saat proses mulai; null berarti layout bisa dipakai. Workbook tanpa
-// tabel laporan tetap sah: sheet-nya boleh hanya membaca nama, dan tabel yang belum ada dibuat mesin saat mengisi.
 export function inspectWorkbook(
     bytes: Uint8Array,
     shape: WorkbookShape,
@@ -1159,8 +1135,6 @@ export function inspectWorkbook(
     return null;
 }
 
-// Isi sel layout bawaan. Nilai laporan selalu lewat nama (`{ name: 'location_name' }` menjadi `=Report.location_name`)
-// atau rumus atas nama dan tabel, tidak pernah alamat sel sheet mesin.
 export type ExcelContent =
     | { readonly text: string }
     | { readonly name: string }
@@ -1172,9 +1146,6 @@ export type ExcelCell = {
     readonly style?: 'heading' | 'title' | 'label';
 };
 
-// Pivot bentuk tabular atas satu tabel laporan: baris dari luar ke dalam, subtotal hanya pada baris terluar, nilai
-// dijumlah dengan format angka dari jenis kolomnya, dan judul dari label field. Cache-nya kosong dan di-refresh saat
-// berkas dibuka.
 export type PivotSpec = {
     readonly table: string;
     readonly at: string;
@@ -1190,16 +1161,14 @@ export type ExcelSheet = {
     readonly widths: readonly number[];
     readonly cells: readonly ExcelCell[];
     readonly pivot?: PivotSpec;
-    // Baris yang diulang di setiap halaman cetak.
     readonly printTitleRows?: readonly [number, number];
 };
 
 export type ExcelWorkbook = {
     readonly sheets: readonly ExcelSheet[];
-    // Tabel laporan yang sheet-nya tampil, sesudah sheet layout. Tabel lain dibuat tersembunyi saat diisi.
-    readonly dataSheets: readonly {
+    readonly visibleTables: readonly {
         readonly table: string;
-        readonly name: string;
+        readonly sheet: string;
     }[];
 };
 
@@ -1330,9 +1299,6 @@ function pivotXml(
     };
 }
 
-// Workbook layout bawaan. Melempar bila spec merujuk nama, tabel, atau kolom yang tidak ada di bentuk laporan, jadi
-// salah ketik di layout bawaan menggagalkan proses saat mulai (katalog) dan CI. Sheet mesin lain (tabel tersembunyi,
-// Keterangan laporan, nama) ditulis fillWorkbook saat layout dipakai.
 export function excelWorkbook(
     shape: WorkbookShape,
     formats: CellFormats,
@@ -1475,13 +1441,13 @@ export function excelWorkbook(
         date: styles.xf(undefined, 'date'),
         datetime: styles.xf(undefined, 'datetime'),
     };
-    for (const dataSheet of spec.dataSheets)
+    for (const visible of spec.visibleTables)
         addTableSheet(
             book,
-            tableOf(dataSheet.table),
+            tableOf(visible.table),
             [],
             engine,
-            dataSheet.name,
+            visible.sheet,
             false,
         );
     pack.write(book.workbookPath, book.workbook);

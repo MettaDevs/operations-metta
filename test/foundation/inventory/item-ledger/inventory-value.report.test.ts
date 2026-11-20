@@ -17,8 +17,6 @@ import { readWorkbook } from '../../../support/workbook-reader.ts';
 
 type Reference = { id: string; code: string; name: string; version: number };
 
-// Nilai persediaan per lokasi dari kartu gudang, diunduh sebagai workbook Excel layout bawaan. Angkanya dibaca dari
-// berkas yang diunduh dan dicocokkan dengan kartu gudang lewat SQL langsung.
 describe.skipIf(!process.env.DB_HOST)('inventory value', () => {
     if (!process.env.DB_HOST) return;
     const { pool, browser, close } = operationsTestApp();
@@ -201,12 +199,10 @@ describe.skipIf(!process.env.DB_HOST)('inventory value', () => {
             ['Tanpa sumber dana', 'ALK-1'],
             ['Tanpa sumber dana', 'OBT-E'],
         ]);
-        // Pemakaian 30 diambil FIFO dari penerimaan APBD 20 Oktober (7) dan 3 November (23).
         expect(numbers(rows[0])).toEqual([
             7, 700, 40, 4000, 30, 3000, 17, 1700, 100,
         ]);
         expect(numbers(rows[1])).toEqual([0, 0, 25, 3000, 0, 0, 25, 3000, 120]);
-        // Penyesuaian masuk yang dibatalkan: pembatalannya bertanda negatif, jadi terhitung pengeluaran seperti LPLPO.
         expect(numbers(rows[2])).toEqual([0, 0, 4, 200, 4, 200, 0, 0, null]);
         expect(numbers(rows[3])).toEqual([0, 0, 5, 500, 0, 0, 5, 500, 100]);
         expect(rows.map((row) => row.item_code)).not.toContain('OBT-D');
@@ -244,7 +240,6 @@ describe.skipIf(!process.env.DB_HOST)('inventory value', () => {
         );
         const book = readWorkbook(new Uint8Array(await response.arrayBuffer()));
         expect(book.value('Report.location_name').value).toBe('Lokasi GUDANG');
-        // 1 November 2026 adalah serial Excel 46327.
         expect(book.value('Report.date_from')).toMatchObject({
             value: '46327',
             format: 'date',

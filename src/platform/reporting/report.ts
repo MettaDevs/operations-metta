@@ -7,8 +7,6 @@ import type { ExcelWorkbook } from './xlsx.ts';
 export const languages = ['id', 'en'] as const;
 export type Language = (typeof languages)[number];
 
-// Format berkas sebuah layout. Format milik layout, bukan milik laporan, sama dengan Report Layouts Business Central:
-// satu dataset boleh punya layout Word dan layout Excel sekaligus, dan legal entity memilih yang dipakai.
 export const layoutFormats = ['docx', 'xlsx'] as const;
 export type LayoutFormat = (typeof layoutFormats)[number];
 
@@ -94,7 +92,7 @@ export type ReportRecord<S extends Fields> = {
 };
 
 // Layout bawaan ikut repo sebagai kode, jadi perubahannya terbaca di diff: dokumen Word ditulis wordDocument (docx.ts),
-// workbook Excel dinyatakan sebagai sheet, sel, dan pivot yang ditulis mesin (xlsx.ts) dengan format angka tenant.
+// workbook Excel dinyatakan sebagai data yang ditulis xlsx.ts.
 export type WordLayout = {
     format: 'docx';
     key: string;
@@ -126,7 +124,6 @@ export type Report<S extends Fields = Fields> = {
     fields: S;
     // Data sintetis untuk pratinjau layout dan test. Bertipe dari `fields`, jadi tidak bisa tertinggal.
     sample: ReportRecord<S>;
-    // Layout pertama dipakai bila legal entity belum memilih. Word dan Excel boleh bercampur.
     layouts: readonly [BuiltinLayout, ...BuiltinLayout[]];
     // Dataset satu record. Dataset menyaring tenant dan memeriksa izin lewat service pemiliknya; null berarti tidak ada.
     // `parameters` adalah query cetak selain format dan layout, misalnya lokasi dan periode kartu stok satu barang

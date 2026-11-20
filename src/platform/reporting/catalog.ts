@@ -25,8 +25,6 @@ function prefixed<T>(
     );
 }
 
-// Field yang diisi mesin untuk setiap laporan, di luar dataset, dengan kunci yang sama dengan tag Word-nya: kop surat,
-// waktu dan pencetak, dan penanda tangan. Tag Word, daftar field di Sys Admin, dan nama Excel diturunkan dari sini.
 export const engineFields: Fields = {
     ...prefixed('letterhead.', letterheadFields),
     ...prefixed('printed.', printedFields),
@@ -73,7 +71,6 @@ export function unknownTags(fields: Fields, layout: Uint8Array): string[] {
     });
 }
 
-// Bentuk Excel sebuah laporan: dataset ditambah bagian yang diisi mesin.
 export function reportShape(fields: Fields): WorkbookShape {
     return workbookShape({ ...fields, ...engineFields });
 }
@@ -87,7 +84,6 @@ const bootLocale: Locale = {
     unitAmountDecimals: 2,
 };
 
-// Nilai kosong yang sah untuk setiap field, pengganti kop, waktu cetak, dan penanda tangan saat pemeriksaan katalog.
 function emptyValues(fields: Fields): Record<string, unknown> {
     return Object.fromEntries(
         Object.entries(fields).map(([key, spec]) => [
@@ -97,8 +93,7 @@ function emptyValues(fields: Fields): Record<string, unknown> {
     );
 }
 
-// Kesalahan bentuk dari pemeriksaan katalog, dengan laporan atau layout yang menyebabkannya.
-function within<T>(owner: string, work: () => T): T {
+function prefixErrors<T>(owner: string, work: () => T): T {
     try {
         return work();
     } catch (error) {
@@ -111,8 +106,7 @@ function within<T>(owner: string, work: () => T): T {
 // Dirakit sekali di src/main.ts dari laporan yang di-export Core dan module, sama seperti router. Laporan yang salah
 // bentuk menggagalkan proses saat mulai, dan karena test memuat src/main.ts, menggagalkan CI juga: kode ganda, izin di
 // luar module pemiliknya, contoh data yang tidak sesuai field, kunci field yang tidak bisa menjadi nama Excel, atau
-// layout bawaan yang memakai tag, nama, atau kolom yang tidak dikenal. Bentuk Excel diperiksa untuk setiap laporan,
-// karena legal entity mana pun boleh mengunggah layout Excel untuk laporan mana pun.
+// layout bawaan dengan tag, nama, atau kolom yang tidak dikenal.
 export function reportCatalog(reports: readonly Report[]): ReportCatalog {
     const catalog = new Map<string, Report>();
     for (const report of reports) {
@@ -134,7 +128,7 @@ export function reportCatalog(reports: readonly Report[]): ReportCatalog {
                 `Izin laporan ${report.code} harus milik ${report.moduleId}.`,
             );
         templateView(report.fields, report.sample.values, bootLocale);
-        const shape = within(`Laporan ${report.code}`, () =>
+        const shape = prefixErrors(`Laporan ${report.code}`, () =>
             reportShape(report.fields),
         );
         const sample = workbookData(
@@ -162,7 +156,7 @@ export function reportCatalog(reports: readonly Report[]): ReportCatalog {
                 }
                 case 'xlsx': {
                     const formats = cellFormats(bootLocale);
-                    const bytes = within(`Layout bawaan ${name}`, () =>
+                    const bytes = prefixErrors(`Layout bawaan ${name}`, () =>
                         excelWorkbook(shape, formats, layout.workbook),
                     );
                     const refusal = inspectWorkbook(bytes, shape);
