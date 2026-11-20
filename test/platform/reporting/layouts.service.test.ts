@@ -371,6 +371,25 @@ describe.skipIf(!process.env.DB_HOST)('report layouts', () => {
                 form(macro.generate({ type: 'uint8array' }), 'Bermakro.xlsm'),
             ),
         ).toContain('makro');
+        const embedded = new PizZip(
+            excelWorkbook(shape, formats, { sheets: [], visibleTables: [] }),
+        );
+        embedded.file(
+            '[Content_Types].xml',
+            (embedded.file('[Content_Types].xml')?.asText() ?? '').replace(
+                '</Types>',
+                '<Default Extension="docx" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document"/></Types>',
+            ),
+        );
+        embedded.file('xl/embeddings/Dokumen_Word.docx', 'x');
+        expect(
+            await refused(
+                form(
+                    embedded.generate({ type: 'uint8array' }),
+                    'Bertanam.xlsx',
+                ),
+            ),
+        ).toContain('objek tertanam');
         const unknown = excelWorkbook(shape, formats, {
             sheets: [
                 {

@@ -347,8 +347,15 @@ function packageFormat(bytes: Uint8Array): LayoutFormat | null {
     } catch {
         return null;
     }
+    // Workbook dikenali dari jenis bagian utamanya dulu: workbook yang menyimpan dokumen Word tertanam juga mencantumkan
+    // jenis wordprocessingml, dan harus ditolak sebagai workbook berobjek tertanam, bukan sebagai Word yang rusak.
+    if (
+        /(spreadsheetml\.sheet|ms-excel\.sheet\.macroEnabled)\.main\+xml/.test(
+            types,
+        )
+    )
+        return 'xlsx';
     if (/wordprocessingml|ms-word/.test(types)) return 'docx';
-    if (/spreadsheetml|ms-excel/.test(types)) return 'xlsx';
     return null;
 }
 
