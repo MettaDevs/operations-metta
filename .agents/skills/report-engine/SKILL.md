@@ -63,8 +63,8 @@ Uploaded Excel layouts are checked by `inspectWorkbook`: macros, embedded object
 PDF needs Gotenberg. `bun scripts/verify.ts up` starts one per run. For tests or `bun run dev`:
 
 ```bash
-docker run -d --name ops-renderer -p 127.0.0.1:3999:3000 gotenberg/gotenberg:8.36.0 \
-    gotenberg --libreoffice-auto-start=true --chromium-disable-routes=true
+docker run -d --name ops-renderer -p 127.0.0.1:3999:3000 gotenberg/gotenberg:9.10.0-libreoffice \
+    gotenberg --libreoffice-auto-start=true --pdf-disable-routes=true --webhook-disable=true --api-disable-download-from=true
 export RENDERER_URL=http://127.0.0.1:3999
 ```
 

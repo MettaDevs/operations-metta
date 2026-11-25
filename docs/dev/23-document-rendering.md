@@ -169,7 +169,7 @@ PDF dibuat LibreOffice di dalam [Gotenberg](https://gotenberg.dev/), container t
 
 |                                 | Terukur                                                                                                                                                     |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Image                           | `gotenberg/gotenberg:8.36.0`, 2,41 GB                                                                                                                       |
+| Image                           | `gotenberg/gotenberg:9.10.0-libreoffice`, 358 MB pull (tanpa Chromium dan Python `unoconverter`, memakai `lok`; angka di bawah diukur saat masih `8.36.0` penuh 2,41 GB) |
 | Memori                          | 12 MB sebelum konversi pertama, 159 MB sesudah 12 konversi, sekitar 285 MB sesudah 100-an konversi                                                          |
 | Konversi kuitansi A4 dan etiket | median 317 sampai 372 ms; pertama 13,3 detik tanpa auto-start; sesekali sekitar 1,4 detik saat LibreOffice dinyalakan ulang (`--libreoffice-restart-after`) |
 | Isi layout di runtime           | median 2,8 ms (etiket) dan 3,5 ms (kuitansi); memori runtime tidak bertambah sesudah 600 kali isi                                                           |
