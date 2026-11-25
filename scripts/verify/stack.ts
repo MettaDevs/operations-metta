@@ -166,7 +166,7 @@ export function runEnv(run: Run): Record<string, string> {
     };
 }
 
-export const rendererImage = 'gotenberg/gotenberg:8.36.0';
+export const rendererImage = 'gotenberg/gotenberg:9.10.0-libreoffice';
 const rendererContainer = (run: Run) => `${run.container}-renderer`;
 
 export function isAlive(pid: number | undefined): boolean {
@@ -346,8 +346,12 @@ export async function up(): Promise<Run> {
                 rendererImage,
                 'gotenberg',
                 '--libreoffice-auto-start=true',
-                '--chromium-disable-routes=true',
-                '--api-timeout=60s',
+                '--libreoffice-max-queue-size=10',
+                '--libreoffice-max-memory=768MB',
+                '--pdf-disable-routes=true',
+                '--webhook-disable=true',
+                '--api-disable-download-from=true',
+                '--api-timeout=35s',
             ],
             { quiet: true },
         );
