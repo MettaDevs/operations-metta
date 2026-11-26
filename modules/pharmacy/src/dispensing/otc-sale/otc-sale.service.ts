@@ -637,6 +637,7 @@ export class OtcSales {
                 buyer_name: 'buyer_name',
             },
             searchColumns: ['number', 'buyer_name'],
+            prefixColumns: ['number'],
             numericColumns: [],
             defaultSort: 'handed_over_at',
             defaultDirection: 'desc',

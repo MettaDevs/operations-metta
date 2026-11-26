@@ -61,6 +61,7 @@ export async function incrementalList(
         parameters: URLSearchParams;
         columns: Record<string, string>;
         searchColumns: string[];
+        prefixColumns?: string[];
         numericColumns: string[];
         defaultSort: string;
         defaultDirection: 'asc' | 'desc';
@@ -108,19 +109,61 @@ export async function incrementalList(
     const keyword = (value.q ?? '').trim();
     if (keyword) {
         const terms = searchTerms(keyword);
-        if (!terms.length) filters.push('false');
-        for (const term of terms) {
-            const words = term.text.match(/[\p{L}\p{N}]+/gu) ?? [];
-            const expression = term.phrase
-                ? words.join(' ')
-                : words.map((word) => `'${word}':*`).join(' & ');
-            const position = bind(expression);
-            const tsquery = term.phrase ? 'phraseto_tsquery' : 'to_tsquery';
-            const matches = options.searchColumns.map(
-                (column) =>
-                    `${searchableText(column)} @@ ${tsquery}('simple'::regconfig, ${position})`,
-            );
-            filters.push(`(${matches.join(' or ')})`);
+        const [first] = terms;
+        if (!first) filters.push('false');
+        else if (options.searchColumns.length) {
+            if (
+                options.prefixColumns?.length &&
+                terms.length === 1 &&
+                !first.phrase &&
+                /[-/]/.test(first.text) &&
+                /\d/.test(first.text)
+            ) {
+                const prefix = bind(`${first.text}%`);
+                const matches = options.prefixColumns.map(
+                    (column) => `lower(cast(${column} as text)) like ${prefix}`,
+                );
+                filters.push(`(${matches.join(' or ')})`);
+            } else {
+                const [singleColumn] = options.searchColumns;
+                const combinedSource =
+                    options.searchColumns.length === 1 &&
+                    singleColumn !== undefined
+                        ? singleColumn
+                        : options.searchColumns
+                              .map(
+                                  (column) =>
+                                      `coalesce(cast(${column} as text), '')`,
+                              )
+                              .join(" || ' ' || ");
+                const combinedVector = searchableText(combinedSource);
+                if (terms.every((term) => !term.phrase)) {
+                    const words = terms.flatMap((term) =>
+                        (term.text.match(/[\p{L}\p{N}]+/gu) ?? []).map(
+                            (word) => `'${word}':*`,
+                        ),
+                    );
+                    if (words.length) {
+                        filters.push(
+                            `${combinedVector} @@ to_tsquery('simple'::regconfig, ${bind(words.join(' & '))})`,
+                        );
+                    }
+                } else {
+                    for (const term of terms) {
+                        const words = term.text.match(/[\p{L}\p{N}]+/gu) ?? [];
+                        const expression = term.phrase
+                            ? words.join(' ')
+                            : words.map((word) => `'${word}':*`).join(' & ');
+                        const position = bind(expression);
+                        const tsquery = term.phrase
+                            ? 'phraseto_tsquery'
+                            : 'to_tsquery';
+                        filters.push(
+                            `${combinedVector} @@ ${tsquery}('simple'::regconfig, ${position})`,
+                        );
+                    }
+                }
+            }
         }
     }
     let cursor: z.infer<ReturnType<typeof cursorSchema>> | null = null;

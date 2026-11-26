@@ -134,10 +134,22 @@ export class StockByLocation {
             lineSchema,
             `with recursive ${categoryId ? `${categoryTreeSql(bind(categoryId))},` : ''}
                  posisi as (
+                     select k.barang_id, k.lokasi_id, k.batch_id,
+                            sum(k.sisa) as jumlah,
+                            sum(round(k.nilai * k.sisa / k.jumlah, 0)) as nilai
+                     from gd_tr_kartu_gudang k
+                     join gd_m_lokasi l on l.tenant_id = k.tenant_id and l.id = k.lokasi_id
+                     where ${asOfAt}::date >= current_date
+                       and k.tenant_id = $1 and k.legal_entity_id = $2
+                       and k.sisa <> 0 and k.tanggal_posting <= ${asOfAt}::date${filter}
+                     group by k.barang_id, k.lokasi_id, k.batch_id
+                     having sum(k.sisa) <> 0
+                     union all
                      select k.barang_id, k.lokasi_id, k.batch_id, sum(k.jumlah) as jumlah, sum(k.nilai) as nilai
                      from gd_tr_kartu_gudang k
                      join gd_m_lokasi l on l.tenant_id = k.tenant_id and l.id = k.lokasi_id
-                     where k.tenant_id = $1 and k.legal_entity_id = $2 and k.tanggal_posting <= ${asOfAt}::date${filter}
+                     where ${asOfAt}::date < current_date
+                       and k.tenant_id = $1 and k.legal_entity_id = $2 and k.tanggal_posting <= ${asOfAt}::date${filter}
                      group by k.barang_id, k.lokasi_id, k.batch_id
                      having sum(k.jumlah) <> 0
                  )
