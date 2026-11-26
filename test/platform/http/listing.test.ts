@@ -89,3 +89,54 @@ test('a cursor whose tie-break id is not an id is a stale list position', async 
     await current.result;
     expect(current.statements[0]?.parameters).toEqual([0, '2026-11-01', id]);
 });
+
+test('search combines columns for multi-word FTS and uses prefixColumns for numbered document codes', async () => {
+    const search = (parameters: string) => {
+        const statements: { query: string; parameters: Bind[] }[] = [];
+        const unsafe = (query: string, parameters: Bind[]) => {
+            statements.push({ query, parameters });
+            return Promise.resolve(Object.assign([], { count: 0 }));
+        };
+        const db = new Database(
+            { unsafe } as unknown as postgres.ReservedSql,
+            undefined,
+            'test',
+        );
+        return {
+            result: incrementalList(db, {
+                query: 'select id,number,buyer_name from records',
+                bindings: [],
+                parameters: new URLSearchParams(parameters),
+                columns: { id: 'id', number: 'number' },
+                searchColumns: ['number', 'buyer_name'],
+                prefixColumns: ['number'],
+                numericColumns: [],
+                defaultSort: 'id',
+                defaultDirection: 'desc',
+            }),
+            statements,
+        };
+    };
+
+    const doc = search('q=KCS-FAR-02399999');
+    await doc.result;
+    expect(doc.statements[0]?.query).toContain(
+        'lower(cast(number as text)) like $1',
+    );
+    expect(doc.statements[0]?.parameters).toEqual(['kcs-far-02399999%']);
+
+    const hyphenName = search('q=Adi-Putra');
+    await hyphenName.result;
+    expect(hyphenName.statements[0]?.query).toContain(
+        "coalesce(cast(number as text), '') || ' ' || coalesce(cast(buyer_name as text), '')",
+    );
+    expect(hyphenName.statements[0]?.parameters).toEqual([
+        "'adi':* & 'putra':*",
+    ]);
+
+    const multi = search('q=Pembeli 2399999');
+    await multi.result;
+    expect(multi.statements[0]?.parameters).toEqual([
+        "'pembeli':* & '2399999':*",
+    ]);
+});

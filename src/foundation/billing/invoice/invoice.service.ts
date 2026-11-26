@@ -28,9 +28,8 @@ import { creditMemoPreview } from '../credit-memo/credit-memo.service.ts';
 import { paymentHolds } from '../payment/payment.checks.ts';
 import { patientTypeMessage } from '../payment/payment.service.ts';
 
-// Sudah dibayar bila tagihan punya pembayaran yang tidak batal.
-const paidSql = `exists (select 1 from kasir p where p.tenant_id = k.tenant_id and p.sumber_module = k.sumber_module
-                                and p.sumber_dokumen_id = k.sumber_dokumen_id and p.status = 'diposting')`;
+// Sudah dibayar bila tagihan punya pembayaran yang tidak batal (dijaga sinkron oleh trigger kasir_sync_tagihan_dibayar).
+const paidSql = 'k.dibayar';
 
 // Tagihan kunjungan selesai dan tagihan penjualan dalam satu bentuk baris. Kolom number, name, dan occurred_at dipakai
 // bersama kedua jenis untuk pencarian dan urutan: waktu daftar kunjungan atau waktu penjualan dicatat.
@@ -183,9 +182,12 @@ export class Invoices {
                 paid: z.number(),
                 total: z.number(),
             }),
-            `select count(*) filter (where not paid)::int as unpaid, count(*) filter (where paid)::int as paid,
+            `select count(*) filter (where not k.dibayar)::int as unpaid,
+                    count(*) filter (where k.dibayar)::int as paid,
                     count(*)::int as total
-             from (${base}) counted`,
+             from tagihan_kasir k
+             where k.tenant_id = $1 and k.legal_entity_id = $2
+               and k.status = 'selesai' and k.tanggal between $3 and $4`,
             [this.scope.tenantId, this.scope.legalEntityId, from, to],
         );
         return {
