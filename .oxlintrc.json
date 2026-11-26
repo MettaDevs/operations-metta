@@ -1,0 +1,50 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "react"],
+    "ignorePatterns": ["dist/**", "docs/**", "parity/**", "src/client.tsx"],
+    "rules": {
+        "eqeqeq": ["error", "always", { "null": "ignore" }],
+        "no-console": "error",
+        "no-unused-vars": [
+            "error",
+            {
+                "argsIgnorePattern": "^_",
+                "varsIgnorePattern": "^_",
+                "destructuredArrayIgnorePattern": "^_",
+                "ignoreRestSiblings": true
+            }
+        ],
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error",
+        "react/purity": "off",
+        "react/refs": "off",
+        "react/immutability": "off",
+        "react/preserve-manual-memoization": "off",
+        "no-control-regex": "off",
+        "no-unsafe-optional-chaining": "off",
+        "typescript/consistent-type-definitions": ["error", "type"],
+        "typescript/consistent-type-imports": "error",
+        "typescript/consistent-type-assertions": [
+            "error",
+            { "assertionStyle": "never" }
+        ],
+        "typescript/no-non-null-assertion": "error"
+    },
+    "overrides": [
+        {
+            "files": ["**/test/**"],
+            "rules": {
+                "no-console": "off",
+                "react/no-children-prop": "off",
+                "typescript/consistent-type-assertions": "off",
+                "typescript/no-non-null-assertion": "off"
+            }
+        },
+        {
+            "files": ["scripts/**", "src/migrate.ts"],
+            "rules": {
+                "no-console": "off"
+            }
+        }
+    ]
+}
